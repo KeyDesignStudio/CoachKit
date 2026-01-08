@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  COACH
+  ATHLETE
+}
+
+enum CalendarItemStatus {
+  PLANNED
+  COMPLETED_MANUAL
+  COMPLETED_SYNCED
+  SKIPPED
+  MODIFIED
+}
+
+enum CompletionSource {
+  MANUAL
+  STRAVA
+  GARMIN
+  FILE
+}
+
+enum GroupVisibilityType {
+  ALL
+  SQUAD
+  SELECTED
+}
+
+enum PlanWeekStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole
+  timezone  String   @default("Australia/Brisbane")
+  createdAt DateTime @default(now())
+
+  // Relations
+  athleteProfile      AthleteProfile?
+  coachedAthletes     AthleteProfile[] @relation("CoachToAthletes")
+  comments            Comment[]
+  messageThreadsAsCoach MessageThread[] @relation("CoachThreads")
+  messageThreadsAsAthlete MessageThread[] @relation("AthleteThreads")
+  messages            Message[]
+  squads              Squad[]
+  workoutTemplates    WorkoutTemplate[]
+  planTemplates       PlanTemplate[]
+  groupSessions       GroupSession[]
+  calendarItemsCoached CalendarItem[]
+  branding            CoachBranding?
+  workoutTitles       WorkoutTitle[]
+  planWeeks           PlanWeek[]
+  coachJournalEntries CoachJournalEntry[]
+
+  @@index([role])
+}
+
+model AthleteProfile {
+  userId          String    @id
+  coachId         String
+  disciplines     String[] // e.g. ["RUN","BIKE","SWIM"]
+  goalsText       String?
+  planCadenceDays Int       @default(7) // 7, 14, 28 etc
+  zonesJson       Json?
+  coachNotes      String?
+  dateOfBirth     DateTime?
+
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coach User @relation("CoachToAthletes", fields: [coachId], references: [id], onDelete: Restrict)
+
+  calendarItems       CalendarItem[]
+  completedActivities CompletedActivity[]
+  painReports         PainReport[]
+  squadMemberships    SquadMember[]
+  groupSessionTargets GroupSessionTarget[]
+  planWeeks           PlanWeek[]
+  coachJournalEntries CoachJournalEntry[]
+
+  @@index([coachId])
+}
+
+model Squad {
+  id        String   @id @default(cuid())
+  coachId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  coach               User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  members             SquadMember[]
+  groupSessionTargets GroupSessionTarget[]
+
+  @@unique([coachId, name])
+  @@index([coachId])
+}
+
+model SquadMember {
+  squadId   String
+  athleteId String // references AthleteProfile.userId
+  createdAt DateTime @default(now())
+
+  squad   Squad           @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@id([squadId, athleteId])
+  @@index([athleteId])
+}
+
+model WorkoutTemplate {
+  id                 String   @id @default(cuid())
+  coachId            String
+  discipline         String
+  subtype            String?
+  title              String
+  structureJson      Json?
+  defaultTargetsJson Json?
+  notes              String?
+  attachmentsJson    Json?
+  createdAt          DateTime @default(now())
+
+  coach         User            @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  calendarItems CalendarItem[]
+
+  @@index([coachId])
+  @@index([discipline])
+}
+
+model WorkoutTitle {
+  id         String   @id @default(cuid())
+  coachId    String
+  discipline String
+  title      String
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, discipline, title])
+  @@index([coachId, discipline, isArchived])
+}
+
+model PlanTemplate {
+  id           String   @id @default(cuid())
+  coachId      String
+  name         String
+  durationDays Int
+  itemsJson    Json
+  createdAt    DateTime @default(now())
+
+  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+}
+
+model GroupSession {
+  id              String             @id @default(cuid())
+  coachId         String
+  title           String
+  discipline      String
+  location        String?
+  startTimeLocal  String // "06:00" etc (keep MVP simple)
+  durationMinutes Int
+  description     String?
+  recurrenceRule  String // iCal RRULE string
+  visibilityType  GroupVisibilityType @default(ALL)
+  optionalFlag    Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+
+  coach         User               @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  targets       GroupSessionTarget[]
+  calendarItems CalendarItem[]
+
+  @@index([coachId])
+}
+
+model GroupSessionTarget {
+  id             String @id @default(cuid())
+  groupSessionId String
+  athleteId      String?
+  squadId        String?
+
+  groupSession GroupSession    @relation(fields: [groupSessionId], references: [id], onDelete: Cascade)
+  athlete      AthleteProfile? @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  squad        Squad?          @relation(fields: [squadId], references: [id], onDelete: Cascade)
+
+  @@index([groupSessionId])
+  @@index([athleteId])
+  @@index([squadId])
+}
+
+model CalendarItem {
+  id                     String   @id @default(cuid())
+  athleteId              String   // AthleteProfile.userId
+  coachId                String
+  date                   DateTime // use date-only at midnight; interpret in timezone in UI
+  plannedStartTimeLocal  String?
+  discipline             String
+  subtype                String?
+  title                  String
+  plannedDurationMinutes Int?
+  plannedDistanceKm      Float?
+  intensityType          String?
+  intensityTargetJson    Json?
+  notes                  String?
+  attachmentsJson        Json?
+  status                 CalendarItemStatus @default(PLANNED)
+  templateId             String?
+  groupSessionId         String?
+  reviewedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  athlete      AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  coach        User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  template     WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  groupSession GroupSession?   @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
+
+  completedActivities CompletedActivity[]
+  comments            Comment[]
+
+  @@index([athleteId, date])
+  @@index([coachId, date])
+  @@index([reviewedAt])
+  @@index([status])
+}
+
+model CompletedActivity {
+  id              String   @id @default(cuid())
+  athleteId       String
+  calendarItemId  String?
+  source          CompletionSource
+  startTime       DateTime
+  durationMinutes Int
+  distanceKm      Float?
+  rpe             Int?
+  notes           String?
+  painFlag        Boolean  @default(false)
+  metricsJson     Json?
+  fileUrl         String?
+  createdAt       DateTime @default(now())
+
+  athlete      AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  calendarItem CalendarItem?  @relation(fields: [calendarItemId], references: [id], onDelete: SetNull)
+
+  @@index([athleteId, startTime])
+  @@index([calendarItemId])
+}
+
+model Comment {
+  id             String   @id @default(cuid())
+  calendarItemId String
+  authorId       String
+  body           String
+  createdAt      DateTime @default(now())
+
+  calendarItem CalendarItem @relation(fields: [calendarItemId], references: [id], onDelete: Cascade)
+  author       User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([calendarItemId, createdAt])
+}
+
+model MessageThread {
+  id        String   @id @default(cuid())
+  coachId   String
+  athleteId String
+  createdAt DateTime @default(now())
+
+  coach   User @relation("CoachThreads", fields: [coachId], references: [id], onDelete: Cascade)
+  athlete User @relation("AthleteThreads", fields: [athleteId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([coachId, athleteId])
+  @@index([coachId])
+  @@index([athleteId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+model PainReport {
+  id           String   @id @default(cuid())
+  athleteId    String
+  date         DateTime
+  bodyLocation String
+  severity     Int
+  durationDays Int?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([athleteId, date])
+}
+
+model PlanWeek {
+  id          String         @id @default(cuid())
+  coachId     String
+  athleteId   String // AthleteProfile.userId
+  weekStart   DateTime // Monday date at midnight
+  status      PlanWeekStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@unique([coachId, athleteId, weekStart])
+  @@index([coachId, weekStart])
+  @@index([athleteId, weekStart])
+}
+
+model CoachBranding {
+  coachId     String  @id
+  displayName String  @default("CoachKit")
+  logoUrl     String?
+  updatedAt   DateTime @updatedAt
+
+  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+}
+
+model CoachJournalEntry {
+  id        String   @id @default(cuid())
+  coachId   String
+  athleteId String // AthleteProfile.userId
+  entryDate DateTime
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([athleteId, entryDate(sort: Desc)])
+  @@index([coachId])
+}

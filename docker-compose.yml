@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: programassist-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: programassist
+      POSTGRES_USER: programassist
+      POSTGRES_PASSWORD: programassist
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U programassist -d programassist"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  postgres-data:
