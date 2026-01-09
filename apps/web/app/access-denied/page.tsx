@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
 export default function AccessDenied() {
-  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -13,43 +14,55 @@ export default function AccessDenied() {
     async function checkAuth() {
       try {
         const response = await fetch('/api/me');
+        
         if (response.ok) {
+          // User is authenticated and has a role - redirect them
           const data = await response.json();
           if (data.success && data.data.user) {
             const user = data.data.user;
-            // User is authenticated and has a role - redirect them
             if (user.role === 'COACH') {
-              setRedirectUrl('/coach/dashboard');
+              router.replace('/coach/dashboard' as any);
             } else if (user.role === 'ATHLETE') {
-              setRedirectUrl('/athlete/calendar');
+              router.replace('/athlete/calendar' as any);
             } else {
               // Unknown role, stay on access denied
-              setRedirectUrl(null);
+              setIsLoading(false);
             }
-          } else {
-            // Not authenticated, go to sign-in
-            setRedirectUrl('/sign-in');
+            return;
           }
-        } else {
-          // API error, go to sign-in
-          setRedirectUrl('/sign-in');
+        } else if (response.status === 401) {
+          // Not authenticated, go to sign-in
+          router.replace('/sign-in' as any);
+          return;
         }
+        
+        // 403 or other error - user is truly not invited, stay here
+        setIsLoading(false);
       } catch (error) {
-        // Network error, go to sign-in
-        setRedirectUrl('/sign-in');
-      } finally {
+        // Network error, assume not invited and stay here
         setIsLoading(false);
       }
     }
 
     checkAuth();
-  }, []);
+  }, [router]);
 
   const handleReturnHome = () => {
-    if (redirectUrl) {
-      window.location.href = redirectUrl;
-    }
+    router.push('/sign-in' as any);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Card className="max-w-md rounded-3xl p-8 text-center">
+          <div className="mb-4 flex justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--muted)] border-t-[var(--primary)]" />
+          </div>
+          <p className="text-[var(--muted)]">Checking access...</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -62,15 +75,9 @@ export default function AccessDenied() {
           If you believe you should have access, please contact your coach or administrator.
         </p>
         <div className="flex flex-col gap-3">
-          {isLoading ? (
-            <Button disabled className="w-full">
-              Loading...
-            </Button>
-          ) : (
-            <Button onClick={handleReturnHome} className="w-full">
-              Return Home
-            </Button>
-          )}
+          <Button onClick={handleReturnHome} className="w-full">
+            Return to Sign In
+          </Button>
           <a href="/sign-out" className="text-sm text-[var(--muted)] hover:underline">
             Sign Out
           </a>

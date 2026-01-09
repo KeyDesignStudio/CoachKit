@@ -16,9 +16,10 @@ export default async function HomePage() {
     select: { role: true },
   });
 
-  // Authenticated but not in DB - not invited
+  // Authenticated but not in DB yet - might be race condition after first sign-up
+  // Redirect to finish-signin page which will poll until user appears in DB
   if (!user) {
-    redirect('/access-denied');
+    redirect('/finish-signin');
   }
 
   // Redirect based on role
