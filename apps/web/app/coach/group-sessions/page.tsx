@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
@@ -56,7 +56,7 @@ type ApplyResult = {
 };
 
 export default function CoachGroupSessionsPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [sessions, setSessions] = useState<GroupSessionRecord[]>([]);
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
@@ -67,10 +67,10 @@ export default function CoachGroupSessionsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const isCoach = user.role === 'COACH';
+  const isCoach = user?.role === 'COACH';
 
   const loadSessions = useCallback(async () => {
-    if (!isCoach || !user.userId) return;
+    if (!isCoach || !user?.userId) return;
     setLoadingSessions(true);
     setPageError('');
     try {
@@ -81,17 +81,17 @@ export default function CoachGroupSessionsPage() {
     } finally {
       setLoadingSessions(false);
     }
-  }, [isCoach, request, user.userId]);
+  }, [isCoach, request, user?.userId]);
 
   const loadAthletes = useCallback(async () => {
-    if (!isCoach || !user.userId) return;
+    if (!isCoach || !user?.userId) return;
     try {
       const data = await request<{ athletes: AthleteOption[] }>('/api/coach/athletes');
       setAthletes(data.athletes);
     } catch (error) {
       console.error('Failed to load athletes:', error);
     }
-  }, [isCoach, request, user.userId]);
+  }, [isCoach, request, user?.userId]);
 
   useEffect(() => {
     loadSessions();

@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -38,7 +38,7 @@ type CalendarItem = {
 
 export default function AthleteWorkoutDetailPage({ params }: { params: { id: string } }) {
   const workoutId = params.id;
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [item, setItem] = useState<CalendarItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [commentDraft, setCommentDraft] = useState('');
 
   const loadData = useCallback(async () => {
-    if (user.role !== 'ATHLETE' || !user.userId) {
+    if (user?.role !== 'ATHLETE' || !user.userId) {
       return;
     }
 
@@ -83,7 +83,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     } finally {
       setLoading(false);
     }
-  }, [request, user.role, user.userId, workoutId]);
+  }, [request, user?.role, user?.userId, workoutId]);
 
   useEffect(() => {
     loadData();
@@ -125,8 +125,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }
   };
 
-  if (user.role !== 'ATHLETE') {
-    return <p className="text-[var(--muted)]">Switch to an athlete identity to open workouts.</p>;
+  if (userLoading) {
+    return <p className="text-[var(--muted)]">Loading...</p>;
+  }
+
+  if (!user || user.role !== 'ATHLETE') {
+    return <p className="text-[var(--muted)]">Athlete access required.</p>;
   }
 
   return (

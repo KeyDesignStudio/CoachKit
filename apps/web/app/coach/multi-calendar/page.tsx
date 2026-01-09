@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { addDays, startOfWeek, toDateInput } from '@/lib/client-date';
@@ -56,7 +56,7 @@ type AthleteData = {
 };
 
 export default function MultiAthleteCalendarPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
   const [athletes, setAthletes] = useState<Athlete[]>([]);
@@ -88,7 +88,7 @@ export default function MultiAthleteCalendarPage() {
 
   // Load athletes
   useEffect(() => {
-    if (user.role !== 'COACH' || !user.userId) return;
+    if (user?.role !== 'COACH' || !user.userId) return;
 
     const loadAthletes = async () => {
       try {
@@ -102,10 +102,10 @@ export default function MultiAthleteCalendarPage() {
     };
 
     loadAthletes();
-  }, [request, user.role, user.userId]);
+  }, [request, user?.role, user?.userId]);
 
   const loadCalendarData = useCallback(async () => {
-    if (!user.userId || selectedAthleteIds.size === 0) {
+    if (!user?.userId || selectedAthleteIds.size === 0) {
       setAthleteData([]);
       return;
     }
@@ -154,13 +154,13 @@ export default function MultiAthleteCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [request, user.userId, athletes, selectedAthleteIds, weekRange.from, weekRange.to]);
+  }, [request, user?.userId, athletes, selectedAthleteIds, weekRange.from, weekRange.to]);
 
   useEffect(() => {
-    if (user.role === 'COACH') {
+    if (user?.role === 'COACH') {
       loadCalendarData();
     }
-  }, [loadCalendarData, user.role]);
+  }, [loadCalendarData, user?.role]);
 
   const goToToday = useCallback(() => {
     setWeekStart(startOfWeek());
@@ -209,8 +209,12 @@ export default function MultiAthleteCalendarPage() {
       });
   }, [athleteData, filterMode, showOnlyWithSessions]);
 
-  if (user.role !== 'COACH') {
-    return <p className="text-[var(--muted)]">Please switch to a coach identity to view the multi-athlete calendar.</p>;
+  if (userLoading) {
+    return <p className="text-[var(--muted)]">Loading...</p>;
+  }
+
+  if (!user || user.role !== 'COACH') {
+    return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
 
   return (

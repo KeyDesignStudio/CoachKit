@@ -3,12 +3,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { useBranding } from '@/components/branding-context';
 import { DEFAULT_BRAND_NAME } from '@/lib/branding';
 
 export default function CoachSettingsPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const { branding, loading: brandingLoading, error: brandingError, refresh: refreshBranding } = useBranding();
   const [form, setForm] = useState({
@@ -28,8 +28,8 @@ export default function CoachSettingsPage() {
   }, [branding.displayName, branding.logoUrl]);
 
   const uploadLogo = async (file: File) => {
-    if (!user.userId) {
-      throw new Error('Set an active user before uploading.');
+    if (!user?.userId) {
+      throw new Error('User not authenticated.');
     }
 
     const formData = new FormData();
@@ -38,9 +38,6 @@ export default function CoachSettingsPage() {
     const response = await fetch('/api/coach/branding/logo', {
       method: 'POST',
       body: formData,
-      headers: {
-        'x-user-id': user.userId,
-      },
     });
 
     const payload = await response.json();
@@ -76,8 +73,8 @@ export default function CoachSettingsPage() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (user.role !== 'COACH') {
-      setError('Switch to a coach identity to edit branding.');
+    if (user?.role !== 'COACH') {
+      setError('Coach access required.');
       return;
     }
 
@@ -113,8 +110,12 @@ export default function CoachSettingsPage() {
     await refreshBranding();
   };
 
-  if (user.role !== 'COACH') {
-    return <p style={{ padding: '2rem' }}>Switch to a coach identity to manage branding.</p>;
+  if (userLoading) {
+    return <p style={{ padding: '2rem' }}>Loading...</p>;
+  }
+
+  if (!user || user.role !== 'COACH') {
+    return <p style={{ padding: '2rem' }}>Coach access required.</p>;
   }
 
   return (

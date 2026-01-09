@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Card } from '@/components/ui/Card';
@@ -123,7 +123,7 @@ function isToday(date: Date): boolean {
 }
 
 export default function CoachCalendarPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
   const [selectedAthleteId, setSelectedAthleteId] = useState('');
@@ -307,7 +307,7 @@ export default function CoachCalendarPage() {
   };
 
   const loadAthletes = useCallback(async () => {
-    if (user.role !== 'COACH' || !user.userId) {
+    if (user?.role !== 'COACH' || !user.userId) {
       return;
     }
 
@@ -320,7 +320,7 @@ export default function CoachCalendarPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load athletes.');
     }
-  }, [request, selectedAthleteId, user.role, user.userId]);
+  }, [request, selectedAthleteId, user?.role, user?.userId]);
 
   const loadCalendar = useCallback(async () => {
     if (!selectedAthleteId) {
@@ -604,8 +604,12 @@ export default function CoachCalendarPage() {
 
   const currentDisciplineTitles = titleOptions[ensureDiscipline(sessionForm.discipline)] || [];
 
-  if (user.role !== 'COACH') {
-    return <p className="text-[var(--muted)]">Please switch to a coach identity to manage calendars.</p>;
+  if (userLoading) {
+    return <p className="text-[var(--muted)]">Loading...</p>;
+  }
+
+  if (!user || user.role !== 'COACH') {
+    return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
 
   return (

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { WeekGrid } from '@/components/coach/WeekGrid';
@@ -79,7 +79,7 @@ function isToday(date: Date): boolean {
 }
 
 export default function AthleteCalendarPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -145,7 +145,7 @@ export default function AthleteCalendarPage() {
   }, [viewMode, currentMonth, itemsByDate]);
 
   const loadItems = useCallback(async () => {
-    if (user.role !== 'ATHLETE' || !user.userId) {
+    if (user?.role !== 'ATHLETE' || !user.userId) {
       return;
     }
 
@@ -162,7 +162,7 @@ export default function AthleteCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [request, user.role, user.userId, dateRange.from, dateRange.to]);
+  }, [request, user?.role, user?.userId, dateRange.from, dateRange.to]);
 
   useEffect(() => {
     setMounted(true);
@@ -224,8 +224,12 @@ export default function AthleteCalendarPage() {
     router.push(`/athlete/workouts/${item.id}`);
   };
 
-  if (user.role !== 'ATHLETE') {
-    return <p className="text-[var(--muted)]">Please switch to an athlete identity to view this calendar.</p>;
+  if (userLoading) {
+    return <p className="text-[var(--muted)]">Loading...</p>;
+  }
+
+  if (!user || user.role !== 'ATHLETE') {
+    return <p className="text-[var(--muted)]">Athlete access required.</p>;
   }
 
   return (

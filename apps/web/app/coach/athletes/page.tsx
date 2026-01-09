@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -26,7 +26,7 @@ interface AthleteRecord {
 }
 
 export default function CoachAthletesPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
   const [error, setError] = useState('');
@@ -36,7 +36,7 @@ export default function CoachAthletesPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   const loadAthletes = () => {
-    if (user.role !== 'COACH' || !user.userId) {
+    if (user?.role !== 'COACH' || !user.userId) {
       return;
     }
 
@@ -52,7 +52,7 @@ export default function CoachAthletesPage() {
   useEffect(() => {
     loadAthletes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.role, user.userId]);
+  }, [user?.role, user?.userId]);
 
   const handleCreateAthlete = async (data: any) => {
     await request('/api/coach/athletes', {
@@ -86,10 +86,18 @@ export default function CoachAthletesPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  if (user.role !== 'COACH') {
+  if (userLoading) {
     return (
       <div className="px-6 pt-6">
-        <p className="text-slate-600">Please switch to a coach identity to see your roster.</p>
+        <p className="text-slate-600">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'COACH') {
+    return (
+      <div className="px-6 pt-6">
+        <p className="text-slate-600">Coach access required.</p>
       </div>
     );
   }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
+import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { ReviewGrid } from '@/components/coach/ReviewGrid';
@@ -53,7 +53,7 @@ type ReviewItem = {
 };
 
 export default function CoachDashboardPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -82,7 +82,7 @@ export default function CoachDashboardPage() {
   }, [weekStart]);
 
   const loadItems = useCallback(async () => {
-    if (!user.userId) {
+    if (!user?.userId) {
       return;
     }
 
@@ -99,13 +99,13 @@ export default function CoachDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [request, user.userId, weekRange.from, weekRange.to]);
+  }, [request, user?.userId, weekRange.from, weekRange.to]);
 
   useEffect(() => {
-    if (user.role === 'COACH') {
+    if (user?.role === 'COACH') {
       loadItems();
     }
-  }, [loadItems, user.role]);
+  }, [loadItems, user?.role]);
 
   const markReviewed = useCallback(
     async (id: string) => {
@@ -223,8 +223,12 @@ export default function CoachDashboardPage() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [items, filterMode]);
 
-  if (user.role !== 'COACH') {
-    return <p className="text-[var(--muted)]">Please switch to a coach identity to view the review inbox.</p>;
+  if (userLoading) {
+    return <p className="text-[var(--muted)]">Loading...</p>;
+  }
+
+  if (!user || user.role !== 'COACH') {
+    return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
 
   return (
