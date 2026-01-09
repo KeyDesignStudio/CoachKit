@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate --schema prisma/schema.prisma && next build",
     "start": "next start",
+    "postinstall": "prisma generate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate:init": "prisma migrate dev --name init --create-only",
     "seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts"
