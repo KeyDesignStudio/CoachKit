@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { handleError } from '@/lib/http';
+import { handleError, success } from '@/lib/http';
 
 // Force dynamic rendering (required for auth)
 export const dynamic = 'force-dynamic';
@@ -18,16 +17,13 @@ export async function GET() {
   try {
     const { user } = await requireAuth();
     
-    return NextResponse.json({ 
-      success: true,
-      data: {
-        user: {
-          userId: user.id,
-          role: user.role,
-          email: user.email,
-          name: user.name,
-          timezone: user.timezone,
-        }
+    return success({ 
+      user: {
+        userId: user.id,
+        role: user.role,
+        email: user.email,
+        name: user.name,
+        timezone: user.timezone,
       }
     });
   } catch (error) {

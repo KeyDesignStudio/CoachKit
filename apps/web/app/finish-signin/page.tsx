@@ -20,7 +20,7 @@ export default function FinishSignIn() {
         if (response.ok) {
           // User found in database - redirect immediately
           const data = await response.json();
-          if (data.success && data.data.user) {
+          if (data.data && data.data.user) {
             const user = data.data.user;
             if (user.role === 'COACH') {
               router.replace('/coach/dashboard' as any);

@@ -19,7 +19,7 @@ export default function AccessDenied() {
         if (response.ok) {
           // User is authenticated and has a role - redirect them immediately
           const data = await response.json();
-          if (data.success && data.data.user) {
+          if (data.data && data.data.user) {
             const user = data.data.user;
             if (user.role === 'COACH') {
               router.replace('/coach/dashboard' as any);
