@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/Button';
 
 export default function AccessDenied() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isChecking, setIsChecking] = useState(true);
+  const [showDenied, setShowDenied] = useState(false);
 
   useEffect(() => {
     // Check if user is authenticated and determine their role home
@@ -16,7 +17,7 @@ export default function AccessDenied() {
         const response = await fetch('/api/me');
         
         if (response.ok) {
-          // User is authenticated and has a role - redirect them
+          // User is authenticated and has a role - redirect them immediately
           const data = await response.json();
           if (data.success && data.data.user) {
             const user = data.data.user;
@@ -25,8 +26,9 @@ export default function AccessDenied() {
             } else if (user.role === 'ATHLETE') {
               router.replace('/athlete/calendar' as any);
             } else {
-              // Unknown role, stay on access denied
-              setIsLoading(false);
+              // Unknown role, show denied
+              setIsChecking(false);
+              setShowDenied(true);
             }
             return;
           }
@@ -34,13 +36,20 @@ export default function AccessDenied() {
           // Not authenticated, go to sign-in
           router.replace('/sign-in' as any);
           return;
+        } else if (response.status === 403) {
+          // Truly not invited - show denied UI
+          setIsChecking(false);
+          setShowDenied(true);
+          return;
         }
         
-        // 403 or other error - user is truly not invited, stay here
-        setIsLoading(false);
+        // Other errors - show denied UI
+        setIsChecking(false);
+        setShowDenied(true);
       } catch (error) {
-        // Network error, assume not invited and stay here
-        setIsLoading(false);
+        // Network error - show denied UI
+        setIsChecking(false);
+        setShowDenied(true);
       }
     }
 
@@ -51,7 +60,8 @@ export default function AccessDenied() {
     router.push('/sign-in' as any);
   };
 
-  if (isLoading) {
+  // Show checking state (no denied card)
+  if (isChecking) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Card className="max-w-md rounded-3xl p-8 text-center">
@@ -62,6 +72,11 @@ export default function AccessDenied() {
         </Card>
       </div>
     );
+  }
+
+  // Only show denied card if truly denied
+  if (!showDenied) {
+    return null;
   }
 
   return (

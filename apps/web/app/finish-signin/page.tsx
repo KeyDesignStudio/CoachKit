@@ -7,7 +7,8 @@ import { Card } from '@/components/ui/Card';
 export default function FinishSignIn() {
   const router = useRouter();
   const [attempts, setAttempts] = useState(0);
-  const MAX_ATTEMPTS = 10; // 10 attempts = ~5 seconds
+  const MAX_ATTEMPTS = 20; // 20 attempts = ~10 seconds
+  const INITIAL_DELAY = 300; // Wait 300ms before first attempt
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -17,7 +18,7 @@ export default function FinishSignIn() {
         const response = await fetch('/api/me');
         
         if (response.ok) {
-          // User found in database
+          // User found in database - redirect immediately
           const data = await response.json();
           if (data.success && data.data.user) {
             const user = data.data.user;
@@ -36,9 +37,14 @@ export default function FinishSignIn() {
           router.replace('/sign-in' as any);
           return;
         } else if (response.status === 403) {
-          // User not invited
-          router.replace('/access-denied' as any);
-          return;
+          // 403: Could be timing issue OR truly not invited
+          // Only redirect to access-denied on FINAL attempt
+          if (attempts >= MAX_ATTEMPTS - 1) {
+            // Final attempt and still 403 - truly not invited
+            router.replace('/access-denied' as any);
+            return;
+          }
+          // Not final attempt - treat as "not ready yet", keep polling
         }
 
         // User not found yet in DB, retry
@@ -46,7 +52,7 @@ export default function FinishSignIn() {
           setAttempts(a => a + 1);
           timeoutId = setTimeout(checkUserStatus, 500);
         } else {
-          // Max attempts reached, assume not invited
+          // Max attempts reached, go to access denied
           router.replace('/access-denied' as any);
         }
       } catch (error) {
@@ -60,7 +66,8 @@ export default function FinishSignIn() {
       }
     }
 
-    checkUserStatus();
+    // Initial delay before first poll to allow DB sync
+    timeoutId = setTimeout(checkUserStatus, attempts === 0 ? INITIAL_DELAY : 0);
 
     return () => {
       if (timeoutId) {
