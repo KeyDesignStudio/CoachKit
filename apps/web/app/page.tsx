@@ -10,26 +10,22 @@ export default async function HomePage() {
     redirect('/sign-in');
   }
 
-  try {
-    // Look up user in database
-    const user = await prisma.user.findUnique({
-      where: { authProviderId: userId },
-      select: { role: true },
-    });
+  // Look up user in database
+  const user = await prisma.user.findUnique({
+    where: { authProviderId: userId },
+    select: { role: true },
+  });
 
-    // Authenticated but not in DB - not invited
-    if (!user) {
-      redirect('/access-denied');
-    }
-
-    // Redirect based on role
-    if (user.role === 'COACH') {
-      redirect('/coach/dashboard');
-    } else {
-      redirect('/athlete/calendar');
-    }
-  } catch (error) {
-    console.error('[Root] Error checking user:', error);
+  // Authenticated but not in DB - not invited
+  if (!user) {
     redirect('/access-denied');
   }
+
+  // Redirect based on role
+  if (user.role === 'COACH') {
+    redirect('/coach/dashboard');
+  }
+  
+  // Default to athlete calendar
+  redirect('/athlete/calendar');
 }
