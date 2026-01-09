@@ -28,7 +28,7 @@ type CopyMode = CopyWeekPayload['mode'];
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = copyWeekSchema.parse(await request.json());
 
     await assertCoachOwnsAthlete(payload.athleteId, user.id);

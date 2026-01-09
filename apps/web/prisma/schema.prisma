@@ -44,6 +44,7 @@ model User {
   name      String?
   role      UserRole
   timezone  String   @default("Australia/Brisbane")
+  authProviderId String?  @unique // Clerk user ID for authentication
   createdAt DateTime @default(now())
 
   // Relations

@@ -57,7 +57,7 @@ type RouteParams = {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = updateGroupSessionSchema.parse(await request.json());
     const { groupSessionId } = params;
 
@@ -164,7 +164,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { groupSessionId } = params;
 
     const existing = await prisma.groupSession.findFirst({ where: { id: groupSessionId, coachId: user.id } });

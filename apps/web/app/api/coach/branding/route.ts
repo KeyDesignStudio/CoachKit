@@ -21,7 +21,7 @@ const updateSchema = z.object({
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = updateSchema.parse(await request.json());
 
     const displayName = payload.displayName?.trim();

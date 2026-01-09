@@ -46,7 +46,7 @@ const groupSessionInclude = {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
 
     const groupSessions = await prisma.groupSession.findMany({
       where: { coachId: user.id },
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = createGroupSessionSchema.parse(await request.json());
 
     parseWeeklyRecurrenceRule(payload.recurrenceRule);

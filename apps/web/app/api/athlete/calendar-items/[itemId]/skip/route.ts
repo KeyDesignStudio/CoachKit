@@ -23,7 +23,7 @@ export async function POST(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireAthlete(request);
+    const { user } = await requireAthlete();
     let payload: z.infer<typeof skipSchema> = {};
 
     try {

@@ -17,7 +17,7 @@ export async function POST(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
 
     const existing = await prisma.calendarItem.findFirst({
       where: { id: context.params.itemId, coachId: user.id },

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest, { params }: { params: { athleteId: string } }) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { athleteId } = params;
 
     // Verify coach owns this athlete

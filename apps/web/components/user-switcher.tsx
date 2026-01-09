@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 
-export function UserSwitcher() {
+function DevUserSwitcher() {
   const { user, setUser } = useUser();
   const [userId, setUserId] = useState(user.userId);
   const [role, setRole] = useState<UserRoleType>(user.role);
@@ -53,9 +53,29 @@ export function UserSwitcher() {
         </div>
       </form>
       <p className="mt-3 text-sm text-[var(--muted)]">
-        Requests from this tab include the `x-user-id` header and rely on your role selection for client-side hints. Server routes still
-        enforce roles.
+        Requests from this tab include the `x-user-id` header and rely on your role selection for client-side hints. Server routes still enforce roles.
       </p>
     </Card>
   );
+}
+
+/**
+ * UserSwitcher - Development-only identity switcher
+ * 
+ * This component is hidden in production builds. To show it:
+ * - Set NODE_ENV !== 'production', OR
+ * - Set NEXT_PUBLIC_SHOW_DEV_SWITCHER=true
+ * 
+ * In production deployments (Vercel), this will be automatically hidden.
+ */
+export function UserSwitcher() {
+  // Check if dev switcher should be shown
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const showDevSwitcher = process.env.NEXT_PUBLIC_SHOW_DEV_SWITCHER === 'true';
+  
+  if (!isDevelopment && !showDevSwitcher) {
+    return null;
+  }
+
+  return <DevUserSwitcher />;
 }

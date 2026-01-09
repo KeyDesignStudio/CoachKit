@@ -29,7 +29,7 @@ export async function POST(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireAthlete(request);
+    const { user } = await requireAthlete();
     const payload = completeSchema.parse(await request.json());
 
     const result = await prisma.$transaction(async (tx) => {

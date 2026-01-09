@@ -15,7 +15,7 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest, { params }: { params: { athleteId: string } }) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { athleteId } = params;
 
     // Verify coach owns this athlete
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { athleteI
 
 export async function POST(request: NextRequest, { params }: { params: { athleteId: string } }) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { athleteId } = params;
 
     // Verify coach owns this athlete

@@ -1,10 +1,8 @@
-import { NextRequest } from 'next/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { UserRole } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError, forbidden, notFound, unauthorized } from '@/lib/errors';
-
-const USER_ID_HEADER = 'x-user-id';
 
 type AuthenticatedContext = {
   user: {
@@ -13,27 +11,112 @@ type AuthenticatedContext = {
     email: string;
     name: string | null;
     timezone: string;
+    authProviderId: string;
   };
 };
 
-export async function requireAuth(request: NextRequest): Promise<AuthenticatedContext> {
-  const userId = request.headers.get(USER_ID_HEADER);
+/**
+ * Require authentication and return the authenticated user context
+ * 
+ * This replaces the old x-user-id header approach with proper Clerk authentication.
+ * 
+ * Security:
+ * - Validates Clerk authentication token
+ * - Looks up user in database by authProviderId
+ * - Syncs authProviderId on first login if needed (invite-only)
+ * - Throws unauthorized if not authenticated or user not found
+ */
+export async function requireAuth(): Promise<AuthenticatedContext> {
+  const { userId: clerkUserId } = await auth();
 
-  if (!userId) {
-    throw unauthorized('Missing authentication header.');
+  if (!clerkUserId) {
+    throw unauthorized('Authentication required.');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  // Look up user by Clerk ID first
+  let user = await prisma.user.findUnique({
+    where: { authProviderId: clerkUserId },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      name: true,
+      timezone: true,
+      authProviderId: true,
+    },
+  });
 
+  // If not found by authProviderId, try to link by email (first-time login)
   if (!user) {
-    throw unauthorized('User session is invalid.');
+    const clerkUser = await currentUser();
+    if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      throw unauthorized('No email address found in authentication.');
+    }
+
+    const email = clerkUser.emailAddresses[0].emailAddress;
+
+    // Try to find user by email
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        name: true,
+        timezone: true,
+        authProviderId: true,
+      },
+    });
+
+    if (!existingUser) {
+      // User authenticated with Clerk but not in our DB = not invited
+      throw forbidden('Access denied. This is an invite-only platform.');
+    }
+
+    if (existingUser.authProviderId && existingUser.authProviderId !== clerkUserId) {
+      // Email exists but linked to different Clerk account - security risk
+      throw forbidden('Account mismatch detected. Please contact support.');
+    }
+
+    // Link the Clerk user to our DB user
+    user = await prisma.user.update({
+      where: { id: existingUser.id },
+      data: { authProviderId: clerkUserId },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        name: true,
+        timezone: true,
+        authProviderId: true,
+      },
+    });
+
+    console.log(`[Auth] Linked Clerk user ${clerkUserId} to DB user ${user.email}`);
   }
 
-  return { user };
+  // At this point, authProviderId must be set
+  if (!user.authProviderId) {
+    throw new Error('Database inconsistency: authProviderId is null after linking');
+  }
+
+  return {
+    user: {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      name: user.name,
+      timezone: user.timezone,
+      authProviderId: user.authProviderId,
+    },
+  };
 }
 
-export async function requireCoach(request: NextRequest) {
-  const context = await requireAuth(request);
+/**
+ * Require COACH role
+ */
+export async function requireCoach() {
+  const context = await requireAuth();
 
   if (context.user.role !== UserRole.COACH) {
     throw forbidden('Coach access required.');
@@ -42,8 +125,11 @@ export async function requireCoach(request: NextRequest) {
   return context;
 }
 
-export async function requireAthlete(request: NextRequest) {
-  const context = await requireAuth(request);
+/**
+ * Require ATHLETE role
+ */
+export async function requireAthlete() {
+  const context = await requireAuth();
 
   if (context.user.role !== UserRole.ATHLETE) {
     throw forbidden('Athlete access required.');
@@ -52,6 +138,9 @@ export async function requireAthlete(request: NextRequest) {
   return context;
 }
 
+/**
+ * Verify a coach owns/manages a specific athlete
+ */
 export async function assertCoachOwnsAthlete(athleteId: string, coachId: string) {
   if (!athleteId) {
     throw new ApiError(400, 'INVALID_ATHLETE_ID', 'athleteId is required.');

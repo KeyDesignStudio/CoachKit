@@ -30,7 +30,7 @@ const includeRefs = {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireAthlete(request);
+    const { user } = await requireAthlete();
     const { searchParams } = new URL(request.url);
     const params = querySchema.parse({
       from: searchParams.get('from'),

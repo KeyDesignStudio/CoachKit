@@ -47,7 +47,7 @@ async function assertCommentAccess(calendarItemId: string, userId: string, role:
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireAuth(request);
+    const { user } = await requireAuth();
     const payload = createSchema.parse(await request.json());
 
     await assertCommentAccess(payload.calendarItemId, user.id, user.role);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireAuth(request);
+    const { user } = await requireAuth();
     const { searchParams } = new URL(request.url);
 
     const params = querySchema.parse({

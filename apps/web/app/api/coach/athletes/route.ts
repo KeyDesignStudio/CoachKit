@@ -18,7 +18,7 @@ const createAthleteSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
 
     const athletes = await prisma.athleteProfile.findMany({
       where: { coachId: user.id },
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = createAthleteSchema.parse(await request.json());
 
     const result = await prisma.$transaction(async (tx) => {

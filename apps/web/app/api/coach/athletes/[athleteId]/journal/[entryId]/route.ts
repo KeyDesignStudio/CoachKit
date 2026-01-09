@@ -12,7 +12,7 @@ export async function DELETE(
   { params }: { params: { athleteId: string; entryId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { athleteId, entryId } = params;
 
     // Verify the entry exists and belongs to this coach and athlete

@@ -57,7 +57,7 @@ export async function PATCH(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = updateSchema.parse(await request.json());
 
     const hasUpdates = Object.values(payload).some((value) => value !== undefined);
@@ -159,7 +159,7 @@ export async function DELETE(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     await ensureCalendarItem(context.params.itemId, user.id);
     await prisma.calendarItem.delete({ where: { id: context.params.itemId } });
 

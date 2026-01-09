@@ -13,7 +13,7 @@ const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const formData = await request.formData();
     const file = formData.get('file');
 

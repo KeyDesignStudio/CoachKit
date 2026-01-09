@@ -1,35 +1,63 @@
-'use client';
-
-import { useMemo } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { usePathname } from 'next/navigation';
+import { auth } from '@clerk/nextjs/server';
+import { UserButton } from '@clerk/nextjs';
 
-import { useBranding } from '@/components/branding-context';
+import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
 import { DEFAULT_BRAND_NAME } from '@/lib/branding';
 
-const navLinks: { href: Route; label: string }[] = [
-  { href: '/coach/dashboard', label: 'Coach · Dashboard' },
-  { href: '/coach/athletes', label: 'Coach · Athlete Profiles' },
-  { href: '/coach/calendar', label: 'Coach · Calendar' },
-  { href: '/coach/multi-calendar', label: 'Coach · Multi-athlete Calendar' },
-  { href: '/coach/group-sessions', label: 'Coach · Group Sessions' },
-  { href: '/coach/settings', label: 'Coach · Settings' },
-  { href: '/athlete/calendar', label: 'Athlete · Calendar' },
+type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
+
+const allNavLinks: NavLink[] = [
+  { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Calendar', roles: ['COACH'] },
+  { href: '/coach/multi-calendar', label: 'Multi-athlete', roles: ['COACH'] },
+  { href: '/coach/group-sessions', label: 'Sessions', roles: ['COACH'] },
+  { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
+  { href: '/athlete/calendar', label: 'My Calendar', roles: ['ATHLETE'] },
 ];
 
-export function AppHeader() {
-  const { branding } = useBranding();
-  const pathname = usePathname();
+/**
+ * AppHeader - Server Component with Clerk Authentication
+ * 
+ * Security:
+ * - Fetches user role from database using Clerk userId
+ * - Filters navigation based on actual DB role (not client state)
+ * - Shows UserButton for authenticated users
+ */
+export async function AppHeader() {
+  const { userId } = await auth();
 
-  const subtitle = useMemo(() => {
-    if (!branding.displayName || branding.displayName === DEFAULT_BRAND_NAME) {
-      return '';
+  // Get user from database if authenticated
+  let userRole: 'COACH' | 'ATHLETE' | null = null;
+  let branding = { displayName: DEFAULT_BRAND_NAME, logoUrl: null as string | null };
+
+  if (userId) {
+    const user = await prisma.user.findUnique({
+      where: { authProviderId: userId },
+      select: { role: true, branding: true },
+    });
+
+    if (user) {
+      userRole = user.role;
+      
+      if (user.role === 'COACH' && user.branding) {
+        branding = {
+          displayName: user.branding.displayName || DEFAULT_BRAND_NAME,
+          logoUrl: user.branding.logoUrl,
+        };
+      }
     }
+  }
 
-    return branding.displayName;
-  }, [branding.displayName]);
+  // Filter navigation by authenticated role
+  const navLinks = userRole
+    ? allNavLinks.filter((link) => link.roles.includes(userRole))
+    : [];
+
+  const subtitle = branding.displayName !== DEFAULT_BRAND_NAME ? branding.displayName : '';
 
   return (
     <header className="px-6 pt-6">
@@ -39,7 +67,7 @@ export function AppHeader() {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={branding.logoUrl}
-              alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
+              alt={`${branding.displayName} logo`}
               className="h-[55px] w-[55px] object-contain"
             />
           ) : (
@@ -54,24 +82,24 @@ export function AppHeader() {
             {subtitle ? <p className="text-sm text-[var(--muted)]">{subtitle}</p> : null}
           </div>
         </div>
-        <nav className="flex flex-wrap gap-2 text-sm font-medium text-[var(--muted)]">
-          {navLinks.map((link) => {
-            const active = pathname?.startsWith(link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={
-                  active
-                    ? 'rounded-full bg-white/70 px-3 py-1 text-[var(--text)] shadow-sm'
-                    : 'rounded-full px-3 py-1 hover:bg-white/30'
-                }
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+
+        <div className="flex items-center gap-4">
+          {navLinks.length > 0 && (
+            <nav className="flex flex-wrap gap-2 text-sm font-medium">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-full px-3 py-1 text-[var(--muted)] hover:bg-white/30"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+          
+          {userId && <UserButton afterSignOutUrl="/" />}
+        </div>
       </Card>
     </header>
   );

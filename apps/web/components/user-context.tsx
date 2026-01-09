@@ -10,6 +10,7 @@ export type UserState = {
 };
 
 const STORAGE_KEY = 'coachKitUser';
+const COOKIE_NAME = 'coachkit-role';
 const DEFAULT_STATE: UserState = {
   userId: '',
   role: 'COACH',
@@ -21,6 +22,18 @@ type UserContextValue = {
 };
 
 const UserContext = createContext<UserContextValue | undefined>(undefined);
+
+/**
+ * Set a cookie that middleware can read for route protection
+ */
+function setRoleCookie(role: UserRoleType) {
+  if (typeof document === 'undefined') return;
+  
+  // Set cookie with 30 day expiry
+  const expires = new Date();
+  expires.setDate(expires.getDate() + 30);
+  document.cookie = `${COOKIE_NAME}=${role}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+}
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<UserState>(DEFAULT_STATE);
@@ -38,10 +51,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         if (parsed.userId && (parsed.role === 'COACH' || parsed.role === 'ATHLETE')) {
           setUserState(parsed);
+          setRoleCookie(parsed.role);
         }
       } catch (error) {
         console.warn('Failed to parse stored user state', error);
       }
+    } else {
+      // Set default role cookie on first load
+      setRoleCookie(DEFAULT_STATE.role);
     }
   }, []);
 
@@ -50,6 +67,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setRoleCookie(next.role);
     }
   };
 

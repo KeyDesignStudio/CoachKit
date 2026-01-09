@@ -17,7 +17,7 @@ export async function DELETE(
   context: { params: { titleId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const params = paramsSchema.parse(context.params);
 
     const record = await prisma.workoutTitle.findFirst({

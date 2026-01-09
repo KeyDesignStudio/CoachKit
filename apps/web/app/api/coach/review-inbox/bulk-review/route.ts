@@ -16,7 +16,7 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const body = await request.json();
     const payload = bodySchema.parse(body);
 

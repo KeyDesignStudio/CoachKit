@@ -16,7 +16,7 @@ const querySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const { athleteId, from, to } = querySchema.parse(searchParams);
 

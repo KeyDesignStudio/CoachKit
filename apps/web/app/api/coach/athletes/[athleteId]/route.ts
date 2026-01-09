@@ -23,7 +23,7 @@ export async function GET(
   context: { params: { athleteId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const athlete = await assertCoachOwnsAthlete(context.params.athleteId, user.id);
 
     return success({ athlete });
@@ -37,7 +37,7 @@ export async function PATCH(
   context: { params: { athleteId: string } }
 ) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const athlete = await assertCoachOwnsAthlete(context.params.athleteId, user.id);
     const payload = updateAthleteSchema.parse(await request.json());
 

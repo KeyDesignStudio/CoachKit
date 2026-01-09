@@ -26,7 +26,7 @@ type RouteParams = {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = applySchema.parse(await request.json());
 
     const fromDate = parseDateOnly(payload.from, 'from');

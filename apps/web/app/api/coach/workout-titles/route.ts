@@ -21,7 +21,7 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const { searchParams } = new URL(request.url);
 
     const params = querySchema.parse({
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = createSchema.parse(await request.json());
 
     const discipline = payload.discipline.trim().toUpperCase();

@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
-import { useUser } from '@/components/user-context';
 import { DEFAULT_BRANDING, type BrandingPayload } from '@/lib/branding';
 
 export type BrandingContextValue = {
@@ -15,20 +14,19 @@ export type BrandingContextValue = {
 
 const BrandingContext = createContext<BrandingContextValue | undefined>(undefined);
 
+/**
+ * BrandingProvider - Client-side branding context
+ * 
+ * Note: This is primarily for client components that need branding.
+ * Server components should fetch branding directly from the database.
+ */
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useUser();
   const { request } = useApi();
   const [branding, setBranding] = useState<BrandingPayload>(DEFAULT_BRANDING);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const loadBranding = useCallback(async () => {
-    if (!user.userId) {
-      setBranding(DEFAULT_BRANDING);
-      setError('');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -41,11 +39,11 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [request, user.userId]);
+  }, [request]);
 
   useEffect(() => {
     loadBranding();
-  }, [loadBranding, user.role]);
+  }, [loadBranding]);
 
   const value = useMemo<BrandingContextValue>(
     () => ({

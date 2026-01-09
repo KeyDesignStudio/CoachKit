@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireAuth(request);
+    const { user } = await requireAuth();
 
     let coachId: string | null = null;
 

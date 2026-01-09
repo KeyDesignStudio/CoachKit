@@ -15,7 +15,7 @@ const publishSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireCoach(request);
+    const { user } = await requireCoach();
     const payload = publishSchema.parse(await request.json());
 
     // Verify athlete ownership

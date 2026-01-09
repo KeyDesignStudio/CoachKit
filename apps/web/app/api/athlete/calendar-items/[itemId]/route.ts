@@ -29,7 +29,7 @@ export async function GET(
   context: { params: { itemId: string } }
 ) {
   try {
-    const { user } = await requireAthlete(request);
+    const { user } = await requireAthlete();
 
     const item = await prisma.calendarItem.findFirst({
       where: { id: context.params.itemId, athleteId: user.id },
