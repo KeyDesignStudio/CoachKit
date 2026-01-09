@@ -76,9 +76,9 @@ export async function AppHeader() {
             </div>
           )}
           <div>
-            <Link href="/" className="font-display text-xl font-semibold tracking-tight">
+            <a href="/" className="font-display text-xl font-semibold tracking-tight">
               CoachKit
-            </Link>
+            </a>
             {subtitle ? <p className="text-sm text-[var(--muted)]">{subtitle}</p> : null}
           </div>
         </div>

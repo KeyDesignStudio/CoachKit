@@ -66,7 +66,8 @@ export default clerkMiddleware(async (auth, request) => {
       return NextResponse.next();
     } catch (error) {
       console.error('[Middleware] Error checking user access:', error);
-      return NextResponse.redirect(new URL('/error', request.url));
+      // On database/auth errors, redirect to access denied page
+      return NextResponse.redirect(new URL('/access-denied', request.url));
     }
   }
 

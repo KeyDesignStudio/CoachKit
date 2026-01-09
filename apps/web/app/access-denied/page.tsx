@@ -1,6 +1,5 @@
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import Link from 'next/link';
 
 export default function AccessDenied() {
   return (
@@ -14,9 +13,9 @@ export default function AccessDenied() {
           If you believe you should have access, please contact your coach or administrator.
         </p>
         <div className="flex flex-col gap-3">
-          <Link href="/">
+          <a href="/">
             <Button className="w-full">Return Home</Button>
-          </Link>
+          </a>
           <a href="/sign-out" className="text-sm text-[var(--muted)] hover:underline">
             Sign Out
           </a>
