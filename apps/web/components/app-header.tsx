@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Route } from 'next';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { UserButton } from '@clerk/nextjs';
 
 import { prisma } from '@/lib/prisma';
@@ -24,6 +24,7 @@ const allNavLinks: NavLink[] = [
  * 
  * Security:
  * - Fetches user role from database using Clerk userId
+ * - Falls back to email lookup for first-time login (same logic as requireAuth)
  * - Filters navigation based on actual DB role (not client state)
  * - Shows UserButton for authenticated users
  */
@@ -35,10 +36,37 @@ export async function AppHeader() {
   let branding = { displayName: DEFAULT_BRAND_NAME, logoUrl: null as string | null };
 
   if (userId) {
-    const user = await prisma.user.findUnique({
+    // Try to find user by authProviderId first
+    let user = await prisma.user.findUnique({
       where: { authProviderId: userId },
-      select: { role: true, branding: true },
+      select: { role: true, branding: true, email: true, id: true, authProviderId: true },
     });
+
+    // If not found by authProviderId, try email lookup (first-time login)
+    if (!user) {
+      const clerkUser = await currentUser();
+      if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
+        const email = clerkUser.emailAddresses[0].emailAddress;
+        
+        const existingUser = await prisma.user.findUnique({
+          where: { email },
+          select: { role: true, branding: true, email: true, id: true, authProviderId: true },
+        });
+
+        if (existingUser && !existingUser.authProviderId) {
+          // Link the Clerk user to our DB user
+          user = await prisma.user.update({
+            where: { id: existingUser.id },
+            data: { authProviderId: userId },
+            select: { role: true, branding: true, email: true, id: true, authProviderId: true },
+          });
+          
+          console.log(`[AppHeader] Linked Clerk user ${userId} to DB user ${user.email}`);
+        } else if (existingUser) {
+          user = existingUser;
+        }
+      }
+    }
 
     if (user) {
       userRole = user.role;
