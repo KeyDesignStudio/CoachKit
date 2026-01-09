@@ -38,6 +38,10 @@ enum PlanWeekStatus {
   PUBLISHED
 }
 
+enum OAuthProvider {
+  STRAVA
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -63,6 +67,7 @@ model User {
   workoutTitles       WorkoutTitle[]
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
+  oauthStates         OAuthState[]
 
   @@index([role])
 }
@@ -87,6 +92,7 @@ model AthleteProfile {
   groupSessionTargets GroupSessionTarget[]
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
+  stravaConnection    StravaConnection?
 
   @@index([coachId])
 }
@@ -240,6 +246,8 @@ model CompletedActivity {
   athleteId       String
   calendarItemId  String?
   source          CompletionSource
+  externalProvider String?
+  externalActivityId String?
   startTime       DateTime
   durationMinutes Int
   distanceKm      Float?
@@ -255,6 +263,7 @@ model CompletedActivity {
 
   @@index([athleteId, startTime])
   @@index([calendarItemId])
+  @@unique([source, externalActivityId])
 }
 
 model Comment {
@@ -354,4 +363,38 @@ model CoachJournalEntry {
 
   @@index([athleteId, entryDate(sort: Desc)])
   @@index([coachId])
+}
+
+model OAuthState {
+  id         String        @id @default(cuid())
+  provider   OAuthProvider
+  userId     String
+  state      String        @unique
+  redirectTo String?
+  expiresAt  DateTime
+  createdAt  DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([provider, userId])
+  @@index([expiresAt])
+}
+
+model StravaConnection {
+  id              String   @id @default(cuid())
+  athleteId       String   @unique // AthleteProfile.userId
+  stravaAthleteId String   @unique
+  accessToken     String
+  refreshToken    String
+  expiresAt       DateTime
+  scope           String?
+  lastSyncAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([athleteId])
+  @@index([stravaAthleteId])
+  @@index([expiresAt])
 }
