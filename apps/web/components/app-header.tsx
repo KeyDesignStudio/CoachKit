@@ -90,7 +90,7 @@ export async function AppHeader() {
 
   return (
     <header className="px-6 pt-6">
-      <Card className="flex flex-col gap-4 rounded-3xl p-5 md:flex-row md:items-center md:justify-between">
+      <Card className="flex flex-col gap-4 rounded-3xl p-5 bg-[var(--bg-surface)] md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           {branding.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -100,7 +100,7 @@ export async function AppHeader() {
               className="h-[55px] w-[55px] object-contain"
             />
           ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/30 bg-white/30 text-lg font-semibold text-[var(--text)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] text-lg font-semibold text-[var(--text)]">
               CK
             </div>
           )}
@@ -119,7 +119,7 @@ export async function AppHeader() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="rounded-full px-3 py-1 text-[var(--muted)] hover:bg-white/30"
+                  className="rounded-full px-3 py-1 text-[var(--muted)] hover:bg-[var(--bg-structure)]"
                 >
                   {link.label}
                 </Link>

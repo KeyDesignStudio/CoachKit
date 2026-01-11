@@ -27,17 +27,17 @@ export function RouteBrandingBar() {
   }
 
   return (
-    <div style={{ padding: '1rem 1.5rem 0', background: '#ffffff' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+    <div className="px-6 pt-4">
+      <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={branding.logoUrl ?? ''}
           alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
-          style={{ width: 56, height: 56, borderRadius: '0.75rem', objectFit: 'cover', border: '1px solid #e2e8f0' }}
+          className="h-14 w-14 rounded-xl object-cover border border-[var(--border-subtle)] bg-[var(--bg-card)]"
         />
         <div>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>Program branding</p>
-          <p style={{ margin: 0, fontWeight: 600 }}>{branding.displayName || DEFAULT_BRAND_NAME}</p>
+          <p className="m-0 text-xs text-[var(--muted)]">Program branding</p>
+          <p className="m-0 font-semibold text-[var(--text)]">{branding.displayName || DEFAULT_BRAND_NAME}</p>
         </div>
       </div>
     </div>

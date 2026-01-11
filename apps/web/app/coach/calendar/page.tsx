@@ -676,11 +676,11 @@ export default function CoachCalendarPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-semibold">{mounted && viewMode === 'month' ? 'Monthly Calendar' : 'Weekly Calendar'}</h1>
               {viewMode === 'week' && mounted && (
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  weekStatus === 'PUBLISHED' 
-                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                    : 'bg-amber-100 text-amber-700 border border-amber-200'
-                }`}>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium border border-[var(--border-subtle)] bg-[var(--bg-card)] ${
+                    weekStatus === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'
+                  }`}
+                >
                   {weekStatus === 'PUBLISHED' ? 'Published' : 'Draft'}
                 </span>
               )}
