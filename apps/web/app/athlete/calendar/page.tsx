@@ -13,6 +13,7 @@ import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRo
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { getCalendarDisplayTime } from '@/components/athlete/getCalendarDisplayTime';
+import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -142,10 +143,13 @@ export default function AthleteCalendarPage() {
         date,
         dateStr,
         isCurrentMonth,
-        items: (itemsByDate[dateStr] || []).map((item) => ({
-          ...item,
-          displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
-        })),
+        items: sortSessionsForDay(
+          (itemsByDate[dateStr] || []).map((item) => ({
+            ...item,
+            displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
+          })),
+          athleteTimezone
+        ),
       });
     }
     
@@ -324,7 +328,7 @@ export default function AthleteCalendarPage() {
                   isEmpty={dayItems.length === 0}
                   isToday={isToday(dayDate)}
                 >
-                  {dayItems.map((item) => (
+                  {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
                     <AthleteWeekSessionRow
                       key={item.id}
                       item={item}
@@ -347,6 +351,7 @@ export default function AthleteCalendarPage() {
                 items={day.items}
                 isCurrentMonth={day.isCurrentMonth}
                 isToday={isToday(day.date)}
+                athleteTimezone={athleteTimezone}
                 onDayClick={handleDayClick}
                 onItemClick={handleItemIdClick}
               />

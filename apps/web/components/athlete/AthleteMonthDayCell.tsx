@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVisual';
+import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 
 export type MonthSession = {
   id: string;
@@ -18,6 +19,7 @@ type AthleteMonthDayCellProps = {
   items: MonthSession[];
   isCurrentMonth: boolean;
   isToday: boolean;
+  athleteTimezone?: string;
   onDayClick: (date: Date) => void;
   onItemClick: (itemId: string) => void;
 };
@@ -30,12 +32,14 @@ export function AthleteMonthDayCell({
   items,
   isCurrentMonth,
   isToday,
+  athleteTimezone = 'Australia/Brisbane',
   onDayClick,
   onItemClick,
 }: AthleteMonthDayCellProps) {
   const dayNumber = date.getDate();
-  const visible = items.slice(0, MAX_VISIBLE_ROWS);
-  const remainingCount = Math.max(0, items.length - MAX_VISIBLE_ROWS);
+  const sortedItems = sortSessionsForDay(items, athleteTimezone);
+  const visible = sortedItems.slice(0, MAX_VISIBLE_ROWS);
+  const remainingCount = Math.max(0, sortedItems.length - MAX_VISIBLE_ROWS);
 
   return (
     <div
