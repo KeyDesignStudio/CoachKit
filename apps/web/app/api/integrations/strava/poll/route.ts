@@ -433,7 +433,6 @@ export async function POST(request: NextRequest) {
           const externalActivityId = String(activity.id);
           const discipline = mapStravaDiscipline(activity);
           const startInstant = new Date(activity.start_date);
-          const startTime = startInstant;
           const activityDateOnly = toNaiveUtcDateOnlyFromZone(startInstant, entry.athleteTimezone);
           const activityMinutes = toZonedMinutes(startInstant, entry.athleteTimezone);
           const durationMinutes = secondsToMinutesRounded(activity.elapsed_time);
@@ -454,6 +453,10 @@ export async function POST(request: NextRequest) {
             avgHr,
             maxHr,
           });
+
+          const canonicalStartUtc = (stravaMetrics as any)?.startDateUtc ?? activity.start_date;
+          const canonicalStart = new Date(canonicalStartUtc);
+          const startTime = !Number.isNaN(canonicalStart.getTime()) ? canonicalStart : startInstant;
 
           // Create or update idempotently.
           let completed: any;

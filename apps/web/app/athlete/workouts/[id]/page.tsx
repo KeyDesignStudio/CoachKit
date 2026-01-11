@@ -26,6 +26,7 @@ type CompletedActivity = {
   source: string;
   confirmedAt?: string | null;
   metricsJson?: any;
+  effectiveStartTimeUtc?: string;
 };
 
 type CalendarItem = {
@@ -100,7 +101,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
   const stravaType = (strava.type ?? strava.sport_type ?? strava.activityType) as string | undefined;
   const stravaName = (strava.name ?? strava.activityName) as string | undefined;
-  const stravaStartUtc = (strava.startDateUtc ?? strava.start_date) as string | undefined;
+  const stravaStartUtc = latestCompletion?.effectiveStartTimeUtc;
   const stravaAvgSpeedMps = (strava.avgSpeedMps ?? strava.average_speed) as number | undefined;
   const stravaAvgPaceSecPerKm = (strava.avgPaceSecPerKm ?? strava.avg_pace_sec_per_km) as number | undefined;
   const stravaAvgHr = (strava.avgHr ?? strava.average_heartrate) as number | undefined;

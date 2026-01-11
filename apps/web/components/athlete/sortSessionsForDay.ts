@@ -4,6 +4,7 @@ type SortableSession = {
   discipline: string;
   plannedStartTimeLocal: string | null;
   latestCompletedActivity?: {
+    effectiveStartTimeUtc?: string | Date;
     startTime?: string | Date;
   } | null;
 };
@@ -38,7 +39,7 @@ function getZonedMinutes(instant: Date, timeZone: string): number | null {
 }
 
 function getSortableMinutes(item: SortableSession, timeZone: string): number | null {
-  const actualStart = item.latestCompletedActivity?.startTime;
+  const actualStart = item.latestCompletedActivity?.effectiveStartTimeUtc ?? item.latestCompletedActivity?.startTime;
   if (actualStart) {
     const instant = actualStart instanceof Date ? actualStart : new Date(actualStart);
     const zonedMinutes = getZonedMinutes(instant, timeZone);

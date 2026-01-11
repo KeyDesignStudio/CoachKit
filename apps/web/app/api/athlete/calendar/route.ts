@@ -28,9 +28,24 @@ const includeRefs = {
       painFlag: true,
       startTime: true,
       source: true,
+      metricsJson: true,
     },
   },
 };
+
+function getEffectiveActualStartUtc(completion: {
+  source: CompletionSource | string;
+  startTime: Date;
+  metricsJson?: any;
+}): Date {
+  if (completion.source === CompletionSource.STRAVA) {
+    const candidate = completion.metricsJson?.strava?.startDateUtc;
+    const parsed = candidate ? new Date(candidate) : null;
+    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return completion.startTime;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -103,14 +118,26 @@ export async function GET(request: NextRequest) {
         painFlag: boolean;
         startTime: Date;
         source: string;
+        metricsJson?: any;
       }>;
 
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
 
+      const latest = latestManual ?? latestStrava;
+
+      const latestCompletedActivity = latest
+        ? {
+            id: latest.id,
+            painFlag: latest.painFlag,
+            source: latest.source,
+            effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
+          }
+        : null;
+
       return {
         ...item,
-        latestCompletedActivity: latestManual ?? latestStrava,
+        latestCompletedActivity,
         completedActivities: undefined,
       };
     });

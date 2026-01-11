@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { PlanWeekStatus } from '@prisma/client';
+import { CompletionSource, PlanWeekStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
@@ -33,11 +33,26 @@ const includeRefs = {
       source: true,
       confirmedAt: true,
       metricsJson: true,
+      startTime: true,
     },
     orderBy: { startTime: 'desc' as const },
     take: 1,
   },
 };
+
+function getEffectiveActualStartUtc(completion: {
+  source: CompletionSource | string;
+  startTime: Date;
+  metricsJson?: any;
+}): Date {
+  if (completion.source === CompletionSource.STRAVA) {
+    const candidate = completion.metricsJson?.strava?.startDateUtc;
+    const parsed = candidate ? new Date(candidate) : null;
+    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return completion.startTime;
+}
 
 export async function GET(
   request: NextRequest,
@@ -72,7 +87,23 @@ export async function GET(
       throw notFound('Calendar item not found.');
     }
 
-    return success({ item });
+    const completed = item.completedActivities?.[0] as
+      | ({ source: string; startTime: Date; metricsJson?: any } & Record<string, any>)
+      | undefined;
+
+    const completedWithEffective = completed
+      ? {
+          ...completed,
+          effectiveStartTimeUtc: getEffectiveActualStartUtc(completed).toISOString(),
+        }
+      : undefined;
+
+    return success({
+      item: {
+        ...item,
+        completedActivities: completedWithEffective ? [completedWithEffective] : [],
+      },
+    });
   } catch (error) {
     return handleError(error);
   }

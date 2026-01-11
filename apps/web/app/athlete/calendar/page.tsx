@@ -30,8 +30,8 @@ interface CalendarItem {
   notes: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
-    startTime: string;
     source: 'MANUAL' | 'STRAVA';
+    effectiveStartTimeUtc: string;
   } | null;
 }
 

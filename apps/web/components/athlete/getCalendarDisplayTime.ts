@@ -3,6 +3,7 @@ type CalendarItemLike = {
   status: string;
   plannedStartTimeLocal: string | null;
   latestCompletedActivity?: {
+    effectiveStartTimeUtc?: string | Date;
     startTime?: string | Date;
     source?: string;
   } | null;
@@ -45,7 +46,7 @@ export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: 
 
   if (item.status === 'SKIPPED') return planned;
 
-  const actualStart = item.latestCompletedActivity?.startTime;
+  const actualStart = item.latestCompletedActivity?.effectiveStartTimeUtc ?? item.latestCompletedActivity?.startTime;
   if (actualStart) {
     return formatTimeInTimezone(actualStart, athleteTimezone);
   }
