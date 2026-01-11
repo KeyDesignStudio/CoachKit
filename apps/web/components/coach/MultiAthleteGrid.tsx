@@ -85,7 +85,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
         <div className="min-w-[1400px]">
           <div className={cn('grid gap-px rounded-2xl bg-[var(--bg-structure)]', gridTemplateClass)}>
             {/* Header row */}
-            <div className="flex items-center bg-[var(--bg-surface)] px-4 py-3 min-w-0">
+            <div className="flex items-center bg-[var(--bg-surface)] px-4 py-3 min-w-0 rounded-2xl border border-[var(--border-subtle)]">
               <span className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Athlete</span>
             </div>
             {DAY_NAMES.map((day, index) => {
@@ -138,40 +138,39 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                   }));
 
                   return (
-                    <div key={`${row.athlete.id}:${dateKey}`} className="min-w-0 bg-[var(--bg-structure)] p-2">
-                      <div
-                        className={cn(
-                          'flex flex-col gap-2 min-w-0 rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
-                          isToday ? 'border-2 border-blue-500/40' : 'border border-[var(--border-subtle)]'
-                        )}
-                      >
-                        <div className="flex flex-col gap-2 p-2 min-w-0">
-                          {dayItems.map((item) => (
-                            <AthleteWeekSessionRow
-                              key={item.id}
-                              item={item as any}
-                              timeZone={row.athlete.timezone}
-                              onClick={() => onItemClick(item)}
-                            />
-                          ))}
+                    <div
+                      key={`${row.athlete.id}:${dateKey}`}
+                      className={cn(
+                        'min-w-0 bg-[var(--bg-structure)] p-2',
+                        isToday ? 'rounded-2xl border-2 border-blue-500/40' : ''
+                      )}
+                    >
+                      <div className="flex flex-col gap-2 min-w-0">
+                        {dayItems.map((item) => (
+                          <AthleteWeekSessionRow
+                            key={item.id}
+                            item={item as any}
+                            timeZone={row.athlete.timezone}
+                            onClick={() => onItemClick(item)}
+                          />
+                        ))}
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // TODO: Open create modal with athleteId + date.
-                              alert(`Add session for ${row.athlete.name} on ${dateKey}`);
-                            }}
-                            className={cn(
-                              'w-full rounded-xl border border-dashed border-[var(--border-subtle)]',
-                              'bg-[var(--bg-card)] px-2 py-2 text-xs text-[var(--muted)]',
-                              'hover:text-[var(--text)] hover:bg-[var(--bg-structure)] transition-colors',
-                              'flex items-center justify-center gap-1'
-                            )}
-                          >
-                            <Icon name="add" size="sm" />
-                            Add
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // TODO: Open create modal with athleteId + date.
+                            alert(`Add session for ${row.athlete.name} on ${dateKey}`);
+                          }}
+                          className={cn(
+                            'w-full rounded-xl border border-dashed border-[var(--border-subtle)]',
+                            'bg-[var(--bg-card)] px-2 py-2 text-xs text-[var(--muted)]',
+                            'hover:text-[var(--text)] hover:bg-[var(--bg-structure)] transition-colors',
+                            'flex items-center justify-center gap-1'
+                          )}
+                        >
+                          <Icon name="add" size="sm" />
+                          Add
+                        </button>
                       </div>
                     </div>
                   );
