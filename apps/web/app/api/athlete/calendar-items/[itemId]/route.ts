@@ -19,8 +19,13 @@ const includeRefs = {
       distanceKm: true,
       rpe: true,
       notes: true,
+      painFlag: true,
       source: true,
+      confirmedAt: true,
+      metricsJson: true,
     },
+    orderBy: { startTime: 'desc' as const },
+    take: 1,
   },
 };
 

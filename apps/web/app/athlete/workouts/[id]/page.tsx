@@ -21,6 +21,8 @@ type CompletedActivity = {
   notes: string | null;
   painFlag: boolean;
   source: string;
+  confirmedAt?: string | null;
+  metricsJson?: any;
 };
 
 type CalendarItem = {
@@ -51,6 +53,66 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     painFlag: false,
   });
   const [commentDraft, setCommentDraft] = useState('');
+  const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
+  const latestCompletion = item?.completedActivities?.[0];
+  const isStravaCompletion = latestCompletion?.source === 'STRAVA';
+  const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
+
+  const formatActualTime = (isoString: string | undefined) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+  };
+
+  const formatActualDateTime = (isoString: string | undefined) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+  };
+
+  const formatSpeedKmh = (mps: number | undefined) => {
+    if (!mps || !Number.isFinite(mps) || mps <= 0) return null;
+    return `${(mps * 3.6).toFixed(1)} km/h`;
+  };
+
+  const formatPace = (secPerKm: number | undefined) => {
+    if (!secPerKm || !Number.isFinite(secPerKm) || secPerKm <= 0) return null;
+    const minutes = Math.floor(secPerKm / 60);
+    const seconds = Math.round(secPerKm % 60);
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
+    return `${mm}:${ss} /km`;
+  };
+
+  const stravaType = (strava.type ?? strava.sport_type ?? strava.activityType) as string | undefined;
+  const stravaName = (strava.name ?? strava.activityName) as string | undefined;
+  const stravaStartLocal = (strava.startDateLocal ?? strava.start_date_local) as string | undefined;
+  const stravaStartUtc = (strava.startDateUtc ?? strava.start_date) as string | undefined;
+  const stravaAvgSpeedMps = (strava.avgSpeedMps ?? strava.average_speed) as number | undefined;
+  const stravaAvgPaceSecPerKm = (strava.avgPaceSecPerKm ?? strava.avg_pace_sec_per_km) as number | undefined;
+  const stravaAvgHr = (strava.avgHr ?? strava.average_heartrate) as number | undefined;
+  const stravaMaxHr = (strava.maxHr ?? strava.max_heartrate) as number | undefined;
+
+  const actualTimeLabel = formatActualTime(stravaStartLocal) ?? formatActualTime(stravaStartUtc);
+  const actualDateTimeLabel = formatActualDateTime(stravaStartLocal) ?? formatActualDateTime(stravaStartUtc);
+  const avgSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaAvgSpeedMps) : null;
+  const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm) : null;
+  const statusLabel = item?.status === 'COMPLETED_SYNCED_DRAFT'
+    ? 'Strava detected'
+    : item?.status
+      ? item.status.replace(/_/g, ' ')
+      : '';
+
+  const headerTimeLabel = isStravaCompletion && actualTimeLabel ? actualTimeLabel : item?.plannedStartTimeLocal ?? 'Anytime';
 
   const loadData = useCallback(async () => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
@@ -75,7 +137,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           distanceKm: completed.distanceKm?.toString() ?? '',
           rpe: completed.rpe ?? 6,
           notes: completed.notes ?? '',
-          painFlag: false, // Don't show pain flag in form, just for initial state
+          painFlag: completed.painFlag ?? false,
         });
       }
     } catch (err) {
@@ -93,21 +155,32 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     event.preventDefault();
 
     try {
-      await request(`/api/athlete/calendar-items/${workoutId}/complete`, {
-        method: 'POST',
-        data: {
-          durationMinutes: Number(completionForm.durationMinutes),
-          distanceKm: completionForm.distanceKm ? Number(completionForm.distanceKm) : undefined,
-          rpe: completionForm.rpe ? Number(completionForm.rpe) : undefined,
-          notes: completionForm.notes || undefined,
-          painFlag: completionForm.painFlag,
-          commentBody: commentDraft.trim() ? commentDraft.trim() : undefined,
-        },
-      });
+      if (item?.status === 'COMPLETED_SYNCED_DRAFT') {
+        await request(`/api/athlete/calendar-items/${workoutId}/confirm-synced`, {
+          method: 'POST',
+          data: {
+            notes: completionForm.notes || undefined,
+            painFlag: completionForm.painFlag,
+            commentBody: commentDraft.trim() ? commentDraft.trim() : undefined,
+          },
+        });
+      } else {
+        await request(`/api/athlete/calendar-items/${workoutId}/complete`, {
+          method: 'POST',
+          data: {
+            durationMinutes: Number(completionForm.durationMinutes),
+            distanceKm: completionForm.distanceKm ? Number(completionForm.distanceKm) : undefined,
+            rpe: completionForm.rpe ? Number(completionForm.rpe) : undefined,
+            notes: completionForm.notes || undefined,
+            painFlag: completionForm.painFlag,
+            commentBody: commentDraft.trim() ? commentDraft.trim() : undefined,
+          },
+        });
+      }
       setCommentDraft('');
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to complete workout.');
+      setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
     }
   };
 
@@ -153,9 +226,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
                 <span>{formatDisplay(item.date)}</span>
                 <span>·</span>
-                <span>{item.plannedStartTimeLocal ?? 'Anytime'}</span>
+                <span>{headerTimeLabel}</span>
                 <Badge className="ml-1">
-                  {item.status.replace(/_/g, ' ')}
+                  {statusLabel}
                 </Badge>
                 <Badge>{item.discipline}</Badge>
               </div>
@@ -183,53 +256,133 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
           {/* Right column: Athlete log (7/12) */}
           <div className="lg:col-span-7">
-            {item.status === 'PLANNED' ? (
+            {isStravaCompletion ? (
+              <Card className="rounded-3xl mb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">From Strava</h2>
+                    {actualDateTimeLabel ? (
+                      <p className="text-xs text-[var(--muted)] mt-1">Actual start time: <span className="text-[var(--text)] font-medium">{actualDateTimeLabel}</span></p>
+                    ) : null}
+                  </div>
+                  {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                    <Badge>Pending confirmation</Badge>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {stravaType ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Activity type</p>
+                      <p className="text-sm mt-1">{stravaType}</p>
+                    </div>
+                  ) : null}
+
+                  {stravaName ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Activity name</p>
+                      <p className="text-sm mt-1">{stravaName}</p>
+                    </div>
+                  ) : null}
+
+                  {avgSpeedLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Avg speed</p>
+                      <p className="text-sm mt-1">{avgSpeedLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {avgPaceLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Avg pace</p>
+                      <p className="text-sm mt-1">{avgPaceLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {typeof stravaAvgHr === 'number' ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Avg HR</p>
+                      <p className="text-sm mt-1">{Math.round(stravaAvgHr)} bpm</p>
+                    </div>
+                  ) : null}
+
+                  {typeof stravaMaxHr === 'number' ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Max HR</p>
+                      <p className="text-sm mt-1">{Math.round(stravaMaxHr)} bpm</p>
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            ) : null}
+
+            {item.status === 'PLANNED' || item.status === 'COMPLETED_SYNCED_DRAFT' ? (
               <Card className="rounded-3xl">
                 <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
                   <div className="space-y-3">
                     <div>
                       <h2 className="text-lg font-semibold">Athlete log</h2>
-                      <p className="text-xs text-[var(--muted)]">Log your effort below</p>
+                      {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                        <p className="text-xs text-[var(--muted)]">Strava detected a workout — add notes/pain and confirm to share with your coach</p>
+                      ) : (
+                        <p className="text-xs text-[var(--muted)]">Log your effort below</p>
+                      )}
                     </div>
 
-                    {/* Compact metrics row */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                        Duration (min)
-                        <Input
-                          type="number"
-                          value={completionForm.durationMinutes}
-                          onChange={(event) =>
-                            setCompletionForm({ ...completionForm, durationMinutes: Number(event.target.value) })
-                          }
-                          min={1}
-                          required
-                          className="text-sm min-h-[44px]"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                        Distance (km)
-                        <Input
-                          type="number"
-                          value={completionForm.distanceKm}
-                          onChange={(event) => setCompletionForm({ ...completionForm, distanceKm: event.target.value })}
-                          min={0}
-                          step="0.1"
-                          className="text-sm min-h-[44px]"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                        RPE (1-10)
-                        <Input
-                          type="number"
-                          value={completionForm.rpe}
-                          min={1}
-                          max={10}
-                          onChange={(event) => setCompletionForm({ ...completionForm, rpe: Number(event.target.value) })}
-                          className="text-sm min-h-[44px]"
-                        />
-                      </label>
-                    </div>
+                    {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-[var(--muted)]">Duration (min)</p>
+                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.durationMinutes ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-[var(--muted)]">Distance (km)</p>
+                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.distanceKm ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-[var(--muted)]">RPE (1-10)</p>
+                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.rpe ?? '—'}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                          Duration (min)
+                          <Input
+                            type="number"
+                            value={completionForm.durationMinutes}
+                            onChange={(event) =>
+                              setCompletionForm({ ...completionForm, durationMinutes: Number(event.target.value) })
+                            }
+                            min={1}
+                            required
+                            className="text-sm min-h-[44px]"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                          Distance (km)
+                          <Input
+                            type="number"
+                            value={completionForm.distanceKm}
+                            onChange={(event) => setCompletionForm({ ...completionForm, distanceKm: event.target.value })}
+                            min={0}
+                            step="0.1"
+                            className="text-sm min-h-[44px]"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                          RPE (1-10)
+                          <Input
+                            type="number"
+                            value={completionForm.rpe}
+                            min={1}
+                            max={10}
+                            onChange={(event) => setCompletionForm({ ...completionForm, rpe: Number(event.target.value) })}
+                            className="text-sm min-h-[44px]"
+                          />
+                        </label>
+                      </div>
+                    )}
 
                     <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
                       Athlete notes to Self
@@ -238,7 +391,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                         onChange={(event) => setCompletionForm({ ...completionForm, notes: event.target.value })}
                         rows={2}
                         className="text-sm"
-                        placeholder="Private notes for yourself"
+                        placeholder={item.status === 'COMPLETED_SYNCED_DRAFT' ? 'Add notes before confirming' : 'Private notes for yourself'}
                       />
                     </label>
 
@@ -267,11 +420,13 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
                   {/* Action buttons at bottom */}
                   <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-white/20">
-                    <Button type="button" variant="ghost" size="sm" onClick={skipWorkout} className="min-h-[44px]">
-                      Skip
-                    </Button>
+                    {item.status === 'PLANNED' ? (
+                      <Button type="button" variant="ghost" size="sm" onClick={skipWorkout} className="min-h-[44px]">
+                        Skip
+                      </Button>
+                    ) : null}
                     <Button type="submit" size="sm" className="min-h-[44px]">
-                      Complete
+                      {item.status === 'COMPLETED_SYNCED_DRAFT' ? 'Confirm' : 'Complete'}
                     </Button>
                   </div>
                 </form>

@@ -28,6 +28,9 @@ type StravaActivity = {
   elapsed_time?: number; // seconds
   moving_time?: number; // seconds
   distance?: number; // meters
+  average_speed?: number; // meters per second
+  average_heartrate?: number;
+  max_heartrate?: number;
   timezone?: string;
 };
 
@@ -47,6 +50,20 @@ function secondsToMinutesRounded(seconds: number) {
 
 function metersToKm(meters: number) {
   return meters / 1000;
+}
+
+function compactObject<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    out[key as keyof T] = value as T[keyof T];
+  }
+  return out;
+}
+
+function deriveAvgPaceSecPerKm(avgSpeedMps: number | undefined) {
+  if (!avgSpeedMps || !Number.isFinite(avgSpeedMps) || avgSpeedMps <= 0) return undefined;
+  return Math.round(1000 / avgSpeedMps);
 }
 
 function parseTimeToMinutes(value: string) {
@@ -195,8 +212,9 @@ async function matchAndLinkCalendarItem(params: {
   activityMinutes: number;
   discipline: string;
   completedActivityId: string;
+  confirmedAt: Date | null;
 }) {
-  const { athleteId, activityDateOnly, activityMinutes, discipline, completedActivityId } = params;
+  const { athleteId, activityDateOnly, activityMinutes, discipline, completedActivityId, confirmedAt } = params;
 
   const rangeStart = addDaysUtc(activityDateOnly, -1);
   const rangeEnd = addDaysUtc(activityDateOnly, 1);
@@ -253,10 +271,12 @@ async function matchAndLinkCalendarItem(params: {
   const match = candidates[0]?.item;
   if (!match) return { matched: false as const };
 
+  const nextStatus = confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
+
   await prisma.$transaction([
     prisma.calendarItem.update({
       where: { id: match.id },
-      data: { status: CalendarItemStatus.COMPLETED_SYNCED },
+      data: { status: nextStatus },
     }),
     prisma.completedActivity.update({
       where: { id: completedActivityId },
@@ -283,6 +303,12 @@ export async function POST(request: NextRequest) {
 
     const url = new URL(request.url);
     const requestedAthleteId = url.searchParams.get('athleteId');
+    const forceDaysParam = url.searchParams.get('forceDays');
+    const requestedForceDays = forceDaysParam ? Number(forceDaysParam) : null;
+    const forceDays =
+      requestedForceDays && Number.isFinite(requestedForceDays)
+        ? Math.min(30, Math.max(1, Math.floor(requestedForceDays)))
+        : null;
 
     let connections: Array<{
       athleteId: string;
@@ -344,7 +370,18 @@ export async function POST(request: NextRequest) {
 
         const lookbackMs = 14 * 24 * 60 * 60 * 1000;
         const bufferMs = 2 * 60 * 60 * 1000;
-        const afterDate = new Date((lastSyncAt ? lastSyncAt.getTime() : now.getTime() - lookbackMs) - bufferMs);
+
+        const effectiveLookbackMs =
+          user.role === UserRole.ATHLETE && forceDays ? forceDays * 24 * 60 * 60 * 1000 : lookbackMs;
+
+        const baseMs =
+          user.role === UserRole.ATHLETE && forceDays
+            ? now.getTime() - effectiveLookbackMs
+            : lastSyncAt
+              ? lastSyncAt.getTime()
+              : now.getTime() - effectiveLookbackMs;
+
+        const afterDate = new Date(baseMs - bufferMs);
         const afterUnixSeconds = Math.max(0, Math.floor(afterDate.getTime() / 1000));
 
         const activities = await fetchRecentActivities(refreshed.accessToken, afterUnixSeconds);
@@ -364,6 +401,22 @@ export async function POST(request: NextRequest) {
           const durationMinutes = secondsToMinutesRounded(activity.elapsed_time);
           const distanceKm = typeof activity.distance === 'number' ? metersToKm(activity.distance) : null;
 
+          const stravaType = activity.sport_type ?? activity.type;
+          const avgSpeedMps = typeof activity.average_speed === 'number' ? activity.average_speed : undefined;
+          const avgHr = typeof activity.average_heartrate === 'number' ? Math.round(activity.average_heartrate) : undefined;
+          const maxHr = typeof activity.max_heartrate === 'number' ? Math.round(activity.max_heartrate) : undefined;
+
+          const stravaMetrics = compactObject({
+            name: activity.name,
+            type: stravaType,
+            startDateLocal: activity.start_date_local,
+            startDateUtc: activity.start_date,
+            avgSpeedMps,
+            avgPaceSecPerKm: discipline === 'RUN' ? deriveAvgPaceSecPerKm(avgSpeedMps) : undefined,
+            avgHr,
+            maxHr,
+          });
+
           // Create or update idempotently.
           let completed: any;
 
@@ -377,21 +430,12 @@ export async function POST(request: NextRequest) {
                 startTime,
                 durationMinutes,
                 distanceKm,
-                notes: activity.name ?? null,
+                // Notes are reserved for the athlete's own log.
+                notes: null,
                 painFlag: false,
+                confirmedAt: null,
                 metricsJson: {
-                  strava: {
-                    id: activity.id,
-                    type: activity.type,
-                    sport_type: activity.sport_type,
-                    name: activity.name,
-                    start_date: activity.start_date,
-                    start_date_local: activity.start_date_local,
-                    elapsed_time: activity.elapsed_time,
-                    moving_time: activity.moving_time,
-                    distance: activity.distance,
-                    timezone: activity.timezone,
-                  },
+                  strava: stravaMetrics,
                 },
               },
               select: {
@@ -400,6 +444,7 @@ export async function POST(request: NextRequest) {
                 durationMinutes: true,
                 distanceKm: true,
                 startTime: true,
+                confirmedAt: true,
               },
             });
             summary.created += 1;
@@ -421,6 +466,8 @@ export async function POST(request: NextRequest) {
                 durationMinutes: true,
                 distanceKm: true,
                 startTime: true,
+                confirmedAt: true,
+                metricsJson: true,
               },
             });
 
@@ -444,20 +491,10 @@ export async function POST(request: NextRequest) {
                   startTime,
                   durationMinutes,
                   distanceKm,
-                  notes: activity.name ?? null,
+                  // Preserve any existing athlete notes; Strava fields belong in metricsJson.
                   metricsJson: {
-                    strava: {
-                      id: activity.id,
-                      type: activity.type,
-                      sport_type: activity.sport_type,
-                      name: activity.name,
-                      start_date: activity.start_date,
-                      start_date_local: activity.start_date_local,
-                      elapsed_time: activity.elapsed_time,
-                      moving_time: activity.moving_time,
-                      distance: activity.distance,
-                      timezone: activity.timezone,
-                    },
+                    ...(typeof existing?.metricsJson === 'object' && existing?.metricsJson ? (existing.metricsJson as any) : {}),
+                    strava: stravaMetrics,
                   },
                 },
                 select: {
@@ -466,6 +503,7 @@ export async function POST(request: NextRequest) {
                   durationMinutes: true,
                   distanceKm: true,
                   startTime: true,
+                  confirmedAt: true,
                 },
               });
               summary.updated += 1;
@@ -480,6 +518,7 @@ export async function POST(request: NextRequest) {
               activityMinutes,
               discipline,
               completedActivityId: completed.id,
+              confirmedAt: completed.confirmedAt ?? null,
             });
 
             if (match.matched) {

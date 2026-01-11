@@ -16,6 +16,7 @@ enum CalendarItemStatus {
   PLANNED
   COMPLETED_MANUAL
   COMPLETED_SYNCED
+  COMPLETED_SYNCED_DRAFT
   SKIPPED
   MODIFIED
 }
@@ -254,6 +255,7 @@ model CompletedActivity {
   rpe             Int?
   notes           String?
   painFlag        Boolean  @default(false)
+  confirmedAt     DateTime?
   metricsJson     Json?
   fileUrl         String?
   createdAt       DateTime @default(now())

@@ -20,6 +20,16 @@ type StravaStatusResponse = {
   } | null;
 };
 
+type PollSummary = {
+  polledAthletes: number;
+  fetched: number;
+  created: number;
+  updated: number;
+  matched: number;
+  skippedExisting: number;
+  errors: Array<{ athleteId?: string; message: string }>;
+};
+
 export default function AthleteSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -28,6 +38,8 @@ export default function AthleteSettingsPage() {
   const [status, setStatus] = useState<StravaStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [working, setWorking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<{ at: string; summary: PollSummary } | null>(null);
   const [error, setError] = useState('');
 
   const resultMessage = useMemo(() => {
@@ -81,6 +93,21 @@ export default function AthleteSettingsPage() {
     }
   };
 
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    setError('');
+    setLastSync(null);
+
+    try {
+      const summary = await request<PollSummary>('/api/integrations/strava/poll?forceDays=14', { method: 'POST' });
+      setLastSync({ at: new Date().toISOString(), summary });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync Strava.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
   }
@@ -118,9 +145,14 @@ export default function AthleteSettingsPage() {
 
           <div className="flex flex-wrap gap-3">
             {connected ? (
-              <Button variant="secondary" onClick={handleDisconnect} disabled={working}>
-                {working ? 'Disconnecting…' : 'Disconnect'}
-              </Button>
+              <>
+                <Button onClick={handleSyncNow} disabled={working || syncing || loadingStatus}>
+                  {syncing ? 'Syncing…' : 'Sync now'}
+                </Button>
+                <Button variant="secondary" onClick={handleDisconnect} disabled={working || syncing}>
+                  {working ? 'Disconnecting…' : 'Disconnect'}
+                </Button>
+              </>
             ) : (
               <Button onClick={handleConnect} disabled={working}>
                 Connect
@@ -131,6 +163,31 @@ export default function AthleteSettingsPage() {
 
         {loadingStatus ? <p className="text-sm text-[var(--muted)]">Loading status…</p> : null}
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
+
+        {lastSync ? (
+          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-4 text-sm text-emerald-900">
+            <p className="font-medium">Strava sync complete</p>
+            <p className="text-emerald-900/80">{new Date(lastSync.at).toLocaleString()}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-emerald-900/90">
+              <p>Fetched: <span className="font-medium">{lastSync.summary.fetched}</span></p>
+              <p>Matched: <span className="font-medium">{lastSync.summary.matched}</span></p>
+              <p>Created: <span className="font-medium">{lastSync.summary.created}</span></p>
+              <p>Updated: <span className="font-medium">{lastSync.summary.updated}</span></p>
+              <p>Skipped: <span className="font-medium">{lastSync.summary.skippedExisting}</span></p>
+              <p>Errors: <span className="font-medium">{lastSync.summary.errors.length}</span></p>
+            </div>
+            {lastSync.summary.errors.length ? (
+              <div className="mt-3 rounded-xl border border-red-200/60 bg-white/50 p-3 text-sm text-red-800">
+                <p className="font-medium">Some activities failed to sync</p>
+                <ul className="mt-2 list-disc pl-5">
+                  {lastSync.summary.errors.slice(0, 3).map((e, idx) => (
+                    <li key={idx}>{e.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {connected && status?.connection ? (
           <div className="rounded-2xl border border-white/25 bg-white/30 p-4 text-sm text-[var(--muted)]">

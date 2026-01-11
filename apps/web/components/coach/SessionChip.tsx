@@ -47,6 +47,8 @@ export function SessionChip({
         )}
         {status === 'COMPLETED_MANUAL' || status === 'COMPLETED_SYNCED' ? (
           <Icon name="completed" size="sm" className="text-green-600" aria-label="Completed" aria-hidden={false} />
+        ) : status === 'COMPLETED_SYNCED_DRAFT' ? (
+          <Icon name="needsReview" size="sm" className="text-amber-600" aria-label="Strava detected" aria-hidden={false} />
         ) : status === 'SKIPPED' ? (
           <Icon name="skipped" size="sm" className="text-gray-500" aria-label="Skipped" aria-hidden={false} />
         ) : null}
