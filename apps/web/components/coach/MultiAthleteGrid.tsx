@@ -70,14 +70,14 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
     <div className="overflow-x-auto">
       <div className="min-w-[1200px]">
         {/* Header row */}
-        <div className="grid grid-cols-[200px_repeat(7,1fr)] gap-px rounded-t-3xl border border-white/20 bg-white/20 backdrop-blur-3xl">
-          <div className="flex items-center justify-between bg-white/40 px-4 py-3">
+        <div className="grid grid-cols-[200px_repeat(7,1fr)] gap-px rounded-t-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]">
+          <div className="flex items-center justify-between bg-[var(--bg-surface)] px-4 py-3">
             <span className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Athlete</span>
           </div>
           {DAY_NAMES.map((day, index) => (
             <div
               key={day}
-              className="flex flex-col items-center justify-center bg-white/40 px-2 py-2 text-center"
+              className="flex flex-col items-center justify-center bg-[var(--bg-surface)] px-2 py-2 text-center"
             >
               <div className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">{day}</div>
               <div className="text-xs text-[var(--muted)]">{formatDisplay(weekDays[index]).split(',')[0].split(' ')[1]}</div>
@@ -86,11 +86,11 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
         </div>
 
         {/* Body */}
-        <div className="rounded-b-3xl border border-t-0 border-white/20 bg-white/20 backdrop-blur-3xl">
+        <div className="rounded-b-2xl border border-t-0 border-[var(--border-subtle)] bg-[var(--bg-structure)]">
           {athleteRows.map((row) => (
-            <div key={row.athlete.id} className="grid grid-cols-[200px_repeat(7,1fr)] gap-px border-t border-white/20">
+            <div key={row.athlete.id} className="grid grid-cols-[200px_repeat(7,1fr)] gap-px border-t border-[var(--border-subtle)]">
               {/* Athlete name cell */}
-              <div className="flex flex-col justify-center gap-1 bg-white/30 px-4 py-3">
+              <div className="flex flex-col justify-center gap-1 bg-[var(--bg-card)] px-4 py-3">
                 <div className="text-sm font-medium text-[var(--text)] truncate">
                   {row.athlete.name || row.athlete.id}
                 </div>
@@ -103,7 +103,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
               {weekDays.map((date) => {
                 const dayItems = row.itemsByDate.get(date) || [];
                 return (
-                  <div key={date} className="min-h-[100px] bg-white/30 p-2">
+                  <div key={date} className="min-h-[100px] bg-[var(--bg-card)] p-2">
                     {dayItems.map((item) => (
                       <SessionChip
                         key={item.id}
@@ -124,7 +124,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                         // TODO: Open create modal with athleteId and date
                         alert(`Add session for ${row.athlete.name} on ${date}`);
                       }}
-                      className="w-full rounded-lg border border-dashed border-white/30 bg-white/20 px-2 py-1.5 text-xs text-[var(--muted)] hover:border-white/50 hover:bg-white/40 hover:text-[var(--text)] transition-colors flex items-center justify-center gap-1"
+                      className="w-full rounded-lg border border-dashed border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)] transition-colors flex items-center justify-center gap-1"
                     >
                       <Icon name="add" size="sm" />
                       Add

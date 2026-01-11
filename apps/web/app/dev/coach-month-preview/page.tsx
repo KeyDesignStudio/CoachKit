@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
+import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
+import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { addDays, toDateInput } from '@/lib/client-date';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +19,7 @@ type PreviewSession = {
   discipline: string;
   status: string;
   title: string;
+  notes?: string | null;
 };
 
 function buildPreviewItems(now: Date): PreviewSession[] {
@@ -33,23 +36,19 @@ function buildPreviewItems(now: Date): PreviewSession[] {
   const d3Str = toDateInput(inThreeDays);
 
   return [
-    // Multiple sessions today (planned + draft + submitted)
-    { id: 'sess-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
-    { id: 'sess-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'COMPLETED_SYNCED_DRAFT', title: 'Trainer ride' },
-    { id: 'sess-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'COMPLETED_SYNCED', title: 'Main set' },
+    { id: 'coach-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
+    { id: 'coach-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'PLANNED', title: 'Trainer ride', notes: 'Keep Z2' },
+    { id: 'coach-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'PLANNED', title: 'Main set' },
 
-    // Yesterday planned becomes MISSED (only after day end)
-    { id: 'sess-yday-1', date: yStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Steady run' },
+    { id: 'coach-yday-1', date: yStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Steady run' },
 
-    // Tomorrow planned should remain neutral
-    { id: 'sess-tmr-1', date: tStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Intervals' },
+    { id: 'coach-tmr-1', date: tStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Intervals' },
 
-    // Explicit REST
-    { id: 'sess-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED', title: 'Rest' },
+    { id: 'coach-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED', title: 'Rest' },
 
     // Overflow day: lots of sessions today to confirm clipping
     ...Array.from({ length: 12 }).map((_, i) => ({
-      id: `sess-today-overflow-${i + 1}`,
+      id: `coach-today-overflow-${i + 1}`,
       date: todayStr,
       plannedStartTimeLocal: `0${(i % 9) + 1}:00`,
       discipline: i % 2 === 0 ? 'RUN' : 'BIKE',
@@ -59,7 +58,7 @@ function buildPreviewItems(now: Date): PreviewSession[] {
   ];
 }
 
-export default function DevMonthPreviewPage() {
+export default function DevCoachMonthPreviewPage() {
   // Dev-only page: default hidden unless explicitly enabled.
   if (process.env.NODE_ENV === 'production') notFound();
   if (process.env.NEXT_PUBLIC_SHOW_DEV_PAGES !== 'true') notFound();
@@ -88,8 +87,17 @@ export default function DevMonthPreviewPage() {
       byDate[item.date].push(item);
     }
 
+    const tz = 'Australia/Brisbane';
+    const sortedByDate: Record<string, any[]> = {};
     for (const dateStr of Object.keys(byDate)) {
-      byDate[dateStr].sort((a, b) => (a.plannedStartTimeLocal || '').localeCompare(b.plannedStartTimeLocal || ''));
+      sortedByDate[dateStr] = sortSessionsForDay(
+        byDate[dateStr].map((item) => ({
+          ...item,
+          displayTimeLocal: getCalendarDisplayTime(item as any, tz, now),
+          latestCompletedActivity: null,
+        })) as any,
+        tz
+      ) as any;
     }
 
     return Array.from({ length: 42 }, (_, i) => {
@@ -100,16 +108,16 @@ export default function DevMonthPreviewPage() {
         dateStr,
         isCurrentMonth: date.getMonth() === month.month,
         isToday: dateStr === toDateInput(now),
-        items: byDate[dateStr] || [],
+        items: (sortedByDate[dateStr] || []) as any,
       };
     });
   }, [month.year, month.month, now, previewItems]);
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-lg font-normal">Dev: Athlete Month Preview</h1>
+      <h1 className="text-lg font-normal">Dev: Coach Month Preview</h1>
       <p className="text-sm text-[var(--muted)]">
-        This page is dev-only. It renders the month grid with fixture data to validate the icon-first contract.
+        This page is dev-only. It renders the coach month grid with fixture data to validate surface parity.
       </p>
 
       <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">
@@ -119,18 +127,18 @@ export default function DevMonthPreviewPage() {
         </div>
       </div>
 
-      <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
+      <CalendarShell variant="month" data-coach-month-view-version="coach-month-v2">
         <MonthGrid>
           {monthDays.map((day) => (
             <AthleteMonthDayCell
               key={day.dateStr}
               date={day.date}
               dateStr={day.dateStr}
-              items={day.items}
+              items={day.items as any}
               isCurrentMonth={day.isCurrentMonth}
               isToday={day.isToday}
-              onDayClick={(d) => setSelected({ kind: 'day', value: toDateInput(d) })}
-              onItemClick={(id) => setSelected({ kind: 'session', value: id })}
+              onDayClick={(date) => setSelected({ kind: 'day', value: toDateInput(date) })}
+              onItemClick={(itemId) => setSelected({ kind: 'session', value: itemId })}
             />
           ))}
         </MonthGrid>

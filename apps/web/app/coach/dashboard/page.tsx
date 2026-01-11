@@ -233,7 +233,7 @@ export default function CoachDashboardPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
+      <header className="flex flex-col gap-4 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
@@ -256,13 +256,13 @@ export default function CoachDashboardPage() {
               </Button>
             </div>
             
-            <div className="flex items-center rounded-xl border border-white/20 bg-white/30 p-1 backdrop-blur-sm w-full md:w-auto">
+            <div className="flex items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1 w-full md:w-auto">
               <button
                 type="button"
                 onClick={() => handleFilterChange('all')}
                 className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
                   filterMode === 'all'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -273,7 +273,7 @@ export default function CoachDashboardPage() {
                 onClick={() => handleFilterChange('comments')}
                 className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
                   filterMode === 'comments'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -284,7 +284,7 @@ export default function CoachDashboardPage() {
                 onClick={() => handleFilterChange('without-comments')}
                 className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
                   filterMode === 'without-comments'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -304,7 +304,7 @@ export default function CoachDashboardPage() {
       </header>
 
       {athleteData.length === 0 && !loading ? (
-        <div className="rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
           <p className="text-lg text-[var(--muted)]">No workouts awaiting review for this week.</p>
         </div>
       ) : (

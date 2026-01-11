@@ -12,8 +12,9 @@ import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn'
 import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
-import { getCalendarDisplayTime } from '@/components/athlete/getCalendarDisplayTime';
+import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
+import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -253,7 +254,7 @@ export default function AthleteCalendarPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
+      <header className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Training</p>
@@ -274,11 +275,13 @@ export default function AthleteCalendarPage() {
           </div>
           <div className="flex flex-col md:flex-row md:items-center gap-3 text-sm">
             {/* View Toggle */}
-            <div className="flex rounded-2xl border border-white/30 bg-white/40 p-1">
+            <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
               <button
                 onClick={() => setViewMode('week')}
                 className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
-                  viewMode === 'week' ? 'bg-white/80 shadow-sm' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  viewMode === 'week'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
               >
                 Week
@@ -286,7 +289,9 @@ export default function AthleteCalendarPage() {
               <button
                 onClick={() => setViewMode('month')}
                 className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
-                  viewMode === 'month' ? 'bg-white/80 shadow-sm' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  viewMode === 'month'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
               >
                 Month
@@ -314,7 +319,7 @@ export default function AthleteCalendarPage() {
 
       {/* Calendar Grid - Week or Month */}
       {viewMode === 'week' ? (
-        <div data-athlete-week-view-version="athlete-week-v2">
+        <CalendarShell variant="week" data-athlete-week-view-version="athlete-week-v2">
           <AthleteWeekGrid>
             {weekDays.map((day) => {
               const dayItems = (itemsByDate[day.date] || []).map((item) => ({
@@ -342,9 +347,9 @@ export default function AthleteCalendarPage() {
               );
             })}
           </AthleteWeekGrid>
-        </div>
+        </CalendarShell>
       ) : (
-        <div data-athlete-month-view-version="athlete-month-v2">
+        <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
           <MonthGrid>
             {monthDays.map((day) => (
               <AthleteMonthDayCell
@@ -360,11 +365,11 @@ export default function AthleteCalendarPage() {
               />
             ))}
           </MonthGrid>
-        </div>
+        </CalendarShell>
       )}
 
       {!loading && items.length === 0 ? (
-        <div className="rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
           <p className="text-lg text-[var(--muted)]">
             {viewMode === 'week' ? 'No workouts planned for this week.' : 'No workouts planned for this month.'}
           </p>

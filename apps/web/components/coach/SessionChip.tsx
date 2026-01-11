@@ -28,13 +28,16 @@ export function SessionChip({
     <button
       type="button"
       onClick={onClick}
-      className="group relative mb-1.5 flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/50 p-1.5 hover:bg-white/70 transition-colors text-left w-full"
+      className={
+        'group relative mb-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left w-full ' +
+        'bg-transparent hover:bg-[var(--bg-structure)] transition-colors'
+      }
     >
-      <div className={`flex items-center gap-1.5 flex-1 min-w-0 border-l-2 ${theme.accentClass} pl-1.5`}>
-        <Icon name={theme.iconName} size="sm" className={`${theme.textClass} flex-shrink-0`} />
-        <span className="text-xs text-[var(--muted)] flex-shrink-0">{time || '—'}</span>
-        <span className="flex-1 truncate text-xs text-[var(--text)]">{title}</span>
-      </div>
+      <span className={`${theme.textClass} flex-shrink-0 text-[16px] leading-none`}>
+        <Icon name={theme.iconName} size="sm" className="text-[16px] leading-none" />
+      </span>
+      <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">{time || '—'}</span>
+      <span className="flex-1 truncate text-xs text-[var(--text)] font-normal">{title}</span>
       <div className="flex items-center gap-0.5 flex-shrink-0">
         {painFlag && (
           <Icon name="painFlag" size="sm" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />

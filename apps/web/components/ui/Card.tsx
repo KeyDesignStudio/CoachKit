@@ -9,8 +9,8 @@ export type CardProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 const variantClasses: Record<CardVariant, string> = {
-  default: 'glass',
-  soft: 'glass-soft',
+  default: 'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+  soft: 'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]',
 };
 
 export function Card({ className, variant = 'default', ...props }: CardProps) {

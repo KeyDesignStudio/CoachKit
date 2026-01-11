@@ -71,12 +71,12 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+        className="fixed inset-0 z-40 bg-black/20"
         onClick={onClose}
       />
       
       {/* Drawer */}
-      <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-white/20 bg-white/40 backdrop-blur-3xl shadow-2xl">
+      <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--bg-surface)]">
         <div className="flex flex-col gap-6 p-6">
           {/* Header */}
           <div className="flex items-start justify-between">
@@ -100,14 +100,14 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-white/30 bg-white/50 p-2 text-sm hover:bg-white/70"
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 text-sm hover:bg-[var(--bg-surface)] transition-colors"
             >
               ✕
             </button>
           </div>
 
           {/* Planned Details */}
-          <section className="rounded-2xl border border-white/30 bg-white/30 p-4">
+          <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Planned</h3>
             <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
               <div>
@@ -127,7 +127,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
 
           {/* Coach Advice */}
           {item.notes && (
-            <section className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
                 <Icon name="coachAdvice" size="sm" className="text-amber-600" />
                 Coach Advice
@@ -138,7 +138,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
 
           {/* Completed Activity */}
           {item.latestCompletedActivity && (
-            <section className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Completed</h3>
               {item.latestCompletedActivity.painFlag && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
@@ -169,7 +169,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
 
           {/* Comments */}
           {item.comments.length > 0 && (
-            <section className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
                 <Icon name="athleteComment" size="sm" className="text-blue-600" />
                 Comments
@@ -178,11 +178,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
                 {item.comments.map((comment) => (
                   <li
                     key={comment.id}
-                    className={`rounded-2xl border p-3 shadow-inner ${
-                      comment.author.role === 'ATHLETE'
-                        ? 'border-blue-300/50 bg-blue-50/50'
-                        : 'border-white/30 bg-white/40'
-                    }`}
+                    className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3"
                   >
                     <p className="text-sm text-[var(--text)]">{comment.body}</p>
                     <p className="mt-1 text-xs text-[var(--muted)]">

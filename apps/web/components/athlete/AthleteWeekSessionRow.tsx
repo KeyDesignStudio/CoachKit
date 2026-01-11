@@ -77,8 +77,9 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteW
       data-athlete-week-session-row="v2"
       className={cn(
         'w-full cursor-pointer text-left',
-        'bg-white/35 hover:bg-white/50 border border-white/25 rounded-lg px-2 py-1.5',
-        'transition-colors'
+        'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl px-2 py-1.5',
+        'transition-shadow',
+        'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
       )}
       aria-label={`Open ${disciplineLabel} session`}
     >

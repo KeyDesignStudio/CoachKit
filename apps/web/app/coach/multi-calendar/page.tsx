@@ -219,7 +219,7 @@ export default function MultiAthleteCalendarPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
+      <header className="flex flex-col gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
@@ -248,13 +248,13 @@ export default function MultiAthleteCalendarPage() {
               onChange={setSelectedAthleteIds}
             />
 
-            <div className="flex items-center rounded-xl border border-white/20 bg-white/30 p-1 backdrop-blur-sm w-full md:w-auto">
+            <div className="flex items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1 w-full md:w-auto">
               <button
                 type="button"
                 onClick={() => handleFilterChange('all')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   filterMode === 'all'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -265,7 +265,7 @@ export default function MultiAthleteCalendarPage() {
                 onClick={() => handleFilterChange('comments')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   filterMode === 'comments'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -276,7 +276,7 @@ export default function MultiAthleteCalendarPage() {
                 onClick={() => handleFilterChange('without-comments')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   filterMode === 'without-comments'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -287,7 +287,7 @@ export default function MultiAthleteCalendarPage() {
                 onClick={() => handleFilterChange('pain')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   filterMode === 'pain'
-                    ? 'bg-white/80 text-[var(--foreground)] shadow-sm'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
@@ -301,7 +301,7 @@ export default function MultiAthleteCalendarPage() {
                   type="checkbox"
                   checked={showOnlyWithSessions}
                   onChange={(e) => setShowOnlyWithSessions(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/30"
+                  className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                 />
                 <span>Only with sessions</span>
               </label>
@@ -316,7 +316,7 @@ export default function MultiAthleteCalendarPage() {
       </header>
 
       {filteredAthleteData.length === 0 && !loading ? (
-        <div className="rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
           <p className="text-lg text-[var(--muted)]">No athletes or sessions to display.</p>
         </div>
       ) : (

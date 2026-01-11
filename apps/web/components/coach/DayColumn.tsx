@@ -15,17 +15,19 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
   return (
     <>
       {/* Mobile: Full-width card per day */}
-      <div className={`flex flex-col md:hidden rounded-2xl border overflow-hidden ${isToday ? 'border-blue-400 bg-blue-50/30' : 'border-white/20 bg-white/40'} backdrop-blur-3xl`}>
-        <div className={`px-4 py-3 border-b ${isToday ? 'bg-blue-100/60 border-blue-200' : 'bg-white/60 border-white/20'}`}>
+      <div
+        className={`flex flex-col md:hidden rounded-2xl border border-[var(--border-subtle)] overflow-hidden bg-[var(--bg-structure)] ${
+          isToday ? 'ring-2 ring-blue-500/40 ring-inset' : ''
+        }`}
+      >
+        <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">{dayName}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
               <p className="text-sm font-medium">{formattedDate}</p>
             </div>
             {isToday && (
-              <span className="rounded-full bg-blue-500 px-2 py-1 text-xs font-semibold text-white">
-                Today
-              </span>
+              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
             )}
           </div>
         </div>
@@ -43,14 +45,16 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
       </div>
 
       {/* Desktop: Column in grid */}
-      <div className={`hidden md:flex min-w-0 flex-col border-r border-white/20 last:border-r-0 ${isToday ? 'bg-blue-50/30' : ''}`}>
-        <div className={`sticky top-0 z-10 border-b border-white/20 px-3 py-3 backdrop-blur-xl ${isToday ? 'bg-blue-100/60' : 'bg-white/60'}`}>
+      <div
+        className={`hidden md:flex min-w-0 flex-col rounded-2xl border border-[var(--border-subtle)] overflow-hidden bg-[var(--bg-structure)] ${
+          isToday ? 'ring-2 ring-blue-500/40 ring-inset' : ''
+        }`}
+      >
+        <div className="sticky top-0 z-10 border-b border-[var(--border-subtle)] px-3 py-2 bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">{dayName}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             {isToday && (
-              <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                Today
-              </span>
+              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
             )}
           </div>
           <p className="text-sm font-medium">{formattedDate}</p>

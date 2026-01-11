@@ -27,7 +27,7 @@ export function ReviewChip({
   const theme = getDisciplineTheme(discipline);
 
   return (
-    <div className="group relative mb-2 flex items-center gap-2 rounded-xl border border-white/30 bg-white/50 p-2 hover:bg-white/70 transition-colors">
+    <div className="group relative mb-2 flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 transition-[background-color,box-shadow] hover:bg-[var(--bg-surface)] hover:shadow-sm">
       <button
         type="button"
         onClick={onClick}
@@ -58,7 +58,7 @@ export function ReviewChip({
             e.stopPropagation();
             onQuickReview();
           }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg border border-white/40 bg-white/60 px-2 py-1 text-xs font-medium hover:bg-white/80"
+          className="opacity-0 group-hover:opacity-100 transition-[opacity,background-color,box-shadow] rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs font-medium hover:bg-[var(--bg-surface)] hover:shadow-sm"
           title="Quick mark reviewed"
         >
           <Icon name="reviewed" size="sm" />

@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0"
           />
         </head>
-        <body className="bg-[var(--bg)] text-[var(--text)]">
+        <body className="bg-[var(--bg-page)] text-[var(--text)]">
           <BrandingProvider>
             <div className="flex min-h-screen flex-col gap-6 pb-10">
               <AppHeader />

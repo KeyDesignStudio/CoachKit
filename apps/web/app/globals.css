@@ -5,9 +5,17 @@
 @tailwind utilities;
 
 :root {
-  --bg: #e7ecf8;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-2: rgba(255, 255, 255, 0.65);
+  /* Surface hierarchy tokens (single source of truth) */
+  --bg-page: #EEF0F3;
+  --bg-surface: #F6F7F9;
+  --bg-structure: #E6E9ED;
+  --bg-card: #FFFFFF;
+  --border-subtle: rgba(0, 0, 0, 0.04);
+
+  /* Legacy aliases (keep existing components working; do not add new usage) */
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
   --text: #0c1222;
   --muted: #5a647d;
   --primary: #2f68ff;
@@ -16,9 +24,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #05060e;
-    --surface: rgba(13, 17, 35, 0.75);
-    --surface-2: rgba(18, 24, 45, 0.65);
+    /* Preserve existing dark-mode behavior (no new feature work) */
+    --bg-page: #05060e;
+    --bg-surface: rgba(13, 17, 35, 0.75);
+    --bg-structure: rgba(18, 24, 45, 0.65);
+    --bg-card: rgba(18, 24, 45, 0.85);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+
+    --bg: var(--bg-page);
+    --surface: var(--bg-surface);
+    --surface-2: var(--bg-structure);
     --text: #f8fbff;
     --muted: #94a3b8;
     --primary: #7ba6ff;
@@ -37,9 +52,7 @@ body {
   padding: 0;
   min-height: 100vh;
   font-family: 'Space Grotesk', 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.9), rgba(231, 236, 248, 0.65)),
-    linear-gradient(135deg, rgba(196, 210, 255, 0.45), rgba(255, 255, 255, 0.15));
-  background-color: var(--bg);
+  background-color: var(--bg-page);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -55,19 +68,13 @@ a {
 }
 
 .glass {
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 1.25rem;
-  box-shadow: 0 25px 45px rgba(15, 23, 42, 0.18);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
 }
 
 .glass-soft {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  background: var(--surface-2);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.85rem;
-  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.12);
+  background: var(--bg-structure);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
 }

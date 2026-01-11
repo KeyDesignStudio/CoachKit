@@ -69,7 +69,7 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/50 px-3 py-2 text-sm hover:bg-white/70 transition-colors"
+        className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-sm hover:bg-[var(--bg-structure)] transition-colors"
       >
         <span className="font-medium">
           {selectedIds.size === 0
@@ -85,23 +85,23 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
           <div 
-            className="fixed z-[101] w-80 max-h-96 overflow-hidden rounded-2xl border border-white/20 bg-white/95 backdrop-blur-3xl shadow-2xl"
+            className="fixed z-[101] w-80 max-h-96 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
             style={{
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`,
             }}
           >
-            <div className="p-3 border-b border-white/20">
+            <div className="p-3 border-b border-[var(--border-subtle)]">
               <input
                 type="text"
                 placeholder="Search athletes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-white/30 bg-white/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
-            <div className="p-2 border-b border-white/20">
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/50 cursor-pointer">
+            <div className="p-2 border-b border-[var(--border-subtle)]">
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--bg-structure)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -109,7 +109,7 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                     if (el) el.indeterminate = someSelected;
                   }}
                   onChange={toggleAll}
-                  className="w-4 h-4 rounded border-white/30"
+                  className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                 />
                 <span className="font-medium text-sm">
                   {allSelected ? 'Deselect all' : 'Select all'}
@@ -123,13 +123,13 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                 filteredAthletes.map((athlete) => (
                   <label
                     key={athlete.userId}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-white/50 cursor-pointer"
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedIds.has(athlete.userId)}
                       onChange={() => toggleAthlete(athlete.userId)}
-                      className="w-4 h-4 rounded border-white/30"
+                      className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                     />
                     <span className="text-sm">{athlete.user.name || athlete.userId}</span>
                   </label>

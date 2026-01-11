@@ -12,45 +12,49 @@ type WorkoutCardProps = {
   onClick: () => void;
 };
 
+function getDisciplineLabel(discipline: string): string {
+  const d = (discipline || 'OTHER').toUpperCase();
+  if (d === 'RUN' || d === 'BIKE' || d === 'SWIM' || d === 'REST') return d;
+  if (d === 'BRICK') return 'BRICK';
+  if (d === 'STRENGTH') return 'STR';
+  return d.slice(0, 5);
+}
+
 export function WorkoutCard({ time, title, discipline, hasAdvice, painFlag = false, onClick }: WorkoutCardProps) {
   const theme = getDisciplineTheme(discipline);
+  const disciplineLabel = getDisciplineLabel(discipline);
 
   return (
     <button
       onClick={onClick}
+      data-coach-workout-card="v2"
       className={cn(
-        'w-full rounded-2xl border border-white/30 bg-white/60 p-3 text-left shadow-sm backdrop-blur-xl transition-all hover:border-white/50 hover:bg-white/70 hover:shadow-md',
-        'border-l-4',
-        theme.accentClass,
-        theme.bgClass
+        'w-full cursor-pointer text-left',
+        'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl px-2 py-1.5',
+        'transition-shadow',
+        'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
       )}
     >
-      <div className="flex items-start gap-2">
-        <Icon name={theme.iconName} size="sm" className={`${theme.textClass} flex-shrink-0 mt-0.5`} />
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Icon + discipline label (stacked; stable) */}
+        <div className="flex flex-col items-center justify-center w-11 flex-shrink-0">
+          <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'text-[16px] leading-none')} />
+          <span className={cn('text-[10px] font-medium leading-none mt-0.5', theme.textClass)}>{disciplineLabel}</span>
+        </div>
+
+        {/* Time + title */}
         <div className="flex-1 min-w-0">
-          {time ? <p className="text-xs font-medium text-[var(--muted)]">{time}</p> : null}
-          <p className="truncate text-sm font-semibold">{title}</p>
+          <p className="text-[10px] leading-none text-[var(--muted)]">{time ?? ''}</p>
+          <p className="text-xs font-normal truncate text-[var(--text)]">{title || disciplineLabel}</p>
         </div>
-        <span className={cn('shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold', theme.textClass, theme.bgClass)}>
-          {theme.badgeText}
-        </span>
+
+        {/* Indicators (right-aligned) */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {painFlag ? <Icon name="painFlag" size="sm" className="text-[16px] leading-none text-rose-500" /> : null}
+          {hasAdvice ? <Icon name="coachAdvice" size="sm" className="text-[16px] leading-none text-amber-600" /> : null}
+          <span className="w-[16px]" />
+        </div>
       </div>
-      {(hasAdvice || painFlag) ? (
-        <div className="mt-2 flex items-center gap-2">
-          {painFlag ? (
-            <div className="flex items-center gap-1">
-              <Icon name="painFlag" size="sm" className="text-rose-500" />
-              <span className="text-xs text-rose-600">Pain</span>
-            </div>
-          ) : null}
-          {hasAdvice ? (
-            <div className="flex items-center gap-1">
-              <Icon name="coachAdvice" size="sm" className="text-amber-600" />
-              <span className="text-xs text-amber-600">Advice</span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </button>
   );
 }

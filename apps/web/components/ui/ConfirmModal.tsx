@@ -24,10 +24,10 @@ export function ConfirmModal({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={onCancel} />
+      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/30 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl">
+      <div className="fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6">
         <h3 className="mb-2 text-lg font-semibold">{title}</h3>
         <p className="mb-6 text-sm text-slate-700">{message}</p>
         <div className="flex gap-3">
@@ -39,7 +39,7 @@ export function ConfirmModal({
           </button>
           <button
             onClick={onCancel}
-            className="rounded-full border border-white/30 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white/80"
+            className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-slate-700 hover:bg-[var(--bg-structure)]"
           >
             {cancelLabel}
           </button>

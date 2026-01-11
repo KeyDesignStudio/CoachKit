@@ -1,4 +1,4 @@
-import { SessionChip } from './SessionChip';
+import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 
 type CalendarItem = {
   id: string;
@@ -21,59 +21,44 @@ type MonthDayCellProps = {
   isToday: boolean;
   onDayClick: () => void;
   onItemClick: (item: CalendarItem) => void;
+  athleteTimezone?: string;
 };
-
-const MAX_VISIBLE_ITEMS = 3;
 
 export function MonthDayCell({
   date,
+  dateStr,
   items,
   isCurrentMonth,
   isToday,
   onDayClick,
   onItemClick,
+  athleteTimezone,
 }: MonthDayCellProps) {
-  const dayNumber = date.getDate();
-  const visibleItems = items.slice(0, MAX_VISIBLE_ITEMS);
-  const remainingCount = items.length - MAX_VISIBLE_ITEMS;
+  const itemsById = new Map(items.map((item) => [item.id, item] as const));
 
   return (
-    <div
-      className={`min-h-[120px] border-r border-b border-white/20 p-2 last:border-r-0 ${
-        !isCurrentMonth ? 'bg-white/10' : 'bg-white/30'
-      } ${isToday ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
-    >
-      <button
-        onClick={onDayClick}
-        className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium hover:bg-white/50 ${
-          isToday ? 'bg-blue-500 text-white' : isCurrentMonth ? '' : 'text-[var(--muted)]'
-        }`}
-      >
-        {dayNumber}
-      </button>
-      
-      <div className="space-y-1">
-        {visibleItems.map((item) => (
-          <SessionChip
-            key={item.id}
-            time={item.plannedStartTimeLocal}
-            title={item.title}
-            discipline={item.discipline}
-            status={item.status}
-            painFlag={item.latestCompletedActivity?.painFlag ?? false}
-            onClick={() => onItemClick(item)}
-          />
-        ))}
-        
-        {remainingCount > 0 ? (
-          <button
-            onClick={onDayClick}
-            className="w-full rounded-lg px-2 py-1 text-xs text-[var(--muted)] hover:bg-white/30"
-          >
-            +{remainingCount} more
-          </button>
-        ) : null}
-      </div>
-    </div>
+    <AthleteMonthDayCell
+      date={date}
+      dateStr={dateStr}
+      items={items.map((item) => ({
+        id: item.id,
+        date: item.date,
+        plannedStartTimeLocal: item.plannedStartTimeLocal,
+        displayTimeLocal: item.plannedStartTimeLocal,
+        discipline: item.discipline,
+        status: item.status,
+        title: item.title,
+      }))}
+      isCurrentMonth={isCurrentMonth}
+      isToday={isToday}
+      athleteTimezone={athleteTimezone}
+      onDayClick={() => onDayClick()}
+      onItemClick={(itemId) => {
+        const found = itemsById.get(itemId);
+        if (found) {
+          onItemClick(found);
+        }
+      }}
+    />
   );
 }
