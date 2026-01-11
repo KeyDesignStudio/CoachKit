@@ -26,7 +26,10 @@ Goal: verify that STRAVA-synced sessions show consistent *actual* start times ac
    - Remove or set `NEXT_PUBLIC_DEBUG_STRAVA_TIME=false`
    - Restart dev server
    - Confirm there are no `[strava-time]` console logs
-   - Confirm API responses do **not** include `debugTime` (e.g., check `/api/athlete/calendar?...` and `/api/athlete/calendar-items/:id`).
+   - Confirm API responses do **not** include `debug.stravaTime` (e.g., check `/api/athlete/calendar?...` and `/api/athlete/calendar-items/:id`).
+
+## Reference
+- See [docs/STRAVA_TROUBLESHOOTING.md](docs/STRAVA_TROUBLESHOOTING.md) for canonical time rules, debug mode details, and backfill guidance.
 
 ## Production guardrail
-- `debugTime` and `[strava-time]` logs must never appear when `NODE_ENV=production`, regardless of environment variables.
+- `debug.stravaTime` and `[strava-time]` logs must never appear when `NODE_ENV=production`, regardless of environment variables.

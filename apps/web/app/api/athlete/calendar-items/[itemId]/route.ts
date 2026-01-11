@@ -6,6 +6,7 @@ import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { notFound } from '@/lib/errors';
 import { startOfWeek } from '@/lib/date';
+import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,8 +61,7 @@ export async function GET(
 ) {
   try {
     const { user } = await requireAthlete();
-    const includeDebug =
-      process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true';
+    const includeDebug = isStravaTimeDebugEnabled();
 
     const item = await prisma.calendarItem.findFirst({
       where: { id: context.params.itemId, athleteId: user.id },
@@ -97,13 +97,17 @@ export async function GET(
       ? {
           ...completed,
           effectiveStartTimeUtc: getEffectiveActualStartUtc(completed).toISOString(),
-          debugTime:
+          // DEV-ONLY DEBUG — Strava time diagnostics
+          // Never enabled in production. Do not rely on this data.
+          debug:
             includeDebug && completed.source === CompletionSource.STRAVA
               ? {
-                  tzUsed: user.timezone,
-                  stravaStartDateUtcRaw: completed.metricsJson?.strava?.startDateUtc ?? null,
-                  stravaStartDateLocalRaw: completed.metricsJson?.strava?.startDateLocal ?? null,
-                  storedStartTimeUtc: completed.startTime?.toISOString?.() ?? null,
+                  stravaTime: {
+                    tzUsed: user.timezone,
+                    stravaStartDateUtcRaw: completed.metricsJson?.strava?.startDateUtc ?? null,
+                    stravaStartDateLocalRaw: completed.metricsJson?.strava?.startDateLocal ?? null,
+                    storedStartTimeUtc: completed.startTime?.toISOString?.() ?? null,
+                  },
                 }
               : undefined,
         }

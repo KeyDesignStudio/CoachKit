@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { assertValidDateRange, parseDateOnly, startOfWeek } from '@/lib/date';
+import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,8 +51,7 @@ function getEffectiveActualStartUtc(completion: {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await requireAthlete();
-    const includeDebug =
-      process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true';
+    const includeDebug = isStravaTimeDebugEnabled();
     const { searchParams } = new URL(request.url);
     const params = querySchema.parse({
       from: searchParams.get('from'),
@@ -134,13 +134,17 @@ export async function GET(request: NextRequest) {
             painFlag: latest.painFlag,
             source: latest.source,
             effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
-            debugTime:
+            // DEV-ONLY DEBUG — Strava time diagnostics
+            // Never enabled in production. Do not rely on this data.
+            debug:
               includeDebug && latest.source === CompletionSource.STRAVA
                 ? {
-                    tzUsed: user.timezone,
-                    stravaStartDateUtcRaw: latest.metricsJson?.strava?.startDateUtc ?? null,
-                    stravaStartDateLocalRaw: latest.metricsJson?.strava?.startDateLocal ?? null,
-                    storedStartTimeUtc: latest.startTime?.toISOString?.() ?? null,
+                    stravaTime: {
+                      tzUsed: user.timezone,
+                      stravaStartDateUtcRaw: latest.metricsJson?.strava?.startDateUtc ?? null,
+                      stravaStartDateLocalRaw: latest.metricsJson?.strava?.startDateLocal ?? null,
+                      storedStartTimeUtc: latest.startTime?.toISOString?.() ?? null,
+                    },
                   }
                 : undefined,
           }

@@ -1,3 +1,6 @@
+import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
+import { isStravaTimeDebugEnabled } from '@/lib/debug';
+
 type CalendarItemLike = {
   id?: string;
   date: string;
@@ -8,16 +11,16 @@ type CalendarItemLike = {
     startTime?: string | Date;
     source?: string;
     startTimeUtc?: string | null;
-    debugTime?: {
-      tzUsed?: string;
-      stravaStartDateUtcRaw?: string | null;
-      stravaStartDateLocalRaw?: string | null;
-      storedStartTimeUtc?: string | null;
+    debug?: {
+      stravaTime?: {
+        tzUsed?: string;
+        stravaStartDateUtcRaw?: string | null;
+        stravaStartDateLocalRaw?: string | null;
+        storedStartTimeUtc?: string | null;
+      };
     };
   } | null;
 };
-
-import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 
 function getZonedDateKey(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -49,7 +52,11 @@ function getItemDateKey(value: string): string {
  * - Future day: planned time
  * - Past/no completion: planned time (for now)
  */
-export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: string, now: Date = new Date()): string | null {
+export function getCalendarDisplayTime(
+  item: CalendarItemLike,
+  athleteTimezone: string,
+  now: Date = new Date()
+): string | null {
   const planned = item.plannedStartTimeLocal;
 
   if (item.status === 'SKIPPED') return planned;
@@ -58,12 +65,9 @@ export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: 
   if (actualStart) {
     const formattedLocalTime = formatTimeInTimezone(actualStart, athleteTimezone);
 
-    if (
-      process.env.NODE_ENV !== 'production' &&
-      process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true' &&
-      typeof window !== 'undefined' &&
-      item.latestCompletedActivity?.source === 'STRAVA'
-    ) {
+    // DEV-ONLY DEBUG — Strava time diagnostics
+    // Never enabled in production. Do not rely on this data.
+    if (isStravaTimeDebugEnabled() && typeof window !== 'undefined' && item.latestCompletedActivity?.source === 'STRAVA') {
       const key = '__ck_strava_time_debug_count__';
       const current = Number((window as any)[key] ?? 0);
       if (Number.isFinite(current) && current < 25) {
@@ -76,12 +80,14 @@ export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: 
           planned,
           actualStart,
           effectiveStartTimeUtc: item.latestCompletedActivity?.effectiveStartTimeUtc ?? null,
-          stravaStartDateUtcRaw: item.latestCompletedActivity?.debugTime?.stravaStartDateUtcRaw ?? null,
-          stravaStartDateLocalRaw: item.latestCompletedActivity?.debugTime?.stravaStartDateLocalRaw ?? null,
+          stravaStartDateUtcRaw: item.latestCompletedActivity?.debug?.stravaTime?.stravaStartDateUtcRaw ?? null,
+          stravaStartDateLocalRaw:
+            item.latestCompletedActivity?.debug?.stravaTime?.stravaStartDateLocalRaw ?? null,
           formattedLocalTime,
         });
       }
     }
+
     return formattedLocalTime;
   }
 
