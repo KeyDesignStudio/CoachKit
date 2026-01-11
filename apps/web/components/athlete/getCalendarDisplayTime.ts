@@ -8,6 +8,8 @@ type CalendarItemLike = {
   } | null;
 };
 
+import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
+
 function getZonedDateKey(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -18,15 +20,6 @@ function getZonedDateKey(date: Date, timeZone: string): string {
 
   const lookup = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   return `${lookup.year}-${lookup.month}-${lookup.day}`;
-}
-
-function formatZonedTime(instant: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(instant);
 }
 
 function getItemDateKey(value: string): string {
@@ -54,10 +47,7 @@ export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: 
 
   const actualStart = item.latestCompletedActivity?.startTime;
   if (actualStart) {
-    const instant = actualStart instanceof Date ? actualStart : new Date(actualStart);
-    if (!Number.isNaN(instant.getTime())) {
-      return formatZonedTime(instant, athleteTimezone);
-    }
+    return formatTimeInTimezone(actualStart, athleteTimezone);
   }
 
   const itemDayKey = getItemDateKey(item.date);

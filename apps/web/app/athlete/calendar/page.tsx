@@ -130,6 +130,8 @@ export default function AthleteCalendarPage() {
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
+
+    const now = new Date();
     
     const gridStart = getMonthGridStart(currentMonth.year, currentMonth.month);
     const days = [];
@@ -146,7 +148,7 @@ export default function AthleteCalendarPage() {
         items: sortSessionsForDay(
           (itemsByDate[dateStr] || []).map((item) => ({
             ...item,
-            displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
+            displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
           })),
           athleteTimezone
         ),
@@ -154,7 +156,7 @@ export default function AthleteCalendarPage() {
     }
     
     return days;
-  }, [viewMode, currentMonth, itemsByDate]);
+  }, [viewMode, currentMonth, itemsByDate, athleteTimezone]);
 
   const loadItems = useCallback(async () => {
     if (user?.role !== 'ATHLETE' || !user.userId) {

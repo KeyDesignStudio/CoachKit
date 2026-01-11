@@ -14,6 +14,7 @@ import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
+import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 
 type CompletedActivity = {
   id: string;
@@ -64,24 +65,16 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
-  const formatZonedTime = (isoString: string | undefined) => {
-    if (!isoString) return null;
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return null;
-    return new Intl.DateTimeFormat(undefined, {
-      timeZone: user?.timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(date);
-  };
+  const tz = user?.timezone || 'Australia/Brisbane';
+
+  const formatZonedTime = (isoString: string | undefined) => formatTimeInTimezone(isoString, tz);
 
   const formatZonedDateTime = (isoString: string | undefined) => {
     if (!isoString) return null;
     const date = new Date(isoString);
     if (Number.isNaN(date.getTime())) return null;
     return new Intl.DateTimeFormat(undefined, {
-      timeZone: user?.timezone,
+      timeZone: tz,
       year: 'numeric',
       month: 'short',
       day: '2-digit',
