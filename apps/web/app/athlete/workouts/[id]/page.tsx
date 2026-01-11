@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -42,10 +43,12 @@ type CalendarItem = {
 
 export default function AthleteWorkoutDetailPage({ params }: { params: { id: string } }) {
   const workoutId = params.id;
+  const router = useRouter();
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [item, setItem] = useState<CalendarItem | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
     durationMinutes: 60,
@@ -157,12 +160,26 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }
   }, [request, user?.role, user?.userId, workoutId]);
 
+  const handleClose = useCallback(() => {
+    if (submitting) return;
+
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push('/athlete/calendar');
+  }, [router, submitting]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   const submitCompletion = async (event: FormEvent) => {
     event.preventDefault();
+
+    if (submitting) return;
+    setSubmitting(true);
 
     try {
       if (isDraftStrava) {
@@ -192,6 +209,8 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -464,13 +483,30 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   </div>
 
                   {/* Action buttons at bottom */}
-                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-white/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
                     {item.status === 'PLANNED' ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={skipWorkout} className="min-h-[44px]">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={skipWorkout}
+                        className="min-h-[44px] w-full sm:w-auto"
+                        disabled={submitting}
+                      >
                         Skip
                       </Button>
                     ) : null}
-                    <Button type="submit" size="sm" className="min-h-[44px]">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="min-h-[44px] w-full sm:w-auto"
+                      onClick={handleClose}
+                      disabled={submitting}
+                    >
+                      Close
+                    </Button>
+                    <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
                       {isDraftStrava ? 'Confirm' : 'Complete'}
                     </Button>
                   </div>
@@ -516,6 +552,19 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       <p className="text-sm mt-1 whitespace-pre-wrap">{latestNoteToCoach}</p>
                     </div>
                   ) : null}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="min-h-[44px] w-full sm:w-auto"
+                    onClick={handleClose}
+                    disabled={submitting}
+                  >
+                    Close
+                  </Button>
                 </div>
               </Card>
             ) : null}
