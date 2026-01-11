@@ -86,8 +86,8 @@ export function getSessionStatusVisual(session: SessionLike, now: Date = new Dat
     return {
       icon,
       overlay: 'skipped',
-      iconColor: 'text-rose-500/70',
-      backgroundTint: 'bg-rose-500/5',
+      iconColor: 'text-[var(--muted)]',
+      backgroundTint: 'bg-slate-500/5',
     };
   }
 
@@ -95,9 +95,9 @@ export function getSessionStatusVisual(session: SessionLike, now: Date = new Dat
   if ((session.status === 'PLANNED' || session.status === 'MODIFIED') && ended) {
     return {
       icon,
-      overlay: 'skipped',
-      iconColor: 'text-rose-500/70',
-      backgroundTint: 'bg-rose-500/5',
+      overlay: 'missed',
+      iconColor: 'text-amber-700/70',
+      backgroundTint: 'bg-amber-500/5',
     };
   }
 
@@ -112,7 +112,8 @@ export function getSessionStatusVisual(session: SessionLike, now: Date = new Dat
 
 function pickDayTint(visuals: SessionStatusVisual[]): string | null {
   // Priority: MISSED > DRAFT > SUBMITTED > REST
-  if (visuals.some((v) => v.overlay === 'skipped' && v.backgroundTint)) return 'bg-rose-500/5';
+  if (visuals.some((v) => v.overlay === 'missed' && v.backgroundTint)) return 'bg-amber-500/5';
+  if (visuals.some((v) => v.overlay === 'skipped' && v.backgroundTint)) return 'bg-slate-500/5';
   if (visuals.some((v) => v.overlay === 'needsReview' && v.backgroundTint)) return 'bg-amber-500/5';
   if (visuals.some((v) => v.overlay === 'completed' && v.backgroundTint)) return 'bg-emerald-500/5';
   if (visuals.some((v) => v.icon === 'disciplineRest' && v.backgroundTint)) return 'bg-slate-500/5';
@@ -163,7 +164,7 @@ export function getDayVisualSummary(items: SessionLike[], now: Date = new Date()
       continue;
     }
 
-    if (v.overlay === 'skipped') {
+    if (v.overlay === 'missed' || v.overlay === 'skipped') {
       missed += 1;
       continue;
     }

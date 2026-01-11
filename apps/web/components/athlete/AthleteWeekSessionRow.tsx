@@ -45,29 +45,33 @@ function getDisciplineLabel(discipline: string): string {
   return d.slice(0, 5);
 }
 
-function getAccountabilityStatusIcon(item: AthleteWeekSessionRowItem, now: Date): { name: IconName | null; className: string } {
+function getAccountabilityStatusIcon(item: AthleteWeekSessionRowItem, now: Date): { name: IconName | null; className: string; title: string | null } {
   const sessionDate = parseDateOnlyLocal(item.date);
   const ended = isDayEndedLocal(sessionDate, now);
 
-  if (item.discipline === 'REST') return { name: null, className: '' };
+  if (item.discipline === 'REST') return { name: null, className: '', title: null };
 
   if (item.status === 'COMPLETED_SYNCED_DRAFT') {
-    return { name: 'needsReview', className: 'text-amber-600' };
+    return { name: 'needsReview', className: 'text-amber-600', title: null };
   }
 
   if (item.status === 'COMPLETED_SYNCED' || item.status === 'COMPLETED_MANUAL') {
-    return { name: 'completed', className: 'text-emerald-600' };
+    return { name: 'completed', className: 'text-emerald-600', title: null };
   }
 
   if (item.status === 'SKIPPED') {
-    return { name: 'skipped', className: 'text-[var(--muted)]' };
+    return { name: 'skipped', className: 'text-[var(--muted)]', title: null };
   }
 
   if ((item.status === 'PLANNED' || item.status === 'MODIFIED') && ended) {
-    return { name: 'warning', className: 'text-rose-500/80' };
+    return {
+      name: 'missed',
+      className: 'text-amber-700/70',
+      title: 'Missed session – this workout was planned but not completed',
+    };
   }
 
-  return { name: null, className: '' };
+  return { name: null, className: '', title: null };
 }
 
 export function AthleteWeekSessionRow({ item, onClick, now }: AthleteWeekSessionRowProps) {
@@ -109,7 +113,9 @@ export function AthleteWeekSessionRow({ item, onClick, now }: AthleteWeekSession
           {pain ? <Icon name="painFlag" size="sm" className="text-[16px] leading-none text-rose-500" /> : null}
           {hasAdvice ? <Icon name="coachAdvice" size="sm" className="text-[16px] leading-none text-amber-600" /> : null}
           {statusIcon.name ? (
-            <Icon name={statusIcon.name} size="sm" className={cn('text-[16px] leading-none', statusIcon.className)} />
+            <span title={statusIcon.title ?? undefined}>
+              <Icon name={statusIcon.name} size="sm" className={cn('text-[16px] leading-none', statusIcon.className)} />
+            </span>
           ) : (
             <span className="w-[16px]" />
           )}

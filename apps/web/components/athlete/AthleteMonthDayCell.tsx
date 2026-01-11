@@ -68,6 +68,10 @@ export function AthleteMonthDayCell({
         {visible.map((item) => {
           const visual = getSessionStatusVisual(item, new Date());
           const statusIcon = visual.overlay;
+          const missedTitle =
+            statusIcon === 'missed'
+              ? 'Missed session – this workout was planned but not completed'
+              : undefined;
 
           return (
             <button
@@ -85,7 +89,7 @@ export function AthleteMonthDayCell({
               </span>
               <span className="text-xs text-[var(--text)] truncate flex-1 font-normal">{item.title}</span>
               {statusIcon ? (
-                <span className="text-[16px] leading-none flex-shrink-0">
+                <span className="text-[16px] leading-none flex-shrink-0" title={missedTitle}>
                   <Icon
                     name={statusIcon}
                     size="sm"
@@ -95,7 +99,9 @@ export function AthleteMonthDayCell({
                         ? 'text-emerald-600'
                         : statusIcon === 'needsReview'
                           ? 'text-amber-600'
-                          : 'text-rose-500/70'
+                          : statusIcon === 'missed'
+                            ? 'text-amber-700/70'
+                            : 'text-[var(--muted)]'
                     )}
                   />
                 </span>

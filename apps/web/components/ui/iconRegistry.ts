@@ -26,6 +26,7 @@ export const ICON_NAMES = [
   'planned',
   'completed',
   'skipped',
+  'missed',
   'reviewed',
   'needsReview',
   
@@ -70,6 +71,7 @@ export const ICONS: Record<IconName, string> = {
   planned: 'event',
   completed: 'check_circle',
   skipped: 'remove_circle_outline',
+  missed: 'event_busy',
   reviewed: 'done',
   needsReview: 'pending_actions',
   
