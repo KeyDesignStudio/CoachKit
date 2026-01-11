@@ -11,7 +11,7 @@ import { WeekGrid } from '@/components/coach/WeekGrid';
 import { DayColumn } from '@/components/coach/DayColumn';
 import { WorkoutCard } from '@/components/coach/WorkoutCard';
 import { MonthGrid } from '@/components/coach/MonthGrid';
-import { MonthDayCell } from '@/components/coach/MonthDayCell';
+import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -220,8 +220,13 @@ export default function AthleteCalendarPage() {
     router.push(`/athlete/workouts/${itemId}`);
   };
 
-  const handleItemClick = (item: { id: string }) => {
-    router.push(`/athlete/workouts/${item.id}`);
+  const handleItemIdClick = (itemId: string) => {
+    router.push(`/athlete/workouts/${itemId}`);
+  };
+
+  const handleDayClick = (date: Date) => {
+    setViewMode('week');
+    setWeekStart(startOfWeek(date));
   };
 
   if (userLoading) {
@@ -238,7 +243,11 @@ export default function AthleteCalendarPage() {
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Training</p>
-            <h1 className="text-2xl md:text-3xl font-semibold">{viewMode === 'week' ? 'Weekly Calendar' : 'Monthly Calendar'}</h1>
+            <h1
+              className={`text-2xl md:text-3xl ${viewMode === 'week' ? 'font-semibold' : 'font-normal'}`}
+            >
+              {viewMode === 'week' ? 'Weekly Calendar' : 'Monthly Calendar'}
+            </h1>
             <p className="text-xs md:text-sm text-[var(--muted)]">
               {mounted ? (
                 viewMode === 'week' 
@@ -254,7 +263,7 @@ export default function AthleteCalendarPage() {
             <div className="flex rounded-2xl border border-white/30 bg-white/40 p-1">
               <button
                 onClick={() => setViewMode('week')}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
+                className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
                   viewMode === 'week' ? 'bg-white/80 shadow-sm' : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
               >
@@ -262,7 +271,7 @@ export default function AthleteCalendarPage() {
               </button>
               <button
                 onClick={() => setViewMode('month')}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
+                className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
                   viewMode === 'month' ? 'bg-white/80 shadow-sm' : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
               >
@@ -321,20 +330,22 @@ export default function AthleteCalendarPage() {
           })}
         </WeekGrid>
       ) : (
-        <MonthGrid>
-          {monthDays.map((day) => (
-            <MonthDayCell
-              key={day.dateStr}
-              date={day.date}
-              dateStr={day.dateStr}
-              items={day.items}
-              isCurrentMonth={day.isCurrentMonth}
-              isToday={isToday(day.date)}
-              onDayClick={() => {}} // Athletes can't create sessions
-              onItemClick={handleItemClick}
-            />
-          ))}
-        </MonthGrid>
+        <div data-athlete-month-view-version="athlete-month-v2">
+          <MonthGrid>
+            {monthDays.map((day) => (
+              <AthleteMonthDayCell
+                key={day.dateStr}
+                date={day.date}
+                dateStr={day.dateStr}
+                items={day.items}
+                isCurrentMonth={day.isCurrentMonth}
+                isToday={isToday(day.date)}
+                onDayClick={handleDayClick}
+                onItemClick={handleItemIdClick}
+              />
+            ))}
+          </MonthGrid>
+        </div>
       )}
 
       {!loading && items.length === 0 ? (

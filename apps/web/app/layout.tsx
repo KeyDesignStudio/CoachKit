@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   description: 'CoachKit — Training management platform for coaches and athletes.',
 };
 
+// Auth-gated app: render on-demand.
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider>

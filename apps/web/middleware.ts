@@ -18,6 +18,11 @@ const isProtectedRoute = createRouteMatcher([
  * Note: No database queries in middleware (Edge runtime limitation)
  */
 export default clerkMiddleware(async (auth, request) => {
+  // Guardrail: dev pages never exist in production.
+  if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/dev')) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
   const { userId } = await auth();
   const { pathname } = request.nextUrl;
 
