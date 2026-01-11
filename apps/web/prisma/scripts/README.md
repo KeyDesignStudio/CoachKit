@@ -57,3 +57,30 @@ export CONFIRM_RESET='YES'
 npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
   apps/web/prisma/scripts/reset-athlete1-strava-draft-test-range.ts
 ```
+
+## cleanup-strava-notes-equal-activity-name.ts
+
+ADMIN/one-off cleanup for legacy data where STRAVA sync incorrectly set Athlete notes to the Strava activity name.
+
+What it does:
+- Finds `CompletedActivity` rows where `source=STRAVA` and `notes` is not null
+- If `metricsJson.strava.name` (or `metricsJson.strava.activityName`) exists AND `notes === that name`, sets `notes = null`
+- Leaves all other notes untouched
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+export CONFIRM_STRAVA_NOTES_CLEANUP='YES'
+
+# Dry run (default)
+export DRY_RUN='true'
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/cleanup-strava-notes-equal-activity-name.ts
+
+# Apply changes
+export DRY_RUN='false'
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/cleanup-strava-notes-equal-activity-name.ts
+```

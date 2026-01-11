@@ -287,6 +287,44 @@ async function matchAndLinkCalendarItem(params: {
   return { matched: true as const, calendarItemId: match.id };
 }
 
+async function ensureCalendarItemStatusForSyncedCompletion(params: {
+  calendarItemId: string;
+  confirmedAt: Date | null;
+}) {
+  const { calendarItemId, confirmedAt } = params;
+
+  const item = await prisma.calendarItem.findUnique({
+    where: { id: calendarItemId },
+    select: { status: true },
+  });
+
+  if (!item) return;
+
+  if (!confirmedAt) {
+    // Unconfirmed Strava matches must remain athlete-editable and not coach-visible.
+    if (
+      item.status === CalendarItemStatus.PLANNED ||
+      item.status === CalendarItemStatus.MODIFIED ||
+      item.status === CalendarItemStatus.COMPLETED_SYNCED
+    ) {
+      await prisma.calendarItem.update({
+        where: { id: calendarItemId },
+        data: { status: CalendarItemStatus.COMPLETED_SYNCED_DRAFT },
+      });
+    }
+
+    return;
+  }
+
+  // Confirmed completions should be committed.
+  if (item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT) {
+    await prisma.calendarItem.update({
+      where: { id: calendarItemId },
+      data: { status: CalendarItemStatus.COMPLETED_SYNCED },
+    });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { user } = await requireAuth();
@@ -511,7 +549,9 @@ export async function POST(request: NextRequest) {
           }
 
           // Attempt to match to planned CalendarItem.
-          if (!completed?.calendarItemId) {
+          let calendarItemId: string | null = completed?.calendarItemId ?? null;
+
+          if (!calendarItemId) {
             const match = await matchAndLinkCalendarItem({
               athleteId: entry.athleteId,
               activityDateOnly,
@@ -523,7 +563,16 @@ export async function POST(request: NextRequest) {
 
             if (match.matched) {
               summary.matched += 1;
+              calendarItemId = match.calendarItemId;
             }
+          }
+
+          // Self-heal status in case older runs set it incorrectly (e.g. backfill over existing links).
+          if (calendarItemId) {
+            await ensureCalendarItemStatusForSyncedCompletion({
+              calendarItemId,
+              confirmedAt: completed.confirmedAt ?? null,
+            });
           }
 
         }
