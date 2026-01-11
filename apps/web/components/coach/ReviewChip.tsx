@@ -52,13 +52,13 @@ export function ReviewChip({
         {/* Right: status icons */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {painFlag && (
-            <Icon name="painFlag" size="sm" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+            <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
           )}
           {coachAdvicePresent && (
-            <Icon name="coachAdvice" size="sm" className="text-amber-600" aria-label="Has coach advice" aria-hidden={false} />
+            <Icon name="coachAdvice" size="xs" className="text-amber-600" aria-label="Has coach advice" aria-hidden={false} />
           )}
           {hasAthleteComment && (
-            <Icon name="athleteComment" size="sm" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+            <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
           )}
         </div>
       </button>
@@ -72,7 +72,7 @@ export function ReviewChip({
           className="opacity-0 group-hover:opacity-100 transition-[opacity,background-color,box-shadow] rounded bg-[var(--bg-card)] px-1.5 py-1 text-xs font-medium hover:bg-[var(--bg-structure)] hover:shadow-sm"
           title="Quick mark reviewed"
         >
-          <Icon name="reviewed" size="sm" />
+          <Icon name="reviewed" size="xs" />
         </button>
       )}
     </div>

@@ -98,14 +98,14 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteW
 
         {/* 4) Indicators (right-aligned; consistent order) */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {pain ? <Icon name="painFlag" size="sm" className="text-[16px] leading-none text-rose-500" /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="sm" className="text-[16px] leading-none text-amber-600" /> : null}
+          {pain ? <Icon name="painFlag" size="xs" className="leading-none text-rose-500" /> : null}
+          {hasAdvice ? <Icon name="coachAdvice" size="xs" className="leading-none text-amber-600" /> : null}
           {statusIcon.name ? (
             <span title={statusIcon.title ?? undefined}>
-              <Icon name={statusIcon.name} size="sm" className={cn('text-[16px] leading-none', statusIcon.className)} />
+              <Icon name={statusIcon.name} size="xs" className={cn('leading-none', statusIcon.className)} />
             </span>
           ) : (
-            <span className="w-[16px]" />
+            <span className="w-[13px]" />
           )}
         </div>
       </div>

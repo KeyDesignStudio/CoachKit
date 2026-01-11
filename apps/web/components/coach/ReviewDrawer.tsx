@@ -129,7 +129,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
           {item.notes && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="coachAdvice" size="sm" className="text-amber-600" />
+                <Icon name="coachAdvice" size="xs" className="text-amber-600" />
                 Coach Advice
               </h3>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.notes}</p>
@@ -142,7 +142,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
               <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Completed</h3>
               {item.latestCompletedActivity.painFlag && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                  <Icon name="painFlag" size="sm" className="text-rose-500 shrink-0" />
+                  <Icon name="painFlag" size="xs" className="text-rose-500 shrink-0" />
                   <p className="text-sm text-rose-600 font-medium">Athlete reported pain or discomfort</p>
                 </div>
               )}
@@ -171,7 +171,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
           {item.comments.length > 0 && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="athleteComment" size="sm" className="text-blue-600" />
+                <Icon name="athleteComment" size="xs" className="text-blue-600" />
                 Comments
               </h3>
               <ul className="mt-3 flex flex-col gap-3">

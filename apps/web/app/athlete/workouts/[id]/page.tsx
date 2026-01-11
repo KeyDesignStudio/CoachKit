@@ -269,7 +269,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 {statusIndicator ? (
                   <div className="flex items-center gap-2 flex-shrink-0 justify-end min-w-[44px] sm:min-w-[180px]">
                     <span title={statusIndicator.ariaLabel} aria-label={statusIndicator.ariaLabel}>
-                      <Icon name={statusIndicator.iconName} size="sm" className={statusIndicator.colorClass} />
+                      <Icon name={statusIndicator.iconName} size="xs" className={statusIndicator.colorClass} />
                     </span>
                     <Badge className="hidden sm:inline-flex">{statusLabel}</Badge>
                   </div>
@@ -287,7 +287,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             {item.notes ? (
               <Card className="rounded-3xl">
                 <div className="flex items-start gap-2">
-                  <Icon name="coachAdvice" size="sm" className="text-amber-600 shrink-0 mt-0.5" />
+                  <Icon name="coachAdvice" size="xs" className="text-amber-600 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Coach advice</p>
                     <p className="mt-1 text-sm text-[var(--text)]">{item.notes}</p>

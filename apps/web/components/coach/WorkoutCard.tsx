@@ -50,9 +50,9 @@ export function WorkoutCard({ time, title, discipline, hasAdvice, painFlag = fal
 
         {/* Indicators (right-aligned) */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {painFlag ? <Icon name="painFlag" size="sm" className="text-[16px] leading-none text-rose-500" /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="sm" className="text-[16px] leading-none text-amber-600" /> : null}
-          <span className="w-[16px]" />
+          {painFlag ? <Icon name="painFlag" size="xs" className="leading-none text-rose-500" /> : null}
+          {hasAdvice ? <Icon name="coachAdvice" size="xs" className="leading-none text-amber-600" /> : null}
+          <span className="w-[13px]" />
         </div>
       </div>
     </button>

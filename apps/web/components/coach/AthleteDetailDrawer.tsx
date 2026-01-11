@@ -374,7 +374,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                           className="flex items-start gap-3 rounded-xl border border-white/30 bg-white/30 p-3 text-sm"
                         >
                           <div className="flex items-center gap-2">
-                            <Icon name="painFlag" size="sm" className="text-rose-500" />
+                            <Icon name="painFlag" size="xs" className="text-rose-500" />
                             <Icon name={theme.iconName} size="sm" className={theme.textClass} />
                           </div>
                           <div className="flex-1">

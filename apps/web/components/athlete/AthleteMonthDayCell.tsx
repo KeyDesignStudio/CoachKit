@@ -102,12 +102,12 @@ export function AthleteMonthDayCell({
               </span>
               <span className="text-xs text-[var(--text)] truncate flex-1 font-normal">{item.title}</span>
               {statusIcon ? (
-                <span className="text-[16px] leading-none flex-shrink-0" title={missedTitle}>
+                <span className="flex-shrink-0" title={missedTitle}>
                   <Icon
                     name={statusIcon}
-                    size="sm"
+                    size="xs"
                     className={cn(
-                      'text-[16px] leading-none',
+                      'leading-none',
                       statusIcon === 'completed'
                         ? 'text-emerald-600'
                         : statusIcon === 'needsReview'
@@ -119,7 +119,7 @@ export function AthleteMonthDayCell({
                   />
                 </span>
               ) : (
-                <span className="text-[16px] leading-none flex-shrink-0" />
+                <span className="w-[13px] flex-shrink-0" />
               )}
             </button>
           );
