@@ -56,6 +56,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
   const isStravaCompletion = latestCompletion?.source === 'STRAVA';
+  const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
   const formatActualTime = (isoString: string | undefined) => {
@@ -106,7 +107,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const actualDateTimeLabel = formatActualDateTime(stravaStartLocal) ?? formatActualDateTime(stravaStartUtc);
   const avgSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaAvgSpeedMps) : null;
   const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm) : null;
-  const statusLabel = item?.status === 'COMPLETED_SYNCED_DRAFT'
+  const statusLabel = isDraftStrava
     ? 'Strava detected'
     : item?.status
       ? item.status.replace(/_/g, ' ')
@@ -155,7 +156,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     event.preventDefault();
 
     try {
-      if (item?.status === 'COMPLETED_SYNCED_DRAFT') {
+      if (isDraftStrava) {
         await request(`/api/athlete/calendar-items/${workoutId}/confirm-synced`, {
           method: 'POST',
           data: {
@@ -265,7 +266,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       <p className="text-xs text-[var(--muted)] mt-1">Actual start time: <span className="text-[var(--text)] font-medium">{actualDateTimeLabel}</span></p>
                     ) : null}
                   </div>
-                  {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                  {isDraftStrava ? (
                     <Badge>Pending confirmation</Badge>
                   ) : null}
                 </div>
@@ -316,20 +317,20 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               </Card>
             ) : null}
 
-            {item.status === 'PLANNED' || item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+            {item.status === 'PLANNED' || isDraftStrava ? (
               <Card className="rounded-3xl">
                 <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
                   <div className="space-y-3">
                     <div>
                       <h2 className="text-lg font-semibold">Athlete log</h2>
-                      {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                      {isDraftStrava ? (
                         <p className="text-xs text-[var(--muted)]">Strava detected a workout — add notes/pain and confirm to share with your coach</p>
                       ) : (
                         <p className="text-xs text-[var(--muted)]">Log your effort below</p>
                       )}
                     </div>
 
-                    {item.status === 'COMPLETED_SYNCED_DRAFT' ? (
+                    {isDraftStrava ? (
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <p className="text-xs font-medium text-[var(--muted)]">Duration (min)</p>
@@ -391,7 +392,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                         onChange={(event) => setCompletionForm({ ...completionForm, notes: event.target.value })}
                         rows={2}
                         className="text-sm"
-                        placeholder={item.status === 'COMPLETED_SYNCED_DRAFT' ? 'Add notes before confirming' : 'Private notes for yourself'}
+                        placeholder={isDraftStrava ? 'Add notes before confirming' : 'Private notes for yourself'}
                       />
                     </label>
 
@@ -414,7 +415,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                         onChange={(event) => setCommentDraft(event.target.value)}
                         className="text-sm"
                       />
-                      <p className="text-xs text-[var(--muted)] mt-1">Autosaves when you complete or skip</p>
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or skip'}
+                      </p>
                     </label>
                   </div>
 
@@ -426,7 +429,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       </Button>
                     ) : null}
                     <Button type="submit" size="sm" className="min-h-[44px]">
-                      {item.status === 'COMPLETED_SYNCED_DRAFT' ? 'Confirm' : 'Complete'}
+                      {isDraftStrava ? 'Confirm' : 'Complete'}
                     </Button>
                   </div>
                 </form>
@@ -434,7 +437,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             ) : null}
 
             {/* Show completed activity data if workout is already completed */}
-            {item.status !== 'PLANNED' && item.completedActivities?.[0] ? (
+            {!isDraftStrava && item.status !== 'PLANNED' && item.completedActivities?.[0] ? (
               <Card className="rounded-3xl">
                 <h2 className="text-lg font-semibold">Athlete log</h2>
                 <div className="mt-3 space-y-3">
