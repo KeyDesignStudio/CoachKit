@@ -335,6 +335,7 @@ export default function AthleteCalendarPage() {
                       key={item.id}
                       item={item}
                       onClick={() => handleWorkoutClick(item.id)}
+                      timeZone={athleteTimezone}
                     />
                   ))}
                 </AthleteWeekDayColumn>

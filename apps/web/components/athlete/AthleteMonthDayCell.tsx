@@ -71,7 +71,7 @@ export function AthleteMonthDayCell({
       {/* B) Body: stacked session rows (max 3) */}
       <div className="flex flex-col gap-1">
         {visible.map((item) => {
-          const visual = getSessionStatusVisual(item, new Date());
+          const visual = getSessionStatusVisual(item, { now: new Date(), timeZone: athleteTimezone });
           const statusIcon = visual.overlay;
           const missedTitle =
             statusIcon === 'missed'

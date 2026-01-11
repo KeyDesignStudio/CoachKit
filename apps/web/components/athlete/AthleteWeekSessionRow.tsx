@@ -1,6 +1,7 @@
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import type { IconName } from '@/components/ui/iconRegistry';
+import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { cn } from '@/lib/cn';
 
 export type AthleteWeekSessionRowItem = {
@@ -20,23 +21,9 @@ export type AthleteWeekSessionRowItem = {
 type AthleteWeekSessionRowProps = {
   item: AthleteWeekSessionRowItem;
   onClick: () => void;
+  timeZone: string;
   now?: Date;
 };
-
-function parseDateOnlyLocal(value: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map((part) => Number(part));
-    return new Date(y, m - 1, d);
-  }
-  return new Date(value);
-}
-
-function isDayEndedLocal(date: Date, now: Date): boolean {
-  const dayEnd = new Date(date);
-  dayEnd.setHours(0, 0, 0, 0);
-  dayEnd.setDate(dayEnd.getDate() + 1);
-  return now.getTime() >= dayEnd.getTime();
-}
 
 function getDisciplineLabel(discipline: string): string {
   const d = (discipline || 'OTHER').toUpperCase();
@@ -46,43 +33,42 @@ function getDisciplineLabel(discipline: string): string {
   return d.slice(0, 5);
 }
 
-function getAccountabilityStatusIcon(item: AthleteWeekSessionRowItem, now: Date): { name: IconName | null; className: string; title: string | null } {
-  const sessionDate = parseDateOnlyLocal(item.date);
-  const ended = isDayEndedLocal(sessionDate, now);
+function getAccountabilityStatusIcon(params: {
+  item: AthleteWeekSessionRowItem;
+  now: Date;
+  timeZone: string;
+}): { name: IconName | null; className: string; title: string | null } {
+  const { item, now, timeZone } = params;
 
   if (item.discipline === 'REST') return { name: null, className: '', title: null };
 
-  if (item.status === 'COMPLETED_SYNCED_DRAFT') {
-    return { name: 'needsReview', className: 'text-amber-600', title: null };
-  }
+  const indicator = getSessionStatusIndicator({
+    status: item.status,
+    date: item.date,
+    timeZone,
+    now,
+  });
 
-  if (item.status === 'COMPLETED_SYNCED' || item.status === 'COMPLETED_MANUAL') {
-    return { name: 'completed', className: 'text-emerald-600', title: null };
-  }
+  if (indicator.iconName === 'planned') return { name: null, className: '', title: null };
 
-  if (item.status === 'SKIPPED') {
-    return { name: 'skipped', className: 'text-[var(--muted)]', title: null };
-  }
-
-  if ((item.status === 'PLANNED' || item.status === 'MODIFIED') && ended) {
-    return {
-      name: 'missed',
-      className: 'text-amber-700/70',
-      title: 'Missed session – this workout was planned but not completed',
-    };
-  }
-
-  return { name: null, className: '', title: null };
+  return {
+    name: indicator.iconName,
+    className: indicator.colorClass,
+    title:
+      indicator.iconName === 'missed'
+        ? 'Missed session – this workout was planned but not completed'
+        : null,
+  };
 }
 
-export function AthleteWeekSessionRow({ item, onClick, now }: AthleteWeekSessionRowProps) {
+export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteWeekSessionRowProps) {
   const theme = getDisciplineTheme(item.discipline as any);
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
 
   const pain = item.latestCompletedActivity?.painFlag ?? false;
   const hasAdvice = !!item.notes;
-  const statusIcon = getAccountabilityStatusIcon(item, effectiveNow);
+  const statusIcon = getAccountabilityStatusIcon({ item, now: effectiveNow, timeZone });
 
   return (
     <button

@@ -1,5 +1,6 @@
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import type { IconName } from '@/components/ui/iconRegistry';
+import { isPastEndOfLocalDay } from '@/lib/timezones';
 
 export type SessionStatusVisual = {
   icon: IconName;
@@ -25,33 +26,34 @@ export type DayVisualSummary = {
   sessions: SessionStatusVisualWithId[];
 };
 
-function parseDate(value: string | Date): Date {
-  if (value instanceof Date) return value;
-
-  // Important: date-only strings like "2026-01-11" are parsed as UTC by JS,
-  // which can shift the day in local timezones. Treat them as local dates.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map((part) => Number(part));
-    return new Date(y, m - 1, d);
+function toIsoDateKey(value: string | Date): string {
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
-  return new Date(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (value.includes('T')) return value.split('T')[0];
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return value;
 }
 
-function isDayEnded(sessionDate: Date, now: Date) {
-  const dayEnd = new Date(sessionDate);
-  // Use local day boundaries (not UTC) so "missed" doesn't appear early.
-  dayEnd.setHours(0, 0, 0, 0);
-  dayEnd.setDate(dayEnd.getDate() + 1);
-  return now.getTime() >= dayEnd.getTime();
-}
+type StatusVisualOptions = {
+  now?: Date;
+  timeZone?: string;
+};
 
-export function getSessionStatusVisual(session: SessionLike, now: Date = new Date()): SessionStatusVisual {
+export function getSessionStatusVisual(session: SessionLike, options: StatusVisualOptions = {}): SessionStatusVisual {
   const theme = getDisciplineTheme(session.discipline as any);
   const icon = theme.iconName;
 
-  const sessionDate = parseDate(session.date);
-  const ended = isDayEnded(sessionDate, now);
+  const now = options.now ?? new Date();
+  const timeZone = options.timeZone ?? 'Australia/Brisbane';
+  const dateKey = toIsoDateKey(session.date);
+  const ended = isPastEndOfLocalDay(dateKey, timeZone, now);
 
   // REST (explicit only): represented by an explicit planned REST item.
   if (session.discipline === 'REST') {
@@ -92,7 +94,7 @@ export function getSessionStatusVisual(session: SessionLike, now: Date = new Dat
   }
 
   // MISSED: only after day end.
-  if ((session.status === 'PLANNED' || session.status === 'MODIFIED') && ended) {
+  if (session.status === 'PLANNED' && ended) {
     return {
       icon,
       overlay: 'missed',
@@ -139,8 +141,8 @@ function buildTooltip(params: {
   return parts.length ? parts.join(' • ') : null;
 }
 
-export function getDayVisualSummary(items: SessionLike[], now: Date = new Date()): DayVisualSummary {
-  const sessions = items.map((item) => ({ ...getSessionStatusVisual(item, now), id: item.id }));
+export function getDayVisualSummary(items: SessionLike[], options: StatusVisualOptions = {}): DayVisualSummary {
+  const sessions = items.map((item) => ({ ...getSessionStatusVisual(item, options), id: item.id }));
 
   let planned = 0;
   let completed = 0;

@@ -8,6 +8,8 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 
 type StravaStatusResponse = {
   connected: boolean;
@@ -41,6 +43,23 @@ export default function AthleteSettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<{ at: string; summary: PollSummary } | null>(null);
   const [error, setError] = useState('');
+
+  const [timezone, setTimezone] = useState('Australia/Brisbane');
+  const [savingTimezone, setSavingTimezone] = useState(false);
+  const [timezoneMessage, setTimezoneMessage] = useState('');
+  const [timezoneError, setTimezoneError] = useState('');
+
+  useEffect(() => {
+    const raw = user?.timezone?.trim() ?? '';
+    if (raw) {
+      setTimezone(raw);
+      return;
+    }
+
+    // Only guess from browser if user.timezone is empty.
+    const guessed = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setTimezone(TIMEZONE_VALUES.has(guessed) ? guessed : 'Australia/Brisbane');
+  }, [user?.timezone]);
 
   const resultMessage = useMemo(() => {
     const result = searchParams.get('strava');
@@ -108,6 +127,27 @@ export default function AthleteSettingsPage() {
     }
   };
 
+  const handleTimezoneChange = async (nextTz: string) => {
+    const previous = timezone;
+    setTimezone(nextTz);
+    setSavingTimezone(true);
+    setTimezoneMessage('');
+    setTimezoneError('');
+
+    try {
+      await request<{ user: { id: string; timezone: string } }>('/api/me/timezone', {
+        method: 'PATCH',
+        data: { timezone: nextTz },
+      });
+      setTimezoneMessage('Timezone updated.');
+    } catch (err) {
+      setTimezone(previous);
+      setTimezoneError(err instanceof Error ? err.message : 'Failed to update timezone.');
+    } finally {
+      setSavingTimezone(false);
+    }
+  };
+
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
   }
@@ -132,6 +172,20 @@ export default function AthleteSettingsPage() {
           <Badge>{searchParams.get('strava') || ''}</Badge>
         </Card>
       ) : null}
+
+      <Card className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">Timezone</h2>
+            <p className="text-sm text-[var(--muted)]">Times and day-boundaries (missed) use this timezone.</p>
+          </div>
+          <Badge className="text-[var(--muted)]">{getTimezoneLabel(timezone)}</Badge>
+        </div>
+
+        <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
+        {timezoneMessage ? <p className="text-sm text-emerald-700">{timezoneMessage}</p> : null}
+        {timezoneError ? <p className="text-sm text-red-700">{timezoneError}</p> : null}
+      </Card>
 
       <Card className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

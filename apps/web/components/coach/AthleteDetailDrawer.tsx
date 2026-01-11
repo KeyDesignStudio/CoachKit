@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { useApi } from '@/components/api-client';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
@@ -73,6 +74,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
   const [goalsText, setGoalsText] = useState('');
   const [coachNotes, setCoachNotes] = useState('');
+  const [timezone, setTimezone] = useState('Australia/Brisbane');
 
   // Journal form
   const [newJournalDate, setNewJournalDate] = useState('');
@@ -111,6 +113,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         // Populate form
         setName(athleteData.athlete.user.name || '');
         setEmail(athleteData.athlete.user.email);
+        setTimezone(athleteData.athlete.user.timezone || 'Australia/Brisbane');
         setDateOfBirth(athleteData.athlete.dateOfBirth ? athleteData.athlete.dateOfBirth.split('T')[0] : '');
         setPlanCadenceDays(String(athleteData.athlete.planCadenceDays));
         setSelectedDisciplines(athleteData.athlete.disciplines);
@@ -151,6 +154,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         method: 'PATCH',
         body: JSON.stringify({
           name: name.trim(),
+          timezone,
           disciplines: selectedDisciplines,
           goalsText: goalsText.trim() || null,
           planCadenceDays: cadence,
@@ -283,6 +287,11 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                   <div>
                     <label className="mb-1 block text-sm font-medium">Email</label>
                     <Input value={email} disabled className="bg-slate-100/50" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Athlete timezone</label>
+                    <p className="text-xs text-slate-500 mb-2">Affects Strava times and day boundaries (missed).</p>
+                    <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Date of Birth</label>

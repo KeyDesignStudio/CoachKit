@@ -6,6 +6,8 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { useBranding } from '@/components/branding-context';
 import { DEFAULT_BRAND_NAME } from '@/lib/branding';
+import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 
 export default function CoachSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
@@ -20,12 +22,50 @@ export default function CoachSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const [timezone, setTimezone] = useState('Australia/Brisbane');
+  const [savingTimezone, setSavingTimezone] = useState(false);
+  const [timezoneMessage, setTimezoneMessage] = useState('');
+  const [timezoneError, setTimezoneError] = useState('');
+
   useEffect(() => {
     setForm({
       displayName: branding.displayName || DEFAULT_BRAND_NAME,
       logoUrl: branding.logoUrl ?? '',
     });
   }, [branding.displayName, branding.logoUrl]);
+
+  useEffect(() => {
+    const raw = user?.timezone?.trim() ?? '';
+    if (raw) {
+      setTimezone(raw);
+      return;
+    }
+
+    // Only guess from browser if user.timezone is empty.
+    const guessed = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setTimezone(TIMEZONE_VALUES.has(guessed) ? guessed : 'Australia/Brisbane');
+  }, [user?.timezone]);
+
+  const handleTimezoneChange = async (nextTz: string) => {
+    const previous = timezone;
+    setTimezone(nextTz);
+    setSavingTimezone(true);
+    setTimezoneMessage('');
+    setTimezoneError('');
+
+    try {
+      await request<{ user: { id: string; timezone: string } }>('/api/me/timezone', {
+        method: 'PATCH',
+        data: { timezone: nextTz },
+      });
+      setTimezoneMessage('Timezone updated.');
+    } catch (err) {
+      setTimezone(previous);
+      setTimezoneError(err instanceof Error ? err.message : 'Failed to update timezone.');
+    } finally {
+      setSavingTimezone(false);
+    }
+  };
 
   const uploadLogo = async (file: File) => {
     if (!user?.userId) {
@@ -161,6 +201,15 @@ export default function CoachSettingsPage() {
           </button>
         </div>
       </form>
+
+      <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', maxWidth: 520 }}>
+        <h2 style={{ margin: 0 }}>Timezone</h2>
+        <p style={{ color: '#475569', margin: '0.25rem 0 1rem' }}>Times and day-boundaries use your timezone.</p>
+        <p style={{ color: '#64748b', margin: '0 0 0.75rem' }}>Current: <span style={{ color: '#0f172a', fontWeight: 500 }}>{getTimezoneLabel(timezone)}</span></p>
+        <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
+        {timezoneMessage ? <p style={{ color: '#047857', margin: '0.75rem 0 0' }}>{timezoneMessage}</p> : null}
+        {timezoneError ? <p style={{ color: '#b91c1c', margin: '0.75rem 0 0' }}>{timezoneError}</p> : null}
+      </div>
     </section>
   );
 }
