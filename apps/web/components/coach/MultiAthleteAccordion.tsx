@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { SessionChip } from './SessionChip';
 import { Icon } from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
+import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
+import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
+import { toDateInput } from '@/lib/client-date';
+import { formatDisplay } from '@/lib/client-date';
+import { cn } from '@/lib/cn';
 
 type CalendarItem = {
   id: string;
@@ -15,6 +19,10 @@ type CalendarItem = {
   notes: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
+    effectiveStartTimeUtc?: string | Date;
+    startTime?: string | Date;
+    startTimeUtc?: string | null;
+    source?: string;
   } | null;
   hasAthleteComment?: boolean;
   coachAdvicePresent?: boolean;
@@ -24,6 +32,7 @@ type AthleteData = {
   athlete: {
     id: string;
     name: string | null;
+    timezone: string;
   };
   items: CalendarItem[];
   weekStatus: 'DRAFT' | 'PUBLISHED';
@@ -40,6 +49,7 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRefresh }: MultiAthleteAccordionProps) {
   const [expandedAthletes, setExpandedAthletes] = useState<Set<string>>(new Set());
+  const todayKey = toDateInput(new Date());
 
   const toggleAthlete = (athleteId: string) => {
     setExpandedAthletes((prev) => {
@@ -87,7 +97,12 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
               <div className="flex flex-col gap-1">
                 <p className="font-medium text-[var(--text)]">{data.athlete.name || data.athlete.id}</p>
                 <div className="flex items-center gap-2">
-                  <Badge className={data.weekStatus === 'PUBLISHED' ? 'bg-green-500/20 text-green-700' : 'bg-amber-500/20 text-amber-700'}>
+                  <Badge
+                    className={cn(
+                      'bg-[var(--bg-card)] border border-[var(--border-subtle)]',
+                      data.weekStatus === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'
+                    )}
+                  >
                     {data.weekStatus}
                   </Badge>
                   <span className="text-xs text-[var(--muted)]">{data.items.length} session(s)</span>
@@ -101,35 +116,56 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
                 <div className="flex gap-1 overflow-x-auto pb-2">
                   {weekDays.map((date, index) => {
                     const dayItems = itemsByDate.get(date) || [];
+                    const isToday = date === todayKey;
                     return (
                       <div key={date} className="flex-shrink-0" style={{ width: '200px' }}>
-                        <div className="mb-2 text-center text-xs font-semibold uppercase text-[var(--muted)]">
-                          {DAY_NAMES[index]}
-                        </div>
-                        <div className="min-h-[80px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
-                          {dayItems.map((item) => (
-                            <SessionChip
-                              key={item.id}
-                              time={item.plannedStartTimeLocal}
-                              title={item.title}
-                              discipline={item.discipline}
-                              status={item.status}
-                              hasAthleteComment={item.hasAthleteComment}
-                              coachAdvicePresent={item.coachAdvicePresent}
-                              painFlag={item.latestCompletedActivity?.painFlag ?? false}
-                              onClick={() => onItemClick(item)}
-                            />
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              alert(`Add session for ${data.athlete.name} on ${date}`);
-                            }}
-                            className="w-full rounded-lg border border-dashed border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)] transition-colors flex items-center justify-center gap-1 mt-1"
-                          >
-                            <Icon name="add" size="sm" />
-                            Add
-                          </button>
+                        <div
+                          className={cn(
+                            'min-h-[110px] rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
+                            isToday ? 'border-2 border-blue-500/40' : 'border border-[var(--border-subtle)]'
+                          )}
+                        >
+                          <div className="flex items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{DAY_NAMES[index]}</p>
+                              <p className="text-sm font-medium truncate">{formatDisplay(date).split(',')[0].split(' ')[1]}</p>
+                            </div>
+                            {isToday ? (
+                              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-col gap-2 p-2">
+                            {dayItems
+                              .map((item) => ({
+                                ...item,
+                                displayTimeLocal: getCalendarDisplayTime(item, data.athlete.timezone, new Date()),
+                              }))
+                              .map((item) => (
+                                <AthleteWeekSessionRow
+                                  key={item.id}
+                                  item={item as any}
+                                  timeZone={data.athlete.timezone}
+                                  onClick={() => onItemClick(item)}
+                                />
+                              ))}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                alert(`Add session for ${data.athlete.name} on ${date}`);
+                              }}
+                              className={cn(
+                                'w-full rounded-xl border border-dashed border-[var(--border-subtle)]',
+                                'bg-[var(--bg-card)] px-2 py-2 text-xs text-[var(--muted)]',
+                                'hover:text-[var(--text)] hover:bg-[var(--bg-structure)] transition-colors',
+                                'flex items-center justify-center gap-1'
+                              )}
+                            >
+                              <Icon name="add" size="sm" />
+                              Add
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );

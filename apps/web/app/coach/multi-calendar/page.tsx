@@ -50,6 +50,7 @@ type AthleteData = {
   athlete: {
     id: string;
     name: string | null;
+    timezone: string;
   };
   items: CalendarItem[];
   weekStatus: 'DRAFT' | 'PUBLISHED';
@@ -141,6 +142,7 @@ export default function MultiAthleteCalendarPage() {
             athlete: {
               id: athlete.userId,
               name: athlete.user.name,
+              timezone: athlete.user.timezone,
             },
             items: processedItems,
             weekStatus,
