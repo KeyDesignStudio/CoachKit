@@ -15,6 +15,7 @@ type PreviewSession = {
   plannedStartTimeLocal: string | null;
   discipline: string;
   status: string;
+  title: string;
 };
 
 function buildPreviewItems(now: Date): PreviewSession[] {
@@ -32,18 +33,18 @@ function buildPreviewItems(now: Date): PreviewSession[] {
 
   return [
     // Multiple sessions today (planned + draft + submitted)
-    { id: 'sess-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED' },
-    { id: 'sess-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'COMPLETED_SYNCED_DRAFT' },
-    { id: 'sess-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'COMPLETED_SYNCED' },
+    { id: 'sess-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
+    { id: 'sess-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'COMPLETED_SYNCED_DRAFT', title: 'Trainer ride' },
+    { id: 'sess-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'COMPLETED_SYNCED', title: 'Main set' },
 
     // Yesterday planned becomes MISSED (only after day end)
-    { id: 'sess-yday-1', date: yStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED' },
+    { id: 'sess-yday-1', date: yStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Steady run' },
 
     // Tomorrow planned should remain neutral
-    { id: 'sess-tmr-1', date: tStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED' },
+    { id: 'sess-tmr-1', date: tStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Intervals' },
 
     // Explicit REST
-    { id: 'sess-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED' },
+    { id: 'sess-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED', title: 'Rest' },
 
     // Overflow day: lots of sessions today to confirm clipping
     ...Array.from({ length: 12 }).map((_, i) => ({
@@ -52,6 +53,7 @@ function buildPreviewItems(now: Date): PreviewSession[] {
       plannedStartTimeLocal: `0${(i % 9) + 1}:00`,
       discipline: i % 2 === 0 ? 'RUN' : 'BIKE',
       status: 'PLANNED',
+      title: `Session ${i + 1}`,
     })),
   ];
 }

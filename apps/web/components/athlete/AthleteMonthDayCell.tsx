@@ -1,8 +1,6 @@
-import { MouseEvent } from 'react';
-
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
-import { getDayVisualSummary } from '@/components/calendar/getSessionStatusVisual';
+import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVisual';
 
 export type MonthSession = {
   id: string;
@@ -10,6 +8,7 @@ export type MonthSession = {
   plannedStartTimeLocal: string | null;
   discipline: string;
   status: string;
+  title: string;
 };
 
 type AthleteMonthDayCellProps = {
@@ -22,10 +21,11 @@ type AthleteMonthDayCellProps = {
   onItemClick: (itemId: string) => void;
 };
 
-const MAX_VISIBLE_ICONS = 10;
+const MAX_VISIBLE_ROWS = 3;
 
 export function AthleteMonthDayCell({
   date,
+  dateStr,
   items,
   isCurrentMonth,
   isToday,
@@ -33,74 +33,96 @@ export function AthleteMonthDayCell({
   onItemClick,
 }: AthleteMonthDayCellProps) {
   const dayNumber = date.getDate();
-  const { dayTint, tooltip, sessions } = getDayVisualSummary(items, new Date());
-
-  const visible = sessions.slice(0, MAX_VISIBLE_ICONS);
+  const visible = items.slice(0, MAX_VISIBLE_ROWS);
+  const remainingCount = Math.max(0, items.length - MAX_VISIBLE_ROWS);
 
   return (
-    <button
-      type="button"
-      onClick={() => onDayClick(date)}
-      title={tooltip ?? undefined}
+    <div
       data-athlete-month-day-cell="v2"
       className={cn(
-        'relative h-[120px] border-r border-b border-white/20 p-2 last:border-r-0 text-left overflow-hidden',
-        !isCurrentMonth ? 'bg-white/10' : 'bg-white/30',
+        'flex flex-col gap-2 p-2 min-h-[96px] border-r border-b border-white/20 last:border-r-0 bg-white/20 hover:bg-white/30 text-left',
+        !isCurrentMonth ? 'opacity-70' : '',
         isToday ? 'ring-2 ring-blue-500 ring-inset' : ''
       )}
     >
-      {dayTint ? <div className={cn('absolute inset-0 pointer-events-none', dayTint)} /> : null}
-
-      <div className="relative flex items-start justify-between">
-        <span
+      {/* A) Header row */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => onDayClick(date)}
           className={cn(
-            'flex h-6 w-6 items-center justify-center rounded-full text-xs',
-            isToday ? 'bg-blue-500 text-white' : isCurrentMonth ? 'text-[var(--text)]' : 'text-[var(--muted)]'
+            'h-6 w-6 rounded-full text-xs bg-white/35 hover:bg-white/50 border border-white/25',
+            !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
           )}
+          aria-label={`Open day ${dateStr}`}
         >
           {dayNumber}
-        </span>
+        </button>
+        {isToday ? (
+          <span className="text-[10px] rounded-full px-2 py-0.5 bg-blue-500/10 text-blue-700">Today</span>
+        ) : null}
       </div>
 
-      <div className="relative mt-2 flex flex-wrap gap-1 max-h-[84px] overflow-hidden">
-        {visible.map((v, idx) => {
-          const itemId = v.id ?? items[idx]?.id;
-          if (!itemId) return null;
-
-          const onIconClick = (event: MouseEvent) => {
-            event.stopPropagation();
-            onItemClick(itemId);
-          };
+      {/* B) Body: stacked session rows (max 3) */}
+      <div className="flex flex-col gap-1">
+        {visible.map((item) => {
+          const visual = getSessionStatusVisual(item, new Date());
+          const statusIcon = visual.overlay;
 
           return (
             <button
-              key={`${itemId}-${idx}`}
+              key={item.id}
               type="button"
-              onClick={onIconClick}
-              className="relative h-7 w-7 rounded-lg bg-white/20 hover:bg-white/35 focus:outline-none focus:ring-2 focus:ring-white/40"
-              aria-label={`Open session ${itemId}`}
+              onClick={() => onItemClick(item.id)}
+              className="w-full flex items-center gap-1 rounded-md bg-white/35 hover:bg-white/50 border border-white/25 px-1.5 py-1 text-left"
+              aria-label={`Open session ${item.id}`}
             >
-              <Icon name={v.icon} size="sm" className={cn('absolute inset-0 m-auto', v.iconColor)} />
-              {v.overlay ? (
-                <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-white/90 flex items-center justify-center">
+              <span className={cn('text-[16px] leading-none flex-shrink-0', visual.iconColor)}>
+                <Icon name={visual.icon} size="sm" className="text-[16px] leading-none" />
+              </span>
+              <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">
+                {item.plannedStartTimeLocal ?? ''}
+              </span>
+              <span className="text-xs text-[var(--text)] truncate flex-1 font-normal">{item.title}</span>
+              {statusIcon ? (
+                <span className="text-[16px] leading-none flex-shrink-0">
                   <Icon
-                    name={v.overlay}
+                    name={statusIcon}
                     size="sm"
                     className={cn(
-                      'text-[11px] leading-none',
-                      v.overlay === 'completed'
+                      'text-[16px] leading-none',
+                      statusIcon === 'completed'
                         ? 'text-emerald-600'
-                        : v.overlay === 'needsReview'
+                        : statusIcon === 'needsReview'
                           ? 'text-amber-600'
                           : 'text-rose-500/70'
                     )}
                   />
                 </span>
-              ) : null}
+              ) : (
+                <span className="text-[16px] leading-none flex-shrink-0" />
+              )}
             </button>
           );
         })}
       </div>
-    </button>
+
+      {/* C) Footer */}
+      <div className="flex items-center justify-between text-[10px] text-[var(--muted)] min-h-[14px]">
+        {remainingCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => onDayClick(date)}
+            className="rounded-md px-1.5 py-0.5 hover:bg-white/35"
+            aria-label={`Open day ${dateStr} (${remainingCount} more)`}
+          >
+            +{remainingCount} more
+          </button>
+        ) : (
+          <span />
+        )}
+        <span />
+      </div>
+    </div>
   );
 }
