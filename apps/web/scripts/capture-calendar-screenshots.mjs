@@ -10,12 +10,13 @@ const pages = [
   { name: 'coach-week', url: '/dev/coach-week-preview' },
   { name: 'athlete-month', url: '/dev/month-preview' },
   { name: 'coach-month', url: '/dev/coach-month-preview' },
+  { name: 'calendar-geometry-compare', url: '/dev/calendar-geometry-compare' },
 ];
 
 async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
+    viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 2,
   });
 

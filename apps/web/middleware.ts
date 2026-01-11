@@ -1,6 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+const DISABLE_AUTH = process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH === 'true';
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
@@ -17,29 +19,40 @@ const isProtectedRoute = createRouteMatcher([
  * 
  * Note: No database queries in middleware (Edge runtime limitation)
  */
-export default clerkMiddleware(async (auth, request) => {
-  // Guardrail: dev pages never exist in production.
-  if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/dev')) {
-    return new NextResponse('Not Found', { status: 404 });
-  }
+const middleware = DISABLE_AUTH
+  ? (request: Request) => {
+      // Guardrail: dev pages never exist in production.
+      if (process.env.NODE_ENV === 'production' && new URL(request.url).pathname.startsWith('/dev')) {
+        return new NextResponse('Not Found', { status: 404 });
+      }
 
-  const { userId } = await auth();
-  const { pathname } = request.nextUrl;
-
-  // Protect all coach and athlete routes
-  if (isProtectedRoute(request)) {
-    // Require authentication
-    if (!userId) {
-      const signInUrl = new URL('/sign-in', request.url);
-      signInUrl.searchParams.set('redirect_url', pathname);
-      return NextResponse.redirect(signInUrl);
+      return NextResponse.next();
     }
-  }
+  : clerkMiddleware(async (auth, request) => {
+      // Guardrail: dev pages never exist in production.
+      if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/dev')) {
+        return new NextResponse('Not Found', { status: 404 });
+      }
 
-  // Allow all authenticated/public routes to proceed
-  // Role enforcement happens in layout.tsx files
-  return NextResponse.next();
-});
+      const { userId } = await auth();
+      const { pathname } = request.nextUrl;
+
+      // Protect all coach and athlete routes
+      if (isProtectedRoute(request)) {
+        // Require authentication
+        if (!userId) {
+          const signInUrl = new URL('/sign-in', request.url);
+          signInUrl.searchParams.set('redirect_url', pathname);
+          return NextResponse.redirect(signInUrl);
+        }
+      }
+
+      // Allow all authenticated/public routes to proceed
+      // Role enforcement happens in layout.tsx files
+      return NextResponse.next();
+    });
+
+export default middleware;
 
 export const config = {
   matcher: [

@@ -15,24 +15,31 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <head>
-          <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0"
-          />
-        </head>
-        <body className="bg-[var(--bg-page)] text-[var(--text)]">
+  const disableAuth =
+    process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true';
+
+  const content = (
+    <html lang="en">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0"
+        />
+      </head>
+      <body className="bg-[var(--bg-page)] text-[var(--text)]">
+        {disableAuth ? (
+          <main className="px-6 pb-8 pt-6">{children}</main>
+        ) : (
           <BrandingProvider>
             <div className="flex min-h-screen flex-col gap-6 pb-10">
               <AppHeader />
               <main className="px-6 pb-8">{children}</main>
             </div>
           </BrandingProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        )}
+      </body>
+    </html>
   );
+
+  return disableAuth ? content : <ClerkProvider>{content}</ClerkProvider>;
 }

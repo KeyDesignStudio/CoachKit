@@ -16,7 +16,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
     <>
       {/* Mobile: Full-width card per day */}
       <div
-        className={`flex flex-col md:hidden rounded-2xl overflow-hidden bg-[var(--bg-structure)] ${
+        className={`flex flex-col md:hidden rounded overflow-hidden bg-[var(--bg-structure)] ${
           isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
         }`}
       >
@@ -27,7 +27,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
               <p className="text-sm font-medium">{formattedDate}</p>
             </div>
             {isToday && (
-              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
             )}
           </div>
         </div>
@@ -46,7 +46,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
 
       {/* Desktop: Column in grid */}
       <div
-        className={`hidden md:flex min-w-0 flex-col rounded-2xl overflow-hidden bg-[var(--bg-structure)] ${
+        className={`hidden md:flex min-w-0 flex-col rounded overflow-hidden bg-[var(--bg-structure)] ${
           isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
         }`}
       >
@@ -54,7 +54,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
           <div className="flex items-center gap-2">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             {isToday && (
-              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
             )}
           </div>
           <p className="text-sm font-medium">{formattedDate}</p>

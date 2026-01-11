@@ -64,7 +64,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
+    <div className="flex flex-col gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
       {athleteData.map((data) => {
         const isExpanded = expandedAthletes.has(data.athlete.id);
         
@@ -88,7 +88,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
         });
 
         return (
-          <div key={data.athlete.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] overflow-hidden">
+          <div key={data.athlete.id} className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] overflow-hidden">
             <button
               type="button"
               onClick={() => toggleAthlete(data.athlete.id)}
@@ -121,7 +121,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
                       <div key={date} className="flex-shrink-0" style={{ width: '200px' }}>
                         <div
                           className={cn(
-                            'min-h-[110px] rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
+                            'min-h-[110px] rounded bg-[var(--bg-structure)] overflow-hidden',
                             isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
                           )}
                         >
@@ -131,7 +131,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
                               <p className="text-sm font-medium truncate">{formatDisplay(date).split(',')[0].split(' ')[1]}</p>
                             </div>
                             {isToday ? (
-                              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+                              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
                             ) : null}
                           </div>
 
@@ -156,7 +156,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
                                 alert(`Add session for ${data.athlete.name} on ${date}`);
                               }}
                               className={cn(
-                                'w-full rounded-xl border border-dashed border-[var(--border-subtle)]',
+                                'w-full rounded border border-dashed border-[var(--border-subtle)]',
                                 'bg-[var(--bg-card)] px-2 py-2 text-xs text-[var(--muted)]',
                                 'hover:text-[var(--text)] hover:bg-[var(--bg-structure)] transition-colors',
                                 'flex items-center justify-center gap-1'

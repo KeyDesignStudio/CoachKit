@@ -46,11 +46,11 @@ export function AthleteMonthDayCell({
       data-athlete-month-day-cell="v2"
       className={cn(
         'flex flex-col gap-2 p-2 min-h-[120px] text-left',
-        'rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)]',
+        'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
         !isCurrentMonth ? 'opacity-70' : '',
-        isToday ? 'ring-2 ring-blue-500 ring-inset' : ''
+        isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
       )}
     >
       {/* A) Header row */}
@@ -59,7 +59,7 @@ export function AthleteMonthDayCell({
           type="button"
           onClick={() => onDayClick(date)}
           className={cn(
-            'h-6 w-6 rounded-full text-xs',
+            'h-6 min-w-6 px-1 rounded text-xs',
             'bg-[var(--bg-structure)] hover:bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
             !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
           )}
@@ -68,7 +68,7 @@ export function AthleteMonthDayCell({
           {dayNumber}
         </button>
         {isToday ? (
-          <span className="text-[10px] rounded-full px-2 py-0.5 bg-blue-500/10 text-blue-700">Today</span>
+          <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">Today</span>
         ) : null}
       </div>
 

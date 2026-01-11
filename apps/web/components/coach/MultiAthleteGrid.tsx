@@ -83,9 +83,9 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
     <CalendarShell variant="week" className="p-0" structureClassName="p-0">
       <div className="overflow-x-auto">
         <div className="min-w-[1400px]">
-          <div className={cn('grid gap-px rounded-2xl bg-[var(--bg-structure)]', gridTemplateClass)}>
+          <div className={cn('grid gap-px rounded bg-[var(--bg-structure)]', gridTemplateClass)}>
             {/* Header row */}
-            <div className="flex items-center bg-[var(--bg-surface)] px-4 py-3 min-w-0 rounded-2xl border border-[var(--border-subtle)]">
+            <div className="flex items-center bg-[var(--bg-surface)] px-4 py-3 min-w-0 rounded border border-[var(--border-subtle)]">
               <span className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Athlete</span>
             </div>
             {DAY_NAMES.map((day, index) => {
@@ -95,14 +95,14 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                 <div
                   key={day}
                   className={cn(
-                    'min-w-0 bg-[var(--bg-surface)] px-2 py-2 text-center rounded-2xl overflow-hidden',
+                    'min-w-0 bg-[var(--bg-surface)] px-2 py-2 text-center rounded overflow-hidden',
                     isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
                   )}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <div className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">{day}</div>
                     {isToday ? (
-                      <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+                      <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
                     ) : null}
                   </div>
                   <div className="text-xs text-[var(--muted)] truncate">
@@ -142,7 +142,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                       key={`${row.athlete.id}:${dateKey}`}
                       className={cn(
                         'min-w-0 bg-[var(--bg-structure)] p-2',
-                        isToday ? 'rounded-2xl border-2 border-[var(--today-border)]' : ''
+                        isToday ? 'rounded border-2 border-[var(--today-border)]' : ''
                       )}
                     >
                       <div className="flex flex-col gap-2 min-w-0">
@@ -162,7 +162,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                             alert(`Add session for ${row.athlete.name} on ${dateKey}`);
                           }}
                           className={cn(
-                            'w-full rounded-xl border border-dashed border-[var(--border-subtle)]',
+                            'w-full rounded border border-dashed border-[var(--border-subtle)]',
                             'bg-[var(--bg-card)] px-2 py-2 text-xs text-[var(--muted)]',
                             'hover:text-[var(--text)] hover:bg-[var(--bg-structure)] transition-colors',
                             'flex items-center justify-center gap-1'

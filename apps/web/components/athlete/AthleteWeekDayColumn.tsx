@@ -25,7 +25,7 @@ export function AthleteWeekDayColumn({
     <div
       data-athlete-week-day-card="v2"
       className={cn(
-        'flex flex-col min-w-0 rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
+        'flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
       )}
     >
@@ -33,24 +33,24 @@ export function AthleteWeekDayColumn({
         <button
           type="button"
           onClick={onHeaderClick}
-          className="flex w-full items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2 rounded-t-2xl text-left"
+          className="flex w-full items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2 text-left"
         >
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
           </div>
           {isToday ? (
-            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
           ) : null}
         </button>
       ) : (
-        <div className="flex items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2 rounded-t-2xl">
+        <div className="flex items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
           </div>
           {isToday ? (
-            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Today</span>
+            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
           ) : null}
         </div>
       )}
