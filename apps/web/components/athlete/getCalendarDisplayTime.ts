@@ -1,4 +1,5 @@
 type CalendarItemLike = {
+  id?: string;
   date: string;
   status: string;
   plannedStartTimeLocal: string | null;
@@ -6,6 +7,13 @@ type CalendarItemLike = {
     effectiveStartTimeUtc?: string | Date;
     startTime?: string | Date;
     source?: string;
+    startTimeUtc?: string | null;
+    debugTime?: {
+      tzUsed?: string;
+      stravaStartDateUtcRaw?: string | null;
+      stravaStartDateLocalRaw?: string | null;
+      storedStartTimeUtc?: string | null;
+    };
   } | null;
 };
 
@@ -48,7 +56,33 @@ export function getCalendarDisplayTime(item: CalendarItemLike, athleteTimezone: 
 
   const actualStart = item.latestCompletedActivity?.effectiveStartTimeUtc ?? item.latestCompletedActivity?.startTime;
   if (actualStart) {
-    return formatTimeInTimezone(actualStart, athleteTimezone);
+    const formattedLocalTime = formatTimeInTimezone(actualStart, athleteTimezone);
+
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true' &&
+      typeof window !== 'undefined' &&
+      item.latestCompletedActivity?.source === 'STRAVA'
+    ) {
+      const key = '__ck_strava_time_debug_count__';
+      const current = Number((window as any)[key] ?? 0);
+      if (Number.isFinite(current) && current < 25) {
+        (window as any)[key] = current + 1;
+        // eslint-disable-next-line no-console
+        console.log('[strava-time]', {
+          itemId: item.id,
+          itemDate: item.date,
+          athleteTimezone,
+          planned,
+          actualStart,
+          effectiveStartTimeUtc: item.latestCompletedActivity?.effectiveStartTimeUtc ?? null,
+          stravaStartDateUtcRaw: item.latestCompletedActivity?.debugTime?.stravaStartDateUtcRaw ?? null,
+          stravaStartDateLocalRaw: item.latestCompletedActivity?.debugTime?.stravaStartDateLocalRaw ?? null,
+          formattedLocalTime,
+        });
+      }
+    }
+    return formattedLocalTime;
   }
 
   const itemDayKey = getItemDateKey(item.date);

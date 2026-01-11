@@ -60,6 +60,8 @@ export async function GET(
 ) {
   try {
     const { user } = await requireAthlete();
+    const includeDebug =
+      process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true';
 
     const item = await prisma.calendarItem.findFirst({
       where: { id: context.params.itemId, athleteId: user.id },
@@ -95,6 +97,15 @@ export async function GET(
       ? {
           ...completed,
           effectiveStartTimeUtc: getEffectiveActualStartUtc(completed).toISOString(),
+          debugTime:
+            includeDebug && completed.source === CompletionSource.STRAVA
+              ? {
+                  tzUsed: user.timezone,
+                  stravaStartDateUtcRaw: completed.metricsJson?.strava?.startDateUtc ?? null,
+                  stravaStartDateLocalRaw: completed.metricsJson?.strava?.startDateLocal ?? null,
+                  storedStartTimeUtc: completed.startTime?.toISOString?.() ?? null,
+                }
+              : undefined,
         }
       : undefined;
 

@@ -50,6 +50,8 @@ function getEffectiveActualStartUtc(completion: {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await requireAthlete();
+    const includeDebug =
+      process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_DEBUG_STRAVA_TIME === 'true';
     const { searchParams } = new URL(request.url);
     const params = querySchema.parse({
       from: searchParams.get('from'),
@@ -132,6 +134,15 @@ export async function GET(request: NextRequest) {
             painFlag: latest.painFlag,
             source: latest.source,
             effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
+            debugTime:
+              includeDebug && latest.source === CompletionSource.STRAVA
+                ? {
+                    tzUsed: user.timezone,
+                    stravaStartDateUtcRaw: latest.metricsJson?.strava?.startDateUtc ?? null,
+                    stravaStartDateLocalRaw: latest.metricsJson?.strava?.startDateLocal ?? null,
+                    storedStartTimeUtc: latest.startTime?.toISOString?.() ?? null,
+                  }
+                : undefined,
           }
         : null;
 

@@ -409,11 +409,12 @@ export async function POST(request: NextRequest) {
         const lookbackMs = 14 * 24 * 60 * 60 * 1000;
         const bufferMs = 2 * 60 * 60 * 1000;
 
-        const effectiveLookbackMs =
-          user.role === UserRole.ATHLETE && forceDays ? forceDays * 24 * 60 * 60 * 1000 : lookbackMs;
+        const effectiveLookbackMs = forceDays ? forceDays * 24 * 60 * 60 * 1000 : lookbackMs;
 
+        // Default: incremental fetch since lastSyncAt.
+        // Backfill/self-heal only when forceDays is provided.
         const baseMs =
-          user.role === UserRole.ATHLETE && forceDays
+          forceDays
             ? now.getTime() - effectiveLookbackMs
             : lastSyncAt
               ? lastSyncAt.getTime()
