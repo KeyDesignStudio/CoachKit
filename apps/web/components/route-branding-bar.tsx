@@ -26,7 +26,7 @@ export function RouteBrandingBar() {
     return null;
   }
 
-  // NOTE (dev-only): Use token surfaces only. Avoid translucent bg-white/* or gradients as they cause coach/athlete surface drift.
+  // NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift).
 
   return (
     <div className="px-6 pt-4">
