@@ -253,7 +253,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           {/* Left column: Coach context (5/12) */}
           <div className="lg:col-span-5 space-y-4">
             {/* Session header card */}
-            <Card className="rounded-3xl">
+            <Card className="rounded-3xl" data-athlete-workout-header-version="right-status-v1">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
@@ -273,7 +273,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 </div>
 
                 {statusIndicator ? (
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 justify-end min-w-[44px] sm:min-w-[180px]">
                     <span title={statusIndicator.ariaLabel} aria-label={statusIndicator.ariaLabel}>
                       <Icon name={statusIndicator.iconName} size="sm" className={statusIndicator.colorClass} />
                     </span>
