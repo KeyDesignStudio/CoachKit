@@ -7,9 +7,9 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { WeekGrid } from '@/components/coach/WeekGrid';
-import { DayColumn } from '@/components/coach/DayColumn';
-import { WorkoutCard } from '@/components/coach/WorkoutCard';
+import { AthleteWeekGrid } from '@/components/athlete/AthleteWeekGrid';
+import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
+import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
@@ -244,7 +244,7 @@ export default function AthleteCalendarPage() {
           <div>
             <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Training</p>
             <h1
-              className={`text-2xl md:text-3xl ${viewMode === 'week' ? 'font-semibold' : 'font-normal'}`}
+              className={`text-2xl md:text-3xl ${viewMode === 'week' ? 'font-medium' : 'font-normal'}`}
             >
               {viewMode === 'week' ? 'Weekly Calendar' : 'Monthly Calendar'}
             </h1>
@@ -300,35 +300,31 @@ export default function AthleteCalendarPage() {
 
       {/* Calendar Grid - Week or Month */}
       {viewMode === 'week' ? (
-        <WeekGrid>
-          {weekDays.map((day) => {
-            const dayItems = itemsByDate[day.date] || [];
-            const dayDate = new Date(day.date);
-            return (
-              <DayColumn
-                key={day.date}
-                dayName={day.name}
-                date={day.date}
-                formattedDate={day.formatted}
-                isEmpty={dayItems.length === 0}
-                isToday={isToday(dayDate)}
-              >
-                {dayItems.map((item) => (
-                  <WorkoutCard
-                    key={item.id}
-                    id={item.id}
-                    time={item.plannedStartTimeLocal}
-                    title={item.title}
-                    discipline={item.discipline}
-                    hasAdvice={!!item.notes}
-                    painFlag={item.latestCompletedActivity?.painFlag ?? false}
-                    onClick={() => handleWorkoutClick(item.id)}
-                  />
-                ))}
-              </DayColumn>
-            );
-          })}
-        </WeekGrid>
+        <div data-athlete-week-view-version="athlete-week-v2">
+          <AthleteWeekGrid>
+            {weekDays.map((day) => {
+              const dayItems = itemsByDate[day.date] || [];
+              const dayDate = new Date(day.date);
+              return (
+                <AthleteWeekDayColumn
+                  key={day.date}
+                  dayName={day.name}
+                  formattedDate={day.formatted}
+                  isEmpty={dayItems.length === 0}
+                  isToday={isToday(dayDate)}
+                >
+                  {dayItems.map((item) => (
+                    <AthleteWeekSessionRow
+                      key={item.id}
+                      item={item}
+                      onClick={() => handleWorkoutClick(item.id)}
+                    />
+                  ))}
+                </AthleteWeekDayColumn>
+              );
+            })}
+          </AthleteWeekGrid>
+        </div>
       ) : (
         <div data-athlete-month-view-version="athlete-month-v2">
           <MonthGrid>
