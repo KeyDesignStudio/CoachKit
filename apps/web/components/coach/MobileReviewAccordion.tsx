@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { ReviewChip } from './ReviewChip';
+import { formatDisplay } from '@/lib/client-date';
+import { cn } from '@/lib/cn';
 
 type CommentRecord = {
   id: string;
@@ -50,15 +52,25 @@ type MobileReviewAccordionProps = {
     itemsByDate: Map<string, ReviewItem[]>;
   }>;
   weekDays: string[];
+  todayKey: string | null;
   onItemClick: (item: ReviewItem) => void;
   onQuickReview: (id: string) => void;
 };
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+function getFormattedHeaderDate(dateKey: string): string {
+  const formatted = formatDisplay(dateKey);
+  return formatted.split(',')[1]?.trim() || formatted;
+}
+
+const todayTintClass =
+  'relative before:absolute before:inset-0 before:bg-blue-500/5 before:pointer-events-none';
+
 export function MobileReviewAccordion({
   athleteData,
   weekDays,
+  todayKey,
   onItemClick,
   onQuickReview,
 }: MobileReviewAccordionProps) {
@@ -104,12 +116,29 @@ export function MobileReviewAccordion({
                 <div className="flex gap-1 overflow-x-auto pb-2">
                   {weekDays.map((date, index) => {
                     const dayItems = athlete.itemsByDate.get(date) || [];
+                    const isToday = !!todayKey && todayKey === date;
                     return (
                       <div key={date} className="flex-shrink-0" style={{ width: '140px' }}>
-                        <div className="mb-2 text-center text-xs font-semibold uppercase text-[var(--muted)]">
-                          {DAY_NAMES[index]}
+                        <div className={cn('mb-2 bg-[var(--bg-surface)] px-3 py-2 rounded border border-[var(--border-subtle)]', isToday ? todayTintClass : '')}>
+                          <div className="relative z-10 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{DAY_NAMES[index]}</p>
+                              <p className="text-sm font-medium truncate">{getFormattedHeaderDate(date)}</p>
+                            </div>
+                            {isToday ? (
+                              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">
+                                Today
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="min-h-[60px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+
+                        <div
+                          className={cn(
+                            'min-h-[60px] rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 overflow-hidden',
+                            isToday ? todayTintClass : ''
+                          )}
+                        >
                           {dayItems.map((item) => (
                             <ReviewChip
                               key={item.id}

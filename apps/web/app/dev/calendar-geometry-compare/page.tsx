@@ -215,13 +215,13 @@ export default function DevCalendarGeometryComparePage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
           <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Dashboard (Review Grid)</h2>
-          <ReviewGrid>
+          <ReviewGrid weekDays={weekDays} todayIndex={weekDays.indexOf(todayKey)}>
             {dashboardAthleteData.map((athlete) => (
-              <AthleteRow key={athlete.id} athleteName={athlete.name}>
+              <AthleteRow key={athlete.id} athleteName={athlete.name} todayIndex={weekDays.indexOf(todayKey)}>
                 {weekDays.map((dateKey) => {
                   const dayItems = athlete.itemsByDate.get(dateKey) ?? [];
                   return (
-                    <div key={`${athlete.id}:${dateKey}`}>
+                    <div key={`${athlete.id}:${dateKey}`} className="flex flex-col gap-1 min-w-0">
                       {dayItems.map((item) => (
                         <ReviewChip
                           key={item.id}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -12,6 +12,7 @@ import { ReviewChip } from '@/components/coach/ReviewChip';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { MobileReviewAccordion } from '@/components/coach/MobileReviewAccordion';
 import { addDays, startOfWeek, toDateInput } from '@/lib/client-date';
+import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 
 type CommentRecord = {
   id: string;
@@ -56,6 +57,7 @@ export default function CoachDashboardPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
+  const didInitWeekStartFromTimezone = useRef(false);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,6 +69,17 @@ export default function CoachDashboardPage() {
     }
     return 'all';
   });
+
+  // Initialize the displayed week based on the coach's timezone (not browser timezone).
+  useEffect(() => {
+    if (!user?.timezone) return;
+    if (didInitWeekStartFromTimezone.current) return;
+
+    const todayKey = getZonedDateKeyForNow(user.timezone);
+    const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
+    setWeekStart(startOfWeek(todayUtcMidnight));
+    didInitWeekStartFromTimezone.current = true;
+  }, [user?.timezone]);
 
   const weekRange = useMemo(() => {
     const from = toDateInput(weekStart);
@@ -80,6 +93,16 @@ export default function CoachDashboardPage() {
       return toDateInput(day);
     });
   }, [weekStart]);
+
+  const todayKey = useMemo(() => {
+    if (!user?.timezone) return null;
+    return getZonedDateKeyForNow(user.timezone);
+  }, [user?.timezone]);
+
+  const todayIndex = useMemo(() => {
+    if (!todayKey) return -1;
+    return weekDays.indexOf(todayKey);
+  }, [todayKey, weekDays]);
 
   const loadItems = useCallback(async () => {
     if (!user?.userId) {
@@ -154,8 +177,14 @@ export default function CoachDashboardPage() {
   }, [request, weekRange, items, loadItems]);
 
   const goToToday = useCallback(() => {
+    if (user?.timezone) {
+      const key = getZonedDateKeyForNow(user.timezone);
+      setWeekStart(startOfWeek(new Date(`${key}T00:00:00.000Z`)));
+      return;
+    }
+
     setWeekStart(startOfWeek());
-  }, []);
+  }, [user?.timezone]);
 
   const navigatePrev = useCallback(() => {
     setWeekStart((prev) => addDays(prev, -7));
@@ -311,13 +340,13 @@ export default function CoachDashboardPage() {
         <>
           {/* Desktop view */}
           <div className="hidden lg:block">
-            <ReviewGrid>
+            <ReviewGrid weekDays={weekDays} todayIndex={todayIndex}>
               {athleteData.map((athlete) => (
-                <AthleteRow key={athlete.id} athleteName={athlete.name}>
+                <AthleteRow key={athlete.id} athleteName={athlete.name} todayIndex={todayIndex}>
                   {weekDays.map((date) => {
                     const dayItems = athlete.itemsByDate.get(date) || [];
                     return (
-                      <div key={date}>
+                      <div key={date} className="flex flex-col gap-1 min-w-0">
                         {dayItems.map((item) => (
                           <ReviewChip
                             key={item.id}
@@ -346,6 +375,7 @@ export default function CoachDashboardPage() {
             <MobileReviewAccordion
               athleteData={athleteData}
               weekDays={weekDays}
+              todayKey={todayKey}
               onItemClick={(item) => setSelectedItem(item)}
               onQuickReview={(id) => markReviewed(id)}
             />

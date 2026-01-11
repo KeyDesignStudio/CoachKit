@@ -2,6 +2,7 @@
 
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { cn } from '@/lib/cn';
 
 type ReviewChipProps = {
   time: string | null;
@@ -15,7 +16,7 @@ type ReviewChipProps = {
 };
 
 export function ReviewChip({
-  time,
+  time: _time,
   title,
   discipline,
   hasAthleteComment,
@@ -26,20 +27,30 @@ export function ReviewChip({
 }: ReviewChipProps) {
   const theme = getDisciplineTheme(discipline);
 
+  const disciplineLabel = (discipline || 'OTHER').toUpperCase();
+
   return (
-    <div className="group relative mb-2 flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 transition-[background-color,box-shadow] hover:bg-[var(--bg-surface)] hover:shadow-sm">
+    <div className="group relative mb-1 flex items-center gap-1.5 rounded bg-[var(--bg-card)] p-1.5 transition-[background-color,box-shadow] hover:bg-[var(--bg-surface)] hover:shadow-sm">
       <button
         type="button"
         onClick={onClick}
-        className={`flex flex-1 items-center gap-2 overflow-hidden text-left border-l-4 ${theme.accentClass} pl-2`}
+        className="flex flex-1 items-center gap-2 overflow-hidden text-left min-w-0"
       >
-        <Icon name={theme.iconName} size="sm" className={`${theme.textClass} flex-shrink-0`} />
-        <span className="text-xs font-medium text-[var(--muted)]">{time || '—'}</span>
-        <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${theme.bgClass} ${theme.textClass}`}>
-          {theme.badgeText}
-        </span>
-        <span className="flex-1 truncate text-xs text-[var(--text)]">{title}</span>
-        <div className="flex items-center gap-1">
+        {/* Left cluster: icon + discipline */}
+        <div className="flex flex-col items-center justify-center w-10 flex-shrink-0">
+          <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'text-[16px] leading-none')} />
+          <span className={cn('text-[10px] font-medium leading-none mt-0.5', theme.textClass)}>
+            {disciplineLabel}
+          </span>
+        </div>
+
+        {/* Main: title only (no time in overview) */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-normal truncate text-[var(--text)]">{title || disciplineLabel}</p>
+        </div>
+
+        {/* Right: status icons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {painFlag && (
             <Icon name="painFlag" size="sm" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
           )}
@@ -58,7 +69,7 @@ export function ReviewChip({
             e.stopPropagation();
             onQuickReview();
           }}
-          className="opacity-0 group-hover:opacity-100 transition-[opacity,background-color,box-shadow] rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs font-medium hover:bg-[var(--bg-surface)] hover:shadow-sm"
+          className="opacity-0 group-hover:opacity-100 transition-[opacity,background-color,box-shadow] rounded bg-[var(--bg-card)] px-1.5 py-1 text-xs font-medium hover:bg-[var(--bg-structure)] hover:shadow-sm"
           title="Quick mark reviewed"
         >
           <Icon name="reviewed" size="sm" />
