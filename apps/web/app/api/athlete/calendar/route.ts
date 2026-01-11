@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { PlanWeekStatus } from '@prisma/client';
+import { CompletionSource, PlanWeekStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -19,11 +19,15 @@ const includeRefs = {
   groupSession: { select: { id: true, title: true } },
   completedActivities: {
     orderBy: [{ startTime: 'desc' as const }],
-    take: 1,
+    take: 5,
+    where: {
+      source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
+    },
     select: {
       id: true,
       painFlag: true,
       startTime: true,
+      source: true,
     },
   },
 };
@@ -92,12 +96,24 @@ export async function GET(request: NextRequest) {
       return publishedWeekStarts.has(itemWeekStart);
     });
 
-    // Format items to include latestCompletedActivity
-    const formattedItems = items.map((item: any) => ({
-      ...item,
-      latestCompletedActivity: item.completedActivities?.[0] ?? null,
-      completedActivities: undefined,
-    }));
+    // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
+    const formattedItems = items.map((item: any) => {
+      const completions = (item.completedActivities ?? []) as Array<{
+        id: string;
+        painFlag: boolean;
+        startTime: Date;
+        source: string;
+      }>;
+
+      const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
+      const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
+
+      return {
+        ...item,
+        latestCompletedActivity: latestManual ?? latestStrava,
+        completedActivities: undefined,
+      };
+    });
 
     return success({ items: formattedItems });
   } catch (error) {

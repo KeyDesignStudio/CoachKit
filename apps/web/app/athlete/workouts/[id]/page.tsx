@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 
 type CompletedActivity = {
   id: string;
@@ -230,6 +231,18 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 {(() => {
                   const theme = getDisciplineTheme(item.discipline);
                   return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
+                })()}
+                {(() => {
+                  const indicator = getSessionStatusIndicator({
+                    status: item.status,
+                    date: item.date,
+                    timeZone: user?.timezone ?? 'Australia/Brisbane',
+                  });
+                  return (
+                    <span title={indicator.ariaLabel}>
+                      <Icon name={indicator.iconName} size="sm" className={indicator.colorClass} />
+                    </span>
+                  );
                 })()}
                 <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
               </div>

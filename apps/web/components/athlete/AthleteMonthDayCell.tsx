@@ -6,6 +6,7 @@ export type MonthSession = {
   id: string;
   date: string | Date;
   plannedStartTimeLocal: string | null;
+  displayTimeLocal?: string | null;
   discipline: string;
   status: string;
   title: string;
@@ -85,7 +86,7 @@ export function AthleteMonthDayCell({
                 <Icon name={visual.icon} size="sm" className="text-[16px] leading-none" />
               </span>
               <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">
-                {item.plannedStartTimeLocal ?? ''}
+                {item.displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
               </span>
               <span className="text-xs text-[var(--text)] truncate flex-1 font-normal">{item.title}</span>
               {statusIcon ? (

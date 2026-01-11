@@ -12,6 +12,7 @@ import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn'
 import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
+import { getCalendarDisplayTime } from '@/components/athlete/getCalendarDisplayTime';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,6 +29,8 @@ interface CalendarItem {
   notes: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
+    startTime: string;
+    source: 'MANUAL' | 'STRAVA';
   } | null;
 }
 
@@ -122,6 +125,8 @@ export default function AthleteCalendarPage() {
 
   const itemsByDate = useMemo(() => groupItemsByDate(items), [items]);
 
+  const athleteTimezone = user?.timezone || 'Australia/Brisbane';
+
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
     
@@ -137,7 +142,10 @@ export default function AthleteCalendarPage() {
         date,
         dateStr,
         isCurrentMonth,
-        items: itemsByDate[dateStr] || [],
+        items: (itemsByDate[dateStr] || []).map((item) => ({
+          ...item,
+          displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
+        })),
       });
     }
     
@@ -303,7 +311,10 @@ export default function AthleteCalendarPage() {
         <div data-athlete-week-view-version="athlete-week-v2">
           <AthleteWeekGrid>
             {weekDays.map((day) => {
-              const dayItems = itemsByDate[day.date] || [];
+              const dayItems = (itemsByDate[day.date] || []).map((item) => ({
+                ...item,
+                displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
+              }));
               const dayDate = new Date(day.date);
               return (
                 <AthleteWeekDayColumn

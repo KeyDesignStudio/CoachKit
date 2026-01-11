@@ -7,6 +7,7 @@ export type AthleteWeekSessionRowItem = {
   id: string;
   date: string;
   plannedStartTimeLocal: string | null;
+  displayTimeLocal?: string | null;
   discipline: string;
   status: string;
   title: string;
@@ -104,7 +105,7 @@ export function AthleteWeekSessionRow({ item, onClick, now }: AthleteWeekSession
 
         {/* 2-3) Time + title */}
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] leading-none text-[var(--muted)]">{item.plannedStartTimeLocal ?? ''}</p>
+          <p className="text-[10px] leading-none text-[var(--muted)]">{item.displayTimeLocal ?? ''}</p>
           <p className="text-xs font-normal truncate text-[var(--text)]">{item.title || disciplineLabel}</p>
         </div>
 
