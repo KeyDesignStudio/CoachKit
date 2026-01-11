@@ -123,6 +123,14 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       ? item.status.replace(/_/g, ' ')
       : '';
 
+  const statusIndicator = item
+    ? getSessionStatusIndicator({
+        status: item.status,
+        date: item.date,
+        timeZone: user?.timezone ?? 'Australia/Brisbane',
+      })
+    : null;
+
   const headerTimeLabel = item?.plannedStartTimeLocal ?? 'Anytime';
 
   const latestNoteToCoach = (item?.comments ?? []).find((c) => c.authorId === user?.userId)?.body ?? null;
@@ -246,33 +254,32 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           <div className="lg:col-span-5 space-y-4">
             {/* Session header card */}
             <Card className="rounded-3xl">
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const theme = getDisciplineTheme(item.discipline);
-                  return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
-                })()}
-                {(() => {
-                  const indicator = getSessionStatusIndicator({
-                    status: item.status,
-                    date: item.date,
-                    timeZone: user?.timezone ?? 'Australia/Brisbane',
-                  });
-                  return (
-                    <span title={indicator.ariaLabel}>
-                      <Icon name={indicator.iconName} size="sm" className={indicator.colorClass} />
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {(() => {
+                      const theme = getDisciplineTheme(item.discipline);
+                      return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
+                    })()}
+                    <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
+                  </div>
+
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+                    <span>{formatDisplay(item.date)}</span>
+                    <span>·</span>
+                    <span>Planned: {headerTimeLabel}</span>
+                    <Badge>{item.discipline}</Badge>
+                  </div>
+                </div>
+
+                {statusIndicator ? (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span title={statusIndicator.ariaLabel} aria-label={statusIndicator.ariaLabel}>
+                      <Icon name={statusIndicator.iconName} size="sm" className={statusIndicator.colorClass} />
                     </span>
-                  );
-                })()}
-                <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
-                <span>{formatDisplay(item.date)}</span>
-                <span>·</span>
-                <span>Planned: {headerTimeLabel}</span>
-                <Badge className="ml-1">
-                  {statusLabel}
-                </Badge>
-                <Badge>{item.discipline}</Badge>
+                    <Badge className="hidden sm:inline-flex">{statusLabel}</Badge>
+                  </div>
+                ) : null}
               </div>
               {item.template ? (
                 <p className="mt-1 text-xs text-[var(--muted)]">Template: {item.template.title}</p>
