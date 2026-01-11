@@ -26,6 +26,8 @@ export function RouteBrandingBar() {
     return null;
   }
 
+  // NOTE (dev-only): Use token surfaces only. Avoid translucent bg-white/* or gradients as they cause coach/athlete surface drift.
+
   return (
     <div className="px-6 pt-4">
       <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">

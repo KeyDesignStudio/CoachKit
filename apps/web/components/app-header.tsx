@@ -90,6 +90,7 @@ export async function AppHeader() {
 
   return (
     <header className="px-6 pt-6">
+      {/* NOTE (dev-only): Use token surfaces only. Avoid translucent bg-white/* or gradients as they cause coach/athlete surface drift. */}
       <Card className="flex flex-col gap-4 rounded-3xl p-5 bg-[var(--bg-surface)] md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           {branding.logoUrl ? (
