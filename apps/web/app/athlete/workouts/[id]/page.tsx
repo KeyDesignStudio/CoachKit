@@ -35,6 +35,7 @@ type CalendarItem = {
   notes?: string | null;
   template?: { id: string; title: string } | null;
   groupSession?: { id: string; title: string } | null;
+  comments?: Array<{ id: string; authorId: string; body: string; createdAt: string }>;
   completedActivities?: CompletedActivity[];
 };
 
@@ -45,10 +46,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [item, setItem] = useState<CalendarItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [completionForm, setCompletionForm] = useState({
+  const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
     durationMinutes: 60,
     distanceKm: '',
-    rpe: 6,
+    rpe: '',
     notes: '',
     painFlag: false,
   });
@@ -59,18 +60,24 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
-  const formatActualTime = (isoString: string | undefined) => {
-    if (!isoString) return null;
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return null;
-    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
-  };
-
-  const formatActualDateTime = (isoString: string | undefined) => {
+  const formatZonedTime = (isoString: string | undefined) => {
     if (!isoString) return null;
     const date = new Date(isoString);
     if (Number.isNaN(date.getTime())) return null;
     return new Intl.DateTimeFormat(undefined, {
+      timeZone: user?.timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+  };
+
+  const formatZonedDateTime = (isoString: string | undefined) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: user?.timezone,
       year: 'numeric',
       month: 'short',
       day: '2-digit',
@@ -96,15 +103,14 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
   const stravaType = (strava.type ?? strava.sport_type ?? strava.activityType) as string | undefined;
   const stravaName = (strava.name ?? strava.activityName) as string | undefined;
-  const stravaStartLocal = (strava.startDateLocal ?? strava.start_date_local) as string | undefined;
   const stravaStartUtc = (strava.startDateUtc ?? strava.start_date) as string | undefined;
   const stravaAvgSpeedMps = (strava.avgSpeedMps ?? strava.average_speed) as number | undefined;
   const stravaAvgPaceSecPerKm = (strava.avgPaceSecPerKm ?? strava.avg_pace_sec_per_km) as number | undefined;
   const stravaAvgHr = (strava.avgHr ?? strava.average_heartrate) as number | undefined;
   const stravaMaxHr = (strava.maxHr ?? strava.max_heartrate) as number | undefined;
 
-  const actualTimeLabel = formatActualTime(stravaStartLocal) ?? formatActualTime(stravaStartUtc);
-  const actualDateTimeLabel = formatActualDateTime(stravaStartLocal) ?? formatActualDateTime(stravaStartUtc);
+  const actualTimeLabel = formatZonedTime(stravaStartUtc);
+  const actualDateTimeLabel = formatZonedDateTime(stravaStartUtc);
   const avgSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaAvgSpeedMps) : null;
   const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm) : null;
   const statusLabel = isDraftStrava
@@ -113,7 +119,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       ? item.status.replace(/_/g, ' ')
       : '';
 
-  const headerTimeLabel = isStravaCompletion && actualTimeLabel ? actualTimeLabel : item?.plannedStartTimeLocal ?? 'Anytime';
+  const headerTimeLabel = item?.plannedStartTimeLocal ?? 'Anytime';
+
+  const latestNoteToCoach = (item?.comments ?? []).find((c) => c.authorId === user?.userId)?.body ?? null;
 
   const loadData = useCallback(async () => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
@@ -136,7 +144,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         setCompletionForm({
           durationMinutes: completed.durationMinutes,
           distanceKm: completed.distanceKm?.toString() ?? '',
-          rpe: completed.rpe ?? 6,
+          rpe: completed.rpe ?? '',
           notes: completed.notes ?? '',
           painFlag: completed.painFlag ?? false,
         });
@@ -160,9 +168,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         await request(`/api/athlete/calendar-items/${workoutId}/confirm-synced`, {
           method: 'POST',
           data: {
-            notes: completionForm.notes || undefined,
+            notesToSelf: completionForm.notes,
+            rpe: completionForm.rpe === '' ? undefined : Number(completionForm.rpe),
             painFlag: completionForm.painFlag,
-            commentBody: commentDraft.trim() ? commentDraft.trim() : undefined,
+            notesToCoach: commentDraft.trim() ? commentDraft.trim() : undefined,
           },
         });
       } else {
@@ -171,7 +180,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           data: {
             durationMinutes: Number(completionForm.durationMinutes),
             distanceKm: completionForm.distanceKm ? Number(completionForm.distanceKm) : undefined,
-            rpe: completionForm.rpe ? Number(completionForm.rpe) : undefined,
+            rpe: completionForm.rpe === '' ? undefined : Number(completionForm.rpe),
             notes: completionForm.notes || undefined,
             painFlag: completionForm.painFlag,
             commentBody: commentDraft.trim() ? commentDraft.trim() : undefined,
@@ -227,7 +236,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
                 <span>{formatDisplay(item.date)}</span>
                 <span>·</span>
-                <span>{headerTimeLabel}</span>
+                <span>Planned: {headerTimeLabel}</span>
                 <Badge className="ml-1">
                   {statusLabel}
                 </Badge>
@@ -263,7 +272,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   <div>
                     <h2 className="text-lg font-semibold">From Strava</h2>
                     {actualDateTimeLabel ? (
-                      <p className="text-xs text-[var(--muted)] mt-1">Actual start time: <span className="text-[var(--text)] font-medium">{actualDateTimeLabel}</span></p>
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        Actual start time (from Strava):{' '}
+                        <span className="text-[var(--text)] font-medium">{actualDateTimeLabel}</span>
+                      </p>
                     ) : null}
                   </div>
                   {isDraftStrava ? (
@@ -340,10 +352,22 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                           <p className="text-xs font-medium text-[var(--muted)]">Distance (km)</p>
                           <p className="text-sm mt-1">{item.completedActivities?.[0]?.distanceKm ?? '—'}</p>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-[var(--muted)]">RPE (1-10)</p>
-                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.rpe ?? '—'}</p>
-                        </div>
+                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                          RPE (1-10)
+                          <Input
+                            type="number"
+                            value={completionForm.rpe}
+                            min={1}
+                            max={10}
+                            onChange={(event) =>
+                              setCompletionForm({
+                                ...completionForm,
+                                rpe: event.target.value === '' ? '' : Number(event.target.value),
+                              })
+                            }
+                            className="text-sm min-h-[44px]"
+                          />
+                        </label>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -378,7 +402,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                             value={completionForm.rpe}
                             min={1}
                             max={10}
-                            onChange={(event) => setCompletionForm({ ...completionForm, rpe: Number(event.target.value) })}
+                            onChange={(event) =>
+                              setCompletionForm({
+                                ...completionForm,
+                                rpe: event.target.value === '' ? '' : Number(event.target.value),
+                              })
+                            }
                             className="text-sm min-h-[44px]"
                           />
                         </label>
@@ -465,6 +494,13 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                     <div>
                       <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Self</p>
                       <p className="text-sm mt-1 whitespace-pre-wrap">{item.completedActivities[0].notes}</p>
+                    </div>
+                  ) : null}
+
+                  {latestNoteToCoach ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Sent to coach</p>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{latestNoteToCoach}</p>
                     </div>
                   ) : null}
                 </div>

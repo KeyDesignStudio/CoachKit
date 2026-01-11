@@ -12,6 +12,16 @@ export const dynamic = 'force-dynamic';
 const includeRefs = {
   template: { select: { id: true, title: true } },
   groupSession: { select: { id: true, title: true } },
+  comments: {
+    select: {
+      id: true,
+      authorId: true,
+      body: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 10,
+  },
   completedActivities: {
     select: {
       id: true,

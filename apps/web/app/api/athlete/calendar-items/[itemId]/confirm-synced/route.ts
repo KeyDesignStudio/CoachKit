@@ -10,9 +10,10 @@ import { ApiError, notFound } from '@/lib/errors';
 export const dynamic = 'force-dynamic';
 
 const confirmSchema = z.object({
-  notes: z.string().trim().max(2000).optional(),
+  notesToSelf: z.string().trim().max(2000).optional(),
+  rpe: z.number().int().min(1).max(10).optional(),
   painFlag: z.boolean().optional(),
-  commentBody: z.string().trim().max(2000).optional(),
+  notesToCoach: z.string().trim().max(2000).optional(),
 });
 
 const includeRefs = {
@@ -72,16 +73,27 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
         throw new ApiError(409, 'NO_SYNCED_ACTIVITY', 'No Strava-synced activity found for this workout.');
       }
 
-      if (!completion.confirmedAt) {
-        await tx.completedActivity.update({
-          where: { id: completion.id },
-          data: {
-            confirmedAt: new Date(),
-            notes: payload.notes ?? null,
-            painFlag: payload.painFlag ?? false,
-          },
-        });
+      const completionUpdate: Record<string, unknown> = {
+        // Preserve existing confirmedAt if already confirmed.
+        confirmedAt: completion.confirmedAt ?? new Date(),
+      };
+
+      if (payload.notesToSelf !== undefined) {
+        completionUpdate.notes = payload.notesToSelf.trim().length ? payload.notesToSelf.trim() : null;
       }
+
+      if (payload.rpe !== undefined) {
+        completionUpdate.rpe = payload.rpe;
+      }
+
+      if (payload.painFlag !== undefined) {
+        completionUpdate.painFlag = payload.painFlag;
+      }
+
+      await tx.completedActivity.update({
+        where: { id: completion.id },
+        data: completionUpdate,
+      });
 
       // Ensure the calendar item is now coach-visible as completed.
       if (item.status !== CalendarItemStatus.COMPLETED_SYNCED) {
@@ -91,12 +103,12 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
         });
       }
 
-      if (payload.commentBody && payload.commentBody.trim().length > 0) {
+      if (payload.notesToCoach && payload.notesToCoach.trim().length > 0) {
         await tx.comment.create({
           data: {
             calendarItemId: item.id,
             authorId: user.id,
-            body: payload.commentBody.trim(),
+            body: payload.notesToCoach.trim(),
           },
         });
       }

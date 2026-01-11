@@ -433,7 +433,7 @@ export async function POST(request: NextRequest) {
           const externalActivityId = String(activity.id);
           const discipline = mapStravaDiscipline(activity);
           const startInstant = new Date(activity.start_date);
-          const startTime = toNaiveUtcDateTimeFromZone(startInstant, entry.athleteTimezone);
+          const startTime = startInstant;
           const activityDateOnly = toNaiveUtcDateOnlyFromZone(startInstant, entry.athleteTimezone);
           const activityMinutes = toZonedMinutes(startInstant, entry.athleteTimezone);
           const durationMinutes = secondsToMinutesRounded(activity.elapsed_time);
