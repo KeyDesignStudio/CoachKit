@@ -12,6 +12,9 @@
   --bg-card: #FFFFFF;
   --border-subtle: rgba(0, 0, 0, 0.04);
 
+  /* Interaction tokens */
+  --today-border: rgba(59, 130, 246, 0.40);
+
   /* Legacy aliases (keep existing components working; do not add new usage) */
   --bg: var(--bg-page);
   --surface: var(--bg-surface);
@@ -30,6 +33,9 @@
     --bg-structure: rgba(18, 24, 45, 0.65);
     --bg-card: rgba(18, 24, 45, 0.85);
     --border-subtle: rgba(255, 255, 255, 0.08);
+
+    /* Interaction tokens */
+    --today-border: rgba(158, 193, 255, 0.50);
 
     --bg: var(--bg-page);
     --surface: var(--bg-surface);

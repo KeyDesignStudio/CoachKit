@@ -96,7 +96,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                   key={day}
                   className={cn(
                     'min-w-0 bg-[var(--bg-surface)] px-2 py-2 text-center rounded-2xl overflow-hidden',
-                    isToday ? 'border-2 border-blue-500/40' : 'border border-[var(--border-subtle)]'
+                    isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
                   )}
                 >
                   <div className="flex items-center justify-center gap-2">
@@ -142,7 +142,7 @@ export function MultiAthleteGrid({ athleteData, weekDays, onItemClick, onRefresh
                       key={`${row.athlete.id}:${dateKey}`}
                       className={cn(
                         'min-w-0 bg-[var(--bg-structure)] p-2',
-                        isToday ? 'rounded-2xl border-2 border-blue-500/40' : ''
+                        isToday ? 'rounded-2xl border-2 border-[var(--today-border)]' : ''
                       )}
                     >
                       <div className="flex flex-col gap-2 min-w-0">

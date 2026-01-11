@@ -16,8 +16,8 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
     <>
       {/* Mobile: Full-width card per day */}
       <div
-        className={`flex flex-col md:hidden rounded-2xl border border-[var(--border-subtle)] overflow-hidden bg-[var(--bg-structure)] ${
-          isToday ? 'ring-2 ring-blue-500/40 ring-inset' : ''
+        className={`flex flex-col md:hidden rounded-2xl overflow-hidden bg-[var(--bg-structure)] ${
+          isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
         }`}
       >
         <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
@@ -46,8 +46,8 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
 
       {/* Desktop: Column in grid */}
       <div
-        className={`hidden md:flex min-w-0 flex-col rounded-2xl border border-[var(--border-subtle)] overflow-hidden bg-[var(--bg-structure)] ${
-          isToday ? 'ring-2 ring-blue-500/40 ring-inset' : ''
+        className={`hidden md:flex min-w-0 flex-col rounded-2xl overflow-hidden bg-[var(--bg-structure)] ${
+          isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
         }`}
       >
         <div className="sticky top-0 z-10 border-b border-[var(--border-subtle)] px-3 py-2 bg-[var(--bg-surface)]">

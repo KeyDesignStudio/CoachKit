@@ -26,7 +26,7 @@ export function AthleteWeekDayColumn({
       data-athlete-week-day-card="v2"
       className={cn(
         'flex flex-col min-w-0 rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
-        isToday ? 'border-2 border-blue-500/40' : 'border border-[var(--border-subtle)]'
+        isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
       )}
     >
       {onHeaderClick ? (

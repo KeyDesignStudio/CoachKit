@@ -122,7 +122,7 @@ export function MultiAthleteAccordion({ athleteData, weekDays, onItemClick, onRe
                         <div
                           className={cn(
                             'min-h-[110px] rounded-2xl bg-[var(--bg-structure)] overflow-hidden',
-                            isToday ? 'border-2 border-blue-500/40' : 'border border-[var(--border-subtle)]'
+                            isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
                           )}
                         >
                           <div className="flex items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2">
