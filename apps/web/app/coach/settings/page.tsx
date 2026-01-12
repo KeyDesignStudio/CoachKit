@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { useBranding } from '@/components/branding-context';
-import { DEFAULT_BRAND_NAME } from '@/lib/branding';
+import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 
@@ -13,6 +13,8 @@ export default function CoachSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const { branding, loading: brandingLoading, error: brandingError, refresh: refreshBranding } = useBranding();
+  const showDevBrandingSampleButton =
+    process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_SHOW_DEV_PAGES === 'true';
   const [form, setForm] = useState({
     displayName: DEFAULT_BRAND_NAME,
     logoUrl: '',
@@ -89,6 +91,15 @@ export default function CoachSettingsPage() {
     return (payload.data?.url ?? '') as string;
   };
 
+  const removeLogo = async () => {
+    const response = await fetch('/api/coach/branding/logo', { method: 'DELETE' });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error?.message ?? 'Failed to remove logo.');
+    }
+  };
+
   const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
@@ -102,11 +113,50 @@ export default function CoachSettingsPage() {
     try {
       const url = await uploadLogo(file);
       setForm((prev) => ({ ...prev, logoUrl: url }));
-      setMessage('Logo uploaded. Remember to save changes.');
+      await refreshBranding();
+      setMessage('Logo uploaded.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Logo upload failed.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    setUploading(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await removeLogo();
+      setForm((prev) => ({ ...prev, logoUrl: '' }));
+      await refreshBranding();
+      setMessage('Logo removed.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove logo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUseSampleLogo = async () => {
+    setSaving(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await request('/api/coach/branding', {
+        method: 'PATCH',
+        data: {
+          logoUrl: '/_dev/msg-logo.jpeg',
+        },
+      });
+      await refreshBranding();
+      setMessage('Sample dev logo applied.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply sample logo.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -183,15 +233,17 @@ export default function CoachSettingsPage() {
           <input type="file" accept="image/*" onChange={handleLogoChange} disabled={uploading} style={{ display: 'block', marginTop: '0.25rem' }} />
           <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>Upload a small square image (PNG/JPG).</p>
         </label>
-        {form.logoUrl ? (
-          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={form.logoUrl} alt="Current logo" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }} />
-            <button type="button" onClick={() => setForm((prev) => ({ ...prev, logoUrl: '' }))} disabled={uploading}>
-              Remove logo
-            </button>
-          </div>
-        ) : null}
+        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolveLogoUrl(form.logoUrl || branding.logoUrl)}
+            alt="Current logo"
+            style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}
+          />
+          <button type="button" onClick={handleRemoveLogo} disabled={uploading || saving}>
+            Remove logo
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button type="submit" disabled={saving}>
             {saving ? 'Saving…' : 'Save branding'}
@@ -199,6 +251,11 @@ export default function CoachSettingsPage() {
           <button type="button" onClick={handleReset} disabled={brandingLoading || saving}>
             Reset
           </button>
+          {showDevBrandingSampleButton ? (
+            <button type="button" onClick={handleUseSampleLogo} disabled={saving || uploading}>
+              Use sample club logo (dev)
+            </button>
+          ) : null}
         </div>
       </form>
 

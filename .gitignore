@@ -53,6 +53,9 @@ logs
 # Screenshots (generated proof artifacts)
 screenshots/
 
+# Dev-only assets (never ship)
+apps/web/public/_dev/
+
 # Database
 *.db
 *.sqlite

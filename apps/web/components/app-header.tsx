@@ -5,7 +5,7 @@ import { UserButton } from '@clerk/nextjs';
 
 import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
-import { DEFAULT_BRAND_NAME } from '@/lib/branding';
+import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
 
@@ -71,11 +71,33 @@ export async function AppHeader() {
     if (user) {
       userRole = user.role;
       
-      if (user.role === 'COACH' && user.branding) {
-        branding = {
-          displayName: user.branding.displayName || DEFAULT_BRAND_NAME,
-          logoUrl: user.branding.logoUrl,
-        };
+      if (user.role === 'COACH') {
+        const coachBranding = user.branding;
+        if (coachBranding) {
+          branding = {
+            displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
+            logoUrl: coachBranding.logoUrl,
+          };
+        }
+      } else {
+        const athleteProfile = await prisma.athleteProfile.findUnique({
+          where: { userId: user.id },
+          select: { coachId: true },
+        });
+
+        if (athleteProfile?.coachId) {
+          const coachBranding = await prisma.coachBranding.findUnique({
+            where: { coachId: athleteProfile.coachId },
+            select: { displayName: true, logoUrl: true },
+          });
+
+          if (coachBranding) {
+            branding = {
+              displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
+              logoUrl: coachBranding.logoUrl,
+            };
+          }
+        }
       }
     }
   }
@@ -92,18 +114,12 @@ export async function AppHeader() {
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
       <Card className="flex flex-col gap-4 rounded-3xl p-5 bg-[var(--bg-surface)] md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          {branding.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={branding.logoUrl}
-              alt={`${branding.displayName} logo`}
-              className="h-[55px] w-[55px] object-contain"
-            />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] text-lg font-semibold text-[var(--text)]">
-              CK
-            </div>
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolveLogoUrl(branding.logoUrl)}
+            alt={`${branding.displayName} logo`}
+            className="h-[55px] w-[55px] object-contain"
+          />
           <div>
             <a href="/" className="font-display text-xl font-semibold tracking-tight">
               CoachKit

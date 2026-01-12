@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { useBranding } from '@/components/branding-context';
-import { DEFAULT_BRAND_NAME } from '@/lib/branding';
+import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
 
 export function RouteBrandingBar() {
   const pathname = usePathname();
@@ -14,13 +14,8 @@ export function RouteBrandingBar() {
     if (!pathname) {
       return false;
     }
-
-    if (!branding.logoUrl) {
-      return false;
-    }
-
     return pathname.startsWith('/coach') || pathname.startsWith('/athlete');
-  }, [branding.logoUrl, pathname]);
+  }, [pathname]);
 
   if (!shouldShow) {
     return null;
@@ -33,7 +28,7 @@ export function RouteBrandingBar() {
       <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={branding.logoUrl ?? ''}
+          src={resolveLogoUrl(branding.logoUrl)}
           alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
           className="h-14 w-14 rounded-xl object-cover border border-[var(--border-subtle)] bg-[var(--bg-card)]"
         />

@@ -64,6 +64,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const latestCompletion = item?.completedActivities?.[0];
   const isStravaCompletion = latestCompletion?.source === 'STRAVA';
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
+  const showStravaBadge = Boolean(isDraftStrava || isStravaCompletion);
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
   const tz = user?.timezone || 'Australia/Brisbane';
@@ -256,6 +257,15 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
                     })()}
                     <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
+                    {showStravaBadge ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src="/integrations/strava.webp"
+                        alt="Strava activity"
+                        title={isDraftStrava ? 'Strava detected (pending confirmation)' : 'Synced from Strava'}
+                        className="h-3.5 w-3.5 flex-shrink-0 opacity-90"
+                      />
+                    ) : null}
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
