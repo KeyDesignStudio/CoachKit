@@ -613,7 +613,7 @@ export default function CoachCalendarPage() {
                 className="flex-1"
               />
               <Button type="button" variant="secondary" onClick={() => handleAddTitle('create')} disabled={!titleInputs.create.trim()}>
-                + Add title
+                Add title
               </Button>
               <Button
                 type="button"
@@ -695,7 +695,7 @@ export default function CoachCalendarPage() {
                 className="flex-1"
               />
               <Button type="button" variant="secondary" onClick={() => handleAddTitle('edit')} disabled={!titleInputs.edit.trim()}>
-                + Add title
+                Add title
               </Button>
               <Button
                 type="button"

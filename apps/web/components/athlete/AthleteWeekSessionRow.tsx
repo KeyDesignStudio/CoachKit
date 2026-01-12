@@ -23,6 +23,7 @@ type AthleteWeekSessionRowProps = {
   onClick: () => void;
   timeZone: string;
   now?: Date;
+  variant?: 'default' | 'stacked';
 };
 
 function getDisciplineLabel(discipline: string): string {
@@ -61,7 +62,7 @@ function getAccountabilityStatusIcon(params: {
   };
 }
 
-export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteWeekSessionRowProps) {
+export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 'default' }: AthleteWeekSessionRowProps) {
   const theme = getDisciplineTheme(item.discipline as any);
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
@@ -70,6 +71,8 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteW
   const hasAdvice = !!item.notes;
   const statusIcon = getAccountabilityStatusIcon({ item, now: effectiveNow, timeZone });
 
+  const isStacked = variant === 'stacked';
+
   return (
     <button
       type="button"
@@ -77,9 +80,9 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteW
       data-athlete-week-session-row="v2"
       className={cn(
         'w-full cursor-pointer text-left',
-        'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded px-2 py-1.5',
-        'transition-shadow',
-        'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+        isStacked
+          ? 'bg-transparent hover:bg-[var(--bg-structure)] rounded-md px-1.5 py-1 transition-colors'
+          : 'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded px-2 py-1.5 transition-shadow hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
       )}
       aria-label={`Open ${disciplineLabel} session`}
     >
@@ -93,7 +96,9 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone }: AthleteW
         {/* 2-3) Time + title */}
         <div className="flex-1 min-w-0">
           <p className="text-[10px] leading-none text-[var(--muted)]">{item.displayTimeLocal ?? ''}</p>
-          <p className="text-xs font-normal truncate text-[var(--text)]">{item.title || disciplineLabel}</p>
+          <p className={cn(isStacked ? 'text-[11px]' : 'text-xs', 'font-normal truncate text-[var(--text)]')}>
+            {item.title || disciplineLabel}
+          </p>
         </div>
 
         {/* 4) Indicators (right-aligned; consistent order) */}

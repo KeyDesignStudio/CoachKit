@@ -41,20 +41,9 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 - Days displayed as vertically stacked cards
 - Each day card has clear header and scrollable content
 - "Today" badge prominent
-- Add buttons full-width with proper touch targets
+- No “+ Add” buttons; tap/click an empty day area to add a session
 
-#### 3. /coach/multi-calendar
-**Improvements:**
-- Header responsive padding and font sizes
-- Navigation buttons with icon-only mobile view
-- Filter controls stack properly on mobile
-- Week grid uses same mobile day-card pattern
-
-**Mobile Behavior:**
-- Athlete selector adapts to mobile (existing Portal implementation)
-- Filters full-width on mobile
-
-#### 4. /coach/group-sessions
+#### 3. /coach/group-sessions
 **Improvements:**
 - Header stacks on mobile: title, then action button
 - Search input: min-h-[44px] for easy tapping, icon properly positioned
@@ -64,7 +53,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 - Single column session cards
 - Search is prominent and accessible
 
-#### 5. /coach/athletes (Athlete Profiles)
+#### 4. /coach/athletes (Athlete Profiles)
 **Improvements:**
 - Header stacks: Title, then New Athlete button
 - Athlete cards: Stack athlete info, cadence badge, and discipline icons vertically on mobile
@@ -78,7 +67,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 
 ### Athlete Pages
 
-#### 6. /athlete/calendar
+#### 5. /athlete/calendar
 **Improvements:**
 - Header stacks: Title info, then view toggle and navigation
 - View toggle: Full-width buttons on mobile
@@ -90,7 +79,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 - Clear day cards with workout chips easy to tap
 - Month view cells sized for touch targets
 
-#### 7. /athlete/workouts/[id]
+#### 6. /athlete/workouts/[id]
 **Improvements:**
 - Form metrics: 2-column grid on mobile (Duration, Distance), RPE full-width
 - All inputs: min-h-[44px] for touch targets

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -16,6 +16,7 @@ import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRo
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
+import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
@@ -27,9 +28,11 @@ const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
 type DisciplineOption = (typeof DISCIPLINE_OPTIONS)[number];
 
 type AthleteOption = {
+  userId: string;
   user: {
     id: string;
     name: string | null;
+    timezone?: string | null;
   };
 };
 
@@ -40,6 +43,9 @@ type CalendarItem = {
   discipline: string;
   status: string;
   title: string;
+  athleteId?: string;
+  athleteName?: string | null;
+  athleteTimezone?: string;
   notes?: string | null;
   template?: { id: string; title: string } | null;
   plannedDurationMinutes?: number | null;
@@ -132,7 +138,8 @@ export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
-  const [selectedAthleteId, setSelectedAthleteId] = useState('');
+  const didInitSelectedAthletes = useRef(false);
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
   const [mounted, setMounted] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
@@ -145,6 +152,7 @@ export default function CoachCalendarPage() {
   const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit'>('closed');
   const [sessionForm, setSessionForm] = useState(() => emptyForm(toDateInput(startOfWeek())));
   const [editItemId, setEditItemId] = useState('');
+  const [drawerAthleteId, setDrawerAthleteId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [copyFormOpen, setCopyFormOpen] = useState(false);
@@ -162,6 +170,10 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+
+  const stackedMode = selectedAthleteIds.size > 1;
+  const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
+  const effectiveAthleteId = drawerMode === 'closed' ? singleAthleteId : drawerAthleteId;
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
@@ -363,16 +375,43 @@ export default function CoachCalendarPage() {
     try {
       const data = await request<{ athletes: AthleteOption[] }>('/api/coach/athletes');
       setAthletes(data.athletes);
-      if (!selectedAthleteId && data.athletes.length > 0) {
-        setSelectedAthleteId(data.athletes[0].user.id);
+
+      if (didInitSelectedAthletes.current) {
+        return;
       }
+
+      const storageKey = 'coach-calendar-selected-athletes';
+      const savedRaw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+      const allIds = new Set(data.athletes.map((a) => a.userId));
+
+      if (savedRaw) {
+        try {
+          const parsed = JSON.parse(savedRaw) as unknown;
+          const savedIds = Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+          const restored = new Set(savedIds.filter((id) => allIds.has(id)));
+          setSelectedAthleteIds(restored.size > 0 ? restored : new Set(allIds));
+        } catch {
+          setSelectedAthleteIds(new Set(allIds));
+        }
+      } else {
+        // Default: All athletes selected.
+        setSelectedAthleteIds(new Set(allIds));
+      }
+
+      didInitSelectedAthletes.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load athletes.');
     }
-  }, [request, selectedAthleteId, user?.role, user?.userId]);
+  }, [request, user?.role, user?.userId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!didInitSelectedAthletes.current) return;
+    localStorage.setItem('coach-calendar-selected-athletes', JSON.stringify(Array.from(selectedAthleteIds)));
+  }, [selectedAthleteIds]);
 
   const loadCalendar = useCallback(async () => {
-    if (!selectedAthleteId) {
+    if (selectedAthleteIds.size === 0) {
       return;
     }
 
@@ -380,31 +419,55 @@ export default function CoachCalendarPage() {
     setError('');
 
     try {
-      const [itemsData, weekData] = await Promise.all([
-        request<{ items: CalendarItem[]; athleteTimezone: string }>(
-          `/api/coach/calendar?athleteId=${selectedAthleteId}&from=${dateRange.from}&to=${dateRange.to}`
-        ),
-        viewMode === 'week' ? request<{ weeks: Array<{ weekStart: string; status: 'DRAFT' | 'PUBLISHED' }> }>(
-          `/api/coach/plan-weeks?athleteId=${selectedAthleteId}&from=${dateRange.from}&to=${dateRange.to}`
-        ) : Promise.resolve({ weeks: [] }),
-      ]);
-      
-      setItems(itemsData.items);
-      if (itemsData.athleteTimezone) {
-        setAthleteTimezone(itemsData.athleteTimezone);
-      }
-      
-      // Set week status for current week in week view
-      if (viewMode === 'week' && weekData.weeks.length > 0) {
-        const currentWeekData = weekData.weeks[0];
-        setWeekStatus(currentWeekData?.status || 'DRAFT');
+      if (selectedAthleteIds.size === 1) {
+        const athleteId = Array.from(selectedAthleteIds)[0];
+        const [itemsData, weekData] = await Promise.all([
+          request<{ items: CalendarItem[]; athleteTimezone: string }>(
+            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+          ),
+          viewMode === 'week'
+            ? request<{ weeks: Array<{ weekStart: string; status: 'DRAFT' | 'PUBLISHED' }> }>(
+                `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+              )
+            : Promise.resolve({ weeks: [] }),
+        ]);
+
+        const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
+        setItems(itemsData.items.map((item) => ({ ...item, athleteId, athleteName, athleteTimezone: itemsData.athleteTimezone })));
+        if (itemsData.athleteTimezone) {
+          setAthleteTimezone(itemsData.athleteTimezone);
+        }
+
+        if (viewMode === 'week' && weekData.weeks.length > 0) {
+          const currentWeekData = weekData.weeks[0];
+          setWeekStatus(currentWeekData?.status || 'DRAFT');
+        }
+      } else {
+        // Stacked mode: load each athlete in parallel and tag items.
+        const selected = Array.from(selectedAthleteIds);
+        const results = await Promise.all(
+          selected.map(async (athleteId) => {
+            const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
+              `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+            );
+            const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
+            return itemsData.items.map((item) => ({
+              ...item,
+              athleteId,
+              athleteName,
+              athleteTimezone: itemsData.athleteTimezone,
+            }));
+          })
+        );
+        setItems(results.flat());
+        setWeekStatus('DRAFT');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
     } finally {
       setLoading(false);
     }
-  }, [request, selectedAthleteId, dateRange.from, dateRange.to, viewMode]);
+  }, [athletes, dateRange.from, dateRange.to, request, selectedAthleteIds, viewMode]);
 
   useEffect(() => {
     setMounted(true);
@@ -463,6 +526,16 @@ export default function CoachCalendarPage() {
   };
 
   const openCreateDrawer = (date: string) => {
+    setDrawerAthleteId(singleAthleteId);
+    setSessionForm(emptyForm(date));
+    setEditItemId('');
+    setDrawerMode('create');
+    setError('');
+    setTitleMessage('');
+  };
+
+  const openCreateDrawerForAthlete = (athleteId: string, date: string) => {
+    setDrawerAthleteId(athleteId);
     setSessionForm(emptyForm(date));
     setEditItemId('');
     setDrawerMode('create');
@@ -472,6 +545,7 @@ export default function CoachCalendarPage() {
 
   const openEditDrawer = (item: CalendarItem) => {
     const dateStr = typeof item.date === 'string' ? item.date : item.date.toISOString().split('T')[0];
+    setDrawerAthleteId(item.athleteId || singleAthleteId);
     setSessionForm({
       date: dateStr,
       plannedStartTimeLocal: item.plannedStartTimeLocal || '05:30',
@@ -489,13 +563,14 @@ export default function CoachCalendarPage() {
   const closeDrawer = () => {
     setDrawerMode('closed');
     setEditItemId('');
+    setDrawerAthleteId('');
     setTitleMessage('');
   };
 
   const onSaveSession = async (event: FormEvent) => {
     event.preventDefault();
 
-    const trimmedAthleteId = selectedAthleteId?.trim() || '';
+    const trimmedAthleteId = effectiveAthleteId?.trim() || '';
 
     if (!trimmedAthleteId) {
       setError('Select an athlete first.');
@@ -555,7 +630,7 @@ export default function CoachCalendarPage() {
   const onCopyWeek = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!selectedAthleteId) {
+    if (!singleAthleteId) {
       setCopyError('Select an athlete first.');
       return;
     }
@@ -568,7 +643,7 @@ export default function CoachCalendarPage() {
       const response = await request<{ message?: string }>('/api/coach/calendar/copy-week', {
         method: 'POST',
         data: {
-          athleteId: selectedAthleteId,
+          athleteId: singleAthleteId,
           fromWeekStart: copyForm.fromWeekStart,
           toWeekStart: copyForm.toWeekStart,
           mode: copyForm.mode,
@@ -602,7 +677,7 @@ export default function CoachCalendarPage() {
   };
 
   const publishWeek = async () => {
-    if (!selectedAthleteId) {
+    if (!singleAthleteId) {
       return;
     }
 
@@ -613,7 +688,7 @@ export default function CoachCalendarPage() {
       await request('/api/coach/plan-weeks/publish', {
         method: 'POST',
         data: {
-          athleteId: selectedAthleteId,
+          athleteId: singleAthleteId,
           weekStart: toDateInput(weekStart),
         },
       });
@@ -626,7 +701,7 @@ export default function CoachCalendarPage() {
   };
 
   const unpublishWeek = async () => {
-    if (!selectedAthleteId) {
+    if (!singleAthleteId) {
       return;
     }
 
@@ -637,7 +712,7 @@ export default function CoachCalendarPage() {
       await request('/api/coach/plan-weeks/unpublish', {
         method: 'POST',
         data: {
-          athleteId: selectedAthleteId,
+          athleteId: singleAthleteId,
           weekStart: toDateInput(weekStart),
         },
       });
@@ -696,20 +771,13 @@ export default function CoachCalendarPage() {
             </p>
           </div>
 
-          {/* Center: Athlete Selector */}
+          {/* Center: Athletes Selector (single or stacked) */}
           <div className="flex items-center flex-shrink-0">
-            <label className="flex items-center gap-3 text-sm w-full md:w-auto">
-              <span className="text-[var(--muted)] hidden md:inline">Athlete</span>
-              <Select value={selectedAthleteId} onChange={(event) => setSelectedAthleteId(event.target.value)} className="min-h-[44px] flex-1 md:flex-initial">
-                <option value="">Select athlete…</option>
-                {athletes.map((athlete) => (
-                  <option key={athlete.user.id} value={athlete.user.id}>
-                    {athlete.user.name ?? athlete.user.id}
-                  </option>
-              ))}
-            </Select>
-          </label>
-        </div>
+            <div className="flex items-center gap-3 text-sm w-full md:w-auto">
+              <span className="text-[var(--muted)] hidden md:inline">Athletes</span>
+              <AthleteSelector athletes={athletes} selectedIds={selectedAthleteIds} onChange={setSelectedAthleteIds} />
+            </div>
+          </div>
         </div>
 
         {/* Bottom row: View Toggle, Navigation, Actions */}
@@ -749,10 +817,17 @@ export default function CoachCalendarPage() {
             </Button>
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={toggleCopyForm} className="flex-1 md:flex-initial min-h-[44px]">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={toggleCopyForm}
+              className="flex-1 md:flex-initial min-h-[44px]"
+              disabled={!singleAthleteId}
+              title={stackedMode ? 'Select a single athlete to copy plans.' : undefined}
+            >
               {copyFormOpen ? 'Close' : <><Icon name="copyWeek" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Copy</span></>}
             </Button>
-            {viewMode === 'week' && mounted && selectedAthleteId && (
+            {viewMode === 'week' && mounted && !!singleAthleteId && (
               weekStatus === 'DRAFT' ? (
                 <Button type="button" variant="primary" onClick={publishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
                   {publishLoading ? 'Publishing...' : 'Publish weekly plan'}
@@ -810,30 +885,110 @@ export default function CoachCalendarPage() {
       ) : null}
 
       {/* Calendar Grid - Week or Month */}
-      {selectedAthleteId ? (
+      {selectedAthleteIds.size > 0 ? (
         viewMode === 'week' ? (
           <CalendarShell variant="week" data-coach-week-view-version="coach-week-v2">
             <WeekGrid>
-              {weekDays.map((day) => (
-                <AthleteWeekDayColumn
-                  key={day.date}
-                  dayName={day.dayName}
-                  formattedDate={day.formattedDate}
-                  isEmpty={day.items.length === 0}
-                  isToday={isToday(new Date(day.date))}
-                  onHeaderClick={() => openCreateDrawer(day.date)}
-                  onEmptyClick={() => openCreateDrawer(day.date)}
-                >
-                  {day.items.map((item) => (
-                    <AthleteWeekSessionRow
-                      key={item.id}
-                      item={item as any}
-                      timeZone={athleteTimezone}
-                      onClick={() => openEditDrawer(item)}
-                    />
-                  ))}
-                </AthleteWeekDayColumn>
-              ))}
+              {!stackedMode
+                ? weekDays.map((day) => (
+                    <AthleteWeekDayColumn
+                      key={day.date}
+                      dayName={day.dayName}
+                      formattedDate={day.formattedDate}
+                      isEmpty={false}
+                      isToday={isToday(new Date(day.date))}
+                    >
+                      {day.items.map((item) => (
+                        <AthleteWeekSessionRow
+                          key={item.id}
+                          item={item as any}
+                          timeZone={athleteTimezone}
+                          onClick={() => openEditDrawer(item)}
+                        />
+                      ))}
+                      {day.items.length === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openCreateDrawer(day.date)}
+                          className="w-full min-h-[96px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] transition-colors"
+                          aria-label={`Add session on ${day.date}`}
+                        />
+                      ) : null}
+                    </AthleteWeekDayColumn>
+                  ))
+                : weekDays.map((day) => {
+                    const dateKey = day.date;
+                    const isDayToday = isToday(new Date(dateKey));
+                    const selected = athletes.filter((a) => selectedAthleteIds.has(a.userId));
+
+                    return (
+                      <AthleteWeekDayColumn
+                        key={dateKey}
+                        dayName={day.dayName}
+                        formattedDate={day.formattedDate}
+                        isEmpty={false}
+                        isToday={isDayToday}
+                        density="compact"
+                      >
+                        <div className="flex flex-col">
+                          {selected.map((athlete, index) => {
+                            const tz = athlete.user.timezone || 'Australia/Brisbane';
+                            const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
+                            const dayItems = sortSessionsForDay(
+                              dayItemsRaw.map((item) => ({
+                                ...item,
+                                date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
+                                displayTimeLocal: getCalendarDisplayTime(
+                                  {
+                                    ...item,
+                                    date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
+                                  } as any,
+                                  tz,
+                                  new Date()
+                                ),
+                              })),
+                              tz
+                            );
+
+                            return (
+                              <div key={athlete.userId} className="min-w-0">
+                                <div className="py-1">
+                                  <div className="text-[11px] font-medium text-[var(--muted)] truncate">
+                                    {athlete.user.name || athlete.userId}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                  {dayItems.map((item) => (
+                                    <AthleteWeekSessionRow
+                                      key={item.id}
+                                      item={item as any}
+                                      timeZone={tz}
+                                      onClick={() => openEditDrawer(item)}
+                                      variant="stacked"
+                                    />
+                                  ))}
+
+                                  {dayItems.length === 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
+                                      className="w-full min-h-[28px] rounded-md bg-transparent hover:bg-[var(--bg-structure)] transition-colors"
+                                      aria-label={`Add session for ${athlete.user.name || athlete.userId} on ${dateKey}`}
+                                    />
+                                  ) : null}
+                                </div>
+
+                                {index < selected.length - 1 ? (
+                                  <div className="my-1 h-px bg-[var(--border-subtle)] opacity-40" />
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </AthleteWeekDayColumn>
+                    );
+                  })}
             </WeekGrid>
           </CalendarShell>
         ) : (
@@ -847,7 +1002,13 @@ export default function CoachCalendarPage() {
                   items={day.items as any}
                   isCurrentMonth={day.isCurrentMonth}
                   isToday={isToday(day.date)}
-                  onDayClick={(date) => openCreateDrawer(toDateInput(date))}
+                  onDayClick={(date) => {
+                    if (!singleAthleteId) {
+                      setError('Select a single athlete to add sessions in month view.');
+                      return;
+                    }
+                    openCreateDrawer(toDateInput(date));
+                  }}
                   onItemClick={(itemId) => {
                     const found = itemsById.get(itemId);
                     if (found) {
@@ -861,7 +1022,7 @@ export default function CoachCalendarPage() {
         )
       ) : (
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center text-[var(--muted)]">
-          <p>Select an athlete to view their calendar</p>
+          <p>Select athletes to view the calendar</p>
         </div>
       )}
 
@@ -872,7 +1033,7 @@ export default function CoachCalendarPage() {
         title={drawerMode === 'create' ? 'Add Session' : 'Edit Session'}
         onSubmit={onSaveSession}
         submitLabel={drawerMode === 'create' ? 'Add Session' : 'Save Changes'}
-        submitDisabled={!selectedAthleteId}
+        submitDisabled={!effectiveAthleteId}
         onDelete={drawerMode === 'edit' ? onDelete : undefined}
       >
         <div className="space-y-4">
@@ -916,7 +1077,7 @@ export default function CoachCalendarPage() {
           <div className="flex flex-wrap gap-3">
             <Input placeholder="Add new title" value={titleInput} onChange={(event) => setTitleInput(event.target.value)} className="flex-1" />
             <Button type="button" variant="secondary" onClick={handleAddTitle} disabled={!titleInput.trim()}>
-              + Add title
+              Add title
             </Button>
             <Button type="button" variant="ghost" onClick={handleDeleteTitle} disabled={!canDeleteTitle()} title="Delete selected title">
               🗑 Remove

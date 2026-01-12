@@ -1,5 +1,4 @@
 import { ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
 
 type DayColumnProps = {
   dayName: string;
@@ -33,14 +32,20 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
         </div>
         <div className="p-3 space-y-2 min-h-[80px]">
           {children}
-          {onAddClick && (
-            <Button type="button" variant="ghost" onClick={onAddClick} className="w-full text-sm min-h-[44px]">
-              + Add
-            </Button>
-          )}
-          {isEmpty && !onAddClick && (
-            <p className="text-center text-sm text-[var(--muted)] py-4">No workouts</p>
-          )}
+          {isEmpty ? (
+            onAddClick ? (
+              <button
+                type="button"
+                onClick={onAddClick}
+                className="w-full min-h-[64px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] text-center text-sm text-[var(--muted)] transition-colors"
+                aria-label="Add session"
+              >
+                No workouts
+              </button>
+            ) : (
+              <p className="text-center text-sm text-[var(--muted)] py-4">No workouts</p>
+            )
+          ) : null}
         </div>
       </div>
 
@@ -61,17 +66,20 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'calc(100vh - 280px)' }}>
           {children}
-          {onAddClick && (
-            isEmpty ? (
-              <Button type="button" variant="ghost" onClick={onAddClick} className="w-full text-sm">
-                + Add
-              </Button>
+          {isEmpty ? (
+            onAddClick ? (
+              <button
+                type="button"
+                onClick={onAddClick}
+                className="w-full min-h-[64px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] text-center text-sm text-[var(--muted)] transition-colors"
+                aria-label="Add session"
+              >
+                No workouts
+              </button>
             ) : (
-              <Button type="button" variant="ghost" onClick={onAddClick} className="w-full text-xs opacity-60 hover:opacity-100">
-                + Add
-              </Button>
+              <p className="text-xs text-[var(--muted)] text-center py-2">No workouts</p>
             )
-          )}
+          ) : null}
         </div>
       </div>
     </>

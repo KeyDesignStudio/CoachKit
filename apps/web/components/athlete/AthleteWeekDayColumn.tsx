@@ -9,6 +9,7 @@ type AthleteWeekDayColumnProps = {
   isEmpty: boolean;
   onHeaderClick?: () => void;
   onEmptyClick?: () => void;
+  density?: 'default' | 'compact';
   children: ReactNode;
 };
 
@@ -19,8 +20,16 @@ export function AthleteWeekDayColumn({
   isEmpty,
   onHeaderClick,
   onEmptyClick,
+  density = 'default',
   children,
 }: AthleteWeekDayColumnProps) {
+  const headerClassName =
+    density === 'compact'
+      ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5'
+      : 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2';
+
+  const bodyClassName = density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2';
+
   return (
     <div
       data-athlete-week-day-card="v2"
@@ -33,7 +42,7 @@ export function AthleteWeekDayColumn({
         <button
           type="button"
           onClick={onHeaderClick}
-          className="flex w-full items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2 text-left"
+          className={cn('flex w-full items-center justify-between text-left', headerClassName)}
         >
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
@@ -44,7 +53,7 @@ export function AthleteWeekDayColumn({
           ) : null}
         </button>
       ) : (
-        <div className="flex items-center justify-between bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2">
+        <div className={cn('flex items-center justify-between', headerClassName)}>
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
@@ -55,7 +64,7 @@ export function AthleteWeekDayColumn({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 p-2">
+      <div className={bodyClassName}>
         {children}
         {isEmpty ? (
           onEmptyClick ? (

@@ -13,7 +13,6 @@ import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { WeekGrid } from '@/components/calendar/WeekGrid';
 import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
 import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
-import { MultiAthleteGrid } from '@/components/coach/MultiAthleteGrid';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,44 +165,6 @@ export default function DevCalendarGeometryComparePage() {
     ]);
   }, [todayKey, weekDays]);
 
-  const multiAthletePreviewData = useMemo(() => {
-    const makeItem = (params: Omit<WeekItem, 'id'> & { id: string }) => params;
-
-    return [
-      {
-        athlete: { id: 'a-1', name: 'Alex (long-name athlete to test truncation)', timezone: 'America/Los_Angeles' },
-        weekStatus: 'DRAFT' as const,
-        items: (weekPreviewItemsByDate.get(todayKey) ?? []).map((i) => ({
-          ...i,
-          date: i.date,
-          plannedStartTimeLocal: i.plannedStartTimeLocal,
-          notes: i.notes ?? null,
-        })),
-      },
-      {
-        athlete: { id: 'a-2', name: 'Bailey', timezone: 'Australia/Brisbane' },
-        weekStatus: 'PUBLISHED' as const,
-        items: [
-          makeItem({
-            id: 'm-a2-t1',
-            date: `${todayKey}T00:00:00.000Z`,
-            plannedStartTimeLocal: '07:15',
-            status: 'COMPLETED_SYNCED',
-            discipline: 'BIKE',
-            title: 'Trainer ride',
-            notes: null,
-            latestCompletedActivity: { painFlag: true },
-          }),
-        ],
-      },
-      {
-        athlete: { id: 'a-3', name: 'Casey', timezone: 'Europe/London' },
-        weekStatus: 'DRAFT' as const,
-        items: [],
-      },
-    ];
-  }, [todayKey, weekPreviewItemsByDate]);
-
   return (
     <div className="flex flex-col gap-6">
       <header className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-5">
@@ -212,7 +173,7 @@ export default function DevCalendarGeometryComparePage() {
         <p className="mt-2 text-sm text-[var(--muted)]">Last click: {clicked ?? 'none'}</p>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
           <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Dashboard (Review Grid)</h2>
           <ReviewGrid weekDays={weekDays} todayIndex={weekDays.indexOf(todayKey)}>
@@ -276,15 +237,6 @@ export default function DevCalendarGeometryComparePage() {
           </CalendarShell>
         </section>
 
-        <section className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
-          <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Multi (Coach Multi-calendar)</h2>
-          <MultiAthleteGrid
-            athleteData={multiAthletePreviewData as any}
-            weekDays={weekDays}
-            onItemClick={(item: any) => setClicked(`multi:item:${item.id}`)}
-            onRefresh={() => null}
-          />
-        </section>
       </div>
     </div>
   );
