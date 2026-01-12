@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
+import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
+import { SkeletonReviewList } from '@/components/dashboard/SkeletonReviewList';
 import { addDays, formatDisplay, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
@@ -159,6 +161,8 @@ export default function CoachDashboardPage() {
   const { request } = useApi();
   const didInitFromTimezone = useRef(false);
   const didInitAthleteFilter = useRef(false);
+  const perfFrameMarked = useRef(false);
+  const perfDataMarked = useRef(false);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -237,6 +241,16 @@ export default function CoachDashboardPage() {
       setError(err instanceof Error ? err.message : 'Failed to load inbox.');
     } finally {
       setLoading(false);
+
+      if (process.env.NODE_ENV !== 'production' && perfFrameMarked.current && !perfDataMarked.current) {
+        perfDataMarked.current = true;
+        try {
+          performance.mark('coach-dashboard-data');
+          performance.measure('coach-dashboard-load', 'coach-dashboard-frame', 'coach-dashboard-data');
+        } catch {
+          // noop
+        }
+      }
     }
   }, [request, user?.userId]);
 
@@ -422,13 +436,23 @@ export default function CoachDashboardPage() {
     });
   }, []);
 
-  if (userLoading) {
-    return <p className="text-[var(--muted)]">Loading...</p>;
-  }
+  // Dev-only perf marks
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (perfFrameMarked.current) return;
+    perfFrameMarked.current = true;
+    try {
+      performance.mark('coach-dashboard-frame');
+    } catch {
+      // noop
+    }
+  }, []);
 
-  if (!user || user.role !== 'COACH') {
+  if (!userLoading && (!user || user.role !== 'COACH')) {
     return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
+
+  const showSkeleton = userLoading || loading;
 
   return (
     <section className="flex flex-col gap-6" data-coach-dashboard-version="review-inbox-v2">
@@ -487,7 +511,9 @@ export default function CoachDashboardPage() {
         </div>
       ) : null}
 
-      {viewMode === 'list' ? (
+      {showSkeleton && viewMode === 'list' ? (
+        <SkeletonReviewList rows={6} />
+      ) : viewMode === 'list' ? (
         <div className="space-y-6">
           <div className="flex items-center justify-end">
             <div className="flex items-center gap-3">
@@ -723,7 +749,32 @@ export default function CoachDashboardPage() {
         </div>
       ) : null}
 
-      {viewMode === 'calendar' ? (
+      {showSkeleton && viewMode === 'calendar' ? (
+        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-subtle)]">
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" disabled className="min-h-[44px]">
+                <Icon name="prev" size="sm" />
+              </Button>
+              <Button type="button" variant="ghost" disabled className="min-h-[44px]">
+                <Icon name="next" size="sm" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-xs text-[var(--muted)]">Athlete</div>
+              <Select className="min-h-[44px] w-[220px]" value="" disabled aria-label="Athlete filter">
+                <option value="">Loading…</option>
+              </Select>
+            </div>
+
+            <div className="h-4 w-32 rounded bg-[var(--bg-card)] animate-pulse" aria-hidden="true" />
+            <div className="w-[120px]" />
+          </div>
+
+          <SkeletonMonthGrid />
+        </div>
+      ) : viewMode === 'calendar' ? (
         <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-subtle)]">
             <div className="flex items-center gap-2">
