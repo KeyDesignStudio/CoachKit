@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
+import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
@@ -62,33 +63,32 @@ export async function GET(request: NextRequest) {
     const toDate = parseDateOnly(params.to, 'to');
     assertValidDateRange(fromDate, toDate);
 
-    // Get athlete profile to find coach
-    const athleteProfile = await prisma.athleteProfile.findUnique({
-      where: { userId: user.id },
-      select: { coachId: true },
-    });
+    const [athleteProfile, items] = await Promise.all([
+      prisma.athleteProfile.findUnique({
+        where: { userId: user.id },
+        select: { coachId: true },
+      }),
+      prisma.calendarItem.findMany({
+        where: {
+          athleteId: user.id,
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+        include: includeRefs,
+      }),
+    ]);
 
     if (!athleteProfile) {
-      return success({ items: [] });
+      return success(
+        { items: [] },
+        {
+          headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+        }
+      );
     }
-
-    // Fetch all calendar items in range
-    const allItems = await prisma.calendarItem.findMany({
-      where: {
-        athleteId: user.id,
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
-      orderBy: [
-        { date: 'asc' },
-        { plannedStartTimeLocal: 'asc' },
-      ],
-      include: includeRefs,
-    });
-
-    const items = allItems;
 
     // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
     const formattedItems = items.map((item: any) => {
@@ -134,7 +134,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return success({ items: formattedItems });
+    return success(
+      { items: formattedItems },
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

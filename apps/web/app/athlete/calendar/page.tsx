@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
@@ -19,6 +19,8 @@ import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
+import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
+import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -125,6 +127,9 @@ export default function AthleteCalendarPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessionForm, setSessionForm] = useState<SessionFormState>(() => emptyForm(toDateInput(startOfWeek())));
 
+  const perfFrameMarked = useRef(false);
+  const perfDataMarked = useRef(false);
+
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       return {
@@ -186,7 +191,7 @@ export default function AthleteCalendarPage() {
     return days;
   }, [viewMode, currentMonth, itemsByDate, athleteTimezone]);
 
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
       return;
     }
@@ -194,15 +199,42 @@ export default function AthleteCalendarPage() {
     setLoading(true);
     setError('');
 
+    const startMs = process.env.NODE_ENV !== 'production' ? performance.now() : 0;
+
     try {
+      const url = bypassCache
+        ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&t=${Date.now()}`
+        : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}`;
+
       const data = await request<{ items: CalendarItem[] }>(
-        `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}`
+        url,
+        bypassCache ? { cache: 'no-store' } : undefined
       );
       setItems(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
     } finally {
       setLoading(false);
+
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const dur = performance.now() - startMs;
+          // eslint-disable-next-line no-console
+          console.debug('[perf] athlete-calendar fetch ms', Math.round(dur));
+        } catch {
+          // noop
+        }
+
+        if (perfFrameMarked.current && !perfDataMarked.current) {
+          perfDataMarked.current = true;
+          try {
+            performance.mark('athlete-calendar-data');
+            performance.measure('athlete-calendar-load', 'athlete-calendar-frame', 'athlete-calendar-data');
+          } catch {
+            // noop
+          }
+        }
+      }
     }
   }, [request, user?.role, user?.userId, dateRange.from, dateRange.to]);
 
@@ -211,6 +243,18 @@ export default function AthleteCalendarPage() {
     const savedView = localStorage.getItem('athlete-calendar-view') as ViewMode;
     if (savedView) {
       setViewMode(savedView);
+    }
+  }, []);
+
+  // Dev-only perf mark for frame.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (perfFrameMarked.current) return;
+    perfFrameMarked.current = true;
+    try {
+      performance.mark('athlete-calendar-frame');
+    } catch {
+      // noop
     }
   }, []);
 
@@ -303,7 +347,7 @@ export default function AthleteCalendarPage() {
           },
         });
 
-        await loadItems();
+        await loadItems(true);
         closeDrawer();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save workout.');
@@ -312,13 +356,7 @@ export default function AthleteCalendarPage() {
     [request, sessionForm, loadItems, closeDrawer]
   );
 
-  if (userLoading) {
-    return <p className="text-[var(--muted)]">Loading...</p>;
-  }
-
-  if (!user || user.role !== 'ATHLETE') {
-    return <p className="text-[var(--muted)]">Athlete access required.</p>;
-  }
+  const showSkeleton = userLoading || loading || !mounted;
 
   return (
     <>
@@ -377,7 +415,13 @@ export default function AthleteCalendarPage() {
                 <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
               </Button>
             </div>
-            <Button type="button" variant="ghost" onClick={loadItems} disabled={loading} className="w-full md:w-auto min-h-[44px]">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => loadItems(true)}
+              disabled={loading}
+              className="w-full md:w-auto min-h-[44px]"
+            >
               <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
             </Button>
           </div>
@@ -386,57 +430,69 @@ export default function AthleteCalendarPage() {
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading calendar...</p> : null}
       </header>
 
+      {!userLoading && (!user || user.role !== 'ATHLETE') ? (
+        <p className="text-[var(--muted)]">Athlete access required.</p>
+      ) : null}
+
       {/* Calendar Grid - Week or Month */}
       {viewMode === 'week' ? (
         <CalendarShell variant="week" data-athlete-week-view-version="athlete-week-v2">
-          <AthleteWeekGrid>
-            {weekDays.map((day) => {
-              const dayItems = (itemsByDate[day.date] || []).map((item) => ({
-                ...item,
-                displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
-              }));
-              const dayDate = new Date(day.date);
-              return (
-                <AthleteWeekDayColumn
-                  key={day.date}
-                  dayName={day.name}
-                  formattedDate={day.formatted}
-                  isEmpty={dayItems.length === 0}
-                  isToday={isToday(dayDate)}
-                  onAddClick={() => openCreateDrawer(day.date)}
-                >
-                  {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
-                    <AthleteWeekSessionRow
-                      key={item.id}
-                      item={item}
-                      onClick={() => handleWorkoutClick(item.id)}
-                      timeZone={athleteTimezone}
-                    />
-                  ))}
-                </AthleteWeekDayColumn>
-              );
-            })}
-          </AthleteWeekGrid>
+          {showSkeleton ? (
+            <SkeletonWeekGrid />
+          ) : (
+            <AthleteWeekGrid>
+              {weekDays.map((day) => {
+                const dayItems = (itemsByDate[day.date] || []).map((item) => ({
+                  ...item,
+                  displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
+                }));
+                const dayDate = new Date(day.date);
+                return (
+                  <AthleteWeekDayColumn
+                    key={day.date}
+                    dayName={day.name}
+                    formattedDate={day.formatted}
+                    isEmpty={dayItems.length === 0}
+                    isToday={isToday(dayDate)}
+                    onAddClick={() => openCreateDrawer(day.date)}
+                  >
+                    {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
+                      <AthleteWeekSessionRow
+                        key={item.id}
+                        item={item}
+                        onClick={() => handleWorkoutClick(item.id)}
+                        timeZone={athleteTimezone}
+                      />
+                    ))}
+                  </AthleteWeekDayColumn>
+                );
+              })}
+            </AthleteWeekGrid>
+          )}
         </CalendarShell>
       ) : (
         <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
-          <MonthGrid>
-            {monthDays.map((day) => (
-              <AthleteMonthDayCell
-                key={day.dateStr}
-                date={day.date}
-                dateStr={day.dateStr}
-                items={day.items}
-                isCurrentMonth={day.isCurrentMonth}
-                isToday={isToday(day.date)}
-                athleteTimezone={athleteTimezone}
-                onDayClick={handleDayClick}
-                onAddClick={(date) => openCreateDrawer(toDateInput(date))}
-                canAdd
-                onItemClick={handleItemIdClick}
-              />
-            ))}
-          </MonthGrid>
+          {showSkeleton ? (
+            <SkeletonMonthGrid />
+          ) : (
+            <MonthGrid>
+              {monthDays.map((day) => (
+                <AthleteMonthDayCell
+                  key={day.dateStr}
+                  date={day.date}
+                  dateStr={day.dateStr}
+                  items={day.items}
+                  isCurrentMonth={day.isCurrentMonth}
+                  isToday={isToday(day.date)}
+                  athleteTimezone={athleteTimezone}
+                  onDayClick={handleDayClick}
+                  onAddClick={(date) => openCreateDrawer(toDateInput(date))}
+                  canAdd
+                  onItemClick={handleItemIdClick}
+                />
+              ))}
+            </MonthGrid>
+          )}
         </CalendarShell>
       )}
 

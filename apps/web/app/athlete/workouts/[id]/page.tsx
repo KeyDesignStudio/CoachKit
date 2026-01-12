@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
@@ -15,6 +15,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
+import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthleteWorkoutDetail';
 
 type CompletedActivity = {
   id: string;
@@ -60,6 +61,8 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     painFlag: false,
   });
   const [commentDraft, setCommentDraft] = useState('');
+  const perfFrameMarked = useRef(false);
+  const perfDataMarked = useRef(false);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
   const isStravaCompletion = latestCompletion?.source === 'STRAVA';
@@ -130,7 +133,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
   const latestNoteToCoach = (item?.comments ?? []).find((c) => c.authorId === user?.userId)?.body ?? null;
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
       return;
     }
@@ -138,9 +141,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     setLoading(true);
     setError('');
 
+    const startMs = process.env.NODE_ENV !== 'production' ? performance.now() : 0;
+
     try {
       const { item: detail } = await request<{ item: CalendarItem }>(
-        `/api/athlete/calendar-items/${workoutId}`
+        bypassCache ? `/api/athlete/calendar-items/${workoutId}?t=${Date.now()}` : `/api/athlete/calendar-items/${workoutId}`,
+        bypassCache ? { cache: 'no-store' } : undefined
       );
 
       setItem(detail);
@@ -160,6 +166,26 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       setError(err instanceof Error ? err.message : 'Failed to load workout.');
     } finally {
       setLoading(false);
+
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const dur = performance.now() - startMs;
+          // eslint-disable-next-line no-console
+          console.debug('[perf] athlete-workout fetch ms', Math.round(dur));
+        } catch {
+          // noop
+        }
+
+        if (perfFrameMarked.current && !perfDataMarked.current) {
+          perfDataMarked.current = true;
+          try {
+            performance.mark('athlete-workout-data');
+            performance.measure('athlete-workout-load', 'athlete-workout-frame', 'athlete-workout-data');
+          } catch {
+            // noop
+          }
+        }
+      }
     }
   }, [request, user?.role, user?.userId, workoutId]);
 
@@ -177,6 +203,18 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Dev-only perf mark for frame.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (perfFrameMarked.current) return;
+    perfFrameMarked.current = true;
+    try {
+      performance.mark('athlete-workout-frame');
+    } catch {
+      // noop
+    }
+  }, []);
 
   const submitCompletion = async (event: FormEvent) => {
     event.preventDefault();
@@ -209,7 +247,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         });
       }
       setCommentDraft('');
-      await loadData();
+      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
     } finally {
@@ -225,25 +263,25 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         data: payload,
       });
       setCommentDraft('');
-      await loadData();
+      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to skip workout.');
     }
   };
 
-  if (userLoading) {
-    return <p className="text-[var(--muted)]">Loading...</p>;
-  }
-
-  if (!user || user.role !== 'ATHLETE') {
-    return <p className="text-[var(--muted)]">Athlete access required.</p>;
-  }
+  const showSkeleton = userLoading || loading || !item;
 
   return (
     <section className="flex flex-col gap-4">
       {error ? <p className="text-sm text-rose-500">{error}</p> : null}
       {loading ? <p className="text-sm text-[var(--muted)]">Loading workout...</p> : null}
-      {item ? (
+      {!userLoading && (!user || user.role !== 'ATHLETE') ? (
+        <p className="text-[var(--muted)]">Athlete access required.</p>
+      ) : null}
+
+      {showSkeleton ? (
+        <SkeletonAthleteWorkoutDetail />
+      ) : item ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left column: Coach context (5/12) */}
           <div className="lg:col-span-5 space-y-4">

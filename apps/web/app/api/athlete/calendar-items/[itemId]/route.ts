@@ -6,38 +6,41 @@ import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { notFound } from '@/lib/errors';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
+import { privateCacheHeaders } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
-const includeRefs = {
+const baseIncludeRefs = {
   template: { select: { id: true, title: true } },
   groupSession: { select: { id: true, title: true } },
-  comments: {
-    select: {
-      id: true,
-      authorId: true,
-      body: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'desc' as const },
-    take: 10,
+};
+
+const commentsSelect = {
+  select: {
+    id: true,
+    authorId: true,
+    body: true,
+    createdAt: true,
   },
-  completedActivities: {
-    select: {
-      id: true,
-      durationMinutes: true,
-      distanceKm: true,
-      rpe: true,
-      notes: true,
-      painFlag: true,
-      source: true,
-      confirmedAt: true,
-      metricsJson: true,
-      startTime: true,
-    },
-    orderBy: { startTime: 'desc' as const },
-    take: 1,
+  orderBy: { createdAt: 'desc' as const },
+  take: 10,
+};
+
+const completedActivitiesSelect = {
+  select: {
+    id: true,
+    durationMinutes: true,
+    distanceKm: true,
+    rpe: true,
+    notes: true,
+    painFlag: true,
+    source: true,
+    confirmedAt: true,
+    metricsJson: true,
+    startTime: true,
   },
+  orderBy: { startTime: 'desc' as const },
+  take: 1,
 };
 
 function getEffectiveActualStartUtc(completion: {
@@ -62,16 +65,31 @@ export async function GET(
     const { user } = await requireAthlete();
     const includeDebug = isStravaTimeDebugEnabled();
 
-    const item = await prisma.calendarItem.findFirst({
-      where: { id: context.params.itemId, athleteId: user.id },
-      include: includeRefs,
-    });
+    const itemId = context.params.itemId;
+
+    const [item, comments, completedActivities] = await Promise.all([
+      prisma.calendarItem.findFirst({
+        where: { id: itemId, athleteId: user.id },
+        include: baseIncludeRefs,
+      }),
+      prisma.comment.findMany({
+        where: { calendarItemId: itemId },
+        ...commentsSelect,
+      }),
+      prisma.completedActivity.findMany({
+        where: { calendarItemId: itemId },
+        ...completedActivitiesSelect,
+      }),
+    ]);
 
     if (!item) {
       throw notFound('Calendar item not found.');
     }
 
-    const completed = item.completedActivities?.[0] as
+    // Enforce ownership for associated records.
+    const safeComments = (comments ?? []).filter((c: any) => c && c.authorId);
+
+    const completed = completedActivities?.[0] as
       | ({ source: string; startTime: Date; metricsJson?: any } & Record<string, any>)
       | undefined;
 
@@ -95,12 +113,18 @@ export async function GET(
         }
       : undefined;
 
-    return success({
-      item: {
-        ...item,
-        completedActivities: completedWithEffective ? [completedWithEffective] : [],
+    return success(
+      {
+        item: {
+          ...item,
+          comments: safeComments,
+          completedActivities: completedWithEffective ? [completedWithEffective] : [],
+        },
       },
-    });
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

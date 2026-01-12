@@ -45,4 +45,41 @@ Notes:
 - `/coach/dashboard`: measures `coach-dashboard-load` from `coach-dashboard-frame` → `coach-dashboard-data`.
 
 ## Next (Phase 2)
-- Apply the same skeleton + parallel fetch + caching pattern to `/athlete/calendar`.
+- Apply the same skeleton + parallel fetch + caching pattern to `/athlete/calendar` and `/athlete/workouts/[id]`.
+
+## Phase 2 (Athlete Calendar + Athlete Workout Detail)
+
+### Skeleton UI
+- `/athlete/calendar`: week + month skeleton grids (no blank state while auth/data loads).
+- `/athlete/workouts/[id]`: skeleton cards for header/Strava block/log/form actions.
+
+### Parallel fetch
+- `GET /api/athlete/calendar`: athlete profile + calendar items are fetched in parallel.
+- `GET /api/athlete/calendar-items/[itemId]`: base item + comments + completed activity are fetched in parallel.
+
+### Safe caching (athlete GET APIs)
+These routes set `Cache-Control: private` with a short TTL (plus `stale-while-revalidate`) and `Vary: Cookie`.
+
+- `GET /api/athlete/calendar`: `max-age=30`, `stale-while-revalidate=60`
+- `GET /api/athlete/calendar-items/[itemId]`: `max-age=30`, `stale-while-revalidate=60`
+
+### Refresh hard-bypass
+- `/athlete/calendar` Refresh uses `?t=...` + `fetch` with `cache: 'no-store'`.
+- Action endpoints (complete/confirm/skip) re-fetch workout detail with the same hard-bypass so the UI updates immediately.
+
+### Dev-only perf marks
+- `/athlete/calendar`: measures `athlete-calendar-load` (frame → first data).
+- `/athlete/workouts/[id]`: measures `athlete-workout-load` (frame → first data).
+
+### How to test
+- Run: `cd apps/web && NEXT_PUBLIC_SHOW_DEV_PAGES=true npm run dev -- -p 3000`
+- Open:
+  - `/athlete/calendar` and toggle Week/Month while watching for immediate frame + skeleton.
+  - `/athlete/workouts/[id]` (pick any existing item) and confirm skeleton shows immediately on navigation.
+  - Use Refresh on athlete calendar and confirm it refetches (should not be satisfied by cache).
+
+### What “good” looks like
+- Page frame renders immediately (header + controls) with skeletons in place.
+- Changing week/month or navigating prev/next shows skeleton quickly without layout shifts.
+- Refresh forces a network re-fetch (cache bypass) and does not get stuck behind in-flight dedupe.
+- DevTools `performance` entries include the `*-load` measures (dev-only).
