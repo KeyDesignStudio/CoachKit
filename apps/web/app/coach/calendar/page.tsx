@@ -18,10 +18,13 @@ import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
+import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
+import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
+import { mapWithConcurrency } from '@/lib/concurrency';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -171,6 +174,9 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+
+  const perfFrameMarked = useRef(false);
+  const perfDataMarked = useRef(false);
 
   const stackedMode = selectedAthleteIds.size > 1;
   const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
@@ -446,20 +452,18 @@ export default function CoachCalendarPage() {
       } else {
         // Stacked mode: load each athlete in parallel and tag items.
         const selected = Array.from(selectedAthleteIds);
-        const results = await Promise.all(
-          selected.map(async (athleteId) => {
-            const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
-              `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
-            );
-            const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
-            return itemsData.items.map((item) => ({
-              ...item,
-              athleteId,
-              athleteName,
-              athleteTimezone: itemsData.athleteTimezone,
-            }));
-          })
-        );
+        const results = await mapWithConcurrency(selected, 5, async (athleteId) => {
+          const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
+            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+          );
+          const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
+          return itemsData.items.map((item) => ({
+            ...item,
+            athleteId,
+            athleteName,
+            athleteTimezone: itemsData.athleteTimezone,
+          }));
+        });
         setItems(results.flat());
         setWeekStatus('DRAFT');
       }
@@ -477,6 +481,35 @@ export default function CoachCalendarPage() {
       setViewMode(savedView);
     }
   }, []);
+
+  // Dev-only perf marks
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (perfFrameMarked.current) return;
+    perfFrameMarked.current = true;
+    try {
+      performance.mark('coach-calendar-frame');
+    } catch {
+      // noop
+    }
+  }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    if (!perfFrameMarked.current) return;
+    if (perfDataMarked.current) return;
+    if (userLoading) return;
+    if (loading) return;
+    if (items.length === 0) return;
+
+    perfDataMarked.current = true;
+    try {
+      performance.mark('coach-calendar-data');
+      performance.measure('coach-calendar-load', 'coach-calendar-frame', 'coach-calendar-data');
+    } catch {
+      // noop
+    }
+  }, [items.length, loading, userLoading]);
 
   useEffect(() => {
     loadAthletes();
@@ -732,13 +765,16 @@ export default function CoachCalendarPage() {
 
   const currentDisciplineTitles = titleOptions[ensureDiscipline(sessionForm.discipline)] || [];
 
-  if (userLoading) {
-    return <p className="text-[var(--muted)]">Loading...</p>;
-  }
-
-  if (!user || user.role !== 'COACH') {
+  if (!userLoading && (!user || user.role !== 'COACH')) {
     return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
+
+  const showSkeleton =
+    userLoading ||
+    loading ||
+    !mounted ||
+    athletes.length === 0 ||
+    selectedAthleteIds.size === 0;
 
   return (
     <section className="flex flex-col gap-6">
@@ -886,7 +922,11 @@ export default function CoachCalendarPage() {
       ) : null}
 
       {/* Calendar Grid - Week or Month */}
-      {selectedAthleteIds.size > 0 ? (
+      {showSkeleton ? (
+        <CalendarShell variant={viewMode}>
+          {viewMode === 'week' ? <SkeletonWeekGrid pillsPerDay={3} /> : <SkeletonMonthGrid />}
+        </CalendarShell>
+      ) : selectedAthleteIds.size > 0 ? (
         viewMode === 'week' ? (
           <CalendarShell variant="week" data-coach-week-view-version="coach-week-v2">
             <WeekGrid>
