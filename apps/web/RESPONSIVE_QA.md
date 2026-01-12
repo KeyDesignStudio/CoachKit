@@ -20,6 +20,28 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 
 ### Coach Pages
 
+## /coach/athletes grid QA (manual)
+
+Pre-req
+- Sign in as a COACH user (real Clerk session). Do not use any DISABLE_AUTH or auth-bypass.
+
+Checks
+- /coach/athletes loads (no 500)
+- Grid columns by breakpoint:
+   - ≥1280px: 4 columns
+   - ≥1024px and <1280px: 3 columns
+   - ≥768px and <1024px: 2 columns
+   - <768px: 1 column
+- Truncation:
+   - long name and email truncate with ellipsis
+   - cards do not increase height due to wrapping
+- Cadence + discipline icons stay aligned and do not wrap
+- Mouse:
+   - click card opens detail drawer
+- Keyboard:
+   - Tab shows visible focus on a card
+   - Enter opens the drawer
+
 #### 1. /coach/dashboard (Review Board)
 **Improvements:**
 
