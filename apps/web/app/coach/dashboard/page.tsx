@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { ReviewGrid } from '@/components/coach/ReviewGrid';
-import { AthleteRow } from '@/components/coach/AthleteRow';
-import { ReviewChip } from '@/components/coach/ReviewChip';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
-import { MobileReviewAccordion } from '@/components/coach/MobileReviewAccordion';
-import { addDays, startOfWeek, toDateInput } from '@/lib/client-date';
+import { MonthGrid } from '@/components/coach/MonthGrid';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
+import { Icon } from '@/components/ui/Icon';
+import { addDays, formatDisplay, toDateInput } from '@/lib/client-date';
+import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 
 type CommentRecord = {
@@ -51,58 +51,70 @@ type ReviewItem = {
   hasAthleteComment: boolean;
   commentCount: number;
   coachAdvicePresent: boolean;
+  actionTime: string;
+  actionDateKey: string;
 };
+
+type ViewMode = 'list' | 'calendar';
+
+function getMonthGridStartUtc(year: number, monthIndex: number): Date {
+  const firstDayUtc = new Date(Date.UTC(year, monthIndex, 1));
+  const dayOfWeek = firstDayUtc.getUTCDay(); // 0 = Sunday
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  return new Date(Date.UTC(year, monthIndex, 1 + mondayOffset));
+}
+
+function getMonthGridDaysUtc(year: number, monthIndex: number): Date[] {
+  const start = getMonthGridStartUtc(year, monthIndex);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+function getDisplayDateLabel(dateKey: string): string {
+  return formatDisplay(dateKey);
+}
 
 export default function CoachDashboardPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek());
-  const didInitWeekStartFromTimezone = useRef(false);
+  const didInitFromTimezone = useRef(false);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'comments' | 'without-comments'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('coach-review-filter') as 'all' | 'comments' | 'without-comments') || 'all';
-    }
-    return 'all';
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
   });
 
-  // Initialize the displayed week based on the coach's timezone (not browser timezone).
+  // Initialize default month + restore last-used view.
   useEffect(() => {
     if (!user?.timezone) return;
-    if (didInitWeekStartFromTimezone.current) return;
+    if (didInitFromTimezone.current) return;
+
+    const storedView = typeof window !== 'undefined' ? (localStorage.getItem('coach-review-view') as ViewMode | null) : null;
+    if (storedView === 'list' || storedView === 'calendar') {
+      setViewMode(storedView);
+    }
 
     const todayKey = getZonedDateKeyForNow(user.timezone);
     const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
-    setWeekStart(startOfWeek(todayUtcMidnight));
-    didInitWeekStartFromTimezone.current = true;
+    setCalendarMonth({ year: todayUtcMidnight.getUTCFullYear(), month: todayUtcMidnight.getUTCMonth() });
+    didInitFromTimezone.current = true;
   }, [user?.timezone]);
-
-  const weekRange = useMemo(() => {
-    const from = toDateInput(weekStart);
-    const to = toDateInput(addDays(weekStart, 6));
-    return { from, to };
-  }, [weekStart]);
-
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = addDays(weekStart, i);
-      return toDateInput(day);
-    });
-  }, [weekStart]);
 
   const todayKey = useMemo(() => {
     if (!user?.timezone) return null;
     return getZonedDateKeyForNow(user.timezone);
   }, [user?.timezone]);
 
-  const todayIndex = useMemo(() => {
-    if (!todayKey) return -1;
-    return weekDays.indexOf(todayKey);
-  }, [todayKey, weekDays]);
+  const yesterdayKey = useMemo(() => {
+    if (!todayKey) return null;
+    const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
+    return toDateInput(addDays(todayUtcMidnight, -1));
+  }, [todayKey]);
 
   const loadItems = useCallback(async () => {
     if (!user?.userId) {
@@ -113,16 +125,15 @@ export default function CoachDashboardPage() {
     setError('');
 
     try {
-      const data = await request<{ items: ReviewItem[] }>(
-        `/api/coach/review-inbox?from=${weekRange.from}&to=${weekRange.to}`
-      );
+      const data = await request<{ items: ReviewItem[] }>(`/api/coach/review-inbox`);
       setItems(data.items);
+      setSelectedIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load inbox.');
     } finally {
       setLoading(false);
     }
-  }, [request, user?.userId, weekRange.from, weekRange.to]);
+  }, [request, user?.userId]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -143,114 +154,112 @@ export default function CoachDashboardPage() {
     [request, loadItems]
   );
 
-  const handleBulkReview = useCallback(async () => {
-    const itemsWithoutComments = items.filter(
-      (item) => !item.hasAthleteComment && !(item.latestCompletedActivity?.painFlag ?? false)
-    );
-    if (itemsWithoutComments.length === 0) {
-      alert('No items available for bulk review. Items with athlete comments or pain flags require individual attention.');
-      return;
+  const toggleViewMode = useCallback((next: ViewMode) => {
+    setViewMode(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('coach-review-view', next);
     }
+  }, []);
 
-    const confirmed = confirm(
-      `Mark ${itemsWithoutComments.length} item(s) as reviewed? (Excludes items with athlete comments or pain flags)`
-    );
-    if (!confirmed) return;
+  const groupedListItems = useMemo(() => {
+    const today: ReviewItem[] = [];
+    const yesterday: ReviewItem[] = [];
+    const earlier: ReviewItem[] = [];
+
+    items.forEach((item) => {
+      if (todayKey && item.actionDateKey === todayKey) {
+        today.push(item);
+        return;
+      }
+      if (yesterdayKey && item.actionDateKey === yesterdayKey) {
+        yesterday.push(item);
+        return;
+      }
+      earlier.push(item);
+    });
+
+    const sortByActionTimeDesc = (a: ReviewItem, b: ReviewItem) =>
+      new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime();
+
+    today.sort(sortByActionTimeDesc);
+    yesterday.sort(sortByActionTimeDesc);
+    earlier.sort(sortByActionTimeDesc);
+
+    const earlierByDate = new Map<string, ReviewItem[]>();
+    earlier.forEach((item) => {
+      if (!earlierByDate.has(item.actionDateKey)) earlierByDate.set(item.actionDateKey, []);
+      earlierByDate.get(item.actionDateKey)!.push(item);
+    });
+    Array.from(earlierByDate.values()).forEach((arr) => arr.sort(sortByActionTimeDesc));
+
+    const earlierDateKeys = Array.from(earlierByDate.keys()).sort((a, b) => b.localeCompare(a));
+
+    return {
+      today,
+      yesterday,
+      earlierByDate,
+      earlierDateKeys,
+    };
+  }, [items, todayKey, yesterdayKey]);
+
+  const monthDays = useMemo(() => {
+    return getMonthGridDaysUtc(calendarMonth.year, calendarMonth.month);
+  }, [calendarMonth.year, calendarMonth.month]);
+
+  const itemsByActionDate = useMemo(() => {
+    const grouped = new Map<string, ReviewItem[]>();
+    items.forEach((item) => {
+      if (!grouped.has(item.actionDateKey)) grouped.set(item.actionDateKey, []);
+      grouped.get(item.actionDateKey)!.push(item);
+    });
+    grouped.forEach((arr) => {
+      arr.sort((a, b) => new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime());
+    });
+    return grouped;
+  }, [items]);
+
+  const selectedCount = selectedIds.size;
+
+  const handleToggleSelected = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkMarkReviewed = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
 
     setBulkLoading(true);
     setError('');
-
     try {
       await request('/api/coach/review-inbox/bulk-review', {
         method: 'POST',
-        data: {
-          from: weekRange.from,
-          to: weekRange.to,
-        },
+        data: { ids },
       });
-      await loadItems();
+
+      setItems((prev) => prev.filter((item) => !selectedIds.has(item.id)));
+      clearSelection();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to bulk mark reviewed.');
     } finally {
       setBulkLoading(false);
     }
-  }, [request, weekRange, items, loadItems]);
+  }, [request, selectedIds, clearSelection]);
 
-  const goToToday = useCallback(() => {
-    if (user?.timezone) {
-      const key = getZonedDateKeyForNow(user.timezone);
-      setWeekStart(startOfWeek(new Date(`${key}T00:00:00.000Z`)));
-      return;
-    }
-
-    setWeekStart(startOfWeek());
-  }, [user?.timezone]);
-
-  const navigatePrev = useCallback(() => {
-    setWeekStart((prev) => addDays(prev, -7));
-  }, []);
-
-  const navigateNext = useCallback(() => {
-    setWeekStart((prev) => addDays(prev, 7));
-  }, []);
-
-  const handleFilterChange = useCallback((mode: 'all' | 'comments' | 'without-comments') => {
-    setFilterMode(mode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('coach-review-filter', mode);
-    }
-  }, []);
-
-  // Group items by athlete and date
-  const athleteData = useMemo(() => {
-    const athleteMap = new Map<string, { name: string; itemsByDate: Map<string, ReviewItem[]> }>();
-
-    items.forEach((item) => {
-      if (!item.athlete) return;
-
-      // Filter based on mode
-      if (filterMode === 'comments' && !item.hasAthleteComment) {
-        return;
-      }
-      if (filterMode === 'without-comments' && item.hasAthleteComment) {
-        return;
-      }
-
-      const athleteId = item.athlete.id;
-      const athleteName = item.athlete.name || athleteId;
-
-      if (!athleteMap.has(athleteId)) {
-        athleteMap.set(athleteId, {
-          name: athleteName,
-          itemsByDate: new Map(),
-        });
-      }
-
-      const athlete = athleteMap.get(athleteId)!;
-      const dateStr = item.date.split('T')[0];
-
-      if (!athlete.itemsByDate.has(dateStr)) {
-        athlete.itemsByDate.set(dateStr, []);
-      }
-
-      athlete.itemsByDate.get(dateStr)!.push(item);
+  const navigateMonth = useCallback((deltaMonths: number) => {
+    setCalendarMonth((prev) => {
+      const nextDate = new Date(Date.UTC(prev.year, prev.month + deltaMonths, 1));
+      return { year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() };
     });
-
-    return Array.from(athleteMap.entries())
-      .map(([id, data]) => ({
-        id,
-        name: data.name,
-        itemsByDate: data.itemsByDate,
-      }))
-      .filter(athlete => {
-        // In filter modes, hide athletes with no visible items
-        if ((filterMode === 'comments' || filterMode === 'without-comments') && athlete.itemsByDate.size === 0) {
-          return false;
-        }
-        return true;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [items, filterMode]);
+  }, []);
 
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
@@ -261,127 +270,341 @@ export default function CoachDashboardPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
+    <section className="flex flex-col gap-6" data-coach-dashboard-version="review-inbox-v2">
       <header className="flex flex-col gap-4 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Coach Review</p>
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Review Board</h1>
-              <p className="text-xs md:text-sm text-[var(--muted)]">Week of {weekRange.from}</p>
-            </div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Coach Review</p>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Inbox</h1>
+            <p className="text-xs md:text-sm text-[var(--muted)]">Only unreviewed athlete actions (completed or skipped).</p>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:justify-end md:flex-wrap text-sm">
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
-                <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
-              </Button>
-              <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
-                <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
-              </Button>
-              <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
-                <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
-              </Button>
-            </div>
-            
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
             <div className="flex items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1 w-full md:w-auto">
               <button
                 type="button"
-                onClick={() => handleFilterChange('all')}
-                className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
-                  filterMode === 'all'
+                onClick={() => toggleViewMode('list')}
+                className={cn(
+                  'rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial',
+                  viewMode === 'list'
                     ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-                }`}
+                )}
               >
-                All
+                List
               </button>
               <button
                 type="button"
-                onClick={() => handleFilterChange('comments')}
-                className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
-                  filterMode === 'comments'
+                onClick={() => toggleViewMode('calendar')}
+                className={cn(
+                  'rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial',
+                  viewMode === 'calendar'
                     ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
                     : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-                }`}
+                )}
               >
-                Comments
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFilterChange('without-comments')}
-                className={`rounded-lg px-3 py-2 text-xs md:text-sm font-medium transition-colors min-h-[44px] flex-1 md:flex-initial ${
-                  filterMode === 'without-comments'
-                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--foreground)]'
-                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-                }`}
-              >
-                No Comments
+                Calendar
               </button>
             </div>
 
             <div className="flex items-center gap-2 w-full md:w-auto">
               <Button type="button" variant="ghost" onClick={loadItems} disabled={loading} className="w-full md:w-auto min-h-[44px]">
-                <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
+                <Icon name="refresh" size="sm" className="md:mr-1" />
+                <span className="hidden md:inline">Refresh</span>
               </Button>
             </div>
           </div>
         </div>
+
         {error ? <p className="text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="text-sm text-[var(--muted)]">Loading review inbox...</p> : null}
       </header>
 
-      {athleteData.length === 0 && !loading ? (
+      {items.length === 0 && !loading ? (
         <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
-          <p className="text-lg text-[var(--muted)]">No workouts awaiting review for this week.</p>
+          <p className="text-lg text-[var(--muted)]">No sessions awaiting review.</p>
         </div>
-      ) : (
-        <>
-          {/* Desktop view */}
-          <div className="hidden lg:block">
-            <ReviewGrid weekDays={weekDays} todayIndex={todayIndex}>
-              {athleteData.map((athlete) => (
-                <AthleteRow key={athlete.id} athleteName={athlete.name} todayIndex={todayIndex}>
-                  {weekDays.map((date) => {
-                    const dayItems = athlete.itemsByDate.get(date) || [];
-                    return (
-                      <div key={date} className="flex flex-col gap-1 min-w-0">
-                        {dayItems.map((item) => (
-                          <ReviewChip
-                            key={item.id}
-                            time={item.plannedStartTimeLocal}
-                            title={item.title}
-                            discipline={item.discipline}
-                            hasAthleteComment={item.hasAthleteComment}
-                            coachAdvicePresent={item.coachAdvicePresent}
-                            painFlag={item.latestCompletedActivity?.painFlag ?? false}
-                            onClick={() => setSelectedItem(item)}
-                            onQuickReview={
-                              !item.hasAthleteComment ? () => markReviewed(item.id) : undefined
-                            }
-                          />
-                        ))}
+      ) : null}
+
+      {viewMode === 'list' ? (
+        <div className="space-y-6">
+          {groupedListItems.today.length > 0 ? (
+            <section>
+              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Today</h2>
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
+                {groupedListItems.today.map((item) => {
+                  const theme = getDisciplineTheme(item.discipline);
+                  const athleteName = item.athlete?.name ?? 'Unknown athlete';
+                  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
+                  const isChecked = selectedIds.has(item.id);
+                  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
+                  const isSkipped = item.status === 'SKIPPED';
+                  return (
+                    <div key={item.id} className="flex items-start gap-3 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-blue-600"
+                        checked={isChecked}
+                        onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                        aria-label={`Select ${athleteName} - ${item.title}`}
+                      />
+                      <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
+                            <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                              <span className="inline-flex items-center gap-1">
+                                <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                                <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
+                              </span>
+                              <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                            {item.hasAthleteComment ? (
+                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                            ) : null}
+                            {painFlag ? (
+                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                            ) : null}
+                            {isSkipped ? (
+                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {groupedListItems.yesterday.length > 0 ? (
+            <section>
+              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Yesterday</h2>
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
+                {groupedListItems.yesterday.map((item) => {
+                  const theme = getDisciplineTheme(item.discipline);
+                  const athleteName = item.athlete?.name ?? 'Unknown athlete';
+                  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
+                  const isChecked = selectedIds.has(item.id);
+                  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
+                  const isSkipped = item.status === 'SKIPPED';
+                  return (
+                    <div key={item.id} className="flex items-start gap-3 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-blue-600"
+                        checked={isChecked}
+                        onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                        aria-label={`Select ${athleteName} - ${item.title}`}
+                      />
+                      <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
+                            <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                              <span className="inline-flex items-center gap-1">
+                                <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                                <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
+                              </span>
+                              <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                            {item.hasAthleteComment ? (
+                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                            ) : null}
+                            {painFlag ? (
+                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                            ) : null}
+                            {isSkipped ? (
+                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {groupedListItems.earlierDateKeys.length > 0 ? (
+            <section>
+              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Earlier</h2>
+              <div className="space-y-3">
+                {groupedListItems.earlierDateKeys.map((dateKey) => {
+                  const dayItems = groupedListItems.earlierByDate.get(dateKey) || [];
+                  return (
+                    <div key={dateKey} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden">
+                      <div className="px-3 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                        <p className="text-sm font-medium">{getDisplayDateLabel(dateKey)}</p>
                       </div>
-                    );
-                  })}
-                </AthleteRow>
-              ))}
-            </ReviewGrid>
+                      <div className="divide-y divide-[var(--border-subtle)]">
+                        {dayItems.map((item) => {
+                          const theme = getDisciplineTheme(item.discipline);
+                          const athleteName = item.athlete?.name ?? 'Unknown athlete';
+                          const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
+                          const isChecked = selectedIds.has(item.id);
+                          const painFlag = item.latestCompletedActivity?.painFlag ?? false;
+                          const isSkipped = item.status === 'SKIPPED';
+                          return (
+                            <div key={item.id} className="flex items-start gap-3 px-3 py-3">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 accent-blue-600"
+                                checked={isChecked}
+                                onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                                aria-label={`Select ${athleteName} - ${item.title}`}
+                              />
+                              <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
+                                    <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
+                                    <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
+                                      <span className="inline-flex items-center gap-1">
+                                        <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                                        <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
+                                      </span>
+                                      <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                                    {item.hasAthleteComment ? (
+                                      <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                                    ) : null}
+                                    {painFlag ? (
+                                      <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                                    ) : null}
+                                    {isSkipped ? (
+                                      <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      {viewMode === 'calendar' ? (
+        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-subtle)]">
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" onClick={() => navigateMonth(-1)} className="min-h-[44px]">
+                <Icon name="prev" size="sm" />
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => navigateMonth(1)} className="min-h-[44px]">
+                <Icon name="next" size="sm" />
+              </Button>
+            </div>
+            <div className="text-sm font-medium">
+              {new Date(Date.UTC(calendarMonth.year, calendarMonth.month, 1)).toLocaleDateString(undefined, {
+                month: 'long',
+                year: 'numeric',
+              })}
+            </div>
+            <div className="w-[120px]" />
           </div>
 
-          {/* Mobile view */}
-          <div className="block lg:hidden">
-            <MobileReviewAccordion
-              athleteData={athleteData}
-              weekDays={weekDays}
-              todayKey={todayKey}
-              onItemClick={(item) => setSelectedItem(item)}
-              onQuickReview={(id) => markReviewed(id)}
-            />
+          <MonthGrid>
+            {monthDays.map((date) => {
+              const dateKey = toDateInput(date);
+              const dayItems = itemsByActionDate.get(dateKey) || [];
+              const isCurrentMonth = date.getUTCMonth() === calendarMonth.month;
+              const isToday = !!todayKey && dateKey === todayKey;
+
+              return (
+                <div
+                  key={dateKey}
+                  className={cn(
+                    'min-h-[120px] p-2 border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+                    'flex flex-col gap-2',
+                    !isCurrentMonth ? 'opacity-70' : '',
+                    isToday ? 'border-2 border-[var(--today-border)] relative' : ''
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={cn('text-xs font-medium', !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]')}>
+                      {date.getUTCDate()}
+                    </span>
+                    {isToday ? (
+                      <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">
+                        Today
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    {dayItems.map((item) => {
+                      const theme = getDisciplineTheme(item.discipline);
+                      const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
+                      const painFlag = item.latestCompletedActivity?.painFlag ?? false;
+                      const isSkipped = item.status === 'SKIPPED';
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedItem(item)}
+                          className={cn(
+                            'w-full flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left',
+                            'bg-transparent hover:bg-[var(--bg-structure)]'
+                          )}
+                        >
+                          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                          <span className={cn('text-[10px] leading-none font-medium', theme.textClass)}>{disciplineLabel}</span>
+                          <span className="text-xs text-[var(--text)] truncate flex-1">{item.title || disciplineLabel}</span>
+                          <span className="flex items-center gap-1 flex-shrink-0">
+                            {item.hasAthleteComment ? (
+                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                            ) : null}
+                            {painFlag ? (
+                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                            ) : null}
+                            {isSkipped ? (
+                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </MonthGrid>
+        </div>
+      ) : null}
+
+      {selectedCount > 0 ? (
+        <div className="sticky bottom-4">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-[var(--text)]">{selectedCount} selected</p>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" onClick={clearSelection} disabled={bulkLoading}>
+                Clear
+              </Button>
+              <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading}>
+                {bulkLoading ? 'Marking…' : 'Mark Reviewed'}
+              </Button>
+            </div>
           </div>
-        </>
-      )}
+        </div>
+      ) : null}
 
       <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} />
     </section>
