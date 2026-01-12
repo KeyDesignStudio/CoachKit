@@ -57,6 +57,76 @@ type ReviewItem = {
 
 type ViewMode = 'list' | 'calendar';
 
+function SelectAllGroupHeader({
+  title,
+  count,
+  groupIds,
+  selectedIds,
+  onToggle,
+}: {
+  title: string;
+  count: number;
+  groupIds: string[];
+  selectedIds: Set<string>;
+  onToggle: (groupIds: string[], allSelected: boolean) => void;
+}) {
+  const checkboxRef = useRef<HTMLInputElement | null>(null);
+
+  const selectedInGroupCount = useMemo(() => {
+    if (groupIds.length === 0) return 0;
+    let count = 0;
+    groupIds.forEach((id) => {
+      if (selectedIds.has(id)) count += 1;
+    });
+    return count;
+  }, [groupIds, selectedIds]);
+
+  const allSelected = groupIds.length > 0 && selectedInGroupCount === groupIds.length;
+  const noneSelected = selectedInGroupCount === 0;
+  const indeterminate = !noneSelected && !allSelected;
+
+  useEffect(() => {
+    if (!checkboxRef.current) return;
+    checkboxRef.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <div className="flex items-center justify-between gap-3 mb-2">
+      <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+        {title} ({count})
+      </h2>
+
+      <div className="flex items-center">
+        <label
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-2 min-h-[44px]',
+            'text-xs font-medium text-[var(--muted)]',
+            groupIds.length === 0 ? 'opacity-60' : 'cursor-pointer'
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          <input
+            ref={checkboxRef}
+            type="checkbox"
+            className="h-4 w-4 accent-blue-600"
+            checked={allSelected}
+            disabled={groupIds.length === 0}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onToggle(groupIds, allSelected);
+            }}
+            aria-label={`Select all in ${title}`}
+          />
+          <span>Select all</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function getMonthGridStartUtc(year: number, monthIndex: number): Date {
   const firstDayUtc = new Date(Date.UTC(year, monthIndex, 1));
   const dayOfWeek = firstDayUtc.getUTCDay(); // 0 = Sunday
@@ -229,6 +299,18 @@ export default function CoachDashboardPage() {
     });
   }, []);
 
+  const handleToggleGroupSelectAll = useCallback((groupIds: string[], allSelected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        groupIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      groupIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, []);
+
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
@@ -330,7 +412,13 @@ export default function CoachDashboardPage() {
         <div className="space-y-6">
           {groupedListItems.today.length > 0 ? (
             <section>
-              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Today</h2>
+              <SelectAllGroupHeader
+                title="Today"
+                count={groupedListItems.today.length}
+                groupIds={groupedListItems.today.map((i) => i.id)}
+                selectedIds={selectedIds}
+                onToggle={handleToggleGroupSelectAll}
+              />
               <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
                 {groupedListItems.today.map((item) => {
                   const theme = getDisciplineTheme(item.discipline);
@@ -345,7 +433,11 @@ export default function CoachDashboardPage() {
                         type="checkbox"
                         className="mt-1 h-4 w-4 accent-blue-600"
                         checked={isChecked}
-                        onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelected(item.id, e.target.checked);
+                        }}
                         aria-label={`Select ${athleteName} - ${item.title}`}
                       />
                       <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
@@ -383,7 +475,13 @@ export default function CoachDashboardPage() {
 
           {groupedListItems.yesterday.length > 0 ? (
             <section>
-              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Yesterday</h2>
+              <SelectAllGroupHeader
+                title="Yesterday"
+                count={groupedListItems.yesterday.length}
+                groupIds={groupedListItems.yesterday.map((i) => i.id)}
+                selectedIds={selectedIds}
+                onToggle={handleToggleGroupSelectAll}
+              />
               <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
                 {groupedListItems.yesterday.map((item) => {
                   const theme = getDisciplineTheme(item.discipline);
@@ -398,7 +496,11 @@ export default function CoachDashboardPage() {
                         type="checkbox"
                         className="mt-1 h-4 w-4 accent-blue-600"
                         checked={isChecked}
-                        onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelected(item.id, e.target.checked);
+                        }}
                         aria-label={`Select ${athleteName} - ${item.title}`}
                       />
                       <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
@@ -436,7 +538,19 @@ export default function CoachDashboardPage() {
 
           {groupedListItems.earlierDateKeys.length > 0 ? (
             <section>
-              <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)] mb-2">Earlier</h2>
+              <SelectAllGroupHeader
+                title="Earlier"
+                count={groupedListItems.earlierDateKeys.reduce((acc, dateKey) => {
+                  const dayItems = groupedListItems.earlierByDate.get(dateKey) || [];
+                  return acc + dayItems.length;
+                }, 0)}
+                groupIds={groupedListItems.earlierDateKeys.flatMap((dateKey) => {
+                  const dayItems = groupedListItems.earlierByDate.get(dateKey) || [];
+                  return dayItems.map((i) => i.id);
+                })}
+                selectedIds={selectedIds}
+                onToggle={handleToggleGroupSelectAll}
+              />
               <div className="space-y-3">
                 {groupedListItems.earlierDateKeys.map((dateKey) => {
                   const dayItems = groupedListItems.earlierByDate.get(dateKey) || [];
@@ -459,7 +573,11 @@ export default function CoachDashboardPage() {
                                 type="checkbox"
                                 className="mt-1 h-4 w-4 accent-blue-600"
                                 checked={isChecked}
-                                onChange={(e) => handleToggleSelected(item.id, e.target.checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleSelected(item.id, e.target.checked);
+                                }}
                                 aria-label={`Select ${athleteName} - ${item.title}`}
                               />
                               <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
