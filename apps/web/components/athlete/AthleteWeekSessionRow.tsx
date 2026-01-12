@@ -83,7 +83,7 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
       }}
       data-athlete-week-session-row="v2"
       className={cn(
-        'w-full cursor-pointer text-left',
+        'w-full cursor-default text-left',
         isStacked
           ? 'bg-transparent hover:bg-[var(--bg-structure)] rounded-md px-1.5 py-1 transition-colors'
           : 'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded px-2 py-1.5 transition-shadow hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'

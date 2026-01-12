@@ -32,7 +32,17 @@ export function AthleteWeekDayColumn({
 
   const bodyClassName = cn(
     density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2',
-    onBodyClick ? 'cursor-pointer transition-colors hover:bg-[var(--bg-surface)]' : ''
+    onBodyClick
+      ? [
+          'cursor-pointer',
+          'transition-colors duration-150',
+          'hover:bg-[var(--bg-card)]',
+          'hover:ring-1 hover:ring-[var(--border-subtle)]',
+          'focus-visible:outline-none',
+          'focus-visible:bg-[var(--bg-card)]',
+          'focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+        ].join(' ')
+      : ''
   );
 
   return (

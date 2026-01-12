@@ -47,12 +47,33 @@ export function AthleteMonthDayCell({
     <div
       data-athlete-month-day-cell="v2"
       onClick={onAddClick ? () => onAddClick(date) : undefined}
+      tabIndex={onAddClick ? 0 : undefined}
+      onKeyDown={
+        onAddClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onAddClick(date);
+              }
+            }
+          : undefined
+      }
       className={cn(
         'flex flex-col gap-2 p-2 min-h-[120px] text-left',
         'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
-        onAddClick ? 'cursor-pointer' : '',
+        onAddClick
+          ? [
+              'cursor-pointer',
+              'transition-colors duration-150',
+              'hover:bg-[var(--bg-structure)]',
+              'hover:ring-1 hover:ring-[var(--border-subtle)]',
+              'focus-visible:outline-none',
+              'focus-visible:bg-[var(--bg-structure)]',
+              'focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+            ].join(' ')
+          : '',
         !isCurrentMonth ? 'opacity-70' : '',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
       )}
@@ -102,7 +123,7 @@ export function AthleteMonthDayCell({
               className={cn(
                 'w-full flex items-center gap-1 rounded-md px-1.5 py-1 text-left',
                 // Avoid stacking multiple white cards inside the day cell card.
-                'bg-transparent hover:bg-[var(--bg-structure)]'
+                'bg-transparent hover:bg-[var(--bg-structure)] cursor-default'
               )}
               aria-label={`Open session ${item.id}`}
             >
