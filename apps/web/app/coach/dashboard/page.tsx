@@ -158,7 +158,7 @@ export default function CoachDashboardPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const didInitFromTimezone = useRef(false);
-  const didInitCalendarAthleteFilter = useRef(false);
+  const didInitAthleteFilter = useRef(false);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -166,7 +166,7 @@ export default function CoachDashboardPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [calendarAthleteId, setCalendarAthleteId] = useState<string | null>(null);
+  const [athleteFilterId, setAthleteFilterId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
@@ -188,21 +188,21 @@ export default function CoachDashboardPage() {
     didInitFromTimezone.current = true;
   }, [user?.timezone]);
 
-  // Restore persisted calendar athlete filter (calendar view only).
+  // Restore persisted athlete filter (shared by list + calendar).
   useEffect(() => {
     if (!user?.userId) return;
-    if (didInitCalendarAthleteFilter.current) return;
+    if (didInitAthleteFilter.current) return;
     if (typeof window === 'undefined') return;
 
     const key = 'coachkit.reviewInbox.calendarAthleteFilter';
     const stored = localStorage.getItem(key);
-    setCalendarAthleteId(stored ? stored : null);
+    setAthleteFilterId(stored ? stored : null);
 
-    didInitCalendarAthleteFilter.current = true;
+    didInitAthleteFilter.current = true;
   }, [user?.userId]);
 
-  const setAndPersistCalendarAthleteId = useCallback((next: string | null) => {
-    setCalendarAthleteId(next);
+  const setAndPersistAthleteFilterId = useCallback((next: string | null) => {
+    setAthleteFilterId(next);
     if (typeof window !== 'undefined') {
       const key = 'coachkit.reviewInbox.calendarAthleteFilter';
       if (!next) localStorage.removeItem(key);
@@ -266,12 +266,32 @@ export default function CoachDashboardPage() {
     }
   }, []);
 
+  const filteredItems = useMemo(() => {
+    if (!athleteFilterId) return items;
+    return items.filter((item) => item.athlete?.id === athleteFilterId);
+  }, [athleteFilterId, items]);
+
+  // Keep bulk selection aligned to the currently visible (filtered) dataset.
+  useEffect(() => {
+    const allowedIds = new Set(filteredItems.map((item) => item.id));
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (allowedIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [filteredItems]);
+
   const groupedListItems = useMemo(() => {
     const today: ReviewItem[] = [];
     const yesterday: ReviewItem[] = [];
     const earlier: ReviewItem[] = [];
 
-    items.forEach((item) => {
+    filteredItems.forEach((item) => {
       if (todayKey && item.actionDateKey === todayKey) {
         today.push(item);
         return;
@@ -305,18 +325,15 @@ export default function CoachDashboardPage() {
       earlierByDate,
       earlierDateKeys,
     };
-  }, [items, todayKey, yesterdayKey]);
+  }, [filteredItems, todayKey, yesterdayKey]);
 
   const monthDays = useMemo(() => {
     return getMonthGridDaysUtc(calendarMonth.year, calendarMonth.month);
   }, [calendarMonth.year, calendarMonth.month]);
 
-  const calendarItems = useMemo(() => {
-    if (!calendarAthleteId) return items;
-    return items.filter((item) => item.athlete?.id === calendarAthleteId);
-  }, [calendarAthleteId, items]);
+  const calendarItems = filteredItems;
 
-  const calendarAthleteOptions = useMemo(() => {
+  const athleteFilterOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
     items.forEach((item) => {
       if (!item.athlete?.id) return;
@@ -472,6 +489,31 @@ export default function CoachDashboardPage() {
 
       {viewMode === 'list' ? (
         <div className="space-y-6">
+          <div className="flex items-center justify-end">
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-xs text-[var(--muted)]">Athlete</div>
+              <Select
+                className="min-h-[44px] w-[220px]"
+                value={athleteFilterId ?? ''}
+                onChange={(e) => setAndPersistAthleteFilterId(e.target.value || null)}
+                aria-label="Athlete filter"
+              >
+                <option value="">All athletes</option>
+                {athleteFilterOptions.map((ath) => (
+                  <option key={ath.id} value={ath.id}>
+                    {ath.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          {items.length > 0 && filteredItems.length === 0 ? (
+            <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
+              <p className="text-sm text-[var(--muted)]">No sessions awaiting review for this athlete.</p>
+            </div>
+          ) : null}
+
           {groupedListItems.today.length > 0 ? (
             <section>
               <SelectAllGroupHeader
@@ -697,12 +739,12 @@ export default function CoachDashboardPage() {
               <div className="hidden sm:block text-xs text-[var(--muted)]">Athlete</div>
               <Select
                 className="min-h-[44px] w-[220px]"
-                value={calendarAthleteId ?? ''}
-                onChange={(e) => setAndPersistCalendarAthleteId(e.target.value || null)}
+                value={athleteFilterId ?? ''}
+                onChange={(e) => setAndPersistAthleteFilterId(e.target.value || null)}
                 aria-label="Athlete filter"
               >
                 <option value="">All athletes</option>
-                {calendarAthleteOptions.map((ath) => (
+                {athleteFilterOptions.map((ath) => (
                   <option key={ath.id} value={ath.id}>
                     {ath.name}
                   </option>
@@ -759,7 +801,7 @@ export default function CoachDashboardPage() {
                       const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
                       const painFlag = item.latestCompletedActivity?.painFlag ?? false;
                       const isSkipped = item.status === 'SKIPPED';
-                      const athletePrefix = calendarAthleteId ? '' : getAthletePrefix(item.athlete?.name);
+                      const athletePrefix = athleteFilterId ? '' : getAthletePrefix(item.athlete?.name);
                       const baseTitle = item.title || disciplineLabel;
                       const displayTitle = athletePrefix ? `${athletePrefix}: ${baseTitle}` : baseTitle;
                       return (

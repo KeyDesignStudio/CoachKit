@@ -24,7 +24,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 **Improvements:**
 
 **Mobile Behavior:**
- Calendar view: Athlete selector defaults to “All athletes” and persists; selecting an athlete filters the month to that athlete only.
+ Athlete selector (List + Calendar): Defaults to “All athletes” and persists; selecting an athlete filters the inbox to that athlete only.
  Calendar view: When “All athletes” is selected, chips include an athlete prefix (e.g. “Gordon G.: Tempo Run”); when filtered to a single athlete, chips omit the prefix.
  Calendar view empty state: If filter yields no items in the visible month, shows “No unreviewed sessions for this athlete in this month.”
 #### 2. /coach/calendar
