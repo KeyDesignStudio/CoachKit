@@ -139,6 +139,9 @@ Approx JSON sizes from the same script:
 ### Before/after timings
 Not yet measured.
 
+### TODO (cleanup)
+- Training plan schedule: After 2–3 releases with no references, remove `planCadenceDays` and run a cleanup migration.
+
 How to measure:
 - Enable dev timings: `COACHKIT_PROFILE_API=1`.
 - Load `/coach/dashboard` and use Refresh; compare `/api/coach/review-inbox` latency logs and overall dashboard load time.

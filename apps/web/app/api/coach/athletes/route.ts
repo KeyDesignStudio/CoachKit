@@ -54,20 +54,6 @@ const createAthleteSchema = z
     }
   });
 
-function cadenceDaysFromTrainingPlanFrequency(freq: TrainingPlanFrequency): number {
-  switch (freq) {
-    case TrainingPlanFrequency.WEEKLY:
-      return 7;
-    case TrainingPlanFrequency.FORTNIGHTLY:
-      return 14;
-    case TrainingPlanFrequency.MONTHLY:
-      return 28;
-    case TrainingPlanFrequency.AD_HOC:
-    default:
-      return 7;
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { user } = await requireCoach();
@@ -119,7 +105,7 @@ export async function POST(request: NextRequest) {
           trainingPlanFrequency: payload.trainingPlanFrequency,
           trainingPlanDayOfWeek: payload.trainingPlanDayOfWeek ?? null,
           trainingPlanWeekOfMonth: payload.trainingPlanWeekOfMonth ?? null,
-          planCadenceDays: cadenceDaysFromTrainingPlanFrequency(payload.trainingPlanFrequency),
+          // NOTE: The legacy schedule field is intentionally not written by the coach UI.
         },
         include: { user: true },
       });

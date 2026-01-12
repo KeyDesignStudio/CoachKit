@@ -23,7 +23,6 @@ type AthleteProfile = {
   trainingPlanFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
   trainingPlanDayOfWeek?: number | null;
   trainingPlanWeekOfMonth?: 1 | 2 | 3 | 4 | null;
-  planCadenceDays: number;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
   user: {

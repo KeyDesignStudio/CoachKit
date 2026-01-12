@@ -85,7 +85,7 @@ model AthleteProfile {
   coachId         String
   disciplines     String[] // e.g. ["RUN","BIKE","SWIM"]
   goalsText       String?
-  planCadenceDays Int       @default(7) // 7, 14, 28 etc
+  planCadenceDays Int       @default(7) // LEGACY: kept for backward compatibility. Do not use in UI. Use trainingPlanFrequency/day/weekOfMonth.
   trainingPlanFrequency   TrainingPlanFrequency @default(AD_HOC)
   trainingPlanDayOfWeek   Int?
   trainingPlanWeekOfMonth Int?

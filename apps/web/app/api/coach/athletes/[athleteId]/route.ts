@@ -58,20 +58,6 @@ const updateAthleteSchema = z
     }
   });
 
-function cadenceDaysFromTrainingPlanFrequency(freq: TrainingPlanFrequency): number {
-  switch (freq) {
-    case TrainingPlanFrequency.WEEKLY:
-      return 7;
-    case TrainingPlanFrequency.FORTNIGHTLY:
-      return 14;
-    case TrainingPlanFrequency.MONTHLY:
-      return 28;
-    case TrainingPlanFrequency.AD_HOC:
-    default:
-      return 7;
-  }
-}
-
 export async function GET(
   request: NextRequest,
   context: { params: { athleteId: string } }
@@ -122,7 +108,7 @@ export async function PATCH(
 
     if (payload.trainingPlanFrequency !== undefined) {
       profileData.trainingPlanFrequency = payload.trainingPlanFrequency;
-      profileData.planCadenceDays = cadenceDaysFromTrainingPlanFrequency(payload.trainingPlanFrequency);
+      // NOTE: The legacy schedule field is intentionally not updated by this endpoint.
 
       // Normalize dependent fields based on frequency
       if (payload.trainingPlanFrequency === TrainingPlanFrequency.AD_HOC) {
