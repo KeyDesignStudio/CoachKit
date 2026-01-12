@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/Icon';
 
 type AthleteWeekDayColumnProps = {
   dayName: string;
@@ -9,7 +10,7 @@ type AthleteWeekDayColumnProps = {
   isEmpty: boolean;
   onHeaderClick?: () => void;
   onEmptyClick?: () => void;
-  onBodyClick?: () => void;
+  onAddClick?: () => void;
   density?: 'default' | 'compact';
   children: ReactNode;
 };
@@ -21,7 +22,7 @@ export function AthleteWeekDayColumn({
   isEmpty,
   onHeaderClick,
   onEmptyClick,
-  onBodyClick,
+  onAddClick,
   density = 'default',
   children,
 }: AthleteWeekDayColumnProps) {
@@ -30,20 +31,25 @@ export function AthleteWeekDayColumn({
       ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5'
       : 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2';
 
-  const bodyClassName = cn(
-    density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2',
-    onBodyClick
-      ? [
-          'cursor-pointer',
-          'transition-colors duration-150',
-          'hover:bg-[var(--bg-card)]',
-          'hover:ring-1 hover:ring-[var(--border-subtle)]',
-          'focus-visible:outline-none',
-          'focus-visible:bg-[var(--bg-card)]',
-          'focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
-        ].join(' ')
-      : ''
-  );
+  const bodyClassName = cn(density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2');
+
+  const addButton = onAddClick ? (
+    <button
+      type="button"
+      onClick={onAddClick}
+      className={cn(
+        'inline-flex h-7 w-7 items-center justify-center rounded-full',
+        'text-[var(--muted)] hover:text-[var(--primary)]',
+        'hover:bg-[var(--bg-structure)]',
+        'transition-colors duration-150',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+      )}
+      aria-label="Add session"
+      title="Add session"
+    >
+      <Icon name="add" size="sm" className="text-[16px]" aria-hidden />
+    </button>
+  ) : null;
 
   return (
     <div
@@ -53,48 +59,28 @@ export function AthleteWeekDayColumn({
         isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
       )}
     >
-      {onHeaderClick ? (
-        <button
-          type="button"
-          onClick={onHeaderClick}
-          className={cn('flex w-full items-center justify-between text-left', headerClassName)}
-        >
+      <div className={cn('flex items-center justify-between gap-2', headerClassName)}>
+        {onHeaderClick ? (
+          <button type="button" onClick={onHeaderClick} className="min-w-0 text-left">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
+            <p className="text-sm font-medium truncate">{formattedDate}</p>
+          </button>
+        ) : (
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
           </div>
-          {isToday ? (
-            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
-          ) : null}
-        </button>
-      ) : (
-        <div className={cn('flex items-center justify-between', headerClassName)}>
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
-            <p className="text-sm font-medium truncate">{formattedDate}</p>
-          </div>
-          {isToday ? (
-            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
-          ) : null}
-        </div>
-      )}
+        )}
 
-      <div
-        className={bodyClassName}
-        onClick={onBodyClick}
-        role={onBodyClick ? 'button' : undefined}
-        tabIndex={onBodyClick ? 0 : undefined}
-        onKeyDown={
-          onBodyClick
-            ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onBodyClick();
-                }
-              }
-            : undefined
-        }
-      >
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isToday ? (
+            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
+          ) : null}
+          {addButton}
+        </div>
+      </div>
+
+      <div className={bodyClassName}>
         {children}
         {isEmpty ? (
           onEmptyClick ? (

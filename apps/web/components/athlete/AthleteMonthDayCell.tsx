@@ -46,34 +46,11 @@ export function AthleteMonthDayCell({
   return (
     <div
       data-athlete-month-day-cell="v2"
-      onClick={onAddClick ? () => onAddClick(date) : undefined}
-      tabIndex={onAddClick ? 0 : undefined}
-      onKeyDown={
-        onAddClick
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onAddClick(date);
-              }
-            }
-          : undefined
-      }
       className={cn(
         'flex flex-col gap-2 p-2 min-h-[120px] text-left',
         'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
-        onAddClick
-          ? [
-              'cursor-pointer',
-              'transition-colors duration-150',
-              'hover:bg-[var(--bg-structure)]',
-              'hover:ring-1 hover:ring-[var(--border-subtle)]',
-              'focus-visible:outline-none',
-              'focus-visible:bg-[var(--bg-structure)]',
-              'focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
-            ].join(' ')
-          : '',
         !isCurrentMonth ? 'opacity-70' : '',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
       )}
@@ -96,9 +73,28 @@ export function AthleteMonthDayCell({
         >
           {dayNumber}
         </button>
-        {isToday ? (
-          <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">Today</span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {isToday ? (
+            <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">Today</span>
+          ) : null}
+          {onAddClick ? (
+            <button
+              type="button"
+              onClick={() => onAddClick(date)}
+              className={cn(
+                'inline-flex h-7 w-7 items-center justify-center rounded-full',
+                'text-[var(--muted)] hover:text-[var(--primary)]',
+                'hover:bg-[var(--bg-structure)]',
+                'transition-colors duration-150',
+                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+              )}
+              aria-label="Add session"
+              title="Add session"
+            >
+              <Icon name="add" size="sm" className="text-[16px]" aria-hidden />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* B) Body: stacked session rows (max 3) */}

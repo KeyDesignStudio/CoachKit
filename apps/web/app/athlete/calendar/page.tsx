@@ -1,23 +1,48 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { AthleteWeekGrid } from '@/components/athlete/AthleteWeekGrid';
 import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
 import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
+import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
+
+type DisciplineOption = (typeof DISCIPLINE_OPTIONS)[number];
+
+type SessionFormState = {
+  date: string;
+  plannedStartTimeLocal: string;
+  title: string;
+  discipline: DisciplineOption | string;
+  notes: string;
+};
+
+const emptyForm = (date: string): SessionFormState => ({
+  date,
+  plannedStartTimeLocal: '05:30',
+  title: '',
+  discipline: DEFAULT_DISCIPLINE,
+  notes: '',
+});
 
 type ViewMode = 'week' | 'month';
 
@@ -97,6 +122,8 @@ export default function AthleteCalendarPage() {
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sessionForm, setSessionForm] = useState<SessionFormState>(() => emptyForm(toDateInput(startOfWeek())));
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
@@ -244,10 +271,46 @@ export default function AthleteCalendarPage() {
     setWeekStart(startOfWeek(date));
   };
 
-  const canAthleteAddSessions = false;
-  const handleAddAttempt = useCallback(() => {
-    setError('Only coaches can add sessions.');
+  const openCreateDrawer = useCallback((dateStr: string) => {
+    setSessionForm(emptyForm(dateStr));
+    setError('');
+    setDrawerOpen(true);
   }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+
+  const onCreateSession = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      setError('');
+
+      if (!sessionForm.title.trim()) {
+        setError('Choose a session title before saving.');
+        return;
+      }
+
+      try {
+        await request('/api/athlete/calendar-items', {
+          method: 'POST',
+          data: {
+            date: sessionForm.date,
+            plannedStartTimeLocal: sessionForm.plannedStartTimeLocal || undefined,
+            title: sessionForm.title.trim(),
+            discipline: String(sessionForm.discipline).trim(),
+            notes: sessionForm.notes.trim() ? sessionForm.notes.trim() : undefined,
+          },
+        });
+
+        await loadItems();
+        closeDrawer();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save session.');
+      }
+    },
+    [request, sessionForm, loadItems, closeDrawer]
+  );
 
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
@@ -258,6 +321,7 @@ export default function AthleteCalendarPage() {
   }
 
   return (
+    <>
     <section className="flex flex-col gap-6">
       <header className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
@@ -339,7 +403,7 @@ export default function AthleteCalendarPage() {
                   formattedDate={day.formatted}
                   isEmpty={dayItems.length === 0}
                   isToday={isToday(dayDate)}
-                  onBodyClick={canAthleteAddSessions ? () => handleAddAttempt() : handleAddAttempt}
+                  onAddClick={() => openCreateDrawer(day.date)}
                 >
                   {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
                     <AthleteWeekSessionRow
@@ -367,7 +431,7 @@ export default function AthleteCalendarPage() {
                 isToday={isToday(day.date)}
                 athleteTimezone={athleteTimezone}
                 onDayClick={handleDayClick}
-                onAddClick={canAthleteAddSessions ? handleAddAttempt : handleAddAttempt}
+                onAddClick={(date) => openCreateDrawer(toDateInput(date))}
                 onItemClick={handleItemIdClick}
               />
             ))}
@@ -383,5 +447,65 @@ export default function AthleteCalendarPage() {
         </div>
       ) : null}
     </section>
+
+    <SessionDrawer
+      isOpen={drawerOpen}
+      onClose={closeDrawer}
+      title="Add Session"
+      onSubmit={onCreateSession}
+      submitLabel="Add Session"
+      submitDisabled={!sessionForm.title.trim()}
+    >
+      <div className="space-y-4">
+        <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+          Date
+          <Input
+            type="date"
+            value={sessionForm.date}
+            onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+          Start time (optional)
+          <Input
+            type="time"
+            value={sessionForm.plannedStartTimeLocal}
+            onChange={(e) => setSessionForm((prev) => ({ ...prev, plannedStartTimeLocal: e.target.value }))}
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+          Discipline
+          <Select
+            value={String(sessionForm.discipline)}
+            onChange={(e) => setSessionForm((prev) => ({ ...prev, discipline: e.target.value }))}
+          >
+            {DISCIPLINE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+          Title
+          <Input
+            value={sessionForm.title}
+            onChange={(e) => setSessionForm((prev) => ({ ...prev, title: e.target.value }))}
+            placeholder="e.g. Easy run"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+          Notes (optional)
+          <Textarea
+            value={sessionForm.notes}
+            onChange={(e) => setSessionForm((prev) => ({ ...prev, notes: e.target.value }))}
+            rows={4}
+          />
+        </label>
+      </div>
+    </SessionDrawer>
+    </>
   );
 }

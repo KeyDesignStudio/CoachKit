@@ -1,11 +1,10 @@
 import { NextRequest } from 'next/server';
-import { CompletionSource, PlanWeekStatus } from '@prisma/client';
+import { CompletionSource } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { notFound } from '@/lib/errors';
-import { startOfWeek } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
 export const dynamic = 'force-dynamic';
@@ -69,23 +68,6 @@ export async function GET(
     });
 
     if (!item) {
-      throw notFound('Calendar item not found.');
-    }
-
-    // Check if the week is published
-    const itemWeekStart = startOfWeek(item.date);
-    const planWeek = await prisma.planWeek.findUnique({
-      where: {
-        coachId_athleteId_weekStart: {
-          coachId: item.coachId,
-          athleteId: user.id,
-          weekStart: itemWeekStart,
-        },
-      },
-    });
-
-    // If no PlanWeek exists or status is DRAFT, deny access
-    if (!planWeek || planWeek.status !== PlanWeekStatus.PUBLISHED) {
       throw notFound('Calendar item not found.');
     }
 

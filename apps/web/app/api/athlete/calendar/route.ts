@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server';
-import { CompletionSource, PlanWeekStatus } from '@prisma/client';
+import { CompletionSource } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
-import { assertValidDateRange, parseDateOnly, startOfWeek } from '@/lib/date';
+import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
 export const dynamic = 'force-dynamic';
@@ -72,25 +72,6 @@ export async function GET(request: NextRequest) {
       return success({ items: [] });
     }
 
-    // Fetch all published weeks in range
-    const publishedWeeks = await prisma.planWeek.findMany({
-      where: {
-        athleteId: user.id,
-        coachId: athleteProfile.coachId,
-        status: PlanWeekStatus.PUBLISHED,
-        weekStart: {
-          gte: startOfWeek(fromDate),
-          lte: toDate,
-        },
-      },
-      select: { weekStart: true },
-    });
-
-    // Create a set of published week start dates for efficient lookup
-    const publishedWeekStarts = new Set(
-      publishedWeeks.map((pw) => pw.weekStart.toISOString().split('T')[0])
-    );
-
     // Fetch all calendar items in range
     const allItems = await prisma.calendarItem.findMany({
       where: {
@@ -107,11 +88,7 @@ export async function GET(request: NextRequest) {
       include: includeRefs,
     });
 
-    // Filter to only items in published weeks
-    const items = allItems.filter((item) => {
-      const itemWeekStart = startOfWeek(item.date).toISOString().split('T')[0];
-      return publishedWeekStarts.has(itemWeekStart);
-    });
+    const items = allItems;
 
     // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
     const formattedItems = items.map((item: any) => {
