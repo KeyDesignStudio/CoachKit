@@ -7,6 +7,7 @@ import { requireCoach } from '@/lib/auth';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
+import { createServerProfiler } from '@/lib/server-profiler';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,46 +44,12 @@ function getDateKeyInTimeZone(date: Date, timeZone: string): string {
   return `${year}-${month}-${day}`;
 }
 
-const includeRefs = {
-  athlete: {
-    select: {
-      user: { select: { id: true, name: true } },
-    },
-  },
-  template: { select: { id: true, title: true } },
-  groupSession: { select: { id: true, title: true } },
-  completedActivities: {
-    orderBy: [{ startTime: 'desc' as const }],
-    take: 1,
-    select: {
-      id: true,
-      source: true,
-      durationMinutes: true,
-      distanceKm: true,
-      rpe: true,
-      painFlag: true,
-      startTime: true,
-    },
-  },
-  comments: {
-    orderBy: [{ createdAt: 'asc' as const }],
-    select: {
-      id: true,
-      body: true,
-      createdAt: true,
-      author: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-        },
-      },
-    },
-  },
-};
+const COMMENTS_LIMIT = 10;
 
 export async function GET(request: NextRequest) {
   try {
+    const prof = createServerProfiler('coach/review-inbox');
+    prof.mark('start');
     const { user } = await requireCoach();
     const { searchParams } = new URL(request.url);
 
@@ -96,6 +63,8 @@ export async function GET(request: NextRequest) {
     if (fromDate && toDate) {
       assertValidDateRange(fromDate, toDate);
     }
+
+    prof.mark('auth+parse');
 
     const items = await prisma.calendarItem.findMany({
       where: {
@@ -117,29 +86,101 @@ export async function GET(request: NextRequest) {
         { updatedAt: 'desc' },
         { date: 'desc' },
       ],
-      include: includeRefs,
+      select: {
+        id: true,
+        athleteId: true,
+        date: true,
+        plannedStartTimeLocal: true,
+        discipline: true,
+        subtype: true,
+        title: true,
+        plannedDurationMinutes: true,
+        plannedDistanceKm: true,
+        intensityType: true,
+        intensityTargetJson: true,
+        workoutDetail: true,
+        attachmentsJson: true,
+        status: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        athlete: {
+          select: {
+            user: { select: { id: true, name: true } },
+          },
+        },
+        completedActivities: {
+          orderBy: [{ startTime: 'desc' as const }],
+          take: 1,
+          select: {
+            id: true,
+            source: true,
+            durationMinutes: true,
+            distanceKm: true,
+            rpe: true,
+            painFlag: true,
+            startTime: true,
+          },
+        },
+        comments: {
+          orderBy: [{ createdAt: 'desc' as const }],
+          take: COMMENTS_LIMIT,
+          select: {
+            id: true,
+            body: true,
+            createdAt: true,
+            author: {
+              select: {
+                id: true,
+                name: true,
+                role: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: { comments: true },
+        },
+      },
     });
+
+    prof.mark('db');
 
     const formatted = items
       .map((item: any) => {
-        const athleteComments = item.comments.filter((c: any) => c.author.role === 'ATHLETE');
-        const hasAthleteComment = athleteComments.length > 0;
-        const latestCompletedActivity = item.completedActivities[0] ?? null;
+        const comments = (item.comments ?? []).slice().reverse();
+        const hasAthleteComment = comments.some((c: any) => c.author?.role === 'ATHLETE');
+
+        const latestCompletedActivity = item.completedActivities?.[0] ?? null;
         const actionTime = latestCompletedActivity?.startTime
           ? new Date(latestCompletedActivity.startTime)
           : new Date(item.updatedAt);
         const actionDateKey = getDateKeyInTimeZone(actionTime, user.timezone);
-        
+
         return {
-          ...item,
+          id: item.id,
+          date: item.date,
+          plannedStartTimeLocal: item.plannedStartTimeLocal,
+          discipline: item.discipline,
+          subtype: item.subtype,
+          title: item.title,
+          plannedDurationMinutes: item.plannedDurationMinutes,
+          plannedDistanceKm: item.plannedDistanceKm,
+          intensityType: item.intensityType,
+          intensityTargetJson: item.intensityTargetJson,
+          workoutDetail: item.workoutDetail,
+          attachmentsJson: item.attachmentsJson,
+          status: item.status,
+          reviewedAt: item.reviewedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
           athlete: item.athlete?.user ?? null,
           latestCompletedActivity,
-          comments: item.comments ?? [],
+          comments,
           hasAthleteComment,
-          commentCount: item.comments.length,
+          commentCount: item._count?.comments ?? comments.length,
           actionTime: actionTime.toISOString(),
           actionDateKey,
-          completedActivities: undefined,
         };
       })
       .sort((a: any, b: any) => {
@@ -147,6 +188,9 @@ export async function GET(request: NextRequest) {
         const bTime = new Date(b.actionTime).getTime();
         return bTime - aTime;
       });
+
+    prof.mark('format');
+    prof.done({ itemCount: formatted.length });
 
     return success(
       { items: formatted },

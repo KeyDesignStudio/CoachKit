@@ -8,6 +8,7 @@ import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
+import { createServerProfiler } from '@/lib/server-profiler';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,24 +18,7 @@ const querySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD.' }),
 });
 
-const includeRefs = {
-  template: { select: { id: true, title: true } },
-  groupSession: { select: { id: true, title: true } },
-  completedActivities: {
-    orderBy: [{ startTime: 'desc' as const }],
-    take: 5,
-    where: {
-      source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
-    },
-    select: {
-      id: true,
-      painFlag: true,
-      startTime: true,
-      source: true,
-      metricsJson: true,
-    },
-  },
-};
+const COMPLETIONS_TAKE = 5;
 
 function getEffectiveActualStartUtc(completion: {
   source: CompletionSource | string;
@@ -52,6 +36,8 @@ function getEffectiveActualStartUtc(completion: {
 
 export async function GET(request: NextRequest) {
   try {
+    const prof = createServerProfiler('coach/calendar');
+    prof.mark('start');
     const { user } = await requireCoach();
     const includeDebug = isStravaTimeDebugEnabled();
     const { searchParams } = new URL(request.url);
@@ -62,18 +48,14 @@ export async function GET(request: NextRequest) {
       to: searchParams.get('to'),
     });
 
-    await assertCoachOwnsAthlete(params.athleteId, user.id);
-
-    const athleteUser = await prisma.user.findUnique({
-      where: { id: params.athleteId },
-      select: { timezone: true },
-    });
-
-    const athleteTimezone = athleteUser?.timezone ?? 'Australia/Brisbane';
+    const athlete = await assertCoachOwnsAthlete(params.athleteId, user.id);
+    const athleteTimezone = athlete?.user?.timezone ?? 'Australia/Brisbane';
 
     const fromDate = parseDateOnly(params.from, 'from');
     const toDate = parseDateOnly(params.to, 'to');
     assertValidDateRange(fromDate, toDate);
+
+    prof.mark('auth+parse');
 
     const items = await prisma.calendarItem.findMany({
       where: {
@@ -88,8 +70,47 @@ export async function GET(request: NextRequest) {
         { date: 'asc' },
         { plannedStartTimeLocal: 'asc' },
       ],
-      include: includeRefs,
+      select: {
+        id: true,
+        athleteId: true,
+        coachId: true,
+        date: true,
+        plannedStartTimeLocal: true,
+        discipline: true,
+        subtype: true,
+        title: true,
+        plannedDurationMinutes: true,
+        plannedDistanceKm: true,
+        intensityType: true,
+        intensityTargetJson: true,
+        workoutDetail: true,
+        attachmentsJson: true,
+        status: true,
+        templateId: true,
+        groupSessionId: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        template: { select: { id: true, title: true } },
+        groupSession: { select: { id: true, title: true } },
+        completedActivities: {
+          orderBy: [{ startTime: 'desc' as const }],
+          take: COMPLETIONS_TAKE,
+          where: {
+            source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
+          },
+          select: {
+            id: true,
+            painFlag: true,
+            startTime: true,
+            source: true,
+            metricsJson: true,
+          },
+        },
+      },
     });
+
+    prof.mark('db');
 
     // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
     const formattedItems = items.map((item: any) => {
@@ -128,11 +149,34 @@ export async function GET(request: NextRequest) {
         : null;
 
       return {
-        ...item,
+        id: item.id,
+        athleteId: item.athleteId,
+        coachId: item.coachId,
+        date: item.date,
+        plannedStartTimeLocal: item.plannedStartTimeLocal,
+        discipline: item.discipline,
+        subtype: item.subtype,
+        title: item.title,
+        plannedDurationMinutes: item.plannedDurationMinutes,
+        plannedDistanceKm: item.plannedDistanceKm,
+        intensityType: item.intensityType,
+        intensityTargetJson: item.intensityTargetJson,
+        workoutDetail: item.workoutDetail,
+        attachmentsJson: item.attachmentsJson,
+        status: item.status,
+        templateId: item.templateId,
+        groupSessionId: item.groupSessionId,
+        reviewedAt: item.reviewedAt,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        template: item.template,
+        groupSession: item.groupSession,
         latestCompletedActivity,
-        completedActivities: undefined,
       };
     });
+
+    prof.mark('format');
+    prof.done({ itemCount: formattedItems.length });
 
     return success(
       { items: formattedItems, athleteTimezone },

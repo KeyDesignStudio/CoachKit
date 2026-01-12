@@ -238,8 +238,10 @@ model CalendarItem {
 
   @@index([athleteId, date])
   @@index([coachId, date])
+  @@index([coachId, athleteId, date])
   @@index([reviewedAt])
   @@index([status])
+  @@index([coachId, reviewedAt, status])
 }
 
 model CompletedActivity {

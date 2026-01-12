@@ -83,3 +83,35 @@ These routes set `Cache-Control: private` with a short TTL (plus `stale-while-re
 - Changing week/month or navigating prev/next shows skeleton quickly without layout shifts.
 - Refresh forces a network re-fetch (cache bypass) and does not get stuck behind in-flight dedupe.
 - DevTools `performance` entries include the `*-load` measures (dev-only).
+
+## Phase 3 – Coach API & DB optimisation
+
+### Implemented
+
+#### Payload trimming (API)
+- `GET /api/coach/review-inbox` now uses Prisma `select` (not `include`) and limits comments returned (`COMMENTS_LIMIT = 10`) while also returning `commentCount` via `_count`.
+- `GET /api/coach/calendar` now uses Prisma `select` (not `include`) and avoids an extra athlete `user` lookup by reusing the result from `assertCoachOwnsAthlete`.
+- Dev-only server timing logs are available via `COACHKIT_PROFILE_API=1` (see `apps/web/lib/server-profiler.ts`).
+
+#### Indexes (DB)
+Added composite indexes (Prisma migration) on `CalendarItem`:
+- `(coachId, athleteId, date)` for coach calendar queries filtering by coach + athlete + date range.
+- `(coachId, reviewedAt, status)` for review inbox queries filtering by coach + reviewedAt + status.
+
+Note: “actionDateKey” is currently a computed API field (derived from completion startTime / updatedAt in a timezone) and is not stored as a DB column, so there is no direct DB index on `actionDateKey`.
+
+### Before/after timing (local)
+Measured on seeded local DB (`cd apps/web && npm run seed`) using `apps/web/scripts/profile-phase3.cjs`.
+
+- Review inbox query (trimmed `select`):
+  - Baseline (new composite indexes dropped): ~14.2ms
+  - With indexes: ~2.5ms
+- Coach calendar query (trimmed `select`):
+  - Baseline (new composite indexes dropped): ~2.4ms
+  - With indexes: ~1.23ms
+
+### Payload size (local)
+Approx JSON sizes from the same script:
+- Review inbox (trimmed `select`, 10 comments max): ~7.6KB
+- Review inbox (include-heavy “old-ish” query): ~8.4KB
+- Coach calendar: ~10.5KB (roughly unchanged in this dataset)
