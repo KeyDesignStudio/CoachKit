@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
+import { privateCacheHeaders } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +148,12 @@ export async function GET(request: NextRequest) {
         return bTime - aTime;
       });
 
-    return success({ items: formatted });
+    return success(
+      { items: formatted },
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

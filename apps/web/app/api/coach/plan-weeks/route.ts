@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
+import { privateCacheHeaders } from '@/lib/cache';
 import { startOfWeek, addDays } from '@/lib/date';
 
 export const dynamic = 'force-dynamic';
@@ -70,7 +71,12 @@ export async function GET(request: NextRequest) {
       currentMonday = addDays(currentMonday, 7);
     }
 
-    return success({ weeks });
+    return success(
+      { weeks },
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

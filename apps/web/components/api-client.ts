@@ -23,27 +23,56 @@ type ApiResponse<T> = {
  */
 export function useApi() {
   const request = useCallback(async <T,>(path: string, options: ApiOptions = {}): Promise<T> => {
+    const method = (options.method ?? 'GET').toUpperCase();
+    const isGet = method === 'GET';
+    const canDedupe = isGet && options.cache !== 'no-store' && options.cache !== 'reload';
+
+    // In-flight request de-duping for GETs.
+    // This complements HTTP caching headers (private, short TTL).
+    const dedupeKey = canDedupe ? `${method} ${path}` : null;
+    if (dedupeKey && inFlightGets.has(dedupeKey)) {
+      return (await inFlightGets.get(dedupeKey)!) as T;
+    }
+
     const headers = new Headers(options.headers);
 
     if (options.data !== undefined && !headers.has('content-type')) {
       headers.set('content-type', 'application/json');
     }
 
-    const response = await fetch(path, {
-      ...options,
-      headers,
-      body: options.data !== undefined ? JSON.stringify(options.data) : options.body,
-      credentials: 'same-origin', // Include Clerk session cookie
-    });
+    const doFetch = async (): Promise<T> => {
+      const response = await fetch(path, {
+        ...options,
+        method,
+        headers,
+        body: options.data !== undefined ? JSON.stringify(options.data) : options.body,
+        credentials: 'same-origin', // Include Clerk session cookie
+      });
 
-    const payload = (await response.json()) as ApiResponse<T> | { error?: { message?: string } };
+      const payload = (await response.json()) as ApiResponse<T> | { error?: { message?: string } };
 
-    if (!response.ok) {
-      throw new Error(payload.error?.message ?? 'Request failed');
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? 'Request failed');
+      }
+
+      return (payload as ApiResponse<T>).data;
+    };
+
+    const promise = doFetch();
+    if (dedupeKey) {
+      inFlightGets.set(dedupeKey, promise);
     }
 
-    return (payload as ApiResponse<T>).data;
+    try {
+      return await promise;
+    } finally {
+      if (dedupeKey) {
+        inFlightGets.delete(dedupeKey);
+      }
+    }
   }, []);
 
   return { request };
 }
+
+const inFlightGets = new Map<string, Promise<unknown>>();

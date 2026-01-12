@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
+import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 
@@ -133,7 +134,12 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return success({ items: formattedItems, athleteTimezone });
+    return success(
+      { items: formattedItems, athleteTimezone },
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

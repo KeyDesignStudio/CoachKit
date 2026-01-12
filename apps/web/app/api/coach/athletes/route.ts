@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
+import { privateCacheHeaders } from '@/lib/cache';
 
 const createAthleteSchema = z.object({
   email: z.string().email(),
@@ -26,7 +27,12 @@ export async function GET(request: NextRequest) {
       orderBy: { user: { createdAt: 'asc' } },
     });
 
-    return success({ athletes });
+    return success(
+      { athletes },
+      {
+        headers: privateCacheHeaders({ maxAgeSeconds: 60, staleWhileRevalidateSeconds: 120 }),
+      }
+    );
   } catch (error) {
     return handleError(error);
   }

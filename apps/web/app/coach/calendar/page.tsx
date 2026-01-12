@@ -428,16 +428,24 @@ export default function CoachCalendarPage() {
     try {
       if (selectedAthleteIds.size === 1) {
         const athleteId = Array.from(selectedAthleteIds)[0];
-        const [itemsData, weekData] = await Promise.all([
-          request<{ items: CalendarItem[]; athleteTimezone: string }>(
-            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
-          ),
+        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string }>(
+          `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+        );
+
+        const planWeeksPromise =
           viewMode === 'week'
             ? request<{ weeks: Array<{ weekStart: string; status: 'DRAFT' | 'PUBLISHED' }> }>(
                 `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
               )
-            : Promise.resolve({ weeks: [] }),
-        ]);
+            : Promise.resolve({ weeks: [] });
+
+        const [itemsResult, weekResult] = await Promise.allSettled([itemsPromise, planWeeksPromise]);
+        if (itemsResult.status !== 'fulfilled') {
+          throw itemsResult.reason;
+        }
+
+        const itemsData = itemsResult.value;
+        const weekData = weekResult.status === 'fulfilled' ? weekResult.value : { weeks: [] };
 
         const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
         setItems(itemsData.items.map((item) => ({ ...item, athleteId, athleteName, athleteTimezone: itemsData.athleteTimezone })));
@@ -448,6 +456,8 @@ export default function CoachCalendarPage() {
         if (viewMode === 'week' && weekData.weeks.length > 0) {
           const currentWeekData = weekData.weeks[0];
           setWeekStatus(currentWeekData?.status || 'DRAFT');
+        } else if (viewMode === 'week') {
+          setWeekStatus('DRAFT');
         }
       } else {
         // Stacked mode: load each athlete in parallel and tag items.

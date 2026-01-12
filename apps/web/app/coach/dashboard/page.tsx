@@ -225,7 +225,7 @@ export default function CoachDashboardPage() {
     return toDateInput(addDays(todayUtcMidnight, -1));
   }, [todayKey]);
 
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (bypassCache = false) => {
     if (!user?.userId) {
       return;
     }
@@ -234,7 +234,8 @@ export default function CoachDashboardPage() {
     setError('');
 
     try {
-      const data = await request<{ items: ReviewItem[] }>(`/api/coach/review-inbox`);
+      const url = bypassCache ? `/api/coach/review-inbox?t=${Date.now()}` : `/api/coach/review-inbox`;
+      const data = await request<{ items: ReviewItem[] }>(url, bypassCache ? { cache: 'no-store' } : undefined);
       setItems(data.items);
       setSelectedIds(new Set());
     } catch (err) {
@@ -493,7 +494,13 @@ export default function CoachDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2 w-full md:w-auto">
-              <Button type="button" variant="ghost" onClick={loadItems} disabled={loading} className="w-full md:w-auto min-h-[44px]">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => loadItems(true)}
+                disabled={loading}
+                className="w-full md:w-auto min-h-[44px]"
+              >
                 <Icon name="refresh" size="sm" className="md:mr-1" />
                 <span className="hidden md:inline">Refresh</span>
               </Button>
