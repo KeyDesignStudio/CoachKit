@@ -135,48 +135,43 @@ export default function CoachAthletesPage() {
         )}
 
         {!loading && athletes.length > 0 && (
-          <div className="space-y-3">
+          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {athletes.map((athlete) => (
               <button
+                type="button"
                 key={athlete.userId}
                 onClick={() => handleAthleteClick(athlete.userId)}
-                className="w-full rounded-2xl border border-white/30 bg-white/60 p-4 text-left shadow-sm backdrop-blur-xl transition-all hover:bg-white/80 hover:shadow-md min-h-[44px]"
+                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-pointer text-left min-w-0 min-h-[44px]"
               >
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
-                  {/* Left: Name, Email, DOB */}
-                  <div className="flex-1 space-y-1">
-                    <h3 className="font-semibold text-slate-900">
-                      {athlete.user.name || 'Unnamed Athlete'}
-                    </h3>
-                    <p className="text-sm text-slate-600">{athlete.user.email}</p>
-                    {athlete.dateOfBirth && (
-                      <p className="text-xs text-slate-500">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</p>
-                    )}
+                {/* Top: Name + email (+ optional DOB) */}
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{athlete.user.name || 'Unnamed Athlete'}</div>
+                  <div className="text-sm text-[var(--muted)] truncate">{athlete.user.email}</div>
+                  {athlete.dateOfBirth ? (
+                    <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
+                  ) : null}
+                </div>
+
+                {/* Footer: Cadence + disciplines */}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="flex-shrink-0 inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/60 px-2.5 py-1 text-xs text-slate-700">
+                    <span className="font-semibold text-slate-900">{athlete.planCadenceDays}</span>
+                    <span className="text-[var(--muted)]">day cadence</span>
                   </div>
 
-                  {/* Right section: Cadence + Disciplines */}
-                  <div className="flex items-center gap-3">
-                    {/* Program Cadence */}
-                    <div className="flex flex-col items-center justify-center rounded-xl border border-white/30 bg-white/40 px-4 py-2">
-                      <div className="text-2xl font-bold text-slate-900">{athlete.planCadenceDays}</div>
-                      <div className="text-xs text-slate-600">Cadence</div>
-                    </div>
-
-                    {/* Disciplines */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {athlete.disciplines.map((discipline) => {
-                        const theme = getDisciplineTheme(discipline);
-                        return (
-                          <div
-                            key={discipline}
-                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-white/40"
-                            title={discipline}
-                          >
-                            <Icon name={theme.iconName} size="md" className={theme.textClass} />
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {athlete.disciplines.map((discipline) => {
+                      const theme = getDisciplineTheme(discipline);
+                      return (
+                        <div
+                          key={discipline}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-white/40"
+                          title={discipline}
+                        >
+                          <Icon name={theme.iconName} size="md" className={theme.textClass} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </button>
