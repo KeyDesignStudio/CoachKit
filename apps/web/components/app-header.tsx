@@ -107,27 +107,48 @@ export async function AppHeader() {
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
-  const subtitle = branding.displayName !== DEFAULT_BRAND_NAME ? branding.displayName : '';
+  const clubName = (() => {
+    const raw = (branding.displayName || '').trim();
+    if (!raw || raw === DEFAULT_BRAND_NAME) return 'Your Club';
+    return raw;
+  })();
 
   return (
     <header className="px-6 pt-6">
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
-      <Card className="flex flex-col gap-4 rounded-3xl p-5 bg-[var(--bg-surface)] md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
+      <Card className="relative flex flex-col gap-4 rounded-3xl bg-[var(--bg-surface)] p-5 md:flex-row md:items-center md:justify-between">
+        {/* Center block: true-centered CoachKit branding (independent of nav width) */}
+        <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
+          <Link
+            href="/" 
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+          >
+            <span className="hidden text-base sm:inline">CoachKit</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/coachkit-logo.png"
+              alt="CoachKit"
+              className="h-9 w-9 object-contain"
+            />
+          </Link>
+        </div>
+
+        {/* Left block: Club branding (name then logo) */}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0">
+            <p className="m-0 max-w-[10rem] truncate font-display text-base font-semibold tracking-tight text-[var(--text)] sm:max-w-[14rem] md:max-w-[18rem]">
+              {clubName}
+            </p>
+          </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resolveLogoUrl(branding.logoUrl)}
-            alt={`${branding.displayName} logo`}
+            alt={`${clubName} logo`}
             className="h-[55px] w-[55px] object-contain"
           />
-          <div>
-            <a href="/" className="font-display text-xl font-semibold tracking-tight">
-              CoachKit
-            </a>
-            {subtitle ? <p className="text-sm text-[var(--muted)]">{subtitle}</p> : null}
-          </div>
         </div>
 
+        {/* Right block: Nav + user (unchanged) */}
         <div className="flex items-center gap-4">
           {navLinks.length > 0 && (
             <nav className="flex flex-wrap gap-2 text-sm font-medium">
@@ -142,7 +163,7 @@ export async function AppHeader() {
               ))}
             </nav>
           )}
-          
+
           {userId && <UserButton afterSignOutUrl="/" />}
         </div>
       </Card>
