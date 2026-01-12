@@ -40,6 +40,7 @@ export function Icon({
 }: IconProps) {
   const materialSymbol = getIcon(name);
   const opsz = OPSZ_BY_SIZE[size];
+  const fontSize = size === 'xs' ? '13px' : undefined;
   
   return (
     <span
@@ -51,7 +52,8 @@ export function Icon({
       aria-hidden={ariaHidden}
       aria-label={ariaLabel}
       style={{ 
-        fontVariationSettings: `'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' ${opsz}`
+        fontSize,
+        fontVariationSettings: `'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' ${opsz}`,
       }}
     >
       {materialSymbol}
