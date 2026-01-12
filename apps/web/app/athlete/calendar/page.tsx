@@ -19,7 +19,7 @@ import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
-import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
+import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -287,7 +287,7 @@ export default function AthleteCalendarPage() {
       setError('');
 
       if (!sessionForm.title.trim()) {
-        setError('Choose a session title before saving.');
+        setError('Choose a workout title before saving.');
         return;
       }
 
@@ -299,14 +299,14 @@ export default function AthleteCalendarPage() {
             plannedStartTimeLocal: sessionForm.plannedStartTimeLocal || undefined,
             title: sessionForm.title.trim(),
             discipline: String(sessionForm.discipline).trim(),
-            notes: sessionForm.notes.trim() ? sessionForm.notes.trim() : undefined,
+            workoutDetail: sessionForm.notes.trim() ? sessionForm.notes.trim() : undefined,
           },
         });
 
         await loadItems();
         closeDrawer();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save session.');
+        setError(err instanceof Error ? err.message : 'Failed to save workout.');
       }
     },
     [request, sessionForm, loadItems, closeDrawer]
@@ -335,10 +335,10 @@ export default function AthleteCalendarPage() {
             <p className="text-xs md:text-sm text-[var(--muted)]">
               {mounted ? (
                 viewMode === 'week' 
-                  ? `Week of ${dateRange.from}` 
+                  ? formatWeekOfLabel(dateRange.from, athleteTimezone)
                   : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
               ) : (
-                `Week of ${dateRange.from}`
+                formatWeekOfLabel(dateRange.from, athleteTimezone)
               )}
             </p>
           </div>
@@ -452,9 +452,9 @@ export default function AthleteCalendarPage() {
     <SessionDrawer
       isOpen={drawerOpen}
       onClose={closeDrawer}
-      title="Add Session"
+      title="Add Workout"
       onSubmit={onCreateSession}
-      submitLabel="Add Session"
+      submitLabel="Add Workout"
       submitDisabled={!sessionForm.title.trim()}
     >
       <div className="space-y-4">
@@ -498,7 +498,7 @@ export default function AthleteCalendarPage() {
           />
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-          Notes (optional)
+          Workout detail (optional)
           <Textarea
             value={sessionForm.notes}
             onChange={(e) => setSessionForm((prev) => ({ ...prev, notes: e.target.value }))}

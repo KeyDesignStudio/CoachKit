@@ -35,7 +35,7 @@ type CalendarItem = {
   plannedStartTimeLocal: string | null;
   discipline: string;
   title: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
   template?: { id: string; title: string } | null;
   plannedDurationMinutes?: number | null;
   plannedDistanceKm?: number | null;
@@ -47,7 +47,7 @@ type SessionFormState = {
   title: string;
   discipline: DisciplineOption | string;
   templateId: string;
-  notes: string;
+  workoutDetail: string;
 };
 
 type WorkoutTitleOption = {
@@ -66,7 +66,7 @@ const emptyForm = (date: string): SessionFormState => ({
   title: '',
   discipline: DEFAULT_DISCIPLINE,
   templateId: '',
-  notes: '',
+  workoutDetail: '',
 });
 
 export default function CoachCalendarPage() {
@@ -291,7 +291,7 @@ export default function CoachCalendarPage() {
     }
 
     if (!createForm.title) {
-      setError('Choose a session title before adding.');
+      setError('Choose a workout title before adding.');
       return;
     }
 
@@ -306,7 +306,7 @@ export default function CoachCalendarPage() {
           title: createForm.title,
           discipline: normalizedDiscipline,
           templateId: createForm.templateId || undefined,
-          notes: createForm.notes.trim() ? createForm.notes.trim() : undefined,
+          workoutDetail: createForm.workoutDetail.trim() ? createForm.workoutDetail.trim() : undefined,
         },
       });
       setCreateForm((prev) => ({ ...emptyForm(createForm.date), discipline: normalizedDiscipline }));
@@ -358,7 +358,7 @@ export default function CoachCalendarPage() {
       title: item.title,
       discipline: ensureDiscipline(item.discipline),
       templateId: item.template?.id ?? '',
-      notes: item.notes ?? '',
+      workoutDetail: item.workoutDetail ?? '',
     });
 
     if (typeof window !== 'undefined') {
@@ -376,7 +376,7 @@ export default function CoachCalendarPage() {
     }
 
     if (!editForm.title) {
-      setError('Choose a session title before saving.');
+      setError('Choose a workout title before saving.');
       return;
     }
 
@@ -390,7 +390,7 @@ export default function CoachCalendarPage() {
           title: editForm.title,
           discipline: normalizedDiscipline,
           templateId: editForm.templateId || null,
-          notes: editForm.notes.trim() ? editForm.notes.trim() : null,
+          workoutDetail: editForm.workoutDetail.trim() ? editForm.workoutDetail.trim() : null,
         },
       });
       setEditItemId('');
@@ -527,7 +527,7 @@ export default function CoachCalendarPage() {
             {copyError ? (
               <p className="text-sm text-rose-500">{copyError}</p>
             ) : (
-              <p className="text-sm text-[var(--muted)]">Copies sessions from one Monday-starting week into another.</p>
+              <p className="text-sm text-[var(--muted)]">Copies workouts from one Monday-starting week into another.</p>
             )}
           </form>
         </Card>
@@ -550,10 +550,10 @@ export default function CoachCalendarPage() {
               <p className="text-sm text-[var(--muted)]">
                 {formatDisplay(toIsoDateString(item.date))} · {item.plannedStartTimeLocal ?? 'n/a'}
               </p>
-              {item.notes ? (
+              {item.workoutDetail ? (
                 <p className="text-sm text-[var(--text)]">
-                  <span className="font-semibold">Coach advice: </span>
-                  {item.notes}
+                  <span className="font-semibold">Workout detail: </span>
+                  {item.workoutDetail}
                 </p>
               ) : null}
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Tap to edit</p>
@@ -565,7 +565,7 @@ export default function CoachCalendarPage() {
         <Card className="rounded-3xl">
           <form onSubmit={onCreate} className="space-y-4">
             <div>
-              <h3 className="text-xl font-semibold">Add session</h3>
+              <h3 className="text-xl font-semibold">Add workout</h3>
               <p className="text-sm text-[var(--muted)]">Create a new assignment for the selected athlete.</p>
             </div>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
@@ -591,7 +591,7 @@ export default function CoachCalendarPage() {
               </Select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-              Session title
+              Workout title
               <Select value={createForm.title} required onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}>
                 <option value="">Select a title</option>
                 {createDisciplineTitles.map((option) => (
@@ -630,11 +630,11 @@ export default function CoachCalendarPage() {
               <Input value={createForm.templateId} onChange={(event) => setCreateForm({ ...createForm, templateId: event.target.value })} />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-              Coach advice
+              Workout Detail
               <Textarea
-                placeholder="Provide guidance that athletes will see on their workout"
-                value={createForm.notes}
-                onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
+                placeholder="Provide workout detail that athletes will see"
+                value={createForm.workoutDetail}
+                onChange={(event) => setCreateForm({ ...createForm, workoutDetail: event.target.value })}
               />
             </label>
             {titleMessage ? <p className="text-xs text-emerald-600">{titleMessage}</p> : null}
@@ -651,7 +651,7 @@ export default function CoachCalendarPage() {
               {editItemId ? (
                 <p className="text-sm text-[var(--muted)]">Editing {selectedItem?.title ?? editItemId}</p>
               ) : (
-                <p className="text-sm text-[var(--muted)]">Select a session above to edit.</p>
+                <p className="text-sm text-[var(--muted)]">Select a workout above to edit.</p>
               )}
             </div>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
@@ -673,7 +673,7 @@ export default function CoachCalendarPage() {
               </Select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-              Session title
+              Workout title
               <Select value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}>
                 <option value="">Select a title</option>
                 {editDisciplineTitles.map((option) => (
@@ -712,8 +712,8 @@ export default function CoachCalendarPage() {
               <Input value={editForm.templateId} onChange={(event) => setEditForm({ ...editForm, templateId: event.target.value })} />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-              Coach advice
-              <Textarea value={editForm.notes} onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })} />
+              Workout Detail
+              <Textarea value={editForm.workoutDetail} onChange={(event) => setEditForm({ ...editForm, workoutDetail: event.target.value })} />
             </label>
             <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={!editItemId}>

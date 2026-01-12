@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             plannedDurationMinutes: groupSession.durationMinutes,
             discipline: groupSession.discipline,
             title: groupSession.title,
-            notes: groupSession.description ?? null,
+            workoutDetail: groupSession.description ?? null,
             groupSessionId: groupSession.id,
             status: CalendarItemStatus.PLANNED,
           },

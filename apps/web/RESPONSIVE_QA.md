@@ -26,7 +26,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 **Mobile Behavior:**
  Athlete selector (List + Calendar): Defaults to “All athletes” and persists; selecting an athlete filters the inbox to that athlete only.
  Calendar view: When “All athletes” is selected, chips include an athlete prefix (e.g. “Gordon G.: Tempo Run”); when filtered to a single athlete, chips omit the prefix.
- Calendar view empty state: If filter yields no items in the visible month, shows “No unreviewed sessions for this athlete in this month.”
+ Calendar view empty state: If filter yields no items in the visible month, shows “No unreviewed workouts for this athlete in this month.”
 #### 2. /coach/calendar
 **Improvements:**
 - Header split into two rows on mobile: Title/Athlete selector, then controls
@@ -41,7 +41,7 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 - Days displayed as vertically stacked cards
 - Each day card has clear header and scrollable content
 - "Today" badge prominent
-- No “+ Add” buttons; tap/click an empty day area to add a session
+- No “+ Add” buttons; tap/click an empty day area to add a workout
 
 #### 3. /coach/group-sessions
 **Improvements:**

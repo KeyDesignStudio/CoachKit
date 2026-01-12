@@ -23,7 +23,7 @@ type WeekItem = {
   status: string;
   discipline: string;
   title: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
   latestCompletedActivity?: { painFlag?: boolean } | null;
 };
 
@@ -59,7 +59,7 @@ export default function DevCalendarGeometryComparePage() {
                 status: 'PLANNED',
                 discipline: 'RUN',
                 title: 'Easy run with a very long title that should truncate cleanly',
-                notes: null,
+                workoutDetail: null,
                 latestCompletedActivity: null,
               }),
               makeItem({
@@ -69,7 +69,7 @@ export default function DevCalendarGeometryComparePage() {
                 status: 'PLANNED',
                 discipline: 'STRENGTH',
                 title: 'Gym',
-                notes: 'Coach advice present',
+                workoutDetail: 'Workout detail present',
                 latestCompletedActivity: { painFlag: false },
               }),
             ],
@@ -84,7 +84,7 @@ export default function DevCalendarGeometryComparePage() {
                 status: 'PLANNED',
                 discipline: 'SWIM',
                 title: 'Technique',
-                notes: null,
+                workoutDetail: null,
                 latestCompletedActivity: null,
               }),
             ],
@@ -105,7 +105,7 @@ export default function DevCalendarGeometryComparePage() {
                 status: 'COMPLETED_SYNCED',
                 discipline: 'BIKE',
                 title: 'Trainer ride',
-                notes: null,
+                workoutDetail: null,
                 latestCompletedActivity: { painFlag: true },
               }),
             ],
@@ -132,7 +132,7 @@ export default function DevCalendarGeometryComparePage() {
             status: 'PLANNED',
             discipline: 'RUN',
             title: 'Easy run with a very long title that should truncate cleanly',
-            notes: null,
+            workoutDetail: null,
             latestCompletedActivity: null,
           }),
           makeItem({
@@ -142,7 +142,7 @@ export default function DevCalendarGeometryComparePage() {
             status: 'PLANNED',
             discipline: 'STRENGTH',
             title: 'Gym',
-            notes: 'Coach advice present',
+            workoutDetail: 'Workout detail present',
             latestCompletedActivity: { painFlag: false },
           }),
         ],
@@ -157,7 +157,7 @@ export default function DevCalendarGeometryComparePage() {
             status: 'PLANNED',
             discipline: 'SWIM',
             title: 'Technique',
-            notes: null,
+            workoutDetail: null,
             latestCompletedActivity: null,
           }),
         ],
@@ -190,7 +190,6 @@ export default function DevCalendarGeometryComparePage() {
                           title={item.title}
                           discipline={item.discipline}
                           hasAthleteComment={false}
-                          coachAdvicePresent={!!item.notes}
                           painFlag={item.latestCompletedActivity?.painFlag ?? false}
                           onClick={() => setClicked(`dashboard:${item.id}`)}
                         />

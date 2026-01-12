@@ -25,7 +25,7 @@ type ReviewItem = {
   plannedStartTimeLocal: string | null;
   plannedDurationMinutes: number | null;
   plannedDistanceKm: number | null;
-  notes: string | null;
+  workoutDetail: string | null;
   status: string;
   latestCompletedActivity: {
     id: string;
@@ -42,7 +42,6 @@ type ReviewItem = {
   comments: CommentRecord[];
   hasAthleteComment: boolean;
   commentCount: number;
-  coachAdvicePresent: boolean;
 };
 
 type MobileReviewAccordionProps = {
@@ -106,7 +105,7 @@ export function MobileReviewAccordion({
             >
               <div>
                 <p className="font-medium text-[var(--text)]">{athlete.name}</p>
-                <p className="text-xs text-[var(--muted)]">{totalItems} session(s) to review</p>
+                <p className="text-xs text-[var(--muted)]">{totalItems} workout(s) to review</p>
               </div>
               <Icon name={isExpanded ? "next" : "next"} size="sm" className={isExpanded ? "rotate-90" : ""} />
             </button>
@@ -146,7 +145,6 @@ export function MobileReviewAccordion({
                               title={item.title}
                               discipline={item.discipline}
                               hasAthleteComment={item.hasAthleteComment}
-                              coachAdvicePresent={item.coachAdvicePresent}
                               painFlag={item.latestCompletedActivity?.painFlag ?? false}
                               onClick={() => onItemClick(item)}
                               onQuickReview={

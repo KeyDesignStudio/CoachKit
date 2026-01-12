@@ -45,8 +45,8 @@ export function AthleteWeekDayColumn({
         'transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
       )}
-      aria-label="Add session"
-      title="Add session"
+      aria-label="Add workout"
+      title="Add workout"
     >
       <Icon name={CALENDAR_ADD_SESSION_ICON} size="sm" className={cn('text-[16px]', CALENDAR_ACTION_ICON_CLASS)} aria-hidden />
     </button>

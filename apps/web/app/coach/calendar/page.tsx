@@ -21,7 +21,7 @@ import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
-import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
+import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -47,7 +47,7 @@ type CalendarItem = {
   athleteId?: string;
   athleteName?: string | null;
   athleteTimezone?: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
   template?: { id: string; title: string } | null;
   plannedDurationMinutes?: number | null;
   plannedDistanceKm?: number | null;
@@ -65,7 +65,7 @@ type SessionFormState = {
   title: string;
   discipline: DisciplineOption | string;
   templateId: string;
-  notes: string;
+  workoutDetail: string;
 };
 
 type WorkoutTitleOption = {
@@ -84,7 +84,7 @@ const emptyForm = (date: string): SessionFormState => ({
   title: '',
   discipline: DEFAULT_DISCIPLINE,
   templateId: '',
-  notes: '',
+  workoutDetail: '',
 });
 
 // Helper to group items by date
@@ -553,7 +553,7 @@ export default function CoachCalendarPage() {
       title: item.title,
       discipline: item.discipline,
       templateId: item.template?.id || '',
-      notes: item.notes || '',
+      workoutDetail: item.workoutDetail || '',
     });
     setEditItemId(item.id);
     setDrawerMode('edit');
@@ -579,7 +579,7 @@ export default function CoachCalendarPage() {
     }
 
     if (!sessionForm.title) {
-      setError('Choose a session title before saving.');
+      setError('Choose a workout title before saving.');
       return;
     }
 
@@ -592,7 +592,7 @@ export default function CoachCalendarPage() {
         title: sessionForm.title,
         discipline: normalizedDiscipline,
         templateId: sessionForm.templateId || undefined,
-        notes: sessionForm.notes.trim() ? sessionForm.notes.trim() : undefined,
+        workoutDetail: sessionForm.workoutDetail.trim() ? sessionForm.workoutDetail.trim() : undefined,
       };
 
       if (drawerMode === 'create') {
@@ -610,7 +610,7 @@ export default function CoachCalendarPage() {
       await loadCalendar();
       closeDrawer();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save session.');
+      setError(err instanceof Error ? err.message : 'Failed to save workout.');
     }
   };
 
@@ -764,10 +764,10 @@ export default function CoachCalendarPage() {
             <p className="text-xs md:text-sm text-[var(--muted)]">
               {mounted ? (
                 viewMode === 'week' 
-                  ? `Week of ${dateRange.from}` 
+                  ? formatWeekOfLabel(dateRange.from, athleteTimezone)
                   : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
               ) : (
-                `Week of ${dateRange.from}`
+                formatWeekOfLabel(dateRange.from, athleteTimezone)
               )}
             </p>
           </div>
@@ -960,8 +960,8 @@ export default function CoachCalendarPage() {
                                     type="button"
                                     onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
                                     className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-                                    aria-label="Add session"
-                                    title="Add session"
+                                    aria-label="Add workout"
+                                    title="Add workout"
                                   >
                                     <Icon
                                       name={CALENDAR_ADD_SESSION_ICON}
@@ -1037,9 +1037,9 @@ export default function CoachCalendarPage() {
       <SessionDrawer
         isOpen={drawerMode !== 'closed'}
         onClose={closeDrawer}
-        title={drawerMode === 'create' ? 'Add Session' : 'Edit Session'}
+        title={drawerMode === 'create' ? 'Add Workout' : 'Edit Workout'}
         onSubmit={onSaveSession}
-        submitLabel={drawerMode === 'create' ? 'Add Session' : 'Save Changes'}
+        submitLabel={drawerMode === 'create' ? 'Add Workout' : 'Save Changes'}
         submitDisabled={!effectiveAthleteId}
         onDelete={drawerMode === 'edit' ? onDelete : undefined}
       >
@@ -1067,7 +1067,7 @@ export default function CoachCalendarPage() {
             </Select>
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-            Session title
+            Workout title
             <Select value={sessionForm.title} required onChange={(event) => setSessionForm({ ...sessionForm, title: event.target.value })}>
               <option value="">Select a title</option>
               {currentDisciplineTitles.map((option) => (
@@ -1095,11 +1095,11 @@ export default function CoachCalendarPage() {
             <Input value={sessionForm.templateId} onChange={(event) => setSessionForm({ ...sessionForm, templateId: event.target.value })} />
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-            Coach advice
+            Workout detail
             <Textarea
-              placeholder="Provide guidance that athletes will see on their workout"
-              value={sessionForm.notes}
-              onChange={(event) => setSessionForm({ ...sessionForm, notes: event.target.value })}
+              placeholder="Optional: add instructions the athlete will see for this workout"
+              value={sessionForm.workoutDetail}
+              onChange={(event) => setSessionForm({ ...sessionForm, workoutDetail: event.target.value })}
               rows={4}
             />
           </label>

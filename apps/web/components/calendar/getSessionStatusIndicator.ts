@@ -38,7 +38,7 @@ export function getSessionStatusIndicator({ status, date, timeZone, now }: Param
   }
 
   if (status === 'PLANNED' && dayEnded) {
-    return { iconName: 'missed', ariaLabel: 'Missed session', colorClass: 'text-amber-700/70' };
+    return { iconName: 'missed', ariaLabel: 'Missed workout', colorClass: 'text-amber-700/70' };
   }
 
   return { iconName: 'planned', ariaLabel: 'Planned', colorClass: 'text-[var(--muted)]' };

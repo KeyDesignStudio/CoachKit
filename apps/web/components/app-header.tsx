@@ -11,11 +11,11 @@ type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Calendar', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'Sessions', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
-  { href: '/athlete/calendar', label: 'My Calendar', roles: ['ATHLETE'] },
+  { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
 

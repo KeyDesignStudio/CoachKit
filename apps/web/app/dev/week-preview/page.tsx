@@ -79,9 +79,9 @@ const itemsByIndex: AthleteWeekSessionRowItem[][] = [
       displayTimeLocal: '8:00 AM',
       discipline: 'BRICK',
       status: 'PLANNED',
-      title: 'Brick Session',
+      title: 'Brick Workout',
       latestCompletedActivity: { painFlag: true },
-      notes: 'Coach advice present',
+      workoutDetail: 'Workout detail present',
     },
   ],
   [

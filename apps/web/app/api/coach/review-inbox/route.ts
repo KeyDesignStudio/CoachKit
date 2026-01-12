@@ -136,7 +136,6 @@ export async function GET(request: NextRequest) {
           comments: item.comments ?? [],
           hasAthleteComment,
           commentCount: item.comments.length,
-          coachAdvicePresent: !!item.notes && item.notes.trim().length > 0,
           actionTime: actionTime.toISOString(),
           actionDateKey,
           completedActivities: undefined,

@@ -13,7 +13,7 @@ export type AthleteWeekSessionRowItem = {
   discipline: string;
   status: string;
   title: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
   latestCompletedActivity?: {
     painFlag?: boolean;
   } | null;
@@ -58,7 +58,7 @@ function getAccountabilityStatusIcon(params: {
     className: indicator.colorClass,
     title:
       indicator.iconName === 'missed'
-        ? 'Missed session – this workout was planned but not completed'
+        ? 'Missed workout – this workout was planned but not completed'
         : null,
   };
 }
@@ -69,7 +69,6 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
   const disciplineLabel = getDisciplineLabel(item.discipline);
 
   const pain = item.latestCompletedActivity?.painFlag ?? false;
-  const hasAdvice = !!item.notes;
   const statusIcon = getAccountabilityStatusIcon({ item, now: effectiveNow, timeZone });
 
   const isStacked = variant === 'stacked';
@@ -89,7 +88,7 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
           ? 'bg-transparent hover:bg-[var(--bg-structure)] rounded-md px-1.5 py-1 transition-colors'
           : 'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded px-2 py-1.5 transition-shadow hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
       )}
-      aria-label={`Open ${disciplineLabel} session`}
+      aria-label={`Open ${disciplineLabel} workout`}
     >
       <div className="flex items-center gap-2 min-w-0">
         {/* 1) Icon + discipline label (stacked; stable) */}
@@ -109,7 +108,6 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
         {/* 4) Indicators (right-aligned; consistent order) */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {pain ? <Icon name="painFlag" size="xs" className={cn('leading-none text-rose-500', CALENDAR_ACTION_ICON_CLASS)} /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="xs" className={cn('leading-none text-amber-600', CALENDAR_ACTION_ICON_CLASS)} /> : null}
           {statusIcon.name ? (
             <span title={statusIcon.title ?? undefined}>
               <Icon name={statusIcon.name} size="xs" className={cn('leading-none', CALENDAR_ACTION_ICON_CLASS, statusIcon.className)} />

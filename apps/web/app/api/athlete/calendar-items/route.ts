@@ -30,7 +30,7 @@ const createCalendarItemSchema = z.object({
   plannedDistanceKm: z.number().nonnegative().max(1000).optional(),
   intensityType: z.string().trim().min(1).optional(),
   intensityTargetJson: z.unknown().optional(),
-  notes: z.string().trim().max(4000).optional(),
+  workoutDetail: z.string().trim().max(4000).optional(),
   attachmentsJson: z.unknown().optional(),
   templateId: cuid.optional(),
 });
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         plannedDistanceKm: payload.plannedDistanceKm ?? null,
         intensityType: payload.intensityType ?? null,
         intensityTargetJson: (payload.intensityTargetJson ?? null) as Prisma.InputJsonValue,
-        notes: payload.notes ?? null,
+        workoutDetail: payload.workoutDetail ?? null,
         attachmentsJson: (payload.attachmentsJson ?? null) as Prisma.InputJsonValue,
         status: CalendarItemStatus.PLANNED,
         template: template

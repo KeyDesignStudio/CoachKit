@@ -12,17 +12,17 @@ import { addDays, toDateInput } from '@/lib/client-date';
 
 export const dynamic = 'force-dynamic';
 
-type PreviewSession = {
+type PreviewWorkout = {
   id: string;
   date: string;
   plannedStartTimeLocal: string | null;
   discipline: string;
   status: string;
   title: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
 };
 
-function buildPreviewItems(now: Date): PreviewSession[] {
+function buildPreviewItems(now: Date): PreviewWorkout[] {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
@@ -37,7 +37,7 @@ function buildPreviewItems(now: Date): PreviewSession[] {
 
   return [
     { id: 'coach-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
-    { id: 'coach-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'PLANNED', title: 'Trainer ride', notes: 'Keep Z2' },
+    { id: 'coach-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'PLANNED', title: 'Trainer ride', workoutDetail: 'Keep Z2' },
     { id: 'coach-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'PLANNED', title: 'Main set' },
 
     { id: 'coach-yday-1', date: yStr, plannedStartTimeLocal: '07:00', discipline: 'RUN', status: 'PLANNED', title: 'Steady run' },
@@ -46,14 +46,14 @@ function buildPreviewItems(now: Date): PreviewSession[] {
 
     { id: 'coach-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED', title: 'Rest' },
 
-    // Overflow day: lots of sessions today to confirm clipping
+    // Overflow day: lots of workouts today to confirm clipping
     ...Array.from({ length: 12 }).map((_, i) => ({
       id: `coach-today-overflow-${i + 1}`,
       date: todayStr,
       plannedStartTimeLocal: `0${(i % 9) + 1}:00`,
       discipline: i % 2 === 0 ? 'RUN' : 'BIKE',
       status: 'PLANNED',
-      title: `Session ${i + 1}`,
+      title: `Workout ${i + 1}`,
     })),
   ];
 }
@@ -64,7 +64,7 @@ export default function DevCoachMonthPreviewPage() {
   if (process.env.NEXT_PUBLIC_SHOW_DEV_PAGES !== 'true') notFound();
 
   const now = useMemo(() => new Date('2026-01-03T10:00:00.000Z'), []);
-  const [selected, setSelected] = useState<{ kind: 'day' | 'session'; value: string } | null>(null);
+  const [selected, setSelected] = useState<{ kind: 'day' | 'workout'; value: string } | null>(null);
 
   const previewItems = useMemo(() => buildPreviewItems(now), [now]);
 
@@ -81,7 +81,7 @@ export default function DevCoachMonthPreviewPage() {
       return new Date(month.year, month.month, 1 + mondayOffset);
     })();
 
-    const byDate: Record<string, PreviewSession[]> = {};
+    const byDate: Record<string, PreviewWorkout[]> = {};
     for (const item of previewItems) {
       byDate[item.date] ??= [];
       byDate[item.date].push(item);
@@ -138,7 +138,7 @@ export default function DevCoachMonthPreviewPage() {
               isCurrentMonth={day.isCurrentMonth}
               isToday={day.isToday}
               onDayClick={(date) => setSelected({ kind: 'day', value: toDateInput(date) })}
-              onItemClick={(itemId) => setSelected({ kind: 'session', value: itemId })}
+              onItemClick={(itemId) => setSelected({ kind: 'workout', value: itemId })}
             />
           ))}
         </MonthGrid>

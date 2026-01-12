@@ -63,7 +63,7 @@ function compareNullableStrings(a: string | null, b: string | null): number {
 }
 
 /**
- * Sort sessions within a day by what the athlete sees:
+ * Sort workouts within a day by what the athlete sees:
  * 1) Non-REST before REST
  * 2) Actual start time (zoned) if available, else planned time
  * 3) Null times last

@@ -20,3 +20,38 @@ export function formatDisplay(dateIso: string): string {
   const date = new Date(dateIso);
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
+
+function getOrdinalSuffix(day: number): string {
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return 'th';
+  switch (day % 10) {
+    case 1:
+      return 'st';
+    case 2:
+      return 'nd';
+    case 3:
+      return 'rd';
+    default:
+      return 'th';
+  }
+}
+
+export function formatWeekOfLabel(weekStartIso: string, timeZone?: string): string {
+  // weekStartIso is expected to be a YYYY-MM-DD string.
+  // We use UTC midnight as a stable anchor and then format into the requested timezone.
+  const date = new Date(`${weekStartIso}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return `Week of ${weekStartIso}`;
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZone || undefined,
+    month: 'long',
+    day: 'numeric',
+  }).formatToParts(date);
+
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const dayStr = parts.find((p) => p.type === 'day')?.value;
+  const day = dayStr ? Number(dayStr) : NaN;
+  if (!month || !Number.isFinite(day)) return `Week of ${weekStartIso}`;
+
+  return `Week of ${month} ${day}${getOrdinalSuffix(day)}`;
+}

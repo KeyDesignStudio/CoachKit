@@ -8,7 +8,6 @@ type SessionChipProps = {
   discipline: string;
   status: string;
   hasAthleteComment?: boolean;
-  coachAdvicePresent?: boolean;
   painFlag?: boolean;
   onClick: () => void;
 };
@@ -19,7 +18,6 @@ export function SessionChip({
   discipline,
   status,
   hasAthleteComment = false,
-  coachAdvicePresent = false,
   painFlag = false,
   onClick,
 }: SessionChipProps) {
@@ -42,9 +40,6 @@ export function SessionChip({
       <div className="flex items-center gap-0.5 flex-shrink-0">
         {painFlag && (
           <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
-        )}
-        {coachAdvicePresent && (
-          <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has coach advice" aria-hidden={false} />
         )}
         {hasAthleteComment && (
           <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />

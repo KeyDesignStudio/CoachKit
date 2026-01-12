@@ -588,13 +588,13 @@ async function main() {
       startTime: '05:30',
       duration: 45,
       distance: 9,
-      coachAdvice: 'Focus on easy aerobic pace, HR zone 2',
+      workoutDetail: 'Focus on easy aerobic pace, HR zone 2',
       status: 'completed',
       painFlag: true,
       athleteComment: 'Left knee felt tight during the last 15 minutes',
       reviewed: false,
     },
-    // Tuesday: Completed with coach advice, no pain (unreviewed)
+    // Tuesday: Completed with workout detail, no pain (unreviewed)
     {
       day: 1,
       discipline: 'RUN',
@@ -602,7 +602,7 @@ async function main() {
       startTime: '05:30',
       duration: 60,
       distance: 10,
-      coachAdvice: '6x800m @ 5k pace, 2min rest',
+      workoutDetail: '6x800m @ 5k pace, 2min rest',
       status: 'completed',
       painFlag: false,
       reviewed: false,
@@ -615,7 +615,7 @@ async function main() {
       startTime: '06:00',
       duration: 75,
       distance: 40,
-      coachAdvice: '3x15min @ FTP, 5min recovery',
+      workoutDetail: '3x15min @ FTP, 5min recovery',
       status: 'completed',
       painFlag: true,
       reviewed: true,
@@ -645,7 +645,7 @@ async function main() {
       athleteComment: 'Great session, felt really smooth today',
       reviewed: false,
     },
-    // Saturday: Planned with coach advice
+    // Saturday: Planned with workout detail
     {
       day: 5,
       discipline: 'RUN',
@@ -653,10 +653,10 @@ async function main() {
       startTime: '06:00',
       duration: 90,
       distance: 18,
-      coachAdvice: 'Start easy, negative split the second half',
+      workoutDetail: 'Start easy, negative split the second half',
       status: 'planned',
     },
-    // Sunday: Planned (no advice)
+    // Sunday: Planned (no workout detail)
     {
       day: 6,
       discipline: 'REST',
@@ -688,7 +688,7 @@ async function main() {
         title: session.title,
         plannedDurationMinutes: session.duration,
         plannedDistanceKm: session.distance,
-        notes: session.coachAdvice || null,
+        workoutDetail: session.workoutDetail || null,
         status: calStatus,
         reviewedAt: session.reviewed ? new Date(Date.now() - 24 * 60 * 60 * 1000) : null,
       },
@@ -744,7 +744,7 @@ async function main() {
       startTime: '06:00',
       duration: 50,
       distance: 10,
-      coachAdvice: 'Build to threshold in final 20 minutes',
+      workoutDetail: 'Build to threshold in final 20 minutes',
       status: 'completed',
       painFlag: true,
       reviewed: false,
@@ -782,7 +782,7 @@ async function main() {
       startTime: '06:00',
       duration: 55,
       distance: 11,
-      coachAdvice: 'Play with pace, stay relaxed',
+      workoutDetail: 'Play with pace, stay relaxed',
       status: 'completed',
       painFlag: false,
       reviewed: true,
@@ -800,7 +800,7 @@ async function main() {
       athleteComment: 'Beautiful morning ride, felt great',
       reviewed: false,
     },
-    // Saturday: Planned with coach advice
+    // Saturday: Planned with workout detail
     {
       day: 5,
       discipline: 'SWIM',
@@ -808,10 +808,10 @@ async function main() {
       startTime: '07:00',
       duration: 65,
       distance: 3.8,
-      coachAdvice: 'Include 8x50m sprints with 30sec rest',
+      workoutDetail: 'Include 8x50m sprints with 30sec rest',
       status: 'planned',
     },
-    // Sunday: Planned (no advice)
+    // Sunday: Planned (no workout detail)
     {
       day: 6,
       discipline: 'RUN',
@@ -844,7 +844,7 @@ async function main() {
         title: session.title,
         plannedDurationMinutes: session.duration,
         plannedDistanceKm: session.distance,
-        notes: session.coachAdvice || null,
+        workoutDetail: session.workoutDetail || null,
         status: calStatus,
         reviewedAt: session.reviewed ? new Date(Date.now() - 24 * 60 * 60 * 1000) : null,
       },
@@ -891,10 +891,10 @@ async function main() {
   }
 
   // ============================================================
-  // W1 (Next Week) - DRAFT sessions
+  // W1 (Next Week) - DRAFT workouts
   // ============================================================
 
-  // Athlete 1: W1 - 6 planned sessions
+  // Athlete 1: W1 - 6 planned workouts
   const athlete1NextWeek = [
     {
       day: 0,
@@ -903,7 +903,7 @@ async function main() {
       startTime: '05:30',
       duration: 50,
       distance: 10,
-      coachAdvice: 'Easy aerobic pace',
+      workoutDetail: 'Easy aerobic pace',
     },
     {
       day: 1,
@@ -920,7 +920,7 @@ async function main() {
       startTime: '05:45',
       duration: 60,
       distance: 3.2,
-      coachAdvice: 'Focus on catch and pull',
+      workoutDetail: 'Focus on catch and pull',
     },
     {
       day: 3,
@@ -945,7 +945,7 @@ async function main() {
       startTime: '06:00',
       duration: 95,
       distance: 19,
-      coachAdvice: 'Negative split, finish strong',
+      workoutDetail: 'Negative split, finish strong',
     },
   ];
 
@@ -963,7 +963,7 @@ async function main() {
         title: session.title,
         plannedDurationMinutes: session.duration,
         plannedDistanceKm: session.distance,
-        notes: session.coachAdvice || null,
+        workoutDetail: session.workoutDetail || null,
         status: CalendarItemStatus.PLANNED,
       },
     });
@@ -971,7 +971,7 @@ async function main() {
     stats.athlete1.planned++;
   }
 
-  // Athlete 2: W1 - 5 planned sessions
+  // Athlete 2: W1 - 5 planned workouts
   const athlete2NextWeek = [
     {
       day: 0,
@@ -988,7 +988,7 @@ async function main() {
       startTime: '05:45',
       duration: 55,
       distance: 3,
-      coachAdvice: 'Steady pace, focus on rhythm',
+      workoutDetail: 'Steady pace, focus on rhythm',
     },
     {
       day: 2,
@@ -1005,7 +1005,7 @@ async function main() {
       startTime: '06:00',
       duration: 60,
       distance: 11,
-      coachAdvice: '8x400m @ 5k pace',
+      workoutDetail: '8x400m @ 5k pace',
     },
     {
       day: 6,
@@ -1031,7 +1031,7 @@ async function main() {
         title: session.title,
         plannedDurationMinutes: session.duration,
         plannedDistanceKm: session.distance,
-        notes: session.coachAdvice || null,
+        workoutDetail: session.workoutDetail || null,
         status: CalendarItemStatus.PLANNED,
       },
     });

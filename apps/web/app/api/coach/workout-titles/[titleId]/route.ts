@@ -37,7 +37,7 @@ export async function DELETE(
     });
 
     if (usageCount > 0) {
-      throw new ApiError(409, 'TITLE_IN_USE', 'Cannot delete a title that is used by planned sessions.');
+      throw new ApiError(409, 'TITLE_IN_USE', 'Cannot delete a title that is used by planned workouts.');
     }
 
     await prisma.workoutTitle.delete({ where: { id: record.id } });

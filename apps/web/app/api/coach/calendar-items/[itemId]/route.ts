@@ -28,7 +28,7 @@ const updateSchema = z.object({
   plannedDistanceKm: z.union([z.number().nonnegative().max(1000), z.null()]).optional(),
   intensityType: z.union([z.string().trim().min(1), z.null()]).optional(),
   intensityTargetJson: z.unknown().optional(),
-  notes: z.union([z.string().trim().max(4000), z.null()]).optional(),
+  workoutDetail: z.union([z.string().trim().max(4000), z.null()]).optional(),
   attachmentsJson: z.unknown().optional(),
   status: z.nativeEnum(CalendarItemStatus).optional(),
   templateId: z.union([cuid, z.null()]).optional(),
@@ -118,8 +118,8 @@ export async function PATCH(
       data.intensityTargetJson = payload.intensityTargetJson as Prisma.InputJsonValue;
     }
 
-    if (payload.notes !== undefined) {
-      data.notes = payload.notes;
+    if (payload.workoutDetail !== undefined) {
+      data.workoutDetail = payload.workoutDetail;
     }
 
     if (payload.attachmentsJson !== undefined) {

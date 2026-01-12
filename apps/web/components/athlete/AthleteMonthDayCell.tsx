@@ -46,7 +46,7 @@ export function AthleteMonthDayCell({
   const visible = sortedItems.slice(0, MAX_VISIBLE_ROWS);
   const remainingCount = Math.max(0, sortedItems.length - MAX_VISIBLE_ROWS);
   const addEnabled = !!onAddClick && canAdd;
-  const addLabel = addEnabled ? 'Add session' : 'Select single athlete to add session';
+  const addLabel = addEnabled ? 'Add workout' : 'Select single athlete to add workout';
 
   return (
     <div
@@ -108,14 +108,14 @@ export function AthleteMonthDayCell({
         </div>
       </div>
 
-      {/* B) Body: stacked session rows (max 3) */}
+      {/* B) Body: stacked workout rows (max 3) */}
       <div className="flex flex-col gap-1">
         {visible.map((item) => {
           const visual = getSessionStatusVisual(item, { now: new Date(), timeZone: athleteTimezone });
           const statusIcon = visual.overlay;
           const missedTitle =
             statusIcon === 'missed'
-              ? 'Missed session – this workout was planned but not completed'
+              ? 'Missed workout – this workout was planned but not completed'
               : undefined;
 
           return (
@@ -132,7 +132,7 @@ export function AthleteMonthDayCell({
                 // Avoid stacking multiple white cards inside the day cell card.
                 'bg-transparent hover:bg-[var(--bg-structure)] cursor-default'
               )}
-              aria-label={`Open session ${item.id}`}
+              aria-label={`Open workout ${item.id}`}
             >
               <span className={cn('text-[16px] leading-none flex-shrink-0', visual.iconColor)}>
                 <Icon name={visual.icon} size="sm" className={cn('text-[16px] leading-none', CALENDAR_ACTION_ICON_CLASS)} />

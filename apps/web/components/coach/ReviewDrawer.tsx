@@ -27,7 +27,7 @@ type ReviewItem = {
   plannedStartTimeLocal: string | null;
   plannedDurationMinutes: number | null;
   plannedDistanceKm: number | null;
-  notes: string | null;
+  workoutDetail: string | null;
   status: string;
   latestCompletedActivity: {
     id: string;
@@ -126,14 +126,13 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
             </dl>
           </section>
 
-          {/* Coach Advice */}
-          {item.notes && (
+          {/* Workout Detail */}
+          {item.workoutDetail && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} />
-                Coach Advice
+                Workout Detail
               </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.notes}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.workoutDetail}</p>
             </section>
           )}
 

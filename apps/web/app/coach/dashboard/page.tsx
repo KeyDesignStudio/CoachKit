@@ -35,7 +35,7 @@ type ReviewItem = {
   plannedStartTimeLocal: string | null;
   plannedDurationMinutes: number | null;
   plannedDistanceKm: number | null;
-  notes: string | null;
+  workoutDetail: string | null;
   status: string;
   latestCompletedActivity: {
     id: string;
@@ -52,7 +52,6 @@ type ReviewItem = {
   comments: CommentRecord[];
   hasAthleteComment: boolean;
   commentCount: number;
-  coachAdvicePresent: boolean;
   actionTime: string;
   actionDateKey: string;
 };
@@ -484,7 +483,7 @@ export default function CoachDashboardPage() {
 
       {items.length === 0 && !loading ? (
         <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
-          <p className="text-lg text-[var(--muted)]">No sessions awaiting review.</p>
+          <p className="text-lg text-[var(--muted)]">No workouts awaiting review.</p>
         </div>
       ) : null}
 
@@ -511,7 +510,7 @@ export default function CoachDashboardPage() {
 
           {items.length > 0 && filteredItems.length === 0 ? (
             <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
-              <p className="text-sm text-[var(--muted)]">No sessions awaiting review for this athlete.</p>
+              <p className="text-sm text-[var(--muted)]">No workouts awaiting review for this athlete.</p>
             </div>
           ) : null}
 
@@ -764,7 +763,7 @@ export default function CoachDashboardPage() {
 
           {visibleMonthItemCount === 0 ? (
             <div className="px-6 py-10 text-center">
-              <p className="text-sm text-[var(--muted)]">No unreviewed sessions for this athlete in this month.</p>
+              <p className="text-sm text-[var(--muted)]">No unreviewed workouts for this athlete in this month.</p>
             </div>
           ) : null}
 

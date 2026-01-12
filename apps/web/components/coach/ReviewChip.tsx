@@ -10,7 +10,6 @@ type ReviewChipProps = {
   title: string;
   discipline: string;
   hasAthleteComment: boolean;
-  coachAdvicePresent: boolean;
   painFlag?: boolean;
   onClick: () => void;
   onQuickReview?: () => void;
@@ -21,7 +20,6 @@ export function ReviewChip({
   title,
   discipline,
   hasAthleteComment,
-  coachAdvicePresent,
   painFlag = false,
   onClick,
   onQuickReview,
@@ -54,9 +52,6 @@ export function ReviewChip({
         <div className="flex items-center gap-1 flex-shrink-0">
           {painFlag && (
             <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
-          )}
-          {coachAdvicePresent && (
-            <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has coach advice" aria-hidden={false} />
           )}
           {hasAthleteComment && (
             <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />

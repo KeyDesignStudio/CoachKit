@@ -14,12 +14,11 @@ type CalendarItem = {
   plannedStartTimeLocal: string | null;
   discipline: string;
   status: string;
-  notes: string | null;
+  workoutDetail: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
   } | null;
   hasAthleteComment?: boolean;
-  coachAdvicePresent?: boolean;
 };
 
 type CalendarItemDrawerProps = {
@@ -67,14 +66,13 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
             </button>
           </div>
 
-          {/* Coach Advice */}
-          {item.coachAdvicePresent && item.notes && (
+          {/* Workout Detail */}
+          {item.workoutDetail && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} />
-                Coach Advice
+                Workout Detail
               </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.notes}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.workoutDetail}</p>
             </section>
           )}
 

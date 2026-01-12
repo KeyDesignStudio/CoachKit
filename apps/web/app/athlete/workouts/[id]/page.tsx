@@ -36,7 +36,7 @@ type CalendarItem = {
   plannedStartTimeLocal: string | null;
   discipline: string;
   status: string;
-  notes?: string | null;
+  workoutDetail?: string | null;
   template?: { id: string; title: string } | null;
   groupSession?: { id: string; title: string } | null;
   comments?: Array<{ id: string; authorId: string; body: string; createdAt: string }>;
@@ -246,7 +246,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left column: Coach context (5/12) */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Session header card */}
+            {/* Workout header card */}
             <Card className="rounded-3xl" data-athlete-workout-header-version="right-status-v1">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -283,14 +283,13 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               ) : null}
             </Card>
 
-            {/* Coach advice card (only if present) */}
-            {item.notes ? (
+            {/* Workout detail card (only if present) */}
+            {item.workoutDetail ? (
               <Card className="rounded-3xl">
                 <div className="flex items-start gap-2">
-                  <Icon name="coachAdvice" size="xs" className="text-amber-600 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Coach advice</p>
-                    <p className="mt-1 text-sm text-[var(--text)]">{item.notes}</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Workout Detail</p>
+                    <p className="mt-1 text-sm text-[var(--text)]">{item.workoutDetail}</p>
                   </div>
                 </div>
               </Card>
@@ -465,7 +464,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                         onChange={(event) => setCompletionForm({ ...completionForm, painFlag: event.target.checked })}
                         className="w-4 h-4 rounded border-white/30 text-rose-500 focus:ring-2 focus:ring-rose-500/50"
                       />
-                      <span className="text-[var(--text)]">Felt pain or discomfort during this session</span>
+                      <span className="text-[var(--text)]">Felt pain or discomfort during this workout</span>
                     </label>
 
                     <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">

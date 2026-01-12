@@ -219,7 +219,7 @@ model CalendarItem {
   plannedDistanceKm      Float?
   intensityType          String?
   intensityTargetJson    Json?
-  notes                  String?
+  workoutDetail          String?
   attachmentsJson        Json?
   status                 CalendarItemStatus @default(PLANNED)
   templateId             String?

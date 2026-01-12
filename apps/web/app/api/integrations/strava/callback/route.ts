@@ -70,7 +70,7 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL('/access-denied', url.origin));
       }
     } catch {
-      // Allow completion without a live session; state is one-time and DB-bound.
+      // Allow completion without a live login session; state is one-time and DB-bound.
     }
 
     if (stravaError) {

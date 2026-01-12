@@ -8,7 +8,6 @@ type WorkoutCardProps = {
   time: string | null;
   title: string;
   discipline: string;
-  hasAdvice: boolean;
   painFlag?: boolean;
   onClick: () => void;
 };
@@ -21,7 +20,7 @@ function getDisciplineLabel(discipline: string): string {
   return d.slice(0, 5);
 }
 
-export function WorkoutCard({ time, title, discipline, hasAdvice, painFlag = false, onClick }: WorkoutCardProps) {
+export function WorkoutCard({ time, title, discipline, painFlag = false, onClick }: WorkoutCardProps) {
   const theme = getDisciplineTheme(discipline);
   const disciplineLabel = getDisciplineLabel(discipline);
 
@@ -52,7 +51,6 @@ export function WorkoutCard({ time, title, discipline, hasAdvice, painFlag = fal
         {/* Indicators (right-aligned) */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {painFlag ? <Icon name="painFlag" size="xs" className={`leading-none text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="xs" className={`leading-none text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} /> : null}
           <span className="w-[13px]" />
         </div>
       </div>

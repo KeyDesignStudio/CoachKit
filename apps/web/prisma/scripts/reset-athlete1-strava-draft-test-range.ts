@@ -113,7 +113,7 @@ async function main() {
       plannedDurationMinutes: 60,
       plannedDistanceKm: null,
       intensityType: null,
-      notes: null,
+      workoutDetail: null,
       status: CalendarItemStatus.PLANNED,
       templateId: null,
       groupSessionId: null,

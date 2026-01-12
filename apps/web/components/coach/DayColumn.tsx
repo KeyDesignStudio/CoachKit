@@ -38,7 +38,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
                 type="button"
                 onClick={onAddClick}
                 className="w-full min-h-[64px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] text-center text-sm text-[var(--muted)] transition-colors"
-                aria-label="Add session"
+                aria-label="Add workout"
               >
                 No workouts
               </button>
@@ -72,7 +72,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
                 type="button"
                 onClick={onAddClick}
                 className="w-full min-h-[64px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] text-center text-sm text-[var(--muted)] transition-colors"
-                aria-label="Add session"
+                aria-label="Add workout"
               >
                 No workouts
               </button>

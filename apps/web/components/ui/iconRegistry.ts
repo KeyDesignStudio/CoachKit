@@ -15,7 +15,6 @@ export const ICON_NAMES = [
   'disciplineOther',
   
   // Coaching / feedback metadata
-  'coachAdvice',
   'athleteComment',
   'anyComment',
   'attachment',
@@ -62,7 +61,6 @@ export const ICONS: Record<IconName, string> = {
   disciplineOther: 'star',
   
   // Coaching / feedback metadata
-  coachAdvice: 'lightbulb',
   athleteComment: 'chat_bubble',
   anyComment: 'forum',
   attachment: 'attach_file',

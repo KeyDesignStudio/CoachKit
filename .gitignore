@@ -50,6 +50,9 @@ Thumbs.db
 logs
 *.log
 
+# Screenshots (generated proof artifacts)
+screenshots/
+
 # Database
 *.db
 *.sqlite

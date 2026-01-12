@@ -10,7 +10,7 @@ import { addDays, toDateInput } from '@/lib/client-date';
 
 export const dynamic = 'force-dynamic';
 
-type PreviewSession = {
+type PreviewWorkout = {
   id: string;
   date: string;
   plannedStartTimeLocal: string | null;
@@ -19,7 +19,7 @@ type PreviewSession = {
   title: string;
 };
 
-function buildPreviewItems(now: Date): PreviewSession[] {
+function buildPreviewItems(now: Date): PreviewWorkout[] {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
@@ -33,7 +33,7 @@ function buildPreviewItems(now: Date): PreviewSession[] {
   const d3Str = toDateInput(inThreeDays);
 
   return [
-    // Multiple sessions today (planned + draft + submitted)
+    // Multiple workouts today (planned + draft + submitted)
     { id: 'sess-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
     { id: 'sess-today-2', date: todayStr, plannedStartTimeLocal: '12:00', discipline: 'BIKE', status: 'COMPLETED_SYNCED_DRAFT', title: 'Trainer ride' },
     { id: 'sess-today-3', date: todayStr, plannedStartTimeLocal: '18:15', discipline: 'SWIM', status: 'COMPLETED_SYNCED', title: 'Main set' },
@@ -47,14 +47,14 @@ function buildPreviewItems(now: Date): PreviewSession[] {
     // Explicit REST
     { id: 'sess-rest-1', date: d3Str, plannedStartTimeLocal: null, discipline: 'REST', status: 'PLANNED', title: 'Rest' },
 
-    // Overflow day: lots of sessions today to confirm clipping
+    // Overflow day: lots of workouts today to confirm clipping
     ...Array.from({ length: 12 }).map((_, i) => ({
       id: `sess-today-overflow-${i + 1}`,
       date: todayStr,
       plannedStartTimeLocal: `0${(i % 9) + 1}:00`,
       discipline: i % 2 === 0 ? 'RUN' : 'BIKE',
       status: 'PLANNED',
-      title: `Session ${i + 1}`,
+      title: `Workout ${i + 1}`,
     })),
   ];
 }
@@ -65,7 +65,7 @@ export default function DevMonthPreviewPage() {
   if (process.env.NEXT_PUBLIC_SHOW_DEV_PAGES !== 'true') notFound();
 
   const now = useMemo(() => new Date('2026-01-03T10:00:00.000Z'), []);
-  const [selected, setSelected] = useState<{ kind: 'day' | 'session'; value: string } | null>(null);
+  const [selected, setSelected] = useState<{ kind: 'day' | 'workout'; value: string } | null>(null);
 
   const previewItems = useMemo(() => buildPreviewItems(now), [now]);
 
@@ -82,7 +82,7 @@ export default function DevMonthPreviewPage() {
       return new Date(month.year, month.month, 1 + mondayOffset);
     })();
 
-    const byDate: Record<string, PreviewSession[]> = {};
+    const byDate: Record<string, PreviewWorkout[]> = {};
     for (const item of previewItems) {
       byDate[item.date] ??= [];
       byDate[item.date].push(item);
@@ -130,7 +130,7 @@ export default function DevMonthPreviewPage() {
               isCurrentMonth={day.isCurrentMonth}
               isToday={day.isToday}
               onDayClick={(d) => setSelected({ kind: 'day', value: toDateInput(d) })}
-              onItemClick={(id) => setSelected({ kind: 'session', value: id })}
+              onItemClick={(id) => setSelected({ kind: 'workout', value: id })}
             />
           ))}
         </MonthGrid>
