@@ -22,6 +22,7 @@ type AthleteMonthDayCellProps = {
   athleteTimezone?: string;
   onDayClick: (date: Date) => void;
   onItemClick: (itemId: string) => void;
+  onAddClick?: (date: Date) => void;
 };
 
 const MAX_VISIBLE_ROWS = 3;
@@ -35,6 +36,7 @@ export function AthleteMonthDayCell({
   athleteTimezone = 'Australia/Brisbane',
   onDayClick,
   onItemClick,
+  onAddClick,
 }: AthleteMonthDayCellProps) {
   const dayNumber = date.getDate();
   const sortedItems = sortSessionsForDay(items, athleteTimezone);
@@ -44,11 +46,13 @@ export function AthleteMonthDayCell({
   return (
     <div
       data-athlete-month-day-cell="v2"
+      onClick={onAddClick ? () => onAddClick(date) : undefined}
       className={cn(
         'flex flex-col gap-2 p-2 min-h-[120px] text-left',
         'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
+        onAddClick ? 'cursor-pointer' : '',
         !isCurrentMonth ? 'opacity-70' : '',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
       )}
@@ -57,7 +61,11 @@ export function AthleteMonthDayCell({
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => onDayClick(date)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDayClick(date);
+          }}
           className={cn(
             'h-6 min-w-6 px-1 rounded text-xs',
             'bg-[var(--bg-structure)] hover:bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
@@ -86,7 +94,11 @@ export function AthleteMonthDayCell({
             <button
               key={item.id}
               type="button"
-              onClick={() => onItemClick(item.id)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onItemClick(item.id);
+              }}
               className={cn(
                 'w-full flex items-center gap-1 rounded-md px-1.5 py-1 text-left',
                 // Avoid stacking multiple white cards inside the day cell card.
@@ -131,7 +143,11 @@ export function AthleteMonthDayCell({
         {remainingCount > 0 ? (
           <button
             type="button"
-            onClick={() => onDayClick(date)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDayClick(date);
+            }}
             className="rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-structure)]"
             aria-label={`Open day ${dateStr} (${remainingCount} more)`}
           >

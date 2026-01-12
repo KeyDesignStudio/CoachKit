@@ -244,6 +244,11 @@ export default function AthleteCalendarPage() {
     setWeekStart(startOfWeek(date));
   };
 
+  const canAthleteAddSessions = false;
+  const handleAddAttempt = useCallback(() => {
+    setError('Only coaches can add sessions.');
+  }, []);
+
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
   }
@@ -334,6 +339,7 @@ export default function AthleteCalendarPage() {
                   formattedDate={day.formatted}
                   isEmpty={dayItems.length === 0}
                   isToday={isToday(dayDate)}
+                  onBodyClick={canAthleteAddSessions ? () => handleAddAttempt() : handleAddAttempt}
                 >
                   {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
                     <AthleteWeekSessionRow
@@ -361,6 +367,7 @@ export default function AthleteCalendarPage() {
                 isToday={isToday(day.date)}
                 athleteTimezone={athleteTimezone}
                 onDayClick={handleDayClick}
+                onAddClick={canAthleteAddSessions ? handleAddAttempt : handleAddAttempt}
                 onItemClick={handleItemIdClick}
               />
             ))}

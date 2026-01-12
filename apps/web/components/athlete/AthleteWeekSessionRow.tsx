@@ -76,7 +76,11 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
       data-athlete-week-session-row="v2"
       className={cn(
         'w-full cursor-pointer text-left',

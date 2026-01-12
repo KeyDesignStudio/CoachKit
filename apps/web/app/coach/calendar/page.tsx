@@ -897,6 +897,7 @@ export default function CoachCalendarPage() {
                       formattedDate={day.formattedDate}
                       isEmpty={false}
                       isToday={isToday(new Date(day.date))}
+                      onBodyClick={() => openCreateDrawer(day.date)}
                     >
                       {day.items.map((item) => (
                         <AthleteWeekSessionRow
@@ -906,14 +907,6 @@ export default function CoachCalendarPage() {
                           onClick={() => openEditDrawer(item)}
                         />
                       ))}
-                      {day.items.length === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => openCreateDrawer(day.date)}
-                          className="w-full min-h-[96px] rounded-md bg-transparent hover:bg-[var(--bg-surface)] transition-colors"
-                          aria-label={`Add session on ${day.date}`}
-                        />
-                      ) : null}
                     </AthleteWeekDayColumn>
                   ))
                 : weekDays.map((day) => {
@@ -951,14 +944,26 @@ export default function CoachCalendarPage() {
                             );
 
                             return (
-                              <div key={athlete.userId} className="min-w-0">
+                              <div
+                                key={athlete.userId}
+                                className="min-w-0 cursor-pointer"
+                                onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openCreateDrawerForAthlete(athlete.userId, dateKey);
+                                  }
+                                }}
+                              >
                                 <div className="py-1">
                                   <div className="text-[11px] font-medium text-[var(--muted)] truncate">
                                     {athlete.user.name || athlete.userId}
                                   </div>
                                 </div>
 
-                                <div className="flex flex-col gap-1">
+                                <div className="flex flex-col gap-1 min-h-[28px]">
                                   {dayItems.map((item) => (
                                     <AthleteWeekSessionRow
                                       key={item.id}
@@ -968,15 +973,6 @@ export default function CoachCalendarPage() {
                                       variant="stacked"
                                     />
                                   ))}
-
-                                  {dayItems.length === 0 ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                      className="w-full min-h-[28px] rounded-md bg-transparent hover:bg-[var(--bg-structure)] transition-colors"
-                                      aria-label={`Add session for ${athlete.user.name || athlete.userId} on ${dateKey}`}
-                                    />
-                                  ) : null}
                                 </div>
 
                                 {index < selected.length - 1 ? (
@@ -1003,6 +999,13 @@ export default function CoachCalendarPage() {
                   isCurrentMonth={day.isCurrentMonth}
                   isToday={isToday(day.date)}
                   onDayClick={(date) => {
+                    if (!singleAthleteId) {
+                      setError('Select a single athlete to add sessions in month view.');
+                      return;
+                    }
+                    openCreateDrawer(toDateInput(date));
+                  }}
+                  onAddClick={(date) => {
                     if (!singleAthleteId) {
                       setError('Select a single athlete to add sessions in month view.');
                       return;

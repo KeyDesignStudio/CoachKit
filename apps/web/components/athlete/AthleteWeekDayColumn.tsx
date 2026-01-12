@@ -9,6 +9,7 @@ type AthleteWeekDayColumnProps = {
   isEmpty: boolean;
   onHeaderClick?: () => void;
   onEmptyClick?: () => void;
+  onBodyClick?: () => void;
   density?: 'default' | 'compact';
   children: ReactNode;
 };
@@ -20,6 +21,7 @@ export function AthleteWeekDayColumn({
   isEmpty,
   onHeaderClick,
   onEmptyClick,
+  onBodyClick,
   density = 'default',
   children,
 }: AthleteWeekDayColumnProps) {
@@ -28,7 +30,10 @@ export function AthleteWeekDayColumn({
       ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5'
       : 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2';
 
-  const bodyClassName = density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2';
+  const bodyClassName = cn(
+    density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2',
+    onBodyClick ? 'cursor-pointer transition-colors hover:bg-[var(--bg-surface)]' : ''
+  );
 
   return (
     <div
@@ -64,7 +69,22 @@ export function AthleteWeekDayColumn({
         </div>
       )}
 
-      <div className={bodyClassName}>
+      <div
+        className={bodyClassName}
+        onClick={onBodyClick}
+        role={onBodyClick ? 'button' : undefined}
+        tabIndex={onBodyClick ? 0 : undefined}
+        onKeyDown={
+          onBodyClick
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onBodyClick();
+                }
+              }
+            : undefined
+        }
+      >
         {children}
         {isEmpty ? (
           onEmptyClick ? (
