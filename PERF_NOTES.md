@@ -115,3 +115,30 @@ Approx JSON sizes from the same script:
 - Review inbox (trimmed `select`, 10 comments max): ~7.6KB
 - Review inbox (include-heavy “old-ish” query): ~8.4KB
 - Coach calendar: ~10.5KB (roughly unchanged in this dataset)
+
+## Phase 4 – Persist actionAt for inbox grouping
+
+### Problem
+`actionDateKey` was computed in API/UI, so the DB couldn’t index grouping/order. Inbox grouping (“Today / Yesterday / Earlier”) was therefore slower and less predictable at scale.
+
+### What changed
+- Added `CalendarItem.actionAt` (persisted athlete action timestamp).
+- Set `actionAt` at the moment of athlete action:
+  - `COMPLETED_MANUAL` -> `now()`
+  - `COMPLETED_SYNCED` -> `effectiveStartTimeUtc` (fallback `now()`)
+  - `SKIPPED` -> `now()`
+- Backfilled `actionAt` for existing acted rows.
+- Added index: `(coachId, reviewedAt, actionAt)`.
+- Coach inbox now groups by `actionAt` in coach timezone client-side.
+
+### Why this matters
+- DB can now efficiently filter: `coachId` + `reviewedAt IS NULL`.
+- DB can now efficiently sort by `actionAt` (or at least avoid scanning/CPU-heavy post-processing).
+- Removes reliance on computed grouping keys and reduces CPU work in API/UI.
+
+### Before/after timings
+Not yet measured.
+
+How to measure:
+- Enable dev timings: `COACHKIT_PROFILE_API=1`.
+- Load `/coach/dashboard` and use Refresh; compare `/api/coach/review-inbox` latency logs and overall dashboard load time.
