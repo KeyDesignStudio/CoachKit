@@ -59,6 +59,90 @@ type ReviewItem = {
 
 type ViewMode = 'list' | 'calendar';
 
+function ReviewInboxRow({
+  item,
+  isChecked,
+  onToggleSelected,
+  onOpen,
+}: {
+  item: ReviewItem;
+  isChecked: boolean;
+  onToggleSelected: (id: string, checked: boolean) => void;
+  onOpen: (item: ReviewItem) => void;
+}) {
+  const theme = getDisciplineTheme(item.discipline);
+  const athleteName = item.athlete?.name ?? 'Unknown athlete';
+  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
+  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
+  const isSkipped = item.status === 'SKIPPED';
+  const statusText = item.status.replace(/_/g, ' ');
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 min-w-0">
+      <input
+        type="checkbox"
+        className="h-4 w-4 accent-blue-600"
+        checked={isChecked}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          e.stopPropagation();
+          onToggleSelected(item.id, e.target.checked);
+        }}
+        aria-label={`Select ${athleteName} - ${item.title}`}
+      />
+
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        className="flex items-center gap-2 min-w-0 flex-1 text-left"
+      >
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          <span className="min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
+          <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
+        </div>
+
+        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+          <span className={cn('text-xs uppercase text-[var(--muted)] font-medium', theme.textClass)}>{disciplineLabel}</span>
+        </div>
+
+        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+          <span className="text-xs uppercase text-[var(--muted)]">{statusText}</span>
+          <div className="flex items-center gap-1">
+            {item.hasAthleteComment ? (
+              <Icon
+                name="athleteComment"
+                size="xs"
+                className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`}
+                aria-label="Has athlete comment"
+                aria-hidden={false}
+              />
+            ) : null}
+            {painFlag ? (
+              <Icon
+                name="painFlag"
+                size="xs"
+                className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`}
+                aria-label="Pain flagged"
+                aria-hidden={false}
+              />
+            ) : null}
+            {isSkipped ? (
+              <Icon
+                name="skipped"
+                size="xs"
+                className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`}
+                aria-label="Skipped"
+                aria-hidden={false}
+              />
+            ) : null}
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 function SelectAllGroupHeader({
   title,
   count,
@@ -582,52 +666,15 @@ export default function CoachDashboardPage() {
               />
               <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
                 {groupedListItems.today.map((item) => {
-                  const theme = getDisciplineTheme(item.discipline);
-                  const athleteName = item.athlete?.name ?? 'Unknown athlete';
-                  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
                   const isChecked = selectedIds.has(item.id);
-                  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
-                  const isSkipped = item.status === 'SKIPPED';
                   return (
-                    <div key={item.id} className="flex items-start gap-3 px-3 py-3">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 accent-blue-600"
-                        checked={isChecked}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleToggleSelected(item.id, e.target.checked);
-                        }}
-                        aria-label={`Select ${athleteName} - ${item.title}`}
-                      />
-                      <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
-                            <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
-                            <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
-                              <span className="inline-flex items-center gap-1">
-                                <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                                <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
-                              </span>
-                              <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
-                            {item.hasAthleteComment ? (
-                              <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
-                            ) : null}
-                            {painFlag ? (
-                              <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
-                            ) : null}
-                            {isSkipped ? (
-                              <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
-                            ) : null}
-                          </div>
-                        </div>
-                      </button>
-                    </div>
+                    <ReviewInboxRow
+                      key={item.id}
+                      item={item}
+                      isChecked={isChecked}
+                      onToggleSelected={handleToggleSelected}
+                      onOpen={setSelectedItem}
+                    />
                   );
                 })}
               </div>
@@ -645,52 +692,15 @@ export default function CoachDashboardPage() {
               />
               <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] divide-y divide-[var(--border-subtle)]">
                 {groupedListItems.yesterday.map((item) => {
-                  const theme = getDisciplineTheme(item.discipline);
-                  const athleteName = item.athlete?.name ?? 'Unknown athlete';
-                  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
                   const isChecked = selectedIds.has(item.id);
-                  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
-                  const isSkipped = item.status === 'SKIPPED';
                   return (
-                    <div key={item.id} className="flex items-start gap-3 px-3 py-3">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 accent-blue-600"
-                        checked={isChecked}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleToggleSelected(item.id, e.target.checked);
-                        }}
-                        aria-label={`Select ${athleteName} - ${item.title}`}
-                      />
-                      <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
-                            <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
-                            <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
-                              <span className="inline-flex items-center gap-1">
-                                <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                                <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
-                              </span>
-                              <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
-                            {item.hasAthleteComment ? (
-                              <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
-                            ) : null}
-                            {painFlag ? (
-                              <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
-                            ) : null}
-                            {isSkipped ? (
-                              <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
-                            ) : null}
-                          </div>
-                        </div>
-                      </button>
-                    </div>
+                    <ReviewInboxRow
+                      key={item.id}
+                      item={item}
+                      isChecked={isChecked}
+                      onToggleSelected={handleToggleSelected}
+                      onOpen={setSelectedItem}
+                    />
                   );
                 })}
               </div>
@@ -722,52 +732,15 @@ export default function CoachDashboardPage() {
                       </div>
                       <div className="divide-y divide-[var(--border-subtle)]">
                         {dayItems.map((item) => {
-                          const theme = getDisciplineTheme(item.discipline);
-                          const athleteName = item.athlete?.name ?? 'Unknown athlete';
-                          const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
                           const isChecked = selectedIds.has(item.id);
-                          const painFlag = item.latestCompletedActivity?.painFlag ?? false;
-                          const isSkipped = item.status === 'SKIPPED';
                           return (
-                            <div key={item.id} className="flex items-start gap-3 px-3 py-3">
-                              <input
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 accent-blue-600"
-                                checked={isChecked}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleSelected(item.id, e.target.checked);
-                                }}
-                                aria-label={`Select ${athleteName} - ${item.title}`}
-                              />
-                              <button type="button" onClick={() => setSelectedItem(item)} className="flex-1 min-w-0 text-left">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-[var(--text)] truncate">{athleteName}</p>
-                                    <p className="text-xs text-[var(--text)] truncate mt-0.5">{item.title}</p>
-                                    <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--muted)]">
-                                      <span className="inline-flex items-center gap-1">
-                                        <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                                        <span className={cn('font-medium', theme.textClass)}>{disciplineLabel}</span>
-                                      </span>
-                                      <Badge className="hidden sm:inline-flex">{item.status.replace(/_/g, ' ')}</Badge>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
-                                    {item.hasAthleteComment ? (
-                                      <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
-                                    ) : null}
-                                    {painFlag ? (
-                                      <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
-                                    ) : null}
-                                    {isSkipped ? (
-                                      <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </button>
-                            </div>
+                            <ReviewInboxRow
+                              key={item.id}
+                              item={item}
+                              isChecked={isChecked}
+                              onToggleSelected={handleToggleSelected}
+                              onOpen={setSelectedItem}
+                            />
                           );
                         })}
                       </div>
