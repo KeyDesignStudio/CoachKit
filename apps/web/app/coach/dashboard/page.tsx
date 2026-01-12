@@ -94,12 +94,10 @@ function ReviewInboxRow({
       <button
         type="button"
         onClick={() => onOpen(item)}
-        className="flex items-center gap-2 min-w-0 flex-1 text-left"
+        className="flex items-center gap-2 min-w-0 flex-1 text-left justify-start"
       >
-        <div className="min-w-0 flex-1 flex items-center gap-2">
-          <span className="min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
-          <span className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
-        </div>
+        <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
+        <span className="block min-w-0 max-w-[45%] truncate text-sm text-[var(--text)]">{item.title}</span>
 
         <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
           <Icon name={theme.iconName} size="sm" className={theme.textClass} />
