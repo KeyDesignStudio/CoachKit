@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate --schema prisma/schema.prisma && next build",
+    "build": "node scripts/build.mjs",
+    "vercel-build": "node scripts/build.mjs",
     "start": "next start",
     "postinstall": "prisma generate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate",
