@@ -84,7 +84,7 @@ export async function POST(
 
       const updatedItem = await tx.calendarItem.update({
         where: { id: item.id },
-        data: { status: CalendarItemStatus.COMPLETED_MANUAL },
+        data: { status: CalendarItemStatus.COMPLETED_MANUAL, actionAt: completedActivity.createdAt },
         include: includeRefs,
       });
 

@@ -49,7 +49,7 @@ export async function POST(
       if (item.status !== CalendarItemStatus.SKIPPED) {
         const updated = await tx.calendarItem.update({
           where: { id: item.id },
-          data: { status: CalendarItemStatus.SKIPPED },
+          data: { status: CalendarItemStatus.SKIPPED, actionAt: new Date() },
           include: includeRefs,
         });
         if (payload.commentBody && payload.commentBody.trim().length > 0) {

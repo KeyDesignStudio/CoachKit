@@ -225,6 +225,7 @@ model CalendarItem {
   templateId             String?
   groupSessionId         String?
   reviewedAt             DateTime?
+  actionAt               DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -240,6 +241,7 @@ model CalendarItem {
   @@index([coachId, date])
   @@index([coachId, athleteId, date])
   @@index([reviewedAt])
+  @@index([coachId, reviewedAt, actionAt])
   @@index([status])
   @@index([coachId, reviewedAt, status])
 }

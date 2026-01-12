@@ -66,6 +66,8 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
         select: {
           id: true,
           confirmedAt: true,
+          startTime: true,
+          metricsJson: true,
         },
       });
 
@@ -95,11 +97,21 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
         data: completionUpdate,
       });
 
+      let actionAt: Date | null = null;
+      const candidate = (completion as any).metricsJson?.strava?.startDateUtc;
+      if (typeof candidate === 'string' && candidate.length > 0) {
+        const parsed = new Date(candidate);
+        if (!Number.isNaN(parsed.getTime())) actionAt = parsed;
+      }
+      if (!actionAt) {
+        actionAt = completion.startTime ?? new Date();
+      }
+
       // Ensure the calendar item is now coach-visible as completed.
-      if (item.status !== CalendarItemStatus.COMPLETED_SYNCED) {
+      if (item.status !== CalendarItemStatus.COMPLETED_SYNCED || item.actionAt == null) {
         await tx.calendarItem.update({
           where: { id: item.id },
-          data: { status: CalendarItemStatus.COMPLETED_SYNCED },
+          data: { status: CalendarItemStatus.COMPLETED_SYNCED, actionAt },
         });
       }
 

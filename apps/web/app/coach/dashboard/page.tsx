@@ -33,6 +33,7 @@ type ReviewItem = {
   id: string;
   title: string;
   date: string;
+  actionAt: string;
   discipline: string;
   plannedStartTimeLocal: string | null;
   plannedDurationMinutes: number | null;
@@ -54,8 +55,6 @@ type ReviewItem = {
   comments: CommentRecord[];
   hasAthleteComment: boolean;
   commentCount: number;
-  actionTime: string;
-  actionDateKey: string;
 };
 
 type ViewMode = 'list' | 'calendar';
@@ -154,6 +153,25 @@ function getAthletePrefix(name?: string | null): string {
   const first = parts[0];
   const lastInitial = parts[parts.length - 1]?.[0];
   return lastInitial ? `${first} ${lastInitial}.` : first;
+}
+
+function getDateKeyInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 export default function CoachDashboardPage() {
@@ -306,31 +324,35 @@ export default function CoachDashboardPage() {
     const yesterday: ReviewItem[] = [];
     const earlier: ReviewItem[] = [];
 
+    const coachTz = user?.timezone ?? 'UTC';
+
     filteredItems.forEach((item) => {
-      if (todayKey && item.actionDateKey === todayKey) {
+      const actionDateKey = getDateKeyInTimeZone(new Date(item.actionAt), coachTz);
+      if (todayKey && actionDateKey === todayKey) {
         today.push(item);
         return;
       }
-      if (yesterdayKey && item.actionDateKey === yesterdayKey) {
+      if (yesterdayKey && actionDateKey === yesterdayKey) {
         yesterday.push(item);
         return;
       }
       earlier.push(item);
     });
 
-    const sortByActionTimeDesc = (a: ReviewItem, b: ReviewItem) =>
-      new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime();
+    const sortByActionAtDesc = (a: ReviewItem, b: ReviewItem) =>
+      new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime();
 
-    today.sort(sortByActionTimeDesc);
-    yesterday.sort(sortByActionTimeDesc);
-    earlier.sort(sortByActionTimeDesc);
+    today.sort(sortByActionAtDesc);
+    yesterday.sort(sortByActionAtDesc);
+    earlier.sort(sortByActionAtDesc);
 
     const earlierByDate = new Map<string, ReviewItem[]>();
     earlier.forEach((item) => {
-      if (!earlierByDate.has(item.actionDateKey)) earlierByDate.set(item.actionDateKey, []);
-      earlierByDate.get(item.actionDateKey)!.push(item);
+      const actionDateKey = getDateKeyInTimeZone(new Date(item.actionAt), coachTz);
+      if (!earlierByDate.has(actionDateKey)) earlierByDate.set(actionDateKey, []);
+      earlierByDate.get(actionDateKey)!.push(item);
     });
-    Array.from(earlierByDate.values()).forEach((arr) => arr.sort(sortByActionTimeDesc));
+    Array.from(earlierByDate.values()).forEach((arr) => arr.sort(sortByActionAtDesc));
 
     const earlierDateKeys = Array.from(earlierByDate.keys()).sort((a, b) => b.localeCompare(a));
 
@@ -340,7 +362,7 @@ export default function CoachDashboardPage() {
       earlierByDate,
       earlierDateKeys,
     };
-  }, [filteredItems, todayKey, yesterdayKey]);
+  }, [filteredItems, todayKey, yesterdayKey, user?.timezone]);
 
   const monthDays = useMemo(() => {
     return getMonthGridDaysUtc(calendarMonth.year, calendarMonth.month);
@@ -361,15 +383,17 @@ export default function CoachDashboardPage() {
 
   const itemsByActionDate = useMemo(() => {
     const grouped = new Map<string, ReviewItem[]>();
+    const coachTz = user?.timezone ?? 'UTC';
     calendarItems.forEach((item) => {
-      if (!grouped.has(item.actionDateKey)) grouped.set(item.actionDateKey, []);
-      grouped.get(item.actionDateKey)!.push(item);
+      const actionDateKey = getDateKeyInTimeZone(new Date(item.actionAt), coachTz);
+      if (!grouped.has(actionDateKey)) grouped.set(actionDateKey, []);
+      grouped.get(actionDateKey)!.push(item);
     });
     grouped.forEach((arr) => {
-      arr.sort((a, b) => new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime());
+      arr.sort((a, b) => new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime());
     });
     return grouped;
-  }, [calendarItems]);
+  }, [calendarItems, user?.timezone]);
 
   const visibleMonthItemCount = useMemo(() => {
     const keys = monthDays
