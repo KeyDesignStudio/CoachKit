@@ -6,6 +6,7 @@ import { UserButton } from '@clerk/nextjs';
 import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
 import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
+import { BrandingDebug } from '@/components/dev/branding-debug';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
 
@@ -33,7 +34,8 @@ export async function AppHeader() {
 
   // Get user from database if authenticated
   let userRole: 'COACH' | 'ATHLETE' | null = null;
-  let branding = { displayName: DEFAULT_BRAND_NAME, logoUrl: null as string | null };
+  let clubBranding = { displayName: DEFAULT_BRAND_NAME, logoUrl: null as string | null };
+  let brandingCoachId: string | null = null;
 
   if (userId) {
     // Try to find user by authProviderId first
@@ -70,33 +72,30 @@ export async function AppHeader() {
 
     if (user) {
       userRole = user.role;
-      
+
+      // Resolve the coachId we should use for club branding
       if (user.role === 'COACH') {
-        const coachBranding = user.branding;
-        if (coachBranding) {
-          branding = {
-            displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
-            logoUrl: coachBranding.logoUrl,
-          };
-        }
+        brandingCoachId = user.id;
       } else {
         const athleteProfile = await prisma.athleteProfile.findUnique({
           where: { userId: user.id },
           select: { coachId: true },
         });
+        brandingCoachId = athleteProfile?.coachId ?? null;
+      }
 
-        if (athleteProfile?.coachId) {
-          const coachBranding = await prisma.coachBranding.findUnique({
-            where: { coachId: athleteProfile.coachId },
-            select: { displayName: true, logoUrl: true },
-          });
+      // Always read club branding directly from CoachBranding to avoid any ambiguity.
+      if (brandingCoachId) {
+        const coachBranding = await prisma.coachBranding.findUnique({
+          where: { coachId: brandingCoachId },
+          select: { displayName: true, logoUrl: true },
+        });
 
-          if (coachBranding) {
-            branding = {
-              displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
-              logoUrl: coachBranding.logoUrl,
-            };
-          }
+        if (coachBranding) {
+          clubBranding = {
+            displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
+            logoUrl: coachBranding.logoUrl,
+          };
         }
       }
     }
@@ -108,7 +107,7 @@ export async function AppHeader() {
     : [];
 
   const clubName = (() => {
-    const raw = (branding.displayName || '').trim();
+    const raw = (clubBranding.displayName || '').trim();
     if (!raw || raw === DEFAULT_BRAND_NAME) return 'Your Club';
     return raw;
   })();
@@ -117,6 +116,10 @@ export async function AppHeader() {
     <header className="px-6 pt-6">
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
       <Card className="relative flex flex-col gap-4 rounded-3xl bg-[var(--bg-surface)] p-5 md:flex-row md:items-center md:justify-between">
+        {process.env.NODE_ENV !== 'production' ? (
+          <BrandingDebug coachId={brandingCoachId} rawLogoUrl={clubBranding.logoUrl} resolvedLogoUrl={resolveLogoUrl(clubBranding.logoUrl)} />
+        ) : null}
+
         {/* Center block: true-centered CoachKit branding (independent of nav width) */}
         <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
           <Link
@@ -142,7 +145,7 @@ export async function AppHeader() {
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={resolveLogoUrl(branding.logoUrl)}
+            src={resolveLogoUrl(clubBranding.logoUrl)}
             alt={`${clubName} logo`}
             className="h-[55px] w-[55px] object-contain"
           />
