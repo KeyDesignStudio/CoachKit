@@ -43,6 +43,13 @@ enum OAuthProvider {
   STRAVA
 }
 
+enum TrainingPlanFrequency {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+  AD_HOC
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -79,6 +86,9 @@ model AthleteProfile {
   disciplines     String[] // e.g. ["RUN","BIKE","SWIM"]
   goalsText       String?
   planCadenceDays Int       @default(7) // 7, 14, 28 etc
+  trainingPlanFrequency   TrainingPlanFrequency @default(AD_HOC)
+  trainingPlanDayOfWeek   Int?
+  trainingPlanWeekOfMonth Int?
   zonesJson       Json?
   coachNotes      String?
   dateOfBirth     DateTime?

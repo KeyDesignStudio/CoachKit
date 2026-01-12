@@ -13,7 +13,9 @@ interface AthleteRecord {
   userId: string;
   coachId: string;
   disciplines: string[];
-  planCadenceDays: number;
+  trainingPlanFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+  trainingPlanDayOfWeek: number | null;
+  trainingPlanWeekOfMonth: 1 | 2 | 3 | 4 | null;
   goalsText?: string | null;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
@@ -86,6 +88,33 @@ export default function CoachAthletesPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const dayName = (dayOfWeek: number) => {
+    const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+    return names[dayOfWeek] ?? 'Unknown';
+  };
+
+  const ordinal = (n: number) => {
+    if (n === 1) return '1st';
+    if (n === 2) return '2nd';
+    if (n === 3) return '3rd';
+    return `${n}th`;
+  };
+
+  const formatTrainingPlanLine = (athlete: AthleteRecord) => {
+    const freq = athlete.trainingPlanFrequency;
+    if (freq === 'AD_HOC') return 'Training Plan: Ad hoc';
+
+    const day = athlete.trainingPlanDayOfWeek;
+    if (day === null || day === undefined) return 'Training Plan: Ad hoc';
+
+    if (freq === 'WEEKLY') return `Training Plan: Weekly · ${dayName(day)}`;
+    if (freq === 'FORTNIGHTLY') return `Training Plan: Fortnightly · ${dayName(day)}`;
+
+    const week = athlete.trainingPlanWeekOfMonth;
+    if (!week) return 'Training Plan: Ad hoc';
+    return `Training Plan: Monthly · ${ordinal(week)} ${dayName(day)}`;
+  };
+
   if (userLoading) {
     return (
       <div className="px-6 pt-6">
@@ -141,24 +170,20 @@ export default function CoachAthletesPage() {
                 type="button"
                 key={athlete.userId}
                 onClick={() => handleAthleteClick(athlete.userId)}
-                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-pointer text-left min-w-0 min-h-[44px]"
+                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-pointer text-left min-w-0 min-h-[44px] h-full flex flex-col"
               >
                 {/* Top: Name + email (+ optional DOB) */}
                 <div className="min-w-0">
                   <div className="font-medium truncate">{athlete.user.name || 'Unnamed Athlete'}</div>
                   <div className="text-sm text-[var(--muted)] truncate">{athlete.user.email}</div>
+                  <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
                   {athlete.dateOfBirth ? (
                     <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
                   ) : null}
                 </div>
 
-                {/* Footer: Cadence + disciplines */}
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="flex-shrink-0 inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/60 px-2.5 py-1 text-xs text-slate-700">
-                    <span className="font-semibold text-slate-900">{athlete.planCadenceDays}</span>
-                    <span className="text-[var(--muted)]">day cadence</span>
-                  </div>
-
+                {/* Footer: disciplines */}
+                <div className="mt-3 flex items-end justify-end gap-2 flex-wrap justify-end flex-1">
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     {athlete.disciplines.map((discipline) => {
                       const theme = getDisciplineTheme(discipline);

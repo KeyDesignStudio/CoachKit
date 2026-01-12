@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
+import { TrainingPlanFrequency } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -7,16 +8,69 @@ import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 
-const updateAthleteSchema = z.object({
-  name: z.string().trim().min(1).optional(),
-  timezone: z.string().trim().min(1).optional(),
-  disciplines: z.array(z.string().trim().min(1)).min(1).optional(),
-  goalsText: z.string().trim().max(2000).nullable().optional(),
-  planCadenceDays: z.number().int().min(1).max(42).optional(),
-  coachNotes: z.string().trim().max(2000).nullable().optional(),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD').nullable().optional(),
-  zonesJson: z.unknown().optional(),
-});
+const updateAthleteSchema = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    timezone: z.string().trim().min(1).optional(),
+    disciplines: z.array(z.string().trim().min(1)).min(1).optional(),
+    goalsText: z.string().trim().max(2000).nullable().optional(),
+    coachNotes: z.string().trim().max(2000).nullable().optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD').nullable().optional(),
+    zonesJson: z.unknown().optional(),
+    trainingPlanFrequency: z.nativeEnum(TrainingPlanFrequency).optional(),
+    trainingPlanDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+    trainingPlanWeekOfMonth: z.number().int().min(1).max(4).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.trainingPlanFrequency === undefined) return;
+
+    const freq = data.trainingPlanFrequency;
+    const day = data.trainingPlanDayOfWeek ?? null;
+    const week = data.trainingPlanWeekOfMonth ?? null;
+
+    if (freq === TrainingPlanFrequency.AD_HOC) {
+      if (day !== null || week !== null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'AD_HOC training plan must not specify day/week.' });
+      }
+      return;
+    }
+
+    if (freq === TrainingPlanFrequency.WEEKLY || freq === TrainingPlanFrequency.FORTNIGHTLY) {
+      if (day === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Weekly/Fortnightly training plan requires day of week.' });
+      }
+      if (week !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Weekly/Fortnightly training plan must not specify week of month.',
+        });
+      }
+      return;
+    }
+
+    if (freq === TrainingPlanFrequency.MONTHLY) {
+      if (day === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Monthly training plan requires day of week.' });
+      }
+      if (week === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Monthly training plan requires week of month.' });
+      }
+    }
+  });
+
+function cadenceDaysFromTrainingPlanFrequency(freq: TrainingPlanFrequency): number {
+  switch (freq) {
+    case TrainingPlanFrequency.WEEKLY:
+      return 7;
+    case TrainingPlanFrequency.FORTNIGHTLY:
+      return 14;
+    case TrainingPlanFrequency.MONTHLY:
+      return 28;
+    case TrainingPlanFrequency.AD_HOC:
+    default:
+      return 7;
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -66,8 +120,32 @@ export async function PATCH(
       profileData.goalsText = payload.goalsText;
     }
 
-    if (payload.planCadenceDays !== undefined) {
-      profileData.planCadenceDays = payload.planCadenceDays;
+    if (payload.trainingPlanFrequency !== undefined) {
+      profileData.trainingPlanFrequency = payload.trainingPlanFrequency;
+      profileData.planCadenceDays = cadenceDaysFromTrainingPlanFrequency(payload.trainingPlanFrequency);
+
+      // Normalize dependent fields based on frequency
+      if (payload.trainingPlanFrequency === TrainingPlanFrequency.AD_HOC) {
+        profileData.trainingPlanDayOfWeek = null;
+        profileData.trainingPlanWeekOfMonth = null;
+      } else if (
+        payload.trainingPlanFrequency === TrainingPlanFrequency.WEEKLY ||
+        payload.trainingPlanFrequency === TrainingPlanFrequency.FORTNIGHTLY
+      ) {
+        profileData.trainingPlanDayOfWeek = payload.trainingPlanDayOfWeek ?? null;
+        profileData.trainingPlanWeekOfMonth = null;
+      } else if (payload.trainingPlanFrequency === TrainingPlanFrequency.MONTHLY) {
+        profileData.trainingPlanDayOfWeek = payload.trainingPlanDayOfWeek ?? null;
+        profileData.trainingPlanWeekOfMonth = payload.trainingPlanWeekOfMonth ?? null;
+      }
+    } else {
+      // Allow partial updates if the UI sends these without changing frequency.
+      if (payload.trainingPlanDayOfWeek !== undefined) {
+        profileData.trainingPlanDayOfWeek = payload.trainingPlanDayOfWeek;
+      }
+      if (payload.trainingPlanWeekOfMonth !== undefined) {
+        profileData.trainingPlanWeekOfMonth = payload.trainingPlanWeekOfMonth;
+      }
     }
 
     if (payload.coachNotes !== undefined) {

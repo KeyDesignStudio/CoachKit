@@ -1,8 +1,9 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
 import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
@@ -19,6 +20,9 @@ type AthleteProfile = {
   coachId: string;
   disciplines: string[];
   goalsText?: string | null;
+  trainingPlanFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+  trainingPlanDayOfWeek?: number | null;
+  trainingPlanWeekOfMonth?: 1 | 2 | 3 | 4 | null;
   planCadenceDays: number;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
@@ -71,11 +75,20 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [planCadenceDays, setPlanCadenceDays] = useState('7');
+  const [trainingPlanFrequency, setTrainingPlanFrequency] = useState<'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC'>(
+    'AD_HOC'
+  );
+  const [trainingPlanDayOfWeek, setTrainingPlanDayOfWeek] = useState<number | null>(null);
+  const [trainingPlanWeekOfMonth, setTrainingPlanWeekOfMonth] = useState<1 | 2 | 3 | 4 | null>(null);
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
   const [goalsText, setGoalsText] = useState('');
   const [coachNotes, setCoachNotes] = useState('');
   const [timezone, setTimezone] = useState('Australia/Brisbane');
+
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const scheduleHydratedRef = useRef(false);
+  const autosaveTimerRef = useRef<number | null>(null);
 
   // Journal form
   const [newJournalDate, setNewJournalDate] = useState('');
@@ -94,6 +107,13 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       setJournalEntries([]);
       setError('');
       setJournalOpen(false);
+      setScheduleError('');
+      setScheduleSaving(false);
+      scheduleHydratedRef.current = false;
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
       return;
     }
 
@@ -116,7 +136,13 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         setEmail(athleteData.athlete.user.email);
         setTimezone(athleteData.athlete.user.timezone || 'Australia/Brisbane');
         setDateOfBirth(athleteData.athlete.dateOfBirth ? athleteData.athlete.dateOfBirth.split('T')[0] : '');
-        setPlanCadenceDays(String(athleteData.athlete.planCadenceDays));
+        setTrainingPlanFrequency(athleteData.athlete.trainingPlanFrequency ?? 'AD_HOC');
+        setTrainingPlanDayOfWeek(
+          athleteData.athlete.trainingPlanDayOfWeek === undefined ? null : (athleteData.athlete.trainingPlanDayOfWeek ?? null)
+        );
+        setTrainingPlanWeekOfMonth(
+          athleteData.athlete.trainingPlanWeekOfMonth === undefined ? null : (athleteData.athlete.trainingPlanWeekOfMonth ?? null)
+        );
         setSelectedDisciplines(athleteData.athlete.disciplines);
         setGoalsText(athleteData.athlete.goalsText || '');
         setCoachNotes(athleteData.athlete.coachNotes || '');
@@ -125,6 +151,8 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         const today = new Date().toISOString().split('T')[0];
         setNewJournalDate(today);
         setJournalDateError('');
+
+        scheduleHydratedRef.current = true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load athlete');
       } finally {
@@ -134,6 +162,53 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
     loadData();
   }, [isOpen, athleteId, request]);
+
+  // Autosave training plan schedule changes
+  useEffect(() => {
+    if (!isOpen || !athleteId) return;
+    if (!scheduleHydratedRef.current) return;
+
+    setScheduleError('');
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        setScheduleSaving(true);
+
+        // Normalize dependent fields
+        const normalized =
+          trainingPlanFrequency === 'AD_HOC'
+            ? { trainingPlanDayOfWeek: null, trainingPlanWeekOfMonth: null }
+            : trainingPlanFrequency === 'MONTHLY'
+              ? { trainingPlanDayOfWeek: trainingPlanDayOfWeek, trainingPlanWeekOfMonth: trainingPlanWeekOfMonth }
+              : { trainingPlanDayOfWeek: trainingPlanDayOfWeek, trainingPlanWeekOfMonth: null };
+
+        await request(`/api/coach/athletes/${athleteId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            trainingPlanFrequency,
+            trainingPlanDayOfWeek: normalized.trainingPlanDayOfWeek,
+            trainingPlanWeekOfMonth: normalized.trainingPlanWeekOfMonth,
+          }),
+        });
+      } catch (err) {
+        setScheduleError(err instanceof Error ? err.message : 'Failed to save Training Plan');
+      } finally {
+        setScheduleSaving(false);
+      }
+    }, 500);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [isOpen, athleteId, request, trainingPlanFrequency, trainingPlanDayOfWeek, trainingPlanWeekOfMonth]);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -146,11 +221,6 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         throw new Error('At least one discipline is required');
       }
 
-      const cadence = Number(planCadenceDays);
-      if (!Number.isFinite(cadence) || cadence < 1 || cadence > 42) {
-        throw new Error('Program Cadence must be between 1 and 42 days');
-      }
-
       await request(`/api/coach/athletes/${athleteId}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -158,7 +228,11 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
           timezone,
           disciplines: selectedDisciplines,
           goalsText: goalsText.trim() || null,
-          planCadenceDays: cadence,
+          trainingPlanFrequency,
+          trainingPlanDayOfWeek:
+            trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
+          trainingPlanWeekOfMonth:
+            trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
           dateOfBirth: dateOfBirth || null,
           coachNotes: coachNotes.trim() || null,
         }),
@@ -299,15 +373,79 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                     <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Program Cadence (days)</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="42"
-                      value={planCadenceDays}
-                      onChange={(e) => setPlanCadenceDays(e.target.value)}
-                      required
-                    />
+                    <label className="mb-1 block text-sm font-medium">Training Plan Schedule</label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
+                        <Select
+                          value={trainingPlanFrequency}
+                          onChange={(e) => {
+                            const next = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+                            setTrainingPlanFrequency(next);
+
+                            if (next === 'AD_HOC') {
+                              setTrainingPlanDayOfWeek(null);
+                              setTrainingPlanWeekOfMonth(null);
+                            } else if (next === 'MONTHLY') {
+                              setTrainingPlanWeekOfMonth((trainingPlanWeekOfMonth ?? 1) as 1 | 2 | 3 | 4);
+                              setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 1);
+                            } else {
+                              setTrainingPlanWeekOfMonth(null);
+                              setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 2);
+                            }
+                          }}
+                          disabled={saving}
+                        >
+                          <option value="WEEKLY">Weekly</option>
+                          <option value="FORTNIGHTLY">Fortnightly</option>
+                          <option value="MONTHLY">Monthly</option>
+                          <option value="AD_HOC">Ad hoc</option>
+                        </Select>
+                      </div>
+
+                      {trainingPlanFrequency === 'MONTHLY' ? (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Week of month</label>
+                          <Select
+                            value={trainingPlanWeekOfMonth ?? ''}
+                            onChange={(e) =>
+                              setTrainingPlanWeekOfMonth((Number(e.target.value) as 1 | 2 | 3 | 4) || null)
+                            }
+                            disabled={saving}
+                          >
+                            <option value="1">1st</option>
+                            <option value="2">2nd</option>
+                            <option value="3">3rd</option>
+                            <option value="4">4th</option>
+                          </Select>
+                        </div>
+                      ) : null}
+
+                      {trainingPlanFrequency !== 'AD_HOC' ? (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Day</label>
+                          <Select
+                            value={trainingPlanDayOfWeek ?? ''}
+                            onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
+                            disabled={saving}
+                          >
+                            <option value="0">Sunday</option>
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5">Friday</option>
+                            <option value="6">Saturday</option>
+                          </Select>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {scheduleSaving ? (
+                      <p className="mt-2 text-xs text-slate-500">Saving Training Plan…</p>
+                    ) : scheduleError ? (
+                      <p className="mt-2 text-xs text-red-600">{scheduleError}</p>
+                    ) : null}
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Disciplines *</label>

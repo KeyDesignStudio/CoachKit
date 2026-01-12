@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -21,7 +22,11 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
   const [name, setName] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
-  const [planCadenceDays, setPlanCadenceDays] = useState('7');
+  const [trainingPlanFrequency, setTrainingPlanFrequency] = useState<'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC'>(
+    'WEEKLY'
+  );
+  const [trainingPlanDayOfWeek, setTrainingPlanDayOfWeek] = useState<number | null>(2); // Tuesday
+  const [trainingPlanWeekOfMonth, setTrainingPlanWeekOfMonth] = useState<1 | 2 | 3 | 4 | null>(1);
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [coachNotes, setCoachNotes] = useState('');
   const [goalsText, setGoalsText] = useState('');
@@ -39,10 +44,18 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       return;
     }
 
-    const cadence = Number(planCadenceDays);
-    if (!Number.isFinite(cadence) || cadence < 1 || cadence > 42) {
-      setError('Program Cadence must be between 1 and 42 days');
-      return;
+    if (trainingPlanFrequency === 'WEEKLY' || trainingPlanFrequency === 'FORTNIGHTLY') {
+      if (trainingPlanDayOfWeek === null) {
+        setError('Training Plan requires a day of week');
+        return;
+      }
+    }
+
+    if (trainingPlanFrequency === 'MONTHLY') {
+      if (trainingPlanDayOfWeek === null || trainingPlanWeekOfMonth === null) {
+        setError('Monthly Training Plan requires week of month and day of week');
+        return;
+      }
     }
 
     const payload: any = {
@@ -50,7 +63,9 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       name: name.trim(),
       timezone: timezone.trim(),
       disciplines: selectedDisciplines,
-      planCadenceDays: cadence,
+      trainingPlanFrequency,
+      trainingPlanDayOfWeek: trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
+      trainingPlanWeekOfMonth: trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
     };
 
     if (goalsText.trim()) {
@@ -65,7 +80,9 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       setName('');
       setTimezone('America/New_York');
       setSelectedDisciplines([]);
-      setPlanCadenceDays('7');
+      setTrainingPlanFrequency('WEEKLY');
+      setTrainingPlanDayOfWeek(2);
+      setTrainingPlanWeekOfMonth(1);
       setDateOfBirth('');
       setCoachNotes('');
       setGoalsText('');
@@ -173,15 +190,67 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Program Cadence (days) *</label>
-            <Input
-              type="number"
-              min="1"
-              max="42"
-              value={planCadenceDays}
-              onChange={(e) => setPlanCadenceDays(e.target.value)}
-              required
-            />
+            <label className="mb-1 block text-sm font-medium">Training Plan Schedule</label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
+                <Select
+                  value={trainingPlanFrequency}
+                  onChange={(e) => {
+                    const next = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+                    setTrainingPlanFrequency(next);
+                    if (next === 'AD_HOC') {
+                      setTrainingPlanDayOfWeek(null);
+                      setTrainingPlanWeekOfMonth(null);
+                    } else if (next === 'MONTHLY') {
+                      setTrainingPlanWeekOfMonth((trainingPlanWeekOfMonth ?? 1) as 1 | 2 | 3 | 4);
+                      setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 1);
+                    } else {
+                      setTrainingPlanWeekOfMonth(null);
+                      setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 2);
+                    }
+                  }}
+                >
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="FORTNIGHTLY">Fortnightly</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="AD_HOC">Ad hoc</option>
+                </Select>
+              </div>
+
+              {trainingPlanFrequency === 'MONTHLY' ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Week of month</label>
+                  <Select
+                    value={trainingPlanWeekOfMonth ?? ''}
+                    onChange={(e) => setTrainingPlanWeekOfMonth((Number(e.target.value) as 1 | 2 | 3 | 4) || null)}
+                  >
+                    <option value="1">1st</option>
+                    <option value="2">2nd</option>
+                    <option value="3">3rd</option>
+                    <option value="4">4th</option>
+                  </Select>
+                </div>
+              ) : null}
+
+              {trainingPlanFrequency !== 'AD_HOC' ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Day</label>
+                  <Select
+                    value={trainingPlanDayOfWeek ?? ''}
+                    onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
+                  >
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </Select>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div>

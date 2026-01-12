@@ -35,7 +35,7 @@ Checks
 - Truncation:
    - long name and email truncate with ellipsis
    - cards do not increase height due to wrapping
-- Cadence + discipline icons stay aligned and do not wrap
+- Training Plan + discipline icons stay aligned and do not wrap
 - Mouse:
    - click card opens detail drawer
 - Keyboard:
@@ -78,7 +78,7 @@ Checks
 #### 4. /coach/athletes (Athlete Profiles)
 **Improvements:**
 - Header stacks: Title, then New Athlete button
-- Athlete cards: Stack athlete info, cadence badge, and discipline icons vertically on mobile
+- Athlete cards: Stack athlete info, Training Plan line, and discipline icons vertically on mobile
 - Drawer: Full-width on mobile (w-full), 50vw on desktop
 - Drawer content: 2-column grid on desktop (lg:grid-cols-2), single column on mobile
 
