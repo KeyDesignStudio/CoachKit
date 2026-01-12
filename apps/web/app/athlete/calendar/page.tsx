@@ -432,6 +432,7 @@ export default function AthleteCalendarPage() {
                 athleteTimezone={athleteTimezone}
                 onDayClick={handleDayClick}
                 onAddClick={(date) => openCreateDrawer(toDateInput(date))}
+                canAdd
                 onItemClick={handleItemIdClick}
               />
             ))}

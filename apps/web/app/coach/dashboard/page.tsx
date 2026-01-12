@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select';
 import { addDays, formatDisplay, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 
 type CommentRecord = {
   id: string;
@@ -559,13 +560,13 @@ export default function CoachDashboardPage() {
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
                             {item.hasAthleteComment ? (
-                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                              <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
                             ) : null}
                             {painFlag ? (
-                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                              <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
                             ) : null}
                             {isSkipped ? (
-                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                              <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
                             ) : null}
                           </div>
                         </div>
@@ -622,13 +623,13 @@ export default function CoachDashboardPage() {
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
                             {item.hasAthleteComment ? (
-                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                              <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
                             ) : null}
                             {painFlag ? (
-                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                              <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
                             ) : null}
                             {isSkipped ? (
-                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                              <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
                             ) : null}
                           </div>
                         </div>
@@ -699,13 +700,13 @@ export default function CoachDashboardPage() {
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
                                     {item.hasAthleteComment ? (
-                                      <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                                      <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
                                     ) : null}
                                     {painFlag ? (
-                                      <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                                      <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
                                     ) : null}
                                     {isSkipped ? (
-                                      <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                                      <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
                                     ) : null}
                                   </div>
                                 </div>
@@ -819,13 +820,13 @@ export default function CoachDashboardPage() {
                           <span className="text-xs text-[var(--text)] truncate flex-1">{displayTitle}</span>
                           <span className="flex items-center gap-1 flex-shrink-0">
                             {item.hasAthleteComment ? (
-                              <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+                              <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
                             ) : null}
                             {painFlag ? (
-                              <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+                              <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
                             ) : null}
                             {isSkipped ? (
-                              <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} />
+                              <Icon name="skipped" size="xs" className={`text-[var(--muted)] ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
                             ) : null}
                           </span>
                         </button>

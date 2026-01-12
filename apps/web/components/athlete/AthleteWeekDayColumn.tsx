@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 
 type AthleteWeekDayColumnProps = {
   dayName: string;
@@ -38,7 +39,7 @@ export function AthleteWeekDayColumn({
       type="button"
       onClick={onAddClick}
       className={cn(
-        'inline-flex h-7 w-7 items-center justify-center rounded-full',
+        'inline-flex h-6 w-6 items-center justify-center rounded-full',
         'text-[var(--muted)] hover:text-[var(--primary)]',
         'hover:bg-[var(--bg-structure)]',
         'transition-colors duration-150',
@@ -47,7 +48,7 @@ export function AthleteWeekDayColumn({
       aria-label="Add session"
       title="Add session"
     >
-      <Icon name="add" size="sm" className="text-[16px]" aria-hidden />
+      <Icon name={CALENDAR_ADD_SESSION_ICON} size="sm" className={cn('text-[16px]', CALENDAR_ACTION_ICON_CLASS)} aria-hidden />
     </button>
   ) : null;
 

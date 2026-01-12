@@ -1,5 +1,6 @@
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 
 type SessionChipProps = {
   time: string | null;
@@ -40,20 +41,20 @@ export function SessionChip({
       <span className="flex-1 truncate text-xs text-[var(--text)] font-normal">{title}</span>
       <div className="flex items-center gap-0.5 flex-shrink-0">
         {painFlag && (
-          <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+          <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
         )}
         {coachAdvicePresent && (
-          <Icon name="coachAdvice" size="xs" className="text-amber-600" aria-label="Has coach advice" aria-hidden={false} />
+          <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has coach advice" aria-hidden={false} />
         )}
         {hasAthleteComment && (
-          <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+          <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
         )}
         {status === 'COMPLETED_MANUAL' || status === 'COMPLETED_SYNCED' ? (
-          <Icon name="completed" size="xs" className="text-green-600" aria-label="Completed" aria-hidden={false} />
+          <Icon name="completed" size="xs" className={`text-green-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Completed" aria-hidden={false} />
         ) : status === 'COMPLETED_SYNCED_DRAFT' ? (
-          <Icon name="needsReview" size="xs" className="text-amber-600" aria-label="Strava detected" aria-hidden={false} />
+          <Icon name="needsReview" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Strava detected" aria-hidden={false} />
         ) : status === 'SKIPPED' ? (
-          <Icon name="skipped" size="xs" className="text-gray-500" aria-label="Skipped" aria-hidden={false} />
+          <Icon name="skipped" size="xs" className={`text-gray-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
         ) : null}
       </div>
     </button>

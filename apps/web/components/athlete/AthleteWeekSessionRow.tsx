@@ -3,6 +3,7 @@ import { Icon } from '@/components/ui/Icon';
 import type { IconName } from '@/components/ui/iconRegistry';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { cn } from '@/lib/cn';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 
 export type AthleteWeekSessionRowItem = {
   id: string;
@@ -107,11 +108,11 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
 
         {/* 4) Indicators (right-aligned; consistent order) */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {pain ? <Icon name="painFlag" size="xs" className="leading-none text-rose-500" /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="xs" className="leading-none text-amber-600" /> : null}
+          {pain ? <Icon name="painFlag" size="xs" className={cn('leading-none text-rose-500', CALENDAR_ACTION_ICON_CLASS)} /> : null}
+          {hasAdvice ? <Icon name="coachAdvice" size="xs" className={cn('leading-none text-amber-600', CALENDAR_ACTION_ICON_CLASS)} /> : null}
           {statusIcon.name ? (
             <span title={statusIcon.title ?? undefined}>
-              <Icon name={statusIcon.name} size="xs" className={cn('leading-none', statusIcon.className)} />
+              <Icon name={statusIcon.name} size="xs" className={cn('leading-none', CALENDAR_ACTION_ICON_CLASS, statusIcon.className)} />
             </span>
           ) : (
             <span className="w-[13px]" />

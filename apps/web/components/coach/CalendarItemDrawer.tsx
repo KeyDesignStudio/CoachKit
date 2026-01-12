@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
@@ -70,7 +71,7 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
           {item.coachAdvicePresent && item.notes && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="coachAdvice" size="xs" className="text-amber-600" />
+                <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} />
                 Coach Advice
               </h3>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.notes}</p>
@@ -81,7 +82,7 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
           {item.latestCompletedActivity?.painFlag && (
             <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4">
               <div className="flex items-center gap-2">
-                <Icon name="painFlag" size="xs" className="text-rose-500" />
+                <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} />
                 <p className="text-sm text-rose-600 font-medium">Athlete reported pain or discomfort</p>
               </div>
             </section>
@@ -91,7 +92,7 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
           {item.hasAthleteComment && (
             <section className="rounded-2xl border border-blue-300/50 bg-blue-50/50 p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                <Icon name="athleteComment" size="xs" className="text-blue-600" />
+                <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} />
                 Athlete Commented
               </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">View full details in Review Board</p>

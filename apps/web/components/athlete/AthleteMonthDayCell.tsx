@@ -2,6 +2,7 @@ import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVisual';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
+import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 
 export type MonthSession = {
   id: string;
@@ -23,6 +24,7 @@ type AthleteMonthDayCellProps = {
   onDayClick: (date: Date) => void;
   onItemClick: (itemId: string) => void;
   onAddClick?: (date: Date) => void;
+  canAdd?: boolean;
 };
 
 const MAX_VISIBLE_ROWS = 3;
@@ -37,11 +39,14 @@ export function AthleteMonthDayCell({
   onDayClick,
   onItemClick,
   onAddClick,
+  canAdd = true,
 }: AthleteMonthDayCellProps) {
   const dayNumber = date.getDate();
   const sortedItems = sortSessionsForDay(items, athleteTimezone);
   const visible = sortedItems.slice(0, MAX_VISIBLE_ROWS);
   const remainingCount = Math.max(0, sortedItems.length - MAX_VISIBLE_ROWS);
+  const addEnabled = !!onAddClick && canAdd;
+  const addLabel = addEnabled ? 'Add session' : 'Select single athlete to add session';
 
   return (
     <div
@@ -80,18 +85,24 @@ export function AthleteMonthDayCell({
           {onAddClick ? (
             <button
               type="button"
-              onClick={() => onAddClick(date)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!addEnabled) return;
+                onAddClick(date);
+              }}
               className={cn(
-                'inline-flex h-7 w-7 items-center justify-center rounded-full',
-                'text-[var(--muted)] hover:text-[var(--primary)]',
-                'hover:bg-[var(--bg-structure)]',
+                'inline-flex h-6 w-6 items-center justify-center rounded-full',
+                addEnabled ? 'text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)]' : 'text-[var(--muted)] opacity-70 cursor-not-allowed',
                 'transition-colors duration-150',
                 'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
               )}
-              aria-label="Add session"
-              title="Add session"
+              aria-label={addLabel}
+              title={addLabel}
+              aria-disabled={!addEnabled}
+              disabled={!addEnabled}
             >
-              <Icon name="add" size="sm" className="text-[16px]" aria-hidden />
+              <Icon name={CALENDAR_ADD_SESSION_ICON} size="sm" className={cn('text-[16px]', CALENDAR_ACTION_ICON_CLASS)} aria-hidden />
             </button>
           ) : null}
         </div>
@@ -124,7 +135,7 @@ export function AthleteMonthDayCell({
               aria-label={`Open session ${item.id}`}
             >
               <span className={cn('text-[16px] leading-none flex-shrink-0', visual.iconColor)}>
-                <Icon name={visual.icon} size="sm" className="text-[16px] leading-none" />
+                <Icon name={visual.icon} size="sm" className={cn('text-[16px] leading-none', CALENDAR_ACTION_ICON_CLASS)} />
               </span>
               <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">
                 {item.displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
@@ -137,6 +148,7 @@ export function AthleteMonthDayCell({
                     size="xs"
                     className={cn(
                       'leading-none',
+                      CALENDAR_ACTION_ICON_CLASS,
                       statusIcon === 'completed'
                         ? 'text-emerald-600'
                         : statusIcon === 'needsReview'

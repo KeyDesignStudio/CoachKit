@@ -20,6 +20,7 @@ import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
+import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
@@ -897,7 +898,10 @@ export default function CoachCalendarPage() {
                       formattedDate={day.formattedDate}
                       isEmpty={false}
                       isToday={isToday(new Date(day.date))}
-                      onAddClick={() => openCreateDrawer(day.date)}
+                      onAddClick={() => {
+                        if (!singleAthleteId) return;
+                        openCreateDrawer(day.date);
+                      }}
                     >
                       {day.items.map((item) => (
                         <AthleteWeekSessionRow
@@ -955,11 +959,16 @@ export default function CoachCalendarPage() {
                                   <button
                                     type="button"
                                     onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                                     aria-label="Add session"
                                     title="Add session"
                                   >
-                                    <Icon name="add" size="sm" className="text-[16px]" aria-hidden />
+                                    <Icon
+                                      name={CALENDAR_ADD_SESSION_ICON}
+                                      size="sm"
+                                      className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
+                                      aria-hidden
+                                    />
                                   </button>
                                 </div>
 
@@ -998,17 +1007,14 @@ export default function CoachCalendarPage() {
                   items={day.items as any}
                   isCurrentMonth={day.isCurrentMonth}
                   isToday={isToday(day.date)}
+                  canAdd={selectedAthleteIds.size === 1}
                   onDayClick={(date) => {
                     setViewMode('week');
                     setWeekStart(startOfWeek(date));
                   }}
                   onAddClick={(date) => {
-                    const fallbackAthleteId = singleAthleteId || Array.from(selectedAthleteIds)[0] || '';
-                    if (!fallbackAthleteId) {
-                      setError('Select an athlete to add sessions.');
-                      return;
-                    }
-                    openCreateDrawerForAthlete(fallbackAthleteId, toDateInput(date));
+                    if (!singleAthleteId) return;
+                    openCreateDrawerForAthlete(singleAthleteId, toDateInput(date));
                   }}
                   onItemClick={(itemId) => {
                     const found = itemsById.get(itemId);

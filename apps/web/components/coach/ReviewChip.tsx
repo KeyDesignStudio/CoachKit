@@ -2,6 +2,7 @@
 
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { cn } from '@/lib/cn';
 
 type ReviewChipProps = {
@@ -52,13 +53,13 @@ export function ReviewChip({
         {/* Right: status icons */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {painFlag && (
-            <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} />
+            <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />
           )}
           {coachAdvicePresent && (
-            <Icon name="coachAdvice" size="xs" className="text-amber-600" aria-label="Has coach advice" aria-hidden={false} />
+            <Icon name="coachAdvice" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has coach advice" aria-hidden={false} />
           )}
           {hasAthleteComment && (
-            <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+            <Icon name="athleteComment" size="xs" className={`text-blue-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Has athlete comment" aria-hidden={false} />
           )}
         </div>
       </button>

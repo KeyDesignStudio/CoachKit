@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { cn } from '@/lib/cn';
 import { useApi } from '@/components/api-client';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -374,8 +375,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                           className="flex items-start gap-3 rounded-xl border border-white/30 bg-white/30 p-3 text-sm"
                         >
                           <div className="flex items-center gap-2">
-                            <Icon name="painFlag" size="xs" className="text-rose-500" />
-                            <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                            <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} />
                           </div>
                           <div className="flex-1">
                             <div className="font-medium">{item.title}</div>

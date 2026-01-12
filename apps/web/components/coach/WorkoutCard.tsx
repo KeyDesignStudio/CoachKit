@@ -1,5 +1,6 @@
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { cn } from '@/lib/cn';
 
 type WorkoutCardProps = {
@@ -50,8 +51,8 @@ export function WorkoutCard({ time, title, discipline, hasAdvice, painFlag = fal
 
         {/* Indicators (right-aligned) */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {painFlag ? <Icon name="painFlag" size="xs" className="leading-none text-rose-500" /> : null}
-          {hasAdvice ? <Icon name="coachAdvice" size="xs" className="leading-none text-amber-600" /> : null}
+          {painFlag ? <Icon name="painFlag" size="xs" className={`leading-none text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} /> : null}
+          {hasAdvice ? <Icon name="coachAdvice" size="xs" className={`leading-none text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} /> : null}
           <span className="w-[13px]" />
         </div>
       </div>
