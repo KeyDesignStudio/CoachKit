@@ -22,18 +22,11 @@ CoachKit has been audited and optimized for mobile responsiveness across all pag
 
 #### 1. /coach/dashboard (Review Board)
 **Improvements:**
-- Header padding adjusted for mobile (px-4 on mobile, px-6 on desktop)
-- Navigation buttons: Icons only on mobile, text + icon on desktop
-- Filter buttons: Shortened labels ("All", "Comments", "No Comments") on mobile
-- Touch targets: min-h-[44px] on all buttons
-- Responsive stacking: Navigation and filters stack vertically on mobile
-- Already had desktop/mobile view separation (ReviewGrid vs MobileReviewAccordion)
 
 **Mobile Behavior:**
-- Single column layout
-- Buttons stretch to fill width for easy tapping
-- Filter pills full-width with flex-1 for equal sizing
-
+ Calendar view: Athlete selector defaults to “All athletes” and persists; selecting an athlete filters the month to that athlete only.
+ Calendar view: When “All athletes” is selected, chips include an athlete prefix (e.g. “Gordon G.: Tempo Run”); when filtered to a single athlete, chips omit the prefix.
+ Calendar view empty state: If filter yields no items in the visible month, shows “No unreviewed sessions for this athlete in this month.”
 #### 2. /coach/calendar
 **Improvements:**
 - Header split into two rows on mobile: Title/Athlete selector, then controls

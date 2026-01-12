@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
+import { Select } from '@/components/ui/Select';
 import { addDays, formatDisplay, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
@@ -143,10 +144,21 @@ function getDisplayDateLabel(dateKey: string): string {
   return formatDisplay(dateKey);
 }
 
+function getAthletePrefix(name?: string | null): string {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'Unknown';
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const lastInitial = parts[parts.length - 1]?.[0];
+  return lastInitial ? `${first} ${lastInitial}.` : first;
+}
+
 export default function CoachDashboardPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const didInitFromTimezone = useRef(false);
+  const didInitCalendarAthleteFilter = useRef(false);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -154,6 +166,7 @@ export default function CoachDashboardPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [calendarAthleteId, setCalendarAthleteId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
@@ -174,6 +187,28 @@ export default function CoachDashboardPage() {
     setCalendarMonth({ year: todayUtcMidnight.getUTCFullYear(), month: todayUtcMidnight.getUTCMonth() });
     didInitFromTimezone.current = true;
   }, [user?.timezone]);
+
+  // Restore persisted calendar athlete filter (calendar view only).
+  useEffect(() => {
+    if (!user?.userId) return;
+    if (didInitCalendarAthleteFilter.current) return;
+    if (typeof window === 'undefined') return;
+
+    const key = 'coachkit.reviewInbox.calendarAthleteFilter';
+    const stored = localStorage.getItem(key);
+    setCalendarAthleteId(stored ? stored : null);
+
+    didInitCalendarAthleteFilter.current = true;
+  }, [user?.userId]);
+
+  const setAndPersistCalendarAthleteId = useCallback((next: string | null) => {
+    setCalendarAthleteId(next);
+    if (typeof window !== 'undefined') {
+      const key = 'coachkit.reviewInbox.calendarAthleteFilter';
+      if (!next) localStorage.removeItem(key);
+      else localStorage.setItem(key, next);
+    }
+  }, []);
 
   const todayKey = useMemo(() => {
     if (!user?.timezone) return null;
@@ -276,9 +311,25 @@ export default function CoachDashboardPage() {
     return getMonthGridDaysUtc(calendarMonth.year, calendarMonth.month);
   }, [calendarMonth.year, calendarMonth.month]);
 
+  const calendarItems = useMemo(() => {
+    if (!calendarAthleteId) return items;
+    return items.filter((item) => item.athlete?.id === calendarAthleteId);
+  }, [calendarAthleteId, items]);
+
+  const calendarAthleteOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    items.forEach((item) => {
+      if (!item.athlete?.id) return;
+      map.set(item.athlete.id, { id: item.athlete.id, name: (item.athlete.name ?? 'Unknown athlete').trim() || 'Unknown athlete' });
+    });
+    const options = Array.from(map.values());
+    options.sort((a, b) => a.name.localeCompare(b.name));
+    return options;
+  }, [items]);
+
   const itemsByActionDate = useMemo(() => {
     const grouped = new Map<string, ReviewItem[]>();
-    items.forEach((item) => {
+    calendarItems.forEach((item) => {
       if (!grouped.has(item.actionDateKey)) grouped.set(item.actionDateKey, []);
       grouped.get(item.actionDateKey)!.push(item);
     });
@@ -286,7 +337,18 @@ export default function CoachDashboardPage() {
       arr.sort((a, b) => new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime());
     });
     return grouped;
-  }, [items]);
+  }, [calendarItems]);
+
+  const visibleMonthItemCount = useMemo(() => {
+    const keys = monthDays
+      .filter((d) => d.getUTCMonth() === calendarMonth.month)
+      .map((d) => toDateInput(d));
+    let count = 0;
+    keys.forEach((key) => {
+      count += itemsByActionDate.get(key)?.length ?? 0;
+    });
+    return count;
+  }, [calendarMonth.month, itemsByActionDate, monthDays]);
 
   const selectedCount = selectedIds.size;
 
@@ -630,6 +692,24 @@ export default function CoachDashboardPage() {
                 <Icon name="next" size="sm" />
               </Button>
             </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-xs text-[var(--muted)]">Athlete</div>
+              <Select
+                className="min-h-[44px] w-[220px]"
+                value={calendarAthleteId ?? ''}
+                onChange={(e) => setAndPersistCalendarAthleteId(e.target.value || null)}
+                aria-label="Athlete filter"
+              >
+                <option value="">All athletes</option>
+                {calendarAthleteOptions.map((ath) => (
+                  <option key={ath.id} value={ath.id}>
+                    {ath.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
             <div className="text-sm font-medium">
               {new Date(Date.UTC(calendarMonth.year, calendarMonth.month, 1)).toLocaleDateString(undefined, {
                 month: 'long',
@@ -638,6 +718,12 @@ export default function CoachDashboardPage() {
             </div>
             <div className="w-[120px]" />
           </div>
+
+          {visibleMonthItemCount === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <p className="text-sm text-[var(--muted)]">No unreviewed sessions for this athlete in this month.</p>
+            </div>
+          ) : null}
 
           <MonthGrid>
             {monthDays.map((date) => {
@@ -673,6 +759,9 @@ export default function CoachDashboardPage() {
                       const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
                       const painFlag = item.latestCompletedActivity?.painFlag ?? false;
                       const isSkipped = item.status === 'SKIPPED';
+                      const athletePrefix = calendarAthleteId ? '' : getAthletePrefix(item.athlete?.name);
+                      const baseTitle = item.title || disciplineLabel;
+                      const displayTitle = athletePrefix ? `${athletePrefix}: ${baseTitle}` : baseTitle;
                       return (
                         <button
                           key={item.id}
@@ -685,7 +774,7 @@ export default function CoachDashboardPage() {
                         >
                           <Icon name={theme.iconName} size="sm" className={theme.textClass} />
                           <span className={cn('text-[10px] leading-none font-medium', theme.textClass)}>{disciplineLabel}</span>
-                          <span className="text-xs text-[var(--text)] truncate flex-1">{item.title || disciplineLabel}</span>
+                          <span className="text-xs text-[var(--text)] truncate flex-1">{displayTitle}</span>
                           <span className="flex items-center gap-1 flex-shrink-0">
                             {item.hasAthleteComment ? (
                               <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
