@@ -295,15 +295,6 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
                     })()}
                     <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
-                    {showStravaBadge ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src="/integrations/strava.webp"
-                        alt="Strava activity"
-                        title={isDraftStrava ? 'Strava detected (pending confirmation)' : 'Synced from Strava'}
-                        className="h-3.5 w-3.5 flex-shrink-0 opacity-90"
-                      />
-                    ) : null}
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
@@ -350,7 +341,16 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               <Card className="rounded-3xl mb-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold">From Strava</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold">From Strava</h2>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/integrations/strava.webp"
+                        alt="Strava"
+                        title={isDraftStrava ? 'Strava detected (pending confirmation)' : 'Synced from Strava'}
+                        className="h-4 w-4 scale-105 inline-block"
+                      />
+                    </div>
                     {actualDateTimeLabel ? (
                       <p className="text-xs text-[var(--muted)] mt-1">
                         Actual start time (from Strava):{' '}
