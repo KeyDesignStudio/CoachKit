@@ -5,8 +5,7 @@ import { UserButton } from '@clerk/nextjs';
 
 import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
-import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
-import { BrandingDebug } from '@/components/dev/branding-debug';
+import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
 
@@ -106,20 +105,12 @@ export async function AppHeader() {
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
-  const clubName = (() => {
-    const raw = (clubBranding.displayName || '').trim();
-    if (!raw || raw === DEFAULT_BRAND_NAME) return 'Your Club';
-    return raw;
-  })();
+  const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   return (
     <header className="px-6 pt-6">
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
       <Card className="relative flex flex-col gap-4 rounded-3xl bg-[var(--bg-surface)] p-5 md:flex-row md:items-center md:justify-between">
-        {process.env.NODE_ENV !== 'production' ? (
-          <BrandingDebug coachId={brandingCoachId} rawLogoUrl={clubBranding.logoUrl} resolvedLogoUrl={resolveLogoUrl(clubBranding.logoUrl)} />
-        ) : null}
-
         {/* Center block: true-centered CoachKit branding (independent of nav width) */}
         <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
           <Link
@@ -136,17 +127,22 @@ export async function AppHeader() {
           </Link>
         </div>
 
-        {/* Left block: Club branding (name then logo) */}
-        <div className="flex max-w-[240px] min-w-0 items-center gap-3 sm:max-w-[320px]">
-          <div className="min-w-0">
-            <p className="m-0 truncate text-sm font-medium text-[var(--text)]">{clubName}</p>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolveLogoUrl(clubBranding.logoUrl)}
-            alt={`${clubName} logo`}
-            className="h-12 w-auto object-contain flex-shrink-0 sm:h-14"
-          />
+        {/* Left block: Club branding (logo-only else text fallback) */}
+        <div className="flex min-w-0 items-center">
+          {headerClubBranding.type === 'logo' ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={headerClubBranding.logoUrl}
+              alt={`${headerClubBranding.name} logo`}
+              className="h-12 w-auto object-contain sm:h-14"
+            />
+          ) : (
+            <span
+              className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
+            >
+              {headerClubBranding.name}
+            </span>
+          )}
         </div>
 
         {/* Right block: Nav + user (unchanged) */}
