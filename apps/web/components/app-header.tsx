@@ -136,19 +136,17 @@ export async function AppHeader() {
           </Link>
         </div>
 
-        {/* Left block: Club branding (name then logo) */}
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="min-w-0">
-            <p className="m-0 max-w-[10rem] truncate font-display text-base font-semibold tracking-tight text-[var(--text)] sm:max-w-[14rem] md:max-w-[18rem]">
-              {clubName}
-            </p>
-          </div>
+        {/* Left block: Club branding (logo then name) */}
+        <div className="flex max-w-[320px] min-w-0 items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resolveLogoUrl(clubBranding.logoUrl)}
             alt={`${clubName} logo`}
-            className="h-[55px] w-[55px] object-contain"
+            className="h-14 w-auto object-contain flex-shrink-0"
           />
+          <div className="min-w-0">
+            <p className="m-0 truncate text-sm font-medium text-[var(--text)]">{clubName}</p>
+          </div>
         </div>
 
         {/* Right block: Nav + user (unchanged) */}
