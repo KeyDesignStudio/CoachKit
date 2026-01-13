@@ -177,6 +177,10 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
     autosaveTimerRef.current = window.setTimeout(async () => {
       try {
+        // Avoid sending invalid combos while the user is mid-selection.
+        if (trainingPlanFrequency !== 'AD_HOC' && trainingPlanDayOfWeek === null) return;
+        if (trainingPlanFrequency === 'MONTHLY' && trainingPlanWeekOfMonth === null) return;
+
         setScheduleSaving(true);
 
         // Normalize dependent fields
@@ -189,14 +193,14 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
         await request(`/api/coach/athletes/${athleteId}`, {
           method: 'PATCH',
-          body: JSON.stringify({
+          data: {
             trainingPlanFrequency,
             trainingPlanDayOfWeek: normalized.trainingPlanDayOfWeek,
             trainingPlanWeekOfMonth: normalized.trainingPlanWeekOfMonth,
-          }),
+          },
         });
       } catch (err) {
-        setScheduleError(err instanceof Error ? err.message : 'Failed to save Training Plan');
+        setScheduleError(err instanceof Error ? err.message : 'Could not save training plan schedule.');
       } finally {
         setScheduleSaving(false);
       }
@@ -223,7 +227,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
       await request(`/api/coach/athletes/${athleteId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
+        data: {
           name: name.trim(),
           timezone,
           disciplines: selectedDisciplines,
@@ -235,7 +239,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
             trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
           dateOfBirth: dateOfBirth || null,
           coachNotes: coachNotes.trim() || null,
-        }),
+        },
       });
 
       onSaved();

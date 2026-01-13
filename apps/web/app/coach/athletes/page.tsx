@@ -103,17 +103,17 @@ export default function CoachAthletesPage() {
 
   const formatTrainingPlanLine = (athlete: AthleteRecord) => {
     const freq = athlete.trainingPlanFrequency;
-    if (freq === 'AD_HOC') return 'Training Plan: Ad hoc';
+    if (freq === 'AD_HOC') return 'Training Plans: Ad hoc';
 
     const day = athlete.trainingPlanDayOfWeek;
-    if (day === null || day === undefined) return 'Training Plan: Ad hoc';
+    if (day === null || day === undefined) return 'Training Plans: Ad hoc';
 
-    if (freq === 'WEEKLY') return `Training Plan: Weekly · ${dayName(day)}`;
-    if (freq === 'FORTNIGHTLY') return `Training Plan: Fortnightly · ${dayName(day)}`;
+    if (freq === 'WEEKLY') return `Training Plans: Weekly on ${dayName(day)}`;
+    if (freq === 'FORTNIGHTLY') return `Training Plans: Fortnightly on ${dayName(day)}`;
 
     const week = athlete.trainingPlanWeekOfMonth;
-    if (!week) return 'Training Plan: Ad hoc';
-    return `Training Plan: Monthly · ${ordinal(week)} ${dayName(day)}`;
+    if (!week) return 'Training Plans: Ad hoc';
+    return `Training Plans: Monthly (Week ${week}) on ${dayName(day)}`;
   };
 
   if (userLoading) {
