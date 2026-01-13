@@ -137,6 +137,7 @@ export default function DevCoachWeekPreviewPage() {
                   timeZone="Australia/Brisbane"
                   onClick={() => setClicked(`item:${item.id}`)}
                   now={new Date('2026-01-03T10:00:00Z')}
+                  statusIndicatorVariant="bar"
                 />
               ))}
             </AthleteWeekDayColumn>

@@ -27,6 +27,7 @@ type AthleteWeekSessionRowProps = {
   now?: Date;
   variant?: 'default' | 'stacked';
   showTimeOnMobile?: boolean;
+  statusIndicatorVariant?: 'icon' | 'bar';
 };
 
 function getDisciplineLabel(discipline: string): string {
@@ -37,14 +38,12 @@ function getDisciplineLabel(discipline: string): string {
   return d.slice(0, 5);
 }
 
-function getAccountabilityStatusIcon(params: {
+function getStatusBarConfig(params: {
   item: AthleteWeekSessionRowItem;
   now: Date;
   timeZone: string;
-}): { name: IconName | null; className: string; title: string | null } {
+}): { iconName: IconName; ariaLabel: string; bgClassName: string; title: string | null } {
   const { item, now, timeZone } = params;
-
-  if (item.discipline === 'REST') return { name: null, className: '', title: null };
 
   const indicator = getSessionStatusIndicator({
     status: item.status,
@@ -53,16 +52,37 @@ function getAccountabilityStatusIcon(params: {
     now,
   });
 
-  if (indicator.iconName === 'planned') return { name: null, className: '', title: null };
+  const isCompleted = item.status === 'COMPLETED_SYNCED' || item.status === 'COMPLETED_MANUAL';
+  const isSkipped = item.status === 'SKIPPED';
+  const isMissed = indicator.iconName === 'missed';
 
-  return {
-    name: indicator.iconName,
-    className: indicator.colorClass,
-    title:
-      indicator.iconName === 'missed'
-        ? 'Missed workout – this workout was planned but not completed'
-        : null,
-  };
+  if (isCompleted) {
+    return { iconName: 'completed', ariaLabel: 'Completed', bgClassName: 'bg-emerald-600', title: null };
+  }
+
+  if (isSkipped) {
+    return { iconName: 'skipped', ariaLabel: 'Skipped', bgClassName: 'bg-rose-600', title: null };
+  }
+
+  if (isMissed) {
+    return {
+      iconName: 'missed',
+      ariaLabel: 'Missed workout',
+      bgClassName: 'bg-rose-600',
+      title: 'Missed workout – this workout was planned but not completed',
+    };
+  }
+
+  if (item.status === 'COMPLETED_SYNCED_DRAFT') {
+    return {
+      iconName: 'needsReview',
+      ariaLabel: 'Draft completion (pending confirmation)',
+      bgClassName: 'bg-amber-500',
+      title: null,
+    };
+  }
+
+  return { iconName: 'planned', ariaLabel: 'Planned', bgClassName: 'bg-amber-500', title: null };
 }
 
 export function AthleteWeekSessionRow({
@@ -72,13 +92,14 @@ export function AthleteWeekSessionRow({
   timeZone,
   variant = 'default',
   showTimeOnMobile = true,
+  statusIndicatorVariant = 'icon',
 }: AthleteWeekSessionRowProps) {
   const theme = getDisciplineTheme(item.discipline as any);
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
 
   const pain = item.latestCompletedActivity?.painFlag ?? false;
-  const statusIcon = getAccountabilityStatusIcon({ item, now: effectiveNow, timeZone });
+  const statusBar = getStatusBarConfig({ item, now: effectiveNow, timeZone });
 
   const isStacked = variant === 'stacked';
 
@@ -92,18 +113,16 @@ export function AthleteWeekSessionRow({
       }}
       data-athlete-week-session-row="v2"
       className={cn(
-        'w-full cursor-pointer text-left min-h-[44px]',
+        'w-full cursor-pointer text-left min-h-[44px] relative overflow-hidden',
         isStacked
           ? cn(
               'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded',
-              mobilePillPadding,
               'transition-shadow',
               'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
               'active:bg-[var(--bg-structure)] md:active:bg-[var(--bg-card)]'
             )
           : cn(
               'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded',
-              mobilePillPadding,
               'transition-shadow',
               'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-visible:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
               'active:bg-[var(--bg-structure)] md:active:bg-[var(--bg-card)]'
@@ -111,7 +130,7 @@ export function AthleteWeekSessionRow({
       )}
       aria-label={`Open ${disciplineLabel} workout`}
     >
-      <div className={cn('flex items-center min-w-0', mobilePillGap)}>
+      <div className={cn('flex items-center min-w-0 h-full', mobilePillGap, mobilePillPadding, statusIndicatorVariant === 'bar' ? 'pr-4' : '')}>
         {/* 1) Icon + discipline label (stacked; stable) */}
         <div className="flex flex-col items-center justify-center w-11 flex-shrink-0">
           <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'text-[16px] leading-none')} />
@@ -133,18 +152,46 @@ export function AthleteWeekSessionRow({
           </p>
         </div>
 
-        {/* 4) Indicators (right-aligned; consistent order) */}
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          {pain ? <Icon name="painFlag" size="xs" className={cn('leading-none text-rose-500', CALENDAR_ACTION_ICON_CLASS)} /> : null}
-          {statusIcon.name ? (
-            <span title={statusIcon.title ?? undefined}>
-              <Icon name={statusIcon.name} size="xs" className={cn('leading-none', CALENDAR_ACTION_ICON_CLASS, statusIcon.className)} />
+        {/* 4) Indicators (right-aligned; pain stays inline; status may become a full-height bar) */}
+        {pain ? (
+          <div className="flex items-center flex-shrink-0 whitespace-nowrap">
+            <Icon name="painFlag" size="xs" className={cn('leading-none text-rose-500', CALENDAR_ACTION_ICON_CLASS)} />
+          </div>
+        ) : null}
+
+        {statusIndicatorVariant === 'icon' ? (
+          <div className="flex items-center flex-shrink-0 whitespace-nowrap">
+            <span title={statusBar.title ?? undefined}>
+              <Icon
+                name={statusBar.iconName}
+                size="xs"
+                className={cn('leading-none', CALENDAR_ACTION_ICON_CLASS, 'text-[var(--muted)]')}
+                aria-label={statusBar.ariaLabel}
+                aria-hidden={false}
+              />
             </span>
-          ) : (
-            <span className="w-[13px]" />
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
+
+      {statusIndicatorVariant === 'bar' ? (
+        <div
+          className={cn(
+            'absolute right-0 top-0 bottom-0 w-3 flex items-center justify-center',
+            statusBar.bgClassName
+          )}
+          title={statusBar.title ?? undefined}
+          aria-hidden
+        >
+          <Icon
+            name={statusBar.iconName}
+            size="xs"
+            className={cn('text-white leading-none scale-[1.05] origin-center')}
+            aria-label={statusBar.ariaLabel}
+            aria-hidden={false}
+          />
+        </div>
+      ) : null}
     </button>
   );
 }

@@ -25,6 +25,7 @@ import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
@@ -1082,6 +1083,7 @@ export default function CoachCalendarPage() {
                     <div className="flex flex-col">
                       {selected.map((athlete, index) => {
                         const tz = athlete.user.timezone || 'Australia/Brisbane';
+                        const showAthleteSubheaderOnMobile = selected.length > 1;
                         const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
                         const dayItems = sortSessionsForDay(
                           dayItemsRaw.map((item) => ({
@@ -1101,15 +1103,20 @@ export default function CoachCalendarPage() {
 
                         return (
                           <div key={athlete.userId} className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]">
-                            {/* Desktop-only: athlete subheader + per-athlete add */}
-                            <div className="hidden md:flex h-8 items-center justify-between gap-2">
+                            {/* Athlete subheader: always on desktop; on mobile only when stacked */}
+                            <div
+                              className={cn(
+                                'h-8 items-center justify-between gap-2',
+                                showAthleteSubheaderOnMobile ? 'flex md:flex' : 'hidden md:flex'
+                              )}
+                            >
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
                                 {athlete.user.name || athlete.userId}
                               </div>
                               <button
                                 type="button"
                                 onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                                className="hidden md:inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                                 aria-label="Add workout"
                                 title="Add workout"
                               >
@@ -1128,11 +1135,12 @@ export default function CoachCalendarPage() {
                                   key={item.id}
                                   item={{
                                     ...(item as any),
-                                    title: `${item.title || item.discipline || 'Workout'} · ${athlete.user.name || athlete.userId}`,
+                                    title: `${item.title || item.discipline || 'Workout'}`,
                                   }}
                                   timeZone={tz}
                                   onClick={() => openEditDrawer(item)}
                                   showTimeOnMobile={false}
+                                  statusIndicatorVariant="bar"
                                 />
                               ))}
                             </div>
