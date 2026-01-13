@@ -26,6 +26,7 @@ type AthleteWeekSessionRowProps = {
   timeZone: string;
   now?: Date;
   variant?: 'default' | 'stacked';
+  showTimeOnMobile?: boolean;
 };
 
 function getDisciplineLabel(discipline: string): string {
@@ -64,7 +65,14 @@ function getAccountabilityStatusIcon(params: {
   };
 }
 
-export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 'default' }: AthleteWeekSessionRowProps) {
+export function AthleteWeekSessionRow({
+  item,
+  onClick,
+  now,
+  timeZone,
+  variant = 'default',
+  showTimeOnMobile = true,
+}: AthleteWeekSessionRowProps) {
   const theme = getDisciplineTheme(item.discipline as any);
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
@@ -112,7 +120,14 @@ export function AthleteWeekSessionRow({ item, onClick, now, timeZone, variant = 
 
         {/* 2-3) Time + title */}
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] leading-none text-[var(--muted)] whitespace-nowrap">{item.displayTimeLocal ?? ''}</p>
+          <p
+            className={cn(
+              'text-[10px] leading-none text-[var(--muted)] whitespace-nowrap',
+              showTimeOnMobile ? '' : 'hidden md:block'
+            )}
+          >
+            {item.displayTimeLocal ?? ''}
+          </p>
           <p className={cn(isStacked ? 'text-[11px]' : 'text-xs', 'font-normal truncate text-[var(--text)]')}>
             {item.title || disciplineLabel}
           </p>

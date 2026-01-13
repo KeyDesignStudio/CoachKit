@@ -5,6 +5,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import '@/app/globals.css';
 import { AppHeader } from '@/components/app-header';
 import { BrandingProvider } from '@/components/branding-context';
+import { DevAppHeader } from '@/components/dev-app-header';
 
 export const metadata: Metadata = {
   title: 'CoachKit',
@@ -29,7 +30,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-[var(--bg-page)] text-[var(--text)] overflow-x-hidden">
         {disableAuth ? (
-          <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:px-6">{children}</main>
+          <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+            <DevAppHeader />
+            <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:px-6">{children}</main>
+          </div>
         ) : (
           <BrandingProvider>
             <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">

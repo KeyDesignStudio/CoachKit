@@ -20,6 +20,15 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'iphone16pro',
+      use: {
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
       name: 'iPhone 14',
       use: { ...devices['iPhone 14'] },
     },

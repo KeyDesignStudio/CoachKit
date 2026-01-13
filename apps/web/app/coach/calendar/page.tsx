@@ -26,6 +26,7 @@ import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/compone
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
+import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -45,6 +46,7 @@ type CalendarItem = {
   id: string;
   date: string | Date;
   plannedStartTimeLocal: string | null;
+  displayTimeLocal?: string | null;
   discipline: string;
   status: string;
   title: string;
@@ -146,6 +148,7 @@ export default function CoachCalendarPage() {
   const didInitSelectedAthletes = useRef(false);
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [weekStart, setWeekStart] = useState(() => startOfWeek());
   const [athleteTimezone, setAthleteTimezone] = useState('Australia/Brisbane');
@@ -175,6 +178,9 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+
+  const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
+  const [mobileDaySheetDateStr, setMobileDaySheetDateStr] = useState<string>('');
 
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
@@ -225,6 +231,11 @@ export default function CoachCalendarPage() {
     });
     return map;
   }, [items]);
+
+  const editingItem = useMemo(() => {
+    if (drawerMode !== 'edit' || !editItemId) return null;
+    return itemsById.get(editItemId) ?? null;
+  }, [drawerMode, editItemId, itemsById]);
 
   const weekDays = useMemo(() => {
     const now = new Date();
@@ -504,11 +515,46 @@ export default function CoachCalendarPage() {
 
   useEffect(() => {
     setMounted(true);
-    const savedView = localStorage.getItem('coach-calendar-view') as ViewMode;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+
+    // Safari < 14 fallback
+    // eslint-disable-next-line deprecation/deprecation
+    media.addListener(update);
+    // eslint-disable-next-line deprecation/deprecation
+    return () => media.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (!user?.userId) return;
+    if (typeof window === 'undefined') return;
+
+    const storageKey = `coach-calendar-view:${user.userId}`;
+    const raw = localStorage.getItem(storageKey);
+    const savedView = raw === 'week' || raw === 'month' ? (raw as ViewMode) : null;
+
     if (savedView) {
       setViewMode(savedView);
+      return;
     }
-  }, []);
+
+    // Mobile default: Week (month is secondary).
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setViewMode('week');
+    }
+  }, [mounted, user?.userId]);
 
   // Dev-only perf marks
   useEffect(() => {
@@ -553,10 +599,23 @@ export default function CoachCalendarPage() {
 
   // Persist view mode to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('coach-calendar-view', viewMode);
-    }
-  }, [viewMode]);
+    if (typeof window === 'undefined') return;
+    if (!user?.userId) return;
+    localStorage.setItem(`coach-calendar-view:${user.userId}`, viewMode);
+  }, [user?.userId, viewMode]);
+
+  // Mobile header title: keep iOS header meaningful without reintroducing desktop branding.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isMobile) return;
+
+    const title =
+      viewMode === 'month'
+        ? new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        : 'Calendar';
+
+    window.dispatchEvent(new CustomEvent('coachkit:mobile-header-title', { detail: { title } }));
+  }, [currentMonth.month, currentMonth.year, isMobile, viewMode]);
 
   const goToToday = () => {
     const now = new Date();
@@ -587,6 +646,16 @@ export default function CoachCalendarPage() {
     }
   };
 
+  const openMobileDaySheet = (dateStr: string) => {
+    setMobileDaySheetDateStr(dateStr);
+    setMobileDaySheetOpen(true);
+  };
+
+  const closeMobileDaySheet = () => {
+    setMobileDaySheetOpen(false);
+    setMobileDaySheetDateStr('');
+  };
+
   const openCreateDrawer = (date: string) => {
     setDrawerAthleteId(singleAthleteId);
     setSessionForm(emptyForm(date));
@@ -606,11 +675,13 @@ export default function CoachCalendarPage() {
   };
 
   const openEditDrawer = (item: CalendarItem) => {
-    const dateStr = typeof item.date === 'string' ? item.date : item.date.toISOString().split('T')[0];
+    const dateStr = (typeof item.date === 'string' ? item.date : item.date.toISOString()).split('T')[0];
+    const displayTimeLocal = item.displayTimeLocal ?? null;
     setDrawerAthleteId(item.athleteId || singleAthleteId);
     setSessionForm({
       date: dateStr,
-      plannedStartTimeLocal: item.plannedStartTimeLocal || '05:30',
+      // Match the time shown in the calendar pill (actual when available).
+      plannedStartTimeLocal: displayTimeLocal || item.plannedStartTimeLocal || '05:30',
       title: item.title,
       discipline: item.discipline,
       templateId: item.template?.id || '',
@@ -870,7 +941,43 @@ export default function CoachCalendarPage() {
               Month
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          {/* Mobile: compact date nav: <  January 2026  > */}
+          <div className="md:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
+            <button
+              type="button"
+              onClick={navigatePrev}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+              aria-label="Previous"
+            >
+              <Icon name="prev" size="md" />
+            </button>
+
+            <button
+              type="button"
+              onClick={goToToday}
+              className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] truncate hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+              aria-label="Go to today"
+              title="Go to today"
+            >
+              {mounted
+                ? viewMode === 'week'
+                  ? formatWeekOfLabel(dateRange.from, athleteTimezone)
+                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                : formatWeekOfLabel(dateRange.from, athleteTimezone)}
+            </button>
+
+            <button
+              type="button"
+              onClick={navigateNext}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+              aria-label="Next"
+            >
+              <Icon name="next" size="md" />
+            </button>
+          </div>
+
+          {/* Desktop: full date nav */}
+          <div className="hidden md:flex items-center gap-2">
             <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
               <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
             </Button>
@@ -970,6 +1077,7 @@ export default function CoachCalendarPage() {
                     formattedDate={day.formattedDate}
                     isEmpty={false}
                     isToday={isDayToday}
+                    onAddClick={selected.length === 1 ? () => openCreateDrawerForAthlete(selected[0].userId, dateKey) : undefined}
                   >
                     <div className="flex flex-col">
                       {selected.map((athlete, index) => {
@@ -992,15 +1100,16 @@ export default function CoachCalendarPage() {
                         );
 
                         return (
-                          <div key={athlete.userId} className="grid min-w-0 gap-1.5 md:gap-2 grid-rows-[44px_auto] md:grid-rows-[32px_auto]">
-                            <div className="h-11 md:h-8 flex items-center justify-between gap-2">
+                          <div key={athlete.userId} className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]">
+                            {/* Desktop-only: athlete subheader + per-athlete add */}
+                            <div className="hidden md:flex h-8 items-center justify-between gap-2">
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
                                 {athlete.user.name || athlete.userId}
                               </div>
                               <button
                                 type="button"
                                 onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                className="inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                                 aria-label="Add workout"
                                 title="Add workout"
                               >
@@ -1013,13 +1122,17 @@ export default function CoachCalendarPage() {
                               </button>
                             </div>
 
-                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2">
+                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2 md:min-h-[72px] md:max-h-[72px] md:overflow-y-auto">
                               {dayItems.map((item) => (
                                 <AthleteWeekSessionRow
                                   key={item.id}
-                                  item={item as any}
+                                  item={{
+                                    ...(item as any),
+                                    title: `${item.title || item.discipline || 'Workout'} · ${athlete.user.name || athlete.userId}`,
+                                  }}
                                   timeZone={tz}
                                   onClick={() => openEditDrawer(item)}
+                                  showTimeOnMobile={false}
                                 />
                               ))}
                             </div>
@@ -1049,6 +1162,11 @@ export default function CoachCalendarPage() {
                   isToday={isToday(day.date)}
                   canAdd={selectedAthleteIds.size === 1}
                   onDayClick={(date) => {
+                    if (isMobile) {
+                      openMobileDaySheet(toDateInput(date));
+                      return;
+                    }
+
                     setViewMode('week');
                     setWeekStart(startOfWeek(date));
                   }}
@@ -1095,6 +1213,17 @@ export default function CoachCalendarPage() {
               value={sessionForm.plannedStartTimeLocal}
               onChange={(event) => setSessionForm({ ...sessionForm, plannedStartTimeLocal: event.target.value })}
             />
+            {editingItem?.latestCompletedActivity?.effectiveStartTimeUtc || editingItem?.latestCompletedActivity?.startTime ? (
+              <span className="text-xs font-normal text-[var(--muted)]">
+                Actual start:{' '}
+                {editingItem.latestCompletedActivity.startTime
+                  ? editingItem.latestCompletedActivity.startTime
+                  : new Date(editingItem.latestCompletedActivity.effectiveStartTimeUtc as string).toLocaleTimeString(undefined, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+              </span>
+            ) : null}
           </label>
           <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
             Discipline
@@ -1147,6 +1276,74 @@ export default function CoachCalendarPage() {
           {error && drawerMode !== 'closed' ? <p className="text-xs text-rose-500">{error}</p> : null}
         </div>
       </SessionDrawer>
+
+      {/* Mobile month day bottom sheet */}
+      {isMobile && viewMode === 'month' && mobileDaySheetOpen ? (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/25" onClick={closeMobileDaySheet} />
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+            role="dialog"
+            aria-label="Day workouts"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-[var(--text)]">{mobileDaySheetDateStr || 'Day'}</div>
+                <div className="text-xs text-[var(--muted)]">Workouts</div>
+              </div>
+              <button
+                type="button"
+                onClick={closeMobileDaySheet}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Close"
+              >
+                <Icon name="close" size="md" />
+              </button>
+            </div>
+
+            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {(() => {
+                const day = monthDays.find((d) => d.dateStr === mobileDaySheetDateStr);
+                const dayItems = day?.items ?? [];
+
+                if (dayItems.length === 0) {
+                  return <div className="text-sm text-[var(--muted)]">No workouts</div>;
+                }
+
+                return (
+                  <div className="flex flex-col gap-2">
+                    {dayItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        data-day-workout-item="true"
+                        onClick={() => {
+                          closeMobileDaySheet();
+                          openEditDrawer(item);
+                        }}
+                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-left hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--bg-structure)]">
+                            <Icon name={getDisciplineTheme(item.discipline as any).iconName} size="md" aria-hidden />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] text-[var(--muted)] whitespace-nowrap">
+                              {(item as any).displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
+                            </div>
+                            <div className="text-sm font-medium text-[var(--text)] truncate">{item.title}</div>
+                            <div className="text-[11px] text-[var(--muted)] truncate">{item.athleteName ?? ''}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

@@ -7,14 +7,13 @@ import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
+import { MobileNavDrawer } from '@/components/MobileNavDrawer';
+import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
 
 const DESKTOP_NAV_LINK_CLASS =
   'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
-
-const MOBILE_MENU_LINK_CLASS =
-  'flex items-center rounded-xl px-3 min-h-[44px] text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
@@ -114,79 +113,60 @@ export async function AppHeader() {
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
+  const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
+
   return (
-    <header className="px-4 pt-4 md:px-6 md:pt-6">
+    <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-3 md:px-6 md:pt-6">
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
-      <Card className="relative flex flex-col gap-4 rounded-3xl bg-[var(--bg-surface)] p-5 md:flex-row md:items-center md:justify-between">
-        {/* Center block: true-centered CoachKit branding (independent of nav width) */}
-        <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
-          <Link
-            href="/" 
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
-          >
-            <span className="hidden text-base sm:inline">CoachKit</span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/coachkit-logo.png"
-              alt="CoachKit"
-              className="h-9 w-9 object-contain"
-            />
-          </Link>
+      <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
+        {/* Mobile (iOS-first): single row header */}
+        <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
+          {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
+          <MobileHeaderTitle />
+          <div className="flex w-11 justify-end">
+            {userId && <UserButton afterSignOutUrl="/" />}
+          </div>
         </div>
 
-        {/* Left block: Club branding (logo-only else text fallback) */}
-        <div className="flex min-w-0 items-center">
-          {headerClubBranding.type === 'logo' ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={headerClubBranding.logoUrl}
-              alt={`${headerClubBranding.name} logo`}
-              className="h-12 w-auto object-contain sm:h-14"
-            />
-          ) : (
-            <span
-              className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
+        {/* Desktop: keep existing multi-brand header */}
+        <div className="relative hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4 md:p-5">
+          {/* Center block: true-centered CoachKit branding (independent of nav width) */}
+          <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
+            <Link
+              href="/" 
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
             >
-              {headerClubBranding.name}
-            </span>
-          )}
-        </div>
+              <span className="hidden text-base sm:inline">CoachKit</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/coachkit-logo.png"
+                alt="CoachKit"
+                className="h-9 w-9 object-contain"
+              />
+            </Link>
+          </div>
 
-        {/* Right block: Nav + user (unchanged) */}
-        <div className="flex items-center gap-3 md:gap-4">
-          {navLinks.length > 0 ? (
-            <>
-              {/* Mobile: collapsible menu (no hover reliance) */}
-              <details className="relative md:hidden">
-                <summary className="list-none cursor-pointer select-none rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-[var(--text)] uppercase">
-                  Menu
-                </summary>
-                <nav className="absolute right-0 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-sm p-2 uppercase">
-                  {navLinks.map((link) => (
-                    link.href.endsWith('/settings') ? (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        aria-label="Settings"
-                        className={`${MOBILE_MENU_LINK_CLASS} justify-center`}
-                      >
-                        <Icon name="settings" size="md" className="text-[var(--text)]" />
-                        <span className="sr-only">Settings</span>
-                      </Link>
-                    ) : (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`${MOBILE_MENU_LINK_CLASS} whitespace-nowrap`}
-                    >
-                      {link.label}
-                    </Link>
-                    )
-                  ))}
-                </nav>
-              </details>
+          {/* Left block: Club branding (logo-only else text fallback) */}
+          <div className="flex min-w-0 items-center">
+            {headerClubBranding.type === 'logo' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={headerClubBranding.logoUrl}
+                alt={`${headerClubBranding.name} logo`}
+                className="h-12 w-auto object-contain sm:h-14"
+              />
+            ) : (
+              <span
+                className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
+              >
+                {headerClubBranding.name}
+              </span>
+            )}
+          </div>
 
-              {/* Desktop */}
+          {/* Right block: Nav + user (desktop) */}
+          <div className="flex items-center gap-3 md:gap-4">
+            {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
                 {navLinks.map((link) =>
                   link.href.endsWith('/settings') ? (
@@ -210,10 +190,10 @@ export async function AppHeader() {
                   )
                 )}
               </nav>
-            </>
-          ) : null}
+            ) : null}
 
-          {userId && <UserButton afterSignOutUrl="/" />}
+            {userId && <UserButton afterSignOutUrl="/" />}
+          </div>
         </div>
       </Card>
     </header>

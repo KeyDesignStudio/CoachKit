@@ -30,6 +30,7 @@ export const ICON_NAMES = [
   'needsReview',
   
   // Navigation / actions
+  'menu',
   'prev',
   'next',
   'today',
@@ -76,6 +77,7 @@ export const ICONS: Record<IconName, string> = {
   needsReview: 'pending_actions',
   
   // Navigation / actions
+  menu: 'menu',
   prev: 'chevron_left',
   next: 'chevron_right',
   today: 'today',

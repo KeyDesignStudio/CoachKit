@@ -1,0 +1,128 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
+import { usePathname } from 'next/navigation';
+
+import { Icon } from '@/components/ui/Icon';
+import { cn } from '@/lib/cn';
+
+export type MobileNavLink = {
+  href: Route | string;
+  label: string;
+  ariaLabel?: string;
+};
+
+type MobileNavDrawerProps = {
+  links: MobileNavLink[];
+};
+
+export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  const close = useCallback(() => setOpen(false), []);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+
+  useEffect(() => {
+    // Close drawer on navigation.
+    setOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [close, open]);
+
+  const effectiveLinks = useMemo(() => {
+    // Defensive: avoid empty/duplicate labels in drawer.
+    const seen = new Set<string>();
+    return links.filter((link) => {
+      const key = `${link.href}::${link.label}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [links]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={toggle}
+        className={cn(
+          'inline-flex h-11 w-11 items-center justify-center rounded-full',
+          'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+          'text-[var(--text)]',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+        )}
+        aria-label={open ? 'Close menu' : 'Open menu'}
+      >
+        <Icon name={open ? 'close' : 'menu'} size="md" className="text-[var(--text)]" aria-hidden />
+      </button>
+
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/25" onClick={close} />
+
+          <nav
+            data-mobile-nav-drawer="v1"
+            className={cn(
+              'fixed left-0 top-0 z-50 h-full w-[min(86vw,360px)]',
+              'bg-[var(--bg-surface)] border-r border-[var(--border-subtle)]',
+              'overflow-y-auto'
+            )}
+            aria-label="Mobile navigation"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
+              <div className="text-sm font-semibold text-[var(--text)]">Menu</div>
+              <button
+                type="button"
+                onClick={close}
+                className={cn(
+                  'inline-flex h-11 w-11 items-center justify-center rounded-full',
+                  'text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+                )}
+                aria-label="Close menu"
+              >
+                <Icon name="close" size="md" className="text-[var(--text)]" aria-hidden />
+              </button>
+            </div>
+
+            <div className="flex flex-col px-2 py-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {effectiveLinks.map((link) => {
+                const active = pathname === link.href;
+                return (
+                  <Link
+                    key={`${link.href}::${link.label}`}
+                    href={link.href as any}
+                    aria-label={link.ariaLabel ?? link.label}
+                    className={cn(
+                      'w-full min-h-[44px] px-4 py-3 rounded-xl',
+                      'text-sm font-medium text-[var(--text)]',
+                      'inline-flex items-center',
+                      'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
+                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+                      active ? 'bg-[var(--bg-structure)]' : ''
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        </>
+      ) : null}
+    </>
+  );
+}
