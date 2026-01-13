@@ -21,6 +21,7 @@ import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
 import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
+import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -364,13 +365,13 @@ export default function AthleteCalendarPage() {
       <header className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
           <div>
-            <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Training</p>
+            <p className={uiEyebrow}>Training</p>
             <h1
-              className={`text-2xl md:text-3xl ${viewMode === 'week' ? 'font-medium' : 'font-normal'}`}
+              className={`${uiH1} ${viewMode === 'week' ? 'font-medium' : 'font-normal'}`}
             >
               {viewMode === 'week' ? 'Weekly Calendar' : 'Monthly Calendar'}
             </h1>
-            <p className="text-xs md:text-sm text-[var(--muted)]">
+            <p className={`${uiMuted} text-xs md:text-sm`}>
               {mounted ? (
                 viewMode === 'week' 
                   ? formatWeekOfLabel(dateRange.from, athleteTimezone)

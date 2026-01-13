@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { AthleteDetailDrawer } from '@/components/coach/AthleteDetailDrawer';
 import { CreateAthleteModal } from '@/components/coach/CreateAthleteModal';
+import { uiH2, uiMuted } from '@/components/ui/typography';
 
 interface AthleteRecord {
   userId: string;
@@ -118,7 +119,7 @@ export default function CoachAthletesPage() {
   if (userLoading) {
     return (
       <div className="px-6 pt-6">
-        <p className="text-slate-600">Loading...</p>
+        <p className="text-[var(--muted)]">Loading...</p>
       </div>
     );
   }
@@ -126,7 +127,7 @@ export default function CoachAthletesPage() {
   if (!user || user.role !== 'COACH') {
     return (
       <div className="px-6 pt-6">
-        <p className="text-slate-600">Coach access required.</p>
+        <p className="text-[var(--muted)]">Coach access required.</p>
       </div>
     );
   }
@@ -137,8 +138,8 @@ export default function CoachAthletesPage() {
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="mb-1 text-xl md:text-2xl font-bold">Athlete Profiles</h1>
-            <p className="text-xs md:text-sm text-slate-600">Manage your athlete roster</p>
+            <h1 className={`${uiH2} mb-1 font-semibold`}>Athlete Profiles</h1>
+            <p className={`${uiMuted} text-xs md:text-sm`}>Manage your athlete roster</p>
           </div>
           <Button onClick={() => setModalOpen(true)} className="min-h-[44px]">
             <Icon name="add" size="sm" />
@@ -154,12 +155,12 @@ export default function CoachAthletesPage() {
         )}
 
         {/* Loading State */}
-        {loading && <p className="text-center text-slate-500">Loading athletes...</p>}
+        {loading && <p className="text-center text-[var(--muted)]">Loading athletes...</p>}
 
         {/* Athletes List */}
         {!loading && athletes.length === 0 && (
           <div className="rounded-3xl border border-white/30 bg-white/40 p-8 text-center backdrop-blur-xl">
-            <p className="text-slate-600">No athletes yet. Click &quot;New Athlete&quot; to add your first athlete.</p>
+            <p className="text-[var(--muted)]">No athletes yet. Click &quot;New Athlete&quot; to add your first athlete.</p>
           </div>
         )}
 

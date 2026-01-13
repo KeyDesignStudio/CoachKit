@@ -445,7 +445,7 @@ export default function CoachCalendarPage() {
       <header className="flex flex-col gap-4 rounded-3xl border border-white/20 bg-white/40 px-6 py-5 backdrop-blur-3xl shadow-inner">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Planning</p>
+            <p className="text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Planning</p>
             <h1 className="text-3xl font-semibold">Coach Calendar</h1>
             <p className="text-sm text-[var(--muted)]">Week of {weekRange.from}</p>
           </div>

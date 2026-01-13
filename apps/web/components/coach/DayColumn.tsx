@@ -22,7 +22,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
         <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
               <p className="text-sm font-medium">{formattedDate}</p>
             </div>
             {isToday && (
@@ -57,7 +57,7 @@ export function DayColumn({ dayName, formattedDate, children, onAddClick, isEmpt
       >
         <div className="sticky top-0 z-10 border-b border-[var(--border-subtle)] px-3 py-2 bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
             {isToday && (
               <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
             )}

@@ -17,6 +17,7 @@ import { addDays, formatDisplay, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
+import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 
 type CommentRecord = {
   id: string;
@@ -176,7 +177,7 @@ function SelectAllGroupHeader({
 
   return (
     <div className="flex items-center justify-between gap-3 mb-2">
-      <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         {title} ({count})
       </h2>
 
@@ -566,9 +567,9 @@ export default function CoachDashboardPage() {
       <header className="flex flex-col gap-4 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Coach Review</p>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Inbox</h1>
-            <p className="text-xs md:text-sm text-[var(--muted)]">Only unreviewed athlete actions (completed or skipped).</p>
+            <p className={uiEyebrow}>Coach Review</p>
+            <h1 className={`${uiH1} font-semibold tracking-tight`}>Inbox</h1>
+            <p className={`${uiMuted} text-xs md:text-sm`}>Only unreviewed athlete actions (completed or skipped).</p>
           </div>
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">

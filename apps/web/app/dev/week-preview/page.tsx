@@ -101,7 +101,7 @@ export default function WeekPreviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">Dev Preview</p>
+        <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Dev Preview</p>
         <h1 className="text-2xl font-semibold">Week Preview</h1>
       </header>
 

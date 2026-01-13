@@ -12,6 +12,7 @@ import { useApi } from '@/components/api-client';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { uiH2, uiMuted } from '@/components/ui/typography';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
@@ -334,7 +335,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       >
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/20 bg-white/60 px-6 py-4 backdrop-blur-xl">
-          <h2 className="text-xl font-semibold">{name || 'Athlete Profile'}</h2>
+          <h2 className={`${uiH2} md:text-xl font-semibold`}>{name || 'Athlete Profile'}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
             ✕
           </Button>
@@ -343,7 +344,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         {/* Content */}
         <form onSubmit={handleSave} className="p-6">
           {loading ? (
-            <p className="text-center text-sm text-slate-500">Loading...</p>
+            <p className={`${uiMuted} text-center`}>Loading...</p>
           ) : error ? (
             <p className="text-center text-sm text-red-600">{error}</p>
           ) : (
@@ -364,7 +365,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Athlete timezone</label>
-                    <p className="text-xs text-slate-500 mb-2">Affects Strava times and day boundaries (missed).</p>
+                    <p className="mb-2 text-xs text-[var(--muted)]">Affects Strava times and day boundaries (missed).</p>
                     <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
                   </div>
                   <div>
@@ -375,7 +376,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                     <label className="mb-1 block text-sm font-medium">Training Plan Schedule</label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
+                        <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Frequency</label>
                         <Select
                           value={trainingPlanFrequency}
                           onChange={(e) => {
@@ -404,7 +405,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
                       {trainingPlanFrequency === 'MONTHLY' ? (
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Week of month</label>
+                          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Week of month</label>
                           <Select
                             value={trainingPlanWeekOfMonth ?? ''}
                             onChange={(e) =>
@@ -422,7 +423,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
                       {trainingPlanFrequency !== 'AD_HOC' ? (
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Day</label>
+                          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Day</label>
                           <Select
                             value={trainingPlanDayOfWeek ?? ''}
                             onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
@@ -441,7 +442,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                     </div>
 
                     {scheduleSaving ? (
-                      <p className="mt-2 text-xs text-slate-500">Saving Training Plan…</p>
+                      <p className="mt-2 text-xs text-[var(--muted)]">Saving Training Plan…</p>
                     ) : scheduleError ? (
                       <p className="mt-2 text-xs text-red-600">{scheduleError}</p>
                     ) : null}
@@ -461,7 +462,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                               'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
                               isSelected
                                 ? 'border-blue-400 bg-blue-50 text-blue-700'
-                                : 'border-white/30 bg-white/40 text-slate-600 hover:bg-white/60'
+                                : 'border-white/30 bg-white/40 text-[var(--muted)] hover:bg-white/60'
                             )}
                           >
                             <Icon name={theme.iconName} size="sm" className={isSelected ? theme.textClass : ''} />
@@ -501,7 +502,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
               <section className="space-y-4 rounded-2xl border border-white/30 bg-white/40 p-4">
                 <h3 className="text-lg font-semibold">Pain History</h3>
                 {painHistory.length === 0 ? (
-                  <p className="text-sm text-slate-500">No pain flags recorded.</p>
+                  <p className="text-sm text-[var(--muted)]">No pain flags recorded.</p>
                 ) : (
                   <div className="space-y-2">
                     {painHistory.map((item) => {
@@ -516,9 +517,9 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                           </div>
                           <div className="flex-1">
                             <div className="font-medium">{item.title}</div>
-                            <div className="text-xs text-slate-600">{formatDate(item.date)}</div>
+                            <div className="text-xs text-[var(--muted)]">{formatDate(item.date)}</div>
                             {item.athletePainComment && (
-                              <div className="mt-1 italic text-slate-700">&quot;{item.athletePainComment}&quot;</div>
+                              <div className="mt-1 italic text-[var(--text)]">&quot;{item.athletePainComment}&quot;</div>
                             )}
                           </div>
                         </div>
@@ -584,7 +585,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
                     {/* Entries List */}
                     {journalEntries.length === 0 ? (
-                      <p className="text-sm text-slate-500">No journal entries yet.</p>
+                      <p className="text-sm text-[var(--muted)]">No journal entries yet.</p>
                     ) : (
                       <div className="space-y-2">
                         {journalEntries.map((entry) => (
@@ -593,7 +594,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                             className="rounded-xl border border-white/30 bg-white/30 p-3 text-sm"
                           >
                             <div className="mb-1 flex items-center justify-between">
-                              <span className="text-xs font-medium text-slate-600">
+                              <span className="text-xs font-medium text-[var(--muted)]">
                                 {formatDate(entry.entryDate)}
                               </span>
                               <button
@@ -604,7 +605,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                                 Delete
                               </button>
                             </div>
-                            <p className="whitespace-pre-wrap text-slate-700">{entry.body}</p>
+                            <p className="whitespace-pre-wrap text-[var(--text)]">{entry.body}</p>
                           </div>
                         ))}
                       </div>

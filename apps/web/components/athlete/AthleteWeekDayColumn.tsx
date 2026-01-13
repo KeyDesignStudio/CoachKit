@@ -63,12 +63,12 @@ export function AthleteWeekDayColumn({
       <div className={cn('flex items-center justify-between gap-2', headerClassName)}>
         {onHeaderClick ? (
           <button type="button" onClick={onHeaderClick} className="min-w-0 text-left">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
           </button>
         ) : (
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">{dayName}</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
             <p className="text-sm font-medium truncate">{formattedDate}</p>
           </div>
         )}

@@ -161,7 +161,7 @@ export default function AthleteSettingsPage() {
   return (
     <section className="flex flex-col gap-6">
       <header className="rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
-        <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Settings</p>
+        <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Settings</p>
         <h1 className="text-2xl md:text-3xl font-semibold">Integrations</h1>
         <p className="text-xs md:text-sm text-[var(--muted)]">Manage connections to external services.</p>
       </header>

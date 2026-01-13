@@ -121,7 +121,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
             type="button"
             onClick={handleClose}
             disabled={creating}
-            className="text-2xl leading-none text-slate-400 hover:text-slate-600"
+            className="text-2xl leading-none text-[var(--muted)] hover:text-[var(--text)]"
           >
             ✕
           </button>
@@ -178,7 +178,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
                       'flex items-center gap-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-all',
                       isSelected
                         ? 'border-blue-400 bg-blue-50 text-blue-700'
-                        : 'border-white/30 bg-white/40 text-slate-700 hover:border-slate-300 hover:bg-white/60'
+                        : 'border-white/30 bg-white/40 text-[var(--text)] hover:border-slate-300 hover:bg-white/60'
                     )}
                   >
                     <Icon name={theme.iconName} className="text-base" />
@@ -193,7 +193,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
             <label className="mb-1 block text-sm font-medium">Training Plan Schedule</label>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
+                <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Frequency</label>
                 <Select
                   value={trainingPlanFrequency}
                   onChange={(e) => {
@@ -220,7 +220,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
 
               {trainingPlanFrequency === 'MONTHLY' ? (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Week of month</label>
+                  <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Week of month</label>
                   <Select
                     value={trainingPlanWeekOfMonth ?? ''}
                     onChange={(e) => setTrainingPlanWeekOfMonth((Number(e.target.value) as 1 | 2 | 3 | 4) || null)}
@@ -235,7 +235,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
 
               {trainingPlanFrequency !== 'AD_HOC' ? (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Day</label>
+                  <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Day</label>
                   <Select
                     value={trainingPlanDayOfWeek ?? ''}
                     onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}

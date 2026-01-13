@@ -25,6 +25,7 @@ import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -794,9 +795,9 @@ export default function CoachCalendarPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* Left: Title and Date */}
           <div className="flex-shrink-0">
-            <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Planning</p>
+            <p className={uiEyebrow}>Planning</p>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-semibold">{mounted && viewMode === 'month' ? 'Monthly Calendar' : 'Weekly Calendar'}</h1>
+              <h1 className={`${uiH1} font-semibold`}>{mounted && viewMode === 'month' ? 'Monthly Calendar' : 'Weekly Calendar'}</h1>
               {viewMode === 'week' && mounted && (
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-medium border border-[var(--border-subtle)] bg-[var(--bg-card)] ${
@@ -807,7 +808,7 @@ export default function CoachCalendarPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs md:text-sm text-[var(--muted)]">
+            <p className={`${uiMuted} text-xs md:text-sm`}>
               {mounted ? (
                 viewMode === 'week' 
                   ? formatWeekOfLabel(dateRange.from, athleteTimezone)

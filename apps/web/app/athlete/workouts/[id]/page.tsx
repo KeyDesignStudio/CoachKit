@@ -16,6 +16,7 @@ import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthleteWorkoutDetail';
+import { uiLabel } from '@/components/ui/typography';
 
 type CompletedActivity = {
   id: string;
@@ -327,7 +328,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               <Card className="rounded-3xl">
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Workout Detail</p>
+                    <p className={uiLabel}>Workout Detail</p>
                     <p className="mt-1 text-sm text-[var(--text)]">{item.workoutDetail}</p>
                   </div>
                 </div>

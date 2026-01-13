@@ -168,7 +168,7 @@ export default function DevCalendarGeometryComparePage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">Dev Preview</p>
+        <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Dev Preview</p>
         <h1 className="text-2xl font-semibold">Calendar Geometry Compare</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">Last click: {clicked ?? 'none'}</p>
       </header>

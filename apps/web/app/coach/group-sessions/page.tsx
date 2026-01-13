@@ -182,7 +182,7 @@ export default function CoachGroupSessionsPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
-              <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-[var(--muted)]">Coaching</p>
+              <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Coaching</p>
               <h1 className="text-2xl md:text-3xl font-semibold">Group Sessions</h1>
               <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring sessions to apply to athlete calendars</p>
             </div>

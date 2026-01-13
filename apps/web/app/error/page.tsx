@@ -2,10 +2,10 @@ export default function ErrorPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl shadow-xl">
-        <h1 className="mb-4 text-3xl font-bold text-slate-900">
+        <h1 className="mb-4 text-3xl font-semibold text-[var(--text)]">
           Authentication Error
         </h1>
-        <p className="mb-6 text-slate-600">
+        <p className="mb-6 text-[var(--muted)]">
           Something went wrong during sign-in. Please try again.
         </p>
         <a
