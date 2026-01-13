@@ -103,6 +103,7 @@ Run before every push that affects UI:
 1) `cd apps/web && npm run build`
 2) Automated mobile smoke:
 - `cd apps/web && npm run test:mobile`
+- Covers `/coach/athletes` (iPhone + iPad)
 3) Manual 5-minute sanity in Chrome DevTools:
 - iPhone SE -> Coach Dashboard + Coach Calendar week
 - iPhone 14 -> Athlete Calendar week + workout detail

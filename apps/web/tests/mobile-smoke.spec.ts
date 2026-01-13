@@ -30,6 +30,13 @@ test.describe('Mobile smoke', () => {
     await assertNoHorizontalScroll(page);
   });
 
+  test('Coach athletes loads and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'COACH');
+    await page.goto('/coach/athletes', { waitUntil: 'networkidle' });
+    await expect(page.locator('h1', { hasText: 'Athlete Profiles' })).toBeVisible();
+    await assertNoHorizontalScroll(page);
+  });
+
   test('Coach calendar loads and no horizontal scroll', async ({ page }) => {
     await setRoleCookie(page, 'COACH');
     await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
