@@ -80,17 +80,21 @@ function ReviewInboxRow({
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 min-w-0">
-      <input
-        type="checkbox"
-        className="h-4 w-4 accent-blue-600"
-        checked={isChecked}
+      <label
+        className="h-11 w-11 flex items-center justify-center flex-shrink-0"
         onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          e.stopPropagation();
-          onToggleSelected(item.id, e.target.checked);
-        }}
-        aria-label={`Select ${athleteName} - ${item.title}`}
-      />
+      >
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-blue-600"
+          checked={isChecked}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggleSelected(item.id, e.target.checked);
+          }}
+          aria-label={`Select ${athleteName} - ${item.title}`}
+        />
+      </label>
 
       <button
         type="button"
@@ -894,7 +898,7 @@ export default function CoachDashboardPage() {
       ) : null}
 
       {selectedCount > 0 ? (
-        <div className="sticky bottom-4">
+        <div className="sticky bottom-0 pb-[env(safe-area-inset-bottom)]">
           <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm px-4 py-3 flex items-center justify-between gap-3">
             <p className="text-sm text-[var(--text)]">{selectedCount} selected</p>
             <div className="flex items-center gap-2">

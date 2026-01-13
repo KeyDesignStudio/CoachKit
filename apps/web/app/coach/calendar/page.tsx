@@ -992,15 +992,15 @@ export default function CoachCalendarPage() {
                         );
 
                         return (
-                          <div key={athlete.userId} className="grid min-w-0 gap-2 grid-rows-[32px_auto]">
-                            <div className="h-8 flex items-center justify-between gap-2">
+                          <div key={athlete.userId} className="grid min-w-0 gap-2 grid-rows-[44px_auto] md:grid-rows-[32px_auto]">
+                            <div className="h-11 md:h-8 flex items-center justify-between gap-2">
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
                                 {athlete.user.name || athlete.userId}
                               </div>
                               <button
                                 type="button"
                                 onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                                className="inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                                 aria-label="Add workout"
                                 title="Add workout"
                               >

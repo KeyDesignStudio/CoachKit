@@ -108,7 +108,7 @@ export async function AppHeader() {
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   return (
-    <header className="px-6 pt-6">
+    <header className="px-4 pt-4 md:px-6 md:pt-6">
       {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
       <Card className="relative flex flex-col gap-4 rounded-3xl bg-[var(--bg-surface)] p-5 md:flex-row md:items-center md:justify-between">
         {/* Center block: true-centered CoachKit branding (independent of nav width) */}
@@ -146,20 +146,41 @@ export async function AppHeader() {
         </div>
 
         {/* Right block: Nav + user (unchanged) */}
-        <div className="flex items-center gap-4">
-          {navLinks.length > 0 && (
-            <nav className="flex flex-wrap gap-2 text-sm font-medium">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-full px-3 py-1 text-[var(--muted)] hover:bg-[var(--bg-structure)]"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          )}
+        <div className="flex items-center gap-3 md:gap-4">
+          {navLinks.length > 0 ? (
+            <>
+              {/* Mobile: collapsible menu (no hover reliance) */}
+              <details className="relative md:hidden">
+                <summary className="list-none cursor-pointer select-none rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-[var(--text)]">
+                  Menu
+                </summary>
+                <nav className="absolute right-0 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-sm p-2">
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="flex items-center rounded-xl px-3 min-h-[44px] text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </nav>
+              </details>
+
+              {/* Desktop */}
+              <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)]"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </>
+          ) : null}
 
           {userId && <UserButton afterSignOutUrl="/" />}
         </div>

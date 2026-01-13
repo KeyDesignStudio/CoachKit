@@ -39,7 +39,7 @@ export function AthleteWeekDayColumn({
       type="button"
       onClick={onAddClick}
       className={cn(
-        'inline-flex h-6 w-6 items-center justify-center rounded-full',
+        'inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full',
         'text-[var(--muted)] hover:text-[var(--primary)]',
         'hover:bg-[var(--bg-structure)]',
         'transition-colors duration-150',

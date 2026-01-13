@@ -12,6 +12,14 @@ import type { ReactNode } from 'react';
  * - Redirects unauthorized users
  */
 export default async function AthleteLayout({ children }: { children: ReactNode }) {
+  const disableAuth =
+    process.env.NODE_ENV === 'development' &&
+    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
+
+  if (disableAuth) {
+    return <>{children}</>;
+  }
+
   const { userId } = await auth();
 
   // Must be authenticated (middleware handles this, but double-check)

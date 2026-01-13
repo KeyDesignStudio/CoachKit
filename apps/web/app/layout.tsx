@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const disableAuth =
-    process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true';
+    process.env.NODE_ENV === 'development' &&
+    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
   const content = (
     <html lang="en">
@@ -26,14 +27,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0"
         />
       </head>
-      <body className="bg-[var(--bg-page)] text-[var(--text)]">
+      <body className="bg-[var(--bg-page)] text-[var(--text)] overflow-x-hidden">
         {disableAuth ? (
-          <main className="px-6 pb-8 pt-6">{children}</main>
+          <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:px-6">{children}</main>
         ) : (
           <BrandingProvider>
-            <div className="flex min-h-screen flex-col gap-6 pb-10">
+            <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
               <AppHeader />
-              <main className="px-6 pb-8">{children}</main>
+              <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:px-6">{children}</main>
             </div>
           </BrandingProvider>
         )}

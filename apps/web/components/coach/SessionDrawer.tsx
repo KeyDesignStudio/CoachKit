@@ -39,28 +39,32 @@ export function SessionDrawer({
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6">
           <h2 className="text-xl font-semibold">{title}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
             ✕
           </Button>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-6 p-6">
-          {children}
+        <form onSubmit={onSubmit} className="flex min-h-[calc(100vh-72px)] flex-col gap-6 p-4 md:p-6">
+          <div className="flex-1 space-y-6">
+            {children}
+          </div>
 
-          <div className="flex flex-wrap gap-3 border-t border-[var(--border-subtle)] pt-6">
-            <Button type="submit" disabled={submitDisabled}>
-              {submitLabel}
-            </Button>
-            {onDelete ? (
-              <Button type="button" variant="ghost" onClick={onDelete}>
-                Delete
+          <div className="sticky bottom-0 -mx-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:static md:mx-0 md:bg-transparent md:px-0 md:pt-6 md:pb-0">
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={submitDisabled}>
+                {submitLabel}
               </Button>
-            ) : null}
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
+              {onDelete ? (
+                <Button type="button" variant="ghost" onClick={onDelete}>
+                  Delete
+                </Button>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </form>
       </div>

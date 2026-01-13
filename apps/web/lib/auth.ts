@@ -1,5 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { UserRole } from '@prisma/client';
+import { cookies } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError, forbidden, notFound, unauthorized } from '@/lib/errors';
@@ -15,6 +16,63 @@ type AuthenticatedContext = {
   };
 };
 
+function isAuthDisabled() {
+  return (
+    process.env.NODE_ENV === 'development' &&
+    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true')
+  );
+}
+
+function getRoleCookie(): UserRole {
+  try {
+    const value = cookies().get('coachkit-role')?.value;
+    if (value === 'ATHLETE') return UserRole.ATHLETE;
+    if (value === 'COACH') return UserRole.COACH;
+  } catch {
+    // no-op: cookies() not available in all server contexts
+  }
+
+  return UserRole.COACH;
+}
+
+async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> {
+  const user = await prisma.user.findFirst({
+    where: { role },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      name: true,
+      timezone: true,
+      authProviderId: true,
+    },
+  });
+
+  if (user) {
+    return {
+      user: {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        name: user.name,
+        timezone: user.timezone,
+        authProviderId: user.authProviderId ?? `dev-${role.toLowerCase()}`,
+      },
+    };
+  }
+
+  return {
+    user: {
+      id: `dev-${role.toLowerCase()}`,
+      role,
+      email: `dev-${role.toLowerCase()}@local`,
+      name: null,
+      timezone: 'UTC',
+      authProviderId: `dev-${role.toLowerCase()}`,
+    },
+  };
+}
+
 /**
  * Require authentication and return the authenticated user context
  * 
@@ -27,6 +85,10 @@ type AuthenticatedContext = {
  * - Throws unauthorized if not authenticated or user not found
  */
 export async function requireAuth(): Promise<AuthenticatedContext> {
+  if (isAuthDisabled()) {
+    return getDevUserContext(getRoleCookie());
+  }
+
   const { userId: clerkUserId } = await auth();
 
   if (!clerkUserId) {
@@ -116,6 +178,10 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
  * Require COACH role
  */
 export async function requireCoach() {
+  if (isAuthDisabled()) {
+    return getDevUserContext(UserRole.COACH);
+  }
+
   const context = await requireAuth();
 
   if (context.user.role !== UserRole.COACH) {
@@ -129,6 +195,10 @@ export async function requireCoach() {
  * Require ATHLETE role
  */
 export async function requireAthlete() {
+  if (isAuthDisabled()) {
+    return getDevUserContext(UserRole.ATHLETE);
+  }
+
   const context = await requireAuth();
 
   if (context.user.role !== UserRole.ATHLETE) {
