@@ -5,15 +5,22 @@ import { UserButton } from '@clerk/nextjs';
 
 import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
+
+const DESKTOP_NAV_LINK_CLASS =
+  'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
+
+const MOBILE_MENU_LINK_CLASS =
+  'flex items-center rounded-xl px-3 min-h-[44px] text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
   { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
   { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
-  { href: '/coach/group-sessions', label: 'Sessions', roles: ['COACH'] },
+  { href: '/coach/group-sessions', label: 'Group Sessions', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
@@ -151,33 +158,57 @@ export async function AppHeader() {
             <>
               {/* Mobile: collapsible menu (no hover reliance) */}
               <details className="relative md:hidden">
-                <summary className="list-none cursor-pointer select-none rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-[var(--text)]">
+                <summary className="list-none cursor-pointer select-none rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-[var(--text)] uppercase">
                   Menu
                 </summary>
-                <nav className="absolute right-0 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-sm p-2">
+                <nav className="absolute right-0 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-sm p-2 uppercase">
                   {navLinks.map((link) => (
+                    link.href.endsWith('/settings') ? (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        aria-label="Settings"
+                        className={`${MOBILE_MENU_LINK_CLASS} justify-center`}
+                      >
+                        <Icon name="settings" size="md" className="text-[var(--text)]" />
+                        <span className="sr-only">Settings</span>
+                      </Link>
+                    ) : (
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="flex items-center rounded-xl px-3 min-h-[44px] text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                      className={`${MOBILE_MENU_LINK_CLASS} whitespace-nowrap`}
                     >
                       {link.label}
                     </Link>
+                    )
                   ))}
                 </nav>
               </details>
 
               {/* Desktop */}
-              <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)]"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+              <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
+                {navLinks.map((link) =>
+                  link.href.endsWith('/settings') ? (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      aria-label="Settings"
+                      className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                    >
+                      <Icon name="settings" size="md" className="text-[var(--muted)]" />
+                      <span className="sr-only">Settings</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}
+                    >
+                      {link.label}
+                    </Link>
+                  )
+                )}
               </nav>
             </>
           ) : null}
