@@ -130,7 +130,14 @@ export function AthleteWeekSessionRow({
       )}
       aria-label={`Open ${disciplineLabel} workout`}
     >
-      <div className={cn('flex items-center min-w-0 h-full', mobilePillGap, mobilePillPadding, statusIndicatorVariant === 'bar' ? 'pr-4' : '')}>
+      <div
+        className={cn(
+          'flex items-center min-w-0 h-full',
+          mobilePillGap,
+          mobilePillPadding,
+          statusIndicatorVariant === 'bar' ? 'pr-3 md:pr-4' : ''
+        )}
+      >
         {/* 1) Icon + discipline label (stacked; stable) */}
         <div className="flex flex-col items-center justify-center w-11 flex-shrink-0">
           <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'text-[16px] leading-none')} />
@@ -177,19 +184,20 @@ export function AthleteWeekSessionRow({
       {statusIndicatorVariant === 'bar' ? (
         <div
           className={cn(
-            'absolute right-0 top-0 bottom-0 w-3 flex items-center justify-center',
+            'absolute right-0 top-0 bottom-0 w-2 md:w-4',
             statusBar.bgClassName
           )}
           title={statusBar.title ?? undefined}
           aria-hidden
         >
-          <Icon
-            name={statusBar.iconName}
-            size="xs"
-            className={cn('text-white leading-none scale-[1.05] origin-center')}
-            aria-label={statusBar.ariaLabel}
-            aria-hidden={false}
-          />
+          <div className="hidden md:flex h-full w-full items-center justify-center">
+            <Icon
+              name={statusBar.iconName}
+              size="xs"
+              className={cn('text-white leading-none scale-[1.15] origin-center')}
+              aria-hidden
+            />
+          </div>
         </div>
       ) : null}
     </button>
