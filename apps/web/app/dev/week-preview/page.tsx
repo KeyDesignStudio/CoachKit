@@ -124,6 +124,7 @@ export default function WeekPreviewPage() {
                     onClick={() => {}}
                     timeZone="Australia/Brisbane"
                     now={new Date('2026-01-03T10:00:00.000Z')}
+                    statusIndicatorVariant="bar"
                   />
                 ))}
               </AthleteWeekDayColumn>

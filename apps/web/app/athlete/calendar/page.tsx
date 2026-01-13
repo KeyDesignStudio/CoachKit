@@ -463,6 +463,7 @@ export default function AthleteCalendarPage() {
                         item={item}
                         onClick={() => handleWorkoutClick(item.id)}
                         timeZone={athleteTimezone}
+                        statusIndicatorVariant="bar"
                       />
                     ))}
                   </AthleteWeekDayColumn>
