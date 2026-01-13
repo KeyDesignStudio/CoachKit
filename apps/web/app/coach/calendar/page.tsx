@@ -183,6 +183,23 @@ export default function CoachCalendarPage() {
   const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
   const effectiveAthleteId = drawerMode === 'closed' ? singleAthleteId : drawerAthleteId;
 
+  const selectedAthletes = useMemo(() => {
+    const ids = Array.from(selectedAthleteIds);
+
+    return ids.map((id) => {
+      const found = athletes.find((athlete) => athlete.userId === id);
+      if (found) return found;
+      return {
+        userId: id,
+        user: {
+          id,
+          name: id,
+          timezone: athleteTimezone,
+        },
+      };
+    });
+  }, [athletes, athleteTimezone, selectedAthleteIds]);
+
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       const from = toDateInput(weekStart);
@@ -944,7 +961,7 @@ export default function CoachCalendarPage() {
               {weekDays.map((day) => {
                 const dateKey = day.date;
                 const isDayToday = isToday(new Date(dateKey));
-                const selected = athletes.filter((a) => selectedAthleteIds.has(a.userId));
+                const selected = selectedAthletes;
 
                 return (
                   <AthleteWeekDayColumn
@@ -997,14 +1014,18 @@ export default function CoachCalendarPage() {
                             </div>
 
                             <div className="flex flex-col gap-2 min-h-[28px]">
-                              {dayItems.map((item) => (
-                                <AthleteWeekSessionRow
-                                  key={item.id}
-                                  item={item as any}
-                                  timeZone={tz}
-                                  onClick={() => openEditDrawer(item)}
-                                />
-                              ))}
+                              {dayItems.length > 0 ? (
+                                dayItems.map((item) => (
+                                  <AthleteWeekSessionRow
+                                    key={item.id}
+                                    item={item as any}
+                                    timeZone={tz}
+                                    onClick={() => openEditDrawer(item)}
+                                  />
+                                ))
+                              ) : (
+                                <div className="min-h-[44px]" />
+                              )}
                             </div>
 
                             {index < selected.length - 1 ? (
