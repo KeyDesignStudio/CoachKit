@@ -22,16 +22,22 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const dropdownId = 'athlete-selector-dropdown';
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 320 });
 
   // Update dropdown position when opened
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const desiredWidth = Math.min(360, Math.max(280, window.innerWidth - 16));
+      const minLeft = 8;
+      const maxLeft = Math.max(8, window.innerWidth - desiredWidth - 8);
+      const desiredLeft = rect.right + window.scrollX - desiredWidth;
       setDropdownPosition({
         top: rect.bottom + window.scrollY + 8, // 8px margin (mt-2)
-        left: rect.right + window.scrollX - 320, // 320px = w-80, align right
-        width: rect.width,
+        left: Math.max(minLeft, Math.min(maxLeft, desiredLeft)),
+        width: desiredWidth,
       });
     }
   }, [isOpen]);
@@ -44,6 +50,12 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
 
   const allSelected = athletes.length > 0 && selectedIds.size === athletes.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < athletes.length;
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    // Indeterminate must be set via DOM property.
+    selectAllRef.current.indeterminate = someSelected && !allSelected;
+  }, [allSelected, someSelected]);
 
   const toggleAll = () => {
     if (allSelected) {
@@ -69,6 +81,10 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        data-athlete-selector="button"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-controls={dropdownId}
         className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-sm hover:bg-[var(--bg-structure)] transition-colors"
       >
         <span className="font-medium">
@@ -85,10 +101,13 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
           <div 
-            className="fixed z-[101] w-80 max-h-96 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+            id={dropdownId}
+            data-athlete-selector="dropdown"
+            className="fixed z-[101] max-h-96 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
             style={{
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`,
+              width: `${dropdownPosition.width}px`,
             }}
           >
             <div className="p-3 border-b border-[var(--border-subtle)]">
@@ -101,18 +120,17 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
               />
             </div>
             <div className="p-2 border-b border-[var(--border-subtle)]">
-              <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--bg-structure)] cursor-pointer">
+              <label className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer">
                 <input
+                  ref={selectAllRef}
                   type="checkbox"
+                  data-athlete-selector="select-all"
                   checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
                   onChange={toggleAll}
-                  className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
+                  className="h-5 w-5 flex-none rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                 />
-                <span className="font-medium text-sm">
-                  {allSelected ? 'Deselect all' : 'Select all'}
+                <span className="min-w-0 flex-1 truncate font-medium text-sm">
+                  Select all
                 </span>
               </label>
             </div>
@@ -123,15 +141,16 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                 filteredAthletes.map((athlete) => (
                   <label
                     key={athlete.userId}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer"
+                    className="flex w-full min-h-[44px] items-center gap-3 px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedIds.has(athlete.userId)}
                       onChange={() => toggleAthlete(athlete.userId)}
-                      className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
+                      data-athlete-selector="athlete-checkbox"
+                      className="h-5 w-5 flex-none rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                     />
-                    <span className="text-sm">{athlete.user.name || athlete.userId}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{athlete.user.name || athlete.userId}</span>
                   </label>
                 ))
               )}

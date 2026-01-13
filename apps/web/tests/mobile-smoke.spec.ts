@@ -44,6 +44,56 @@ test.describe('Mobile smoke', () => {
     await assertNoHorizontalScroll(page);
   });
 
+  test('Athlete selector: select-all indeterminate works', async ({ page }) => {
+    await setRoleCookie(page, 'COACH');
+    await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
+    await expect(page.locator('h1', { hasText: 'Weekly Calendar' })).toBeVisible();
+
+    await page.locator('[data-athlete-selector="button"]').click();
+    const dropdown = page.locator('[data-athlete-selector="dropdown"]');
+    await expect(dropdown).toBeVisible();
+
+    const selectAll = dropdown.locator('input[data-athlete-selector="select-all"]');
+    const athleteCheckboxes = dropdown.locator('input[data-athlete-selector="athlete-checkbox"]');
+    const athleteCount = await athleteCheckboxes.count();
+    expect(athleteCount).toBeGreaterThan(0);
+
+    // Ensure we start from a known state: none selected.
+    if (await selectAll.isChecked()) {
+      await selectAll.click();
+    }
+
+    if (athleteCount < 2) {
+      test.skip(true, 'Need at least 2 athletes to test indeterminate state');
+    }
+
+    await athleteCheckboxes.first().click();
+
+    await expect(selectAll).not.toBeChecked();
+    const isIndeterminate = await selectAll.evaluate((el) => (el as HTMLInputElement).indeterminate);
+    expect(isIndeterminate).toBeTruthy();
+
+    // Clicking select-all from indeterminate should select all.
+    await selectAll.click();
+    await expect(selectAll).toBeChecked();
+    const indeterminateAfterAll = await selectAll.evaluate((el) => (el as HTMLInputElement).indeterminate);
+    expect(indeterminateAfterAll).toBeFalsy();
+
+    for (let i = 0; i < athleteCount; i++) {
+      await expect(athleteCheckboxes.nth(i)).toBeChecked();
+    }
+
+    // Clicking select-all when all selected should clear all.
+    await selectAll.click();
+    await expect(selectAll).not.toBeChecked();
+    const indeterminateAfterNone = await selectAll.evaluate((el) => (el as HTMLInputElement).indeterminate);
+    expect(indeterminateAfterNone).toBeFalsy();
+
+    for (let i = 0; i < athleteCount; i++) {
+      await expect(athleteCheckboxes.nth(i)).not.toBeChecked();
+    }
+  });
+
   test('Athlete calendar loads and no horizontal scroll', async ({ page }) => {
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
