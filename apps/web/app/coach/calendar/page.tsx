@@ -183,6 +183,12 @@ export default function CoachCalendarPage() {
   const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
   const effectiveAthleteId = drawerMode === 'closed' ? singleAthleteId : drawerAthleteId;
 
+  const singleAthleteName = useMemo(() => {
+    if (!singleAthleteId) return '';
+    const found = athletes.find((athlete) => athlete.userId === singleAthleteId);
+    return found?.user.name || singleAthleteId;
+  }, [athletes, singleAthleteId]);
+
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       const from = toDateInput(weekStart);
@@ -949,19 +955,40 @@ export default function CoachCalendarPage() {
                       formattedDate={day.formattedDate}
                       isEmpty={false}
                       isToday={isToday(new Date(day.date))}
-                      onAddClick={() => {
-                        if (!singleAthleteId) return;
-                        openCreateDrawer(day.date);
-                      }}
                     >
-                      {day.items.map((item) => (
-                        <AthleteWeekSessionRow
-                          key={item.id}
-                          item={item as any}
-                          timeZone={athleteTimezone}
-                          onClick={() => openEditDrawer(item)}
-                        />
-                      ))}
+                      <div className="flex items-center justify-between gap-2 py-1">
+                        <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
+                          {singleAthleteName}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!singleAthleteId) return;
+                            openCreateDrawerForAthlete(singleAthleteId, day.date);
+                          }}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                          aria-label="Add workout"
+                          title="Add workout"
+                        >
+                          <Icon
+                            name={CALENDAR_ADD_SESSION_ICON}
+                            size="sm"
+                            className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
+                            aria-hidden
+                          />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-h-[28px]">
+                        {day.items.map((item) => (
+                          <AthleteWeekSessionRow
+                            key={item.id}
+                            item={item as any}
+                            timeZone={athleteTimezone}
+                            onClick={() => openEditDrawer(item)}
+                          />
+                        ))}
+                      </div>
                     </AthleteWeekDayColumn>
                   ))
                 : weekDays.map((day) => {
