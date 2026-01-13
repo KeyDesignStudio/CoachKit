@@ -97,6 +97,10 @@ Performance
 - Skeletons show on key screens (calendar, dashboard, lists)
 - No blank content while loading
 
+## Regression checklist
+
+- Calendar (mobile): week + month show denser rows, titles never wrap, icons never overlap/wrap; add buttons remain >=44px and obviously tappable.
+
 ## Mobile QA routine (5-10 minutes)
 
 Run before every push that affects UI:

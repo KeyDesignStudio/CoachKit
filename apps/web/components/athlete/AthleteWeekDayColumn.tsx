@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
+import { mobileHeaderPadding } from '@/components/calendar/calendarDensity';
 
 type AthleteWeekDayColumnProps = {
   dayName: string;
@@ -29,10 +30,14 @@ export function AthleteWeekDayColumn({
 }: AthleteWeekDayColumnProps) {
   const headerClassName =
     density === 'compact'
-      ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5'
-      : 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-2';
+      ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1 md:py-1.5'
+      : cn('bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]', mobileHeaderPadding);
 
-  const bodyClassName = cn(density === 'compact' ? 'flex flex-col gap-1.5 p-1.5' : 'flex flex-col gap-2 p-2');
+  const bodyClassName = cn(
+    density === 'compact'
+      ? 'flex flex-col gap-1 p-1 md:gap-1.5 md:p-1.5'
+      : 'flex flex-col gap-1.5 p-1.5 md:gap-2 md:p-2'
+  );
 
   const addButton = onAddClick ? (
     <button
@@ -41,7 +46,7 @@ export function AthleteWeekDayColumn({
       className={cn(
         'inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full',
         'text-[var(--muted)] hover:text-[var(--primary)]',
-        'hover:bg-[var(--bg-structure)]',
+        'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
         'transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
       )}

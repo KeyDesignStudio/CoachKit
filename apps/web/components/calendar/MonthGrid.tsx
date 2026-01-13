@@ -14,7 +14,7 @@ export function MonthGrid({ children }: MonthGridProps) {
         {DAY_NAMES.map((day) => (
           <div
             key={day}
-            className="border-r border-[var(--border-subtle)] px-3 py-2 text-center text-xs font-normal uppercase tracking-wider text-[var(--muted)] last:border-r-0"
+            className="border-r border-[var(--border-subtle)] px-2 py-1.5 md:px-3 md:py-2 text-center text-[11px] md:text-xs font-normal uppercase tracking-wider text-[var(--muted)] last:border-r-0"
           >
             {day}
           </div>

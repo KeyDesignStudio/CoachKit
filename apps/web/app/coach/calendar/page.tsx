@@ -992,7 +992,7 @@ export default function CoachCalendarPage() {
                         );
 
                         return (
-                          <div key={athlete.userId} className="grid min-w-0 gap-2 grid-rows-[44px_auto] md:grid-rows-[32px_auto]">
+                          <div key={athlete.userId} className="grid min-w-0 gap-1.5 md:gap-2 grid-rows-[44px_auto] md:grid-rows-[32px_auto]">
                             <div className="h-11 md:h-8 flex items-center justify-between gap-2">
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
                                 {athlete.user.name || athlete.userId}
@@ -1013,7 +1013,7 @@ export default function CoachCalendarPage() {
                               </button>
                             </div>
 
-                            <div className="min-h-[56px] flex flex-col gap-2">
+                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2">
                               {dayItems.map((item) => (
                                 <AthleteWeekSessionRow
                                   key={item.id}
@@ -1025,7 +1025,7 @@ export default function CoachCalendarPage() {
                             </div>
 
                             {index < selected.length - 1 ? (
-                              <div className="my-2 h-px bg-[var(--border-subtle)] opacity-40" />
+                              <div className="my-1 md:my-2 h-px bg-[var(--border-subtle)] opacity-40" />
                             ) : null}
                           </div>
                         );

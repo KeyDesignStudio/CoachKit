@@ -3,6 +3,7 @@ import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVisual';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
+import { mobileDayCellPadding, mobilePillGap, mobilePillPadding } from '@/components/calendar/calendarDensity';
 
 export type MonthSession = {
   id: string;
@@ -52,7 +53,8 @@ export function AthleteMonthDayCell({
     <div
       data-athlete-month-day-cell="v2"
       className={cn(
-        'flex flex-col gap-2 p-2 min-h-[120px] text-left',
+        'flex flex-col gap-1.5 md:gap-2 min-h-[112px] md:min-h-[120px] text-left',
+        mobileDayCellPadding,
         'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
@@ -70,8 +72,9 @@ export function AthleteMonthDayCell({
             onDayClick(date);
           }}
           className={cn(
-            'h-6 min-w-6 px-1 rounded text-xs',
+            'h-11 min-w-11 md:h-6 md:min-w-6 md:px-1 rounded text-xs inline-flex items-center justify-center',
             'bg-[var(--bg-structure)] hover:bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
+            'active:bg-[var(--bg-structure)]',
             !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
           )}
           aria-label={`Open day ${dateStr}`}
@@ -94,6 +97,7 @@ export function AthleteMonthDayCell({
               className={cn(
                 'inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full',
                 addEnabled ? 'text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)]' : 'text-[var(--muted)] opacity-70 cursor-not-allowed',
+                addEnabled ? 'active:bg-[var(--bg-structure)]' : '',
                 'transition-colors duration-150',
                 'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
               )}
@@ -128,21 +132,23 @@ export function AthleteMonthDayCell({
                 onItemClick(item.id);
               }}
               className={cn(
-                'w-full flex items-center gap-1 rounded-md px-1.5 py-1 text-left',
+                'w-full flex items-center min-w-0 rounded-md text-left min-h-[44px]',
+                mobilePillPadding,
+                mobilePillGap,
                 // Avoid stacking multiple white cards inside the day cell card.
-                'bg-transparent hover:bg-[var(--bg-structure)] cursor-default'
+                'bg-transparent hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] cursor-default'
               )}
               aria-label={`Open workout ${item.id}`}
             >
               <span className={cn('text-[16px] leading-none flex-shrink-0', visual.iconColor)}>
                 <Icon name={visual.icon} size="sm" className={cn('text-[16px] leading-none', CALENDAR_ACTION_ICON_CLASS)} />
               </span>
-              <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">
+              <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0 whitespace-nowrap">
                 {item.displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
               </span>
-              <span className="text-xs text-[var(--text)] truncate flex-1 font-normal">{item.title}</span>
+              <span className="text-[11px] md:text-xs text-[var(--text)] truncate flex-1 min-w-0 font-normal">{item.title}</span>
               {statusIcon ? (
-                <span className="flex-shrink-0" title={missedTitle}>
+                <span className="flex-shrink-0 whitespace-nowrap" title={missedTitle}>
                   <Icon
                     name={statusIcon}
                     size="xs"
@@ -177,7 +183,7 @@ export function AthleteMonthDayCell({
               e.stopPropagation();
               onDayClick(date);
             }}
-            className="rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-structure)]"
+            className="rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]"
             aria-label={`Open day ${dateStr} (${remainingCount} more)`}
           >
             +{remainingCount} more
