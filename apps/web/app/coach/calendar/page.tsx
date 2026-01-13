@@ -992,8 +992,8 @@ export default function CoachCalendarPage() {
                         );
 
                         return (
-                          <div key={athlete.userId} className="min-w-0">
-                            <div className="flex items-center justify-between gap-2 py-1">
+                          <div key={athlete.userId} className="grid min-w-0 gap-2 grid-rows-[32px_auto]">
+                            <div className="h-8 flex items-center justify-between gap-2">
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
                                 {athlete.user.name || athlete.userId}
                               </div>
@@ -1013,19 +1013,15 @@ export default function CoachCalendarPage() {
                               </button>
                             </div>
 
-                            <div className="flex flex-col gap-2 min-h-[28px]">
-                              {dayItems.length > 0 ? (
-                                dayItems.map((item) => (
-                                  <AthleteWeekSessionRow
-                                    key={item.id}
-                                    item={item as any}
-                                    timeZone={tz}
-                                    onClick={() => openEditDrawer(item)}
-                                  />
-                                ))
-                              ) : (
-                                <div className="min-h-[44px]" />
-                              )}
+                            <div className="min-h-[56px] flex flex-col gap-2">
+                              {dayItems.map((item) => (
+                                <AthleteWeekSessionRow
+                                  key={item.id}
+                                  item={item as any}
+                                  timeZone={tz}
+                                  onClick={() => openEditDrawer(item)}
+                                />
+                              ))}
                             </div>
 
                             {index < selected.length - 1 ? (
