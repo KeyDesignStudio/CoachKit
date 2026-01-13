@@ -88,10 +88,19 @@ function formatTargets(session: GroupSessionRecord): string {
 export function SessionCard({ session, onClick }: SessionCardProps) {
   const theme = getDisciplineTheme(session.discipline);
 
+  const metaParts: string[] = [
+    describeRecurrence(session.recurrenceRule),
+    session.startTimeLocal,
+    `${session.durationMinutes} min`,
+    formatTargets(session),
+  ];
+
+  const metaLine = session.optionalFlag ? `${metaParts.join(' • ')} • Optional` : metaParts.join(' • ');
+
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-2xl border border-white/30 bg-white/60 p-4 text-left shadow-sm backdrop-blur-xl transition-all hover:border-white/50 hover:bg-white/70 hover:shadow-md"
+      className="group w-full rounded-2xl border border-white/30 bg-white/60 p-4 text-left shadow-sm backdrop-blur-xl transition-all hover:border-white/50 hover:bg-white/70 hover:shadow-md min-w-0 h-full"
     >
       <div className="flex items-start gap-3">
         {/* Discipline Icon */}
@@ -104,21 +113,21 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
             <Icon name="next" size="sm" className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--muted)]" />
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+          <div className="mt-1 text-xs text-[var(--muted)] truncate">
             <span className={`font-semibold ${theme.textClass}`}>{session.discipline}</span>
-            <span>{describeRecurrence(session.recurrenceRule)}</span>
-            <span>{session.startTimeLocal}</span>
-            <span>{session.durationMinutes} min</span>
-            <span>{formatTargets(session)}</span>
-            {session.optionalFlag && <span className="text-amber-600">Optional</span>}
+            <span className="text-[var(--muted)]"> • {metaLine}</span>
           </div>
 
-          {session.location && (
-            <p className="mt-1 text-xs text-[var(--muted)] truncate">
-              <Icon name="info" size="sm" className="inline mr-1" />
-              {session.location}
-            </p>
-          )}
+          <p className="mt-1 text-xs text-[var(--muted)] truncate min-h-[16px]">
+            {session.location ? (
+              <>
+                <Icon name="info" size="sm" className="inline mr-1" />
+                {session.location}
+              </>
+            ) : (
+              <span className="invisible">—</span>
+            )}
+          </p>
         </div>
       </div>
     </button>

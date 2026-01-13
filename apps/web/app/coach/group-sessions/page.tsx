@@ -211,15 +211,15 @@ export default function CoachGroupSessionsPage() {
       </header>
 
       {/* Sessions List */}
-      <div className="flex flex-col gap-3">
+      <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
-          <div className="rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
             <p className="text-[var(--muted)]">No group sessions yet. Create one to get started.</p>
           </div>
         )}
 
         {!loadingSessions && filteredSessions.length === 0 && searchQuery && (
-          <div className="rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
             <p className="text-[var(--muted)]">No sessions match your search.</p>
           </div>
         )}
