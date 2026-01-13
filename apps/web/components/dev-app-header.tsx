@@ -47,19 +47,36 @@ export function DevAppHeader() {
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
   return (
-    <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-3 md:px-6 md:pt-6">
-      <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
-        {/* Mobile: single-row header */}
-        <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
-          {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
-          <MobileHeaderTitle />
-          <div className="flex w-11 justify-end">
-            {/* Placeholder avatar in dev mode */}
-            <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
-              D
+    <>
+      {/* Mobile-only top branding: scrolls away; sticky header remains */}
+      <div data-mobile-top-branding="v1" className="md:hidden px-4 pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">Your Club</span>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+            aria-label="CoachKit"
+          >
+            <span className="text-sm">CoachKit</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/coachkit-logo.png" alt="CoachKit" className="h-6 w-6 object-contain" />
+          </Link>
+        </div>
+      </div>
+
+      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-2 md:px-6 md:pt-6">
+        <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
+          {/* Mobile: single-row header */}
+          <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
+            {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
+            <MobileHeaderTitle />
+            <div className="flex w-11 justify-end">
+              {/* Placeholder avatar in dev mode */}
+              <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
+                D
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Desktop: minimal dev header */}
         <div className="hidden md:flex items-center justify-between gap-4 p-5">
@@ -85,7 +102,8 @@ export function DevAppHeader() {
             D
           </div>
         </div>
-      </Card>
-    </header>
+        </Card>
+      </header>
+    </>
   );
 }

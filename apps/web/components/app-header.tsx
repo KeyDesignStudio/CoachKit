@@ -116,17 +116,48 @@ export async function AppHeader() {
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
 
   return (
-    <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-3 md:px-6 md:pt-6">
-      {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
-      <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
-        {/* Mobile (iOS-first): single row header */}
-        <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
-          {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
-          <MobileHeaderTitle />
-          <div className="flex w-11 justify-end">
-            {userId && <UserButton afterSignOutUrl="/" />}
+    <>
+      {/* Mobile-only top branding: scrolls away; sticky header remains */}
+      <div data-mobile-top-branding="v1" className="md:hidden px-4 pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            {headerClubBranding.type === 'logo' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={headerClubBranding.logoUrl}
+                alt={`${headerClubBranding.name} logo`}
+                className="h-8 w-auto object-contain"
+              />
+            ) : (
+              <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">
+                {headerClubBranding.name}
+              </span>
+            )}
           </div>
+
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+            aria-label="CoachKit"
+          >
+            <span className="text-sm">CoachKit</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/coachkit-logo.png" alt="CoachKit" className="h-6 w-6 object-contain" />
+          </Link>
         </div>
+      </div>
+
+      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-2 md:px-6 md:pt-6">
+        {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
+        <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
+          {/* Mobile (iOS-first): single row header */}
+          <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
+            {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
+            <MobileHeaderTitle />
+            <div className="flex w-11 justify-end">
+              {userId && <UserButton afterSignOutUrl="/" />}
+            </div>
+          </div>
 
         {/* Desktop: keep existing multi-brand header */}
         <div className="relative hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4 md:p-5">
@@ -195,7 +226,8 @@ export async function AppHeader() {
             {userId && <UserButton afterSignOutUrl="/" />}
           </div>
         </div>
-      </Card>
-    </header>
+        </Card>
+      </header>
+    </>
   );
 }
