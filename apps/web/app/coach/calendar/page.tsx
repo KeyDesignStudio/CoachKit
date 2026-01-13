@@ -183,12 +183,6 @@ export default function CoachCalendarPage() {
   const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
   const effectiveAthleteId = drawerMode === 'closed' ? singleAthleteId : drawerAthleteId;
 
-  const singleAthleteName = useMemo(() => {
-    if (!singleAthleteId) return '';
-    const found = athletes.find((athlete) => athlete.userId === singleAthleteId);
-    return found?.user.name || singleAthleteId;
-  }, [athletes, singleAthleteId]);
-
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       const from = toDateInput(weekStart);
@@ -947,131 +941,82 @@ export default function CoachCalendarPage() {
         viewMode === 'week' ? (
           <CalendarShell variant="week" data-coach-week-view-version="coach-week-v2">
             <WeekGrid>
-              {!stackedMode
-                ? weekDays.map((day) => (
-                    <AthleteWeekDayColumn
-                      key={day.date}
-                      dayName={day.dayName}
-                      formattedDate={day.formattedDate}
-                      isEmpty={false}
-                      isToday={isToday(new Date(day.date))}
-                    >
-                      <div className="flex items-center justify-between gap-2 py-1">
-                        <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
-                          {singleAthleteName}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!singleAthleteId) return;
-                            openCreateDrawerForAthlete(singleAthleteId, day.date);
-                          }}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-                          aria-label="Add workout"
-                          title="Add workout"
-                        >
-                          <Icon
-                            name={CALENDAR_ADD_SESSION_ICON}
-                            size="sm"
-                            className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
-                            aria-hidden
-                          />
-                        </button>
-                      </div>
+              {weekDays.map((day) => {
+                const dateKey = day.date;
+                const isDayToday = isToday(new Date(dateKey));
+                const selected = athletes.filter((a) => selectedAthleteIds.has(a.userId));
 
-                      <div className="flex flex-col gap-1 min-h-[28px]">
-                        {day.items.map((item) => (
-                          <AthleteWeekSessionRow
-                            key={item.id}
-                            item={item as any}
-                            timeZone={athleteTimezone}
-                            onClick={() => openEditDrawer(item)}
-                          />
-                        ))}
-                      </div>
-                    </AthleteWeekDayColumn>
-                  ))
-                : weekDays.map((day) => {
-                    const dateKey = day.date;
-                    const isDayToday = isToday(new Date(dateKey));
-                    const selected = athletes.filter((a) => selectedAthleteIds.has(a.userId));
-
-                    return (
-                      <AthleteWeekDayColumn
-                        key={dateKey}
-                        dayName={day.dayName}
-                        formattedDate={day.formattedDate}
-                        isEmpty={false}
-                        isToday={isDayToday}
-                        density="compact"
-                      >
-                        <div className="flex flex-col">
-                          {selected.map((athlete, index) => {
-                            const tz = athlete.user.timezone || 'Australia/Brisbane';
-                            const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
-                            const dayItems = sortSessionsForDay(
-                              dayItemsRaw.map((item) => ({
+                return (
+                  <AthleteWeekDayColumn
+                    key={dateKey}
+                    dayName={day.dayName}
+                    formattedDate={day.formattedDate}
+                    isEmpty={false}
+                    isToday={isDayToday}
+                  >
+                    <div className="flex flex-col">
+                      {selected.map((athlete, index) => {
+                        const tz = athlete.user.timezone || 'Australia/Brisbane';
+                        const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
+                        const dayItems = sortSessionsForDay(
+                          dayItemsRaw.map((item) => ({
+                            ...item,
+                            date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
+                            displayTimeLocal: getCalendarDisplayTime(
+                              {
                                 ...item,
                                 date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-                                displayTimeLocal: getCalendarDisplayTime(
-                                  {
-                                    ...item,
-                                    date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-                                  } as any,
-                                  tz,
-                                  new Date()
-                                ),
-                              })),
-                              tz
-                            );
+                              } as any,
+                              tz,
+                              new Date()
+                            ),
+                          })),
+                          tz
+                        );
 
-                            return (
-                              <div
-                                key={athlete.userId}
-                                className="min-w-0"
-                              >
-                                <div className="flex items-center justify-between gap-2 py-1">
-                                  <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
-                                    {athlete.user.name || athlete.userId}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-                                    aria-label="Add workout"
-                                    title="Add workout"
-                                  >
-                                    <Icon
-                                      name={CALENDAR_ADD_SESSION_ICON}
-                                      size="sm"
-                                      className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
-                                      aria-hidden
-                                    />
-                                  </button>
-                                </div>
-
-                                <div className="flex flex-col gap-1 min-h-[28px]">
-                                  {dayItems.map((item) => (
-                                    <AthleteWeekSessionRow
-                                      key={item.id}
-                                      item={item as any}
-                                      timeZone={tz}
-                                      onClick={() => openEditDrawer(item)}
-                                      variant="stacked"
-                                    />
-                                  ))}
-                                </div>
-
-                                {index < selected.length - 1 ? (
-                                  <div className="my-1 h-px bg-[var(--border-subtle)] opacity-40" />
-                                ) : null}
+                        return (
+                          <div key={athlete.userId} className="min-w-0">
+                            <div className="flex items-center justify-between gap-2 py-1">
+                              <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
+                                {athlete.user.name || athlete.userId}
                               </div>
-                            );
-                          })}
-                        </div>
-                      </AthleteWeekDayColumn>
-                    );
-                  })}
+                              <button
+                                type="button"
+                                onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                                aria-label="Add workout"
+                                title="Add workout"
+                              >
+                                <Icon
+                                  name={CALENDAR_ADD_SESSION_ICON}
+                                  size="sm"
+                                  className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
+                                  aria-hidden
+                                />
+                              </button>
+                            </div>
+
+                            <div className="flex flex-col gap-2 min-h-[28px]">
+                              {dayItems.map((item) => (
+                                <AthleteWeekSessionRow
+                                  key={item.id}
+                                  item={item as any}
+                                  timeZone={tz}
+                                  onClick={() => openEditDrawer(item)}
+                                />
+                              ))}
+                            </div>
+
+                            {index < selected.length - 1 ? (
+                              <div className="my-2 h-px bg-[var(--border-subtle)] opacity-40" />
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </AthleteWeekDayColumn>
+                );
+              })}
             </WeekGrid>
           </CalendarShell>
         ) : (
