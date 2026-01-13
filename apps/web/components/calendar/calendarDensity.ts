@@ -1,7 +1,9 @@
 import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 
-// Mobile-first density tokens for calendar UIs.
-// Use `md:` to restore existing desktop spacing.
+// Token contract: calendar density + scannability
+// - Mobile-first tokens for calendar density/scannability.
+// - Use `md:` overrides for desktop.
+// - Do not introduce one-off padding/gap values in calendar components; extend tokens instead.
 
 export const mobilePillPadding = 'px-2 py-1 md:py-1.5';
 export const mobilePillGap = 'gap-1.5 md:gap-2';
