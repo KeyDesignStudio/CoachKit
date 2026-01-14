@@ -70,7 +70,8 @@ test.describe('Mobile smoke', () => {
     const disciplineOverflow = await disciplineCard.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(disciplineOverflow, 'Discipline load section should not overflow horizontally').toBeFalsy();
 
-    const inboxSection = page.getByRole('heading', { level: 2, name: 'Review inbox' }).locator('..');
+    await expect(page.getByRole('heading', { level: 2, name: 'Review inbox' })).toBeVisible();
+    const inboxSection = page.getByTestId('coach-dashboard-review-inbox');
     await expect(inboxSection).toBeVisible();
     await expect(page.getByRole('button', { name: /^Mark Reviewed/ })).toBeVisible();
 

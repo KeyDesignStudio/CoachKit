@@ -669,43 +669,41 @@ export default function CoachDashboardConsolePage() {
         {/* Discipline load + Review inbox */}
         <div className="mt-6 grid grid-cols-1 gap-6 min-w-0 items-start md:grid-cols-2">
           {/* Column 1: Review inbox */}
-          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox">
-            <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
               <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
               <div className="text-xs uppercase tracking-wide text-[var(--muted)]">FILTER APPLIED: UNREVIEWED COMPLETED + SKIPPED</div>
             </div>
 
-            <div className="rounded-3xl bg-[var(--bg-structure)]/60 p-4 md:p-5">
-              <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
-                <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
-                  <div className="text-xs text-[var(--muted)]">
-                    Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
-                    {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
-                      {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={clearSelection} disabled={selectedCount === 0} className="min-h-[44px]">
-                      Clear
-                    </Button>
-                  </div>
+            <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
+              <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
+                <div className="text-xs text-[var(--muted)]">
+                  Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
+                  {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
                 </div>
-
-                {loading ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
-                {!loading && inboxItems.length === 0 ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
-
-                <div className="divide-y divide-black/5">
-                  {inboxItems.map((item) => (
-                    <ReviewInboxRow
-                      key={item.id}
-                      item={item}
-                      isChecked={selectedIds.has(item.id)}
-                      onToggleSelected={handleToggleSelected}
-                      onOpen={(it) => setSelectedItem(it)}
-                    />
-                  ))}
+                <div className="flex items-center gap-2">
+                  <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
+                    {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={clearSelection} disabled={selectedCount === 0} className="min-h-[44px]">
+                    Clear
+                  </Button>
                 </div>
+              </div>
+
+              {loading ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
+              {!loading && inboxItems.length === 0 ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
+
+              <div className="divide-y divide-black/5">
+                {inboxItems.map((item) => (
+                  <ReviewInboxRow
+                    key={item.id}
+                    item={item}
+                    isChecked={selectedIds.has(item.id)}
+                    onToggleSelected={handleToggleSelected}
+                    onOpen={(it) => setSelectedItem(it)}
+                  />
+                ))}
               </div>
             </div>
           </div>
