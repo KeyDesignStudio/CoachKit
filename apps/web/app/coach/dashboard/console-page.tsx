@@ -179,14 +179,14 @@ function AlertStripItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-3 py-2 text-left min-h-[44px]',
+        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
         'bg-[var(--bg-card)] transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60'
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-medium text-[var(--text)]">{label}</div>
-        <div className="text-lg font-semibold tabular-nums text-[var(--text)]">{count}</div>
+        <div className="text-sm font-medium text-[var(--text)]">{label}</div>
+        <div className="text-2xl font-semibold tabular-nums text-[var(--text)]">{count}</div>
       </div>
     </button>
   );
