@@ -666,77 +666,82 @@ export default function CoachDashboardConsolePage() {
 
         {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Accountability → Inbox */}
 
-        {/* 3. Discipline load */}
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Discipline load</h2>
-          <div className="rounded-2xl bg-[var(--bg-card)] p-3">
-            {(() => {
-              const rows = data?.disciplineLoad ?? [];
-              const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-              return (
-                <div className="flex flex-col gap-2">
-                  {rows.map((r) => {
-                    const theme = getDisciplineTheme(r.discipline);
-                    const pct = Math.round((r.totalMinutes / maxMinutes) * 100);
-                    return (
-                      <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
-                        <div className="flex items-center gap-2 min-w-[72px]">
-                          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                          <span className="text-xs font-medium text-[var(--text)]">{r.discipline}</span>
-                        </div>
-
-                        <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                          <div className={cn('h-full rounded-full', theme.textClass.replace('text-', 'bg-'))} style={{ width: `${pct}%` }} />
-                        </div>
-
-                        <div className="text-xs text-[var(--muted)] tabular-nums text-right">
-                          {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* 4. Review inbox */}
-        <div className="mt-8 rounded-3xl bg-[var(--bg-structure)]/60 p-4 md:p-5" ref={reviewInboxRef} id="review-inbox">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
-            <div className="text-xs text-[var(--muted)]">Unreviewed completed + skipped</div>
-          </div>
-
-          <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
-            <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
-              <div className="text-xs text-[var(--muted)]">
-                Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
-                {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
-                  {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
-                </Button>
-                <Button type="button" variant="ghost" onClick={clearSelection} disabled={selectedCount === 0} className="min-h-[44px]">
-                  Clear
-                </Button>
-              </div>
+        {/* Discipline load + Review inbox */}
+        <div className="mt-6 grid grid-cols-1 gap-6 min-w-0 items-start md:grid-cols-2">
+          {/* Column 1: Review inbox */}
+          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
+              <div className="text-xs text-[var(--muted)]">Unreviewed completed + skipped</div>
             </div>
 
-            {loading ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
-            {!loading && inboxItems.length === 0 ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
+            <div className="rounded-3xl bg-[var(--bg-structure)]/60 p-4 md:p-5">
+              <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
+                <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
+                  <div className="text-xs text-[var(--muted)]">
+                    Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
+                    {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
+                      {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={clearSelection} disabled={selectedCount === 0} className="min-h-[44px]">
+                      Clear
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="divide-y divide-black/5">
-              {inboxItems.map((item) => (
-                <ReviewInboxRow
-                  key={item.id}
-                  item={item}
-                  isChecked={selectedIds.has(item.id)}
-                  onToggleSelected={handleToggleSelected}
-                  onOpen={(it) => setSelectedItem(it)}
-                />
-              ))}
+                {loading ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
+                {!loading && inboxItems.length === 0 ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
+
+                <div className="divide-y divide-black/5">
+                  {inboxItems.map((item) => (
+                    <ReviewInboxRow
+                      key={item.id}
+                      item={item}
+                      isChecked={selectedIds.has(item.id)}
+                      onToggleSelected={handleToggleSelected}
+                      onOpen={(it) => setSelectedItem(it)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Discipline load */}
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Discipline load</h2>
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3">
+              {(() => {
+                const rows = data?.disciplineLoad ?? [];
+                const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
+                return (
+                  <div className="flex flex-col gap-2">
+                    {rows.map((r) => {
+                      const theme = getDisciplineTheme(r.discipline);
+                      const pct = Math.round((r.totalMinutes / maxMinutes) * 100);
+                      return (
+                        <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-[72px]">
+                            <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                            <span className="text-xs font-medium text-[var(--text)]">{r.discipline}</span>
+                          </div>
+
+                          <div className="h-2 rounded-full bg-black/10 overflow-hidden">
+                            <div className={cn('h-full rounded-full', theme.textClass.replace('text-', 'bg-'))} style={{ width: `${pct}%` }} />
+                          </div>
+
+                          <div className="text-xs text-[var(--muted)] tabular-nums text-right">
+                            {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
