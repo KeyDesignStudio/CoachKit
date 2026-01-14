@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { AthleteDetailDrawer } from '@/components/coach/AthleteDetailDrawer';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -278,9 +277,6 @@ export default function CoachDashboardConsolePage() {
 
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
 
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
-  const [athleteDrawerOpen, setAthleteDrawerOpen] = useState(false);
-
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
 
   const coachTimeZone = user?.timezone ?? 'UTC';
@@ -430,16 +426,6 @@ export default function CoachDashboardConsolePage() {
     [jumpToInbox]
   );
 
-  const handleAthleteRowClick = useCallback((id: string) => {
-    setSelectedAthleteId(id);
-    setAthleteDrawerOpen(true);
-  }, []);
-
-  const handleAthleteDrawerClose = useCallback(() => {
-    setAthleteDrawerOpen(false);
-    setSelectedAthleteId(null);
-  }, []);
-
   if (userLoading) {
     return (
       <div className="px-6 pt-6">
@@ -461,14 +447,55 @@ export default function CoachDashboardConsolePage() {
       <section className="px-4 pb-10 md:px-6">
         <div className="pt-3 md:pt-6">
           <h1 className={cn(uiH1, 'font-semibold')}>Coach Console</h1>
-          <p className={cn(uiMuted, 'text-sm hidden md:block')}>Fast triage and accountability.</p>
         </div>
 
-        {/* Top grid shell: 1 col (mobile), 2 cols (tablet), 3 cols (desktop) */}
-        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {/* Column 2 on desktop: Filters */}
-          <div className="min-w-0 xl:col-start-2">
+        {/* Top grid shell: mobile 1 col (Needs → Filters → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
+        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {/* Column 1: Needs your attention */}
+          <div className="min-w-0">
             <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
+                <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
+              </div>
+
+              <div className="grid gap-2">
+                <AttentionItem
+                  label="Workouts with pain flags"
+                  count={data?.attention.painFlagWorkouts ?? 0}
+                  tone="danger"
+                  active={inboxPreset === 'PAIN'}
+                  onClick={() => toggleInboxPreset('PAIN')}
+                />
+                <AttentionItem
+                  label="Workouts with athlete comments"
+                  count={data?.attention.athleteCommentWorkouts ?? 0}
+                  tone="primary"
+                  active={inboxPreset === 'COMMENTS'}
+                  onClick={() => toggleInboxPreset('COMMENTS')}
+                />
+              </div>
+
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <AlertStripItem
+                  label="Skipped workouts"
+                  count={data?.attention.skippedWorkouts ?? 0}
+                  active={inboxPreset === 'SKIPPED'}
+                  onClick={() => toggleInboxPreset('SKIPPED')}
+                />
+                <AlertStripItem
+                  label="Awaiting coach review"
+                  count={data?.attention.awaitingCoachReview ?? 0}
+                  active={inboxPreset === 'AWAITING_REVIEW'}
+                  onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Filters/selectors */}
+          <div className="min-w-0">
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 h-full">
               <div className="grid gap-2 md:gap-3">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Time range</div>
@@ -528,72 +555,35 @@ export default function CoachDashboardConsolePage() {
                 </div>
               </div>
 
-              <div className="mt-2 text-xs text-[var(--muted)]">
-                Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
-              </div>
-
-              <Button type="button" variant="ghost" onClick={() => reload(true)} className="mt-2 w-full min-h-[40px] md:min-h-[44px]">
-                Refresh
-              </Button>
-            </div>
-          </div>
-
-          {/* Column 1 on desktop; stacked under filters on tablet */}
-          <div className="min-w-0 md:col-start-1 md:row-start-2 xl:col-start-1 xl:row-start-1">
-            <div className="flex items-center justify-between gap-3 mb-1 md:mb-2">
-              <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
-              <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
-            </div>
-
-            <div className="grid gap-2">
-              <AttentionItem
-                label="Workouts with pain flags"
-                count={data?.attention.painFlagWorkouts ?? 0}
-                tone="danger"
-                active={inboxPreset === 'PAIN'}
-                onClick={() => toggleInboxPreset('PAIN')}
-              />
-              <AttentionItem
-                label="Workouts with athlete comments"
-                count={data?.attention.athleteCommentWorkouts ?? 0}
-                tone="primary"
-                active={inboxPreset === 'COMMENTS'}
-                onClick={() => toggleInboxPreset('COMMENTS')}
-              />
-            </div>
-
-            {/* Alerts strip: skipped + awaiting review */}
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
-              <AlertStripItem
-                label="Skipped workouts"
-                count={data?.attention.skippedWorkouts ?? 0}
-                active={inboxPreset === 'SKIPPED'}
-                onClick={() => toggleInboxPreset('SKIPPED')}
-              />
-              <AlertStripItem
-                label="Awaiting coach review"
-                count={data?.attention.awaitingCoachReview ?? 0}
-                active={inboxPreset === 'AWAITING_REVIEW'}
-                onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
-              />
-            </div>
-          </div>
-
-          {/* Column 3: At a glance (right), spans tablet right column */}
-          <div className="min-w-0 md:col-start-2 md:row-start-1 md:row-span-2 xl:col-start-3 xl:row-span-1">
-            <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
-            <div className="grid grid-cols-1 gap-2">
-              {[
-                { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-              ].map((tile) => (
-                <div key={tile.label} className="rounded-2xl bg-[var(--bg-card)] px-3 py-2">
-                  <div className="text-[28px] leading-tight font-semibold tabular-nums text-[var(--text)]">{tile.value}</div>
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]/90 mt-0.5">{tile.label}</div>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div className="text-xs text-[var(--muted)]">
+                  Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                 </div>
-              ))}
+
+                <Button type="button" variant="ghost" onClick={() => reload(true)} className="min-h-[40px] md:min-h-[44px]">
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
+          <div className="min-w-0 md:col-span-2 xl:col-span-1">
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+              <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                  { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                  { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                  { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                ].map((tile) => (
+                  <div key={tile.label} className="rounded-2xl bg-[var(--bg-structure)]/60 px-3 py-2">
+                    <div className="text-[28px] leading-tight font-semibold tabular-nums text-[var(--text)]">{tile.value}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]/90 mt-0.5">{tile.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -637,50 +627,7 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
 
-        {/* 4. Athlete accountability */}
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Athlete accountability</h2>
-
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {(data?.athleteSummaries ?? []).map((a) => (
-              <button
-                key={a.athleteId}
-                type="button"
-                onClick={() => handleAthleteRowClick(a.athleteId)}
-                className="rounded-2xl bg-[var(--bg-card)] p-3 text-left min-h-[44px]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium truncate text-[var(--text)]">{a.name ?? 'Unnamed athlete'}</div>
-                    <div className="mt-1 text-xs text-[var(--muted)] tabular-nums">
-                      Completed {a.completedCount} · Skipped {a.skippedCount} · {formatMinutes(a.totalMinutes)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="flex items-center gap-1" title="Pain flags">
-                      <Icon name="painFlag" size="xs" className={cn(a.painFlagCount > 0 ? 'text-rose-500' : 'text-[var(--muted)]')} />
-                      <span className="text-xs tabular-nums text-[var(--muted)]">{a.painFlagCount}</span>
-                    </div>
-                    <div className="flex items-center gap-1" title="Athlete comments">
-                      <Icon name="athleteComment" size="xs" className={cn(a.athleteCommentCount > 0 ? 'text-blue-600' : 'text-[var(--muted)]')} />
-                      <span className="text-xs tabular-nums text-[var(--muted)]">{a.athleteCommentCount}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex items-center gap-2">
-                  {['BIKE', 'RUN', 'SWIM', 'OTHER'].map((d) => {
-                    const theme = getDisciplineTheme(d);
-                    const on = a.disciplinesPresent.includes(d);
-                    return <span key={d} className={cn('h-2 w-2 rounded-full', on ? theme.textClass.replace('text-', 'bg-') : 'bg-black/10')} aria-label={d} title={d} />;
-                  })}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 5. Review inbox */}
+        {/* 4. Review inbox */}
         <div className="mt-8 rounded-3xl bg-[var(--bg-structure)]/60 p-4 md:p-5" ref={reviewInboxRef} id="review-inbox">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
@@ -722,14 +669,6 @@ export default function CoachDashboardConsolePage() {
       </section>
 
       <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
-
-      <AthleteDetailDrawer
-        isOpen={athleteDrawerOpen}
-        athleteId={selectedAthleteId}
-        onClose={handleAthleteDrawerClose}
-        onSaved={() => reload(true)}
-        onDeleted={() => reload(true)}
-      />
     </>
   );
 }
