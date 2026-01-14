@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { ClerkProvider } from '@clerk/nextjs';
 
 import '@/app/globals.css';
@@ -20,6 +21,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     process.env.NODE_ENV === 'development' &&
     (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
+  const gitSha = process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown';
+  const vercelEnv = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'unknown';
+
   const content = (
     <html lang="en">
       <head>
@@ -29,6 +33,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="bg-[var(--bg-page)] text-[var(--text)] overflow-x-hidden">
+        <Script
+          id="coachkit-build-marker"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `window.__COACHKIT_BUILD__ = { gitSha: ${JSON.stringify(gitSha)}, env: ${JSON.stringify(
+              vercelEnv
+            )}, builtAt: new Date().toISOString() };`,
+          }}
+        />
         {disableAuth ? (
           <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
             <DevAppHeader />
