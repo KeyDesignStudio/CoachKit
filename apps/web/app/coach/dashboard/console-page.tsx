@@ -485,10 +485,10 @@ export default function CoachDashboardConsolePage() {
           <h1 className={cn(uiH1, 'font-semibold')}>Coach Console</h1>
         </div>
 
-        {/* Top grid shell: mobile 1 col (Needs → Filters → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
+        {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
         <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {/* Column 1: Needs your attention */}
-          <div className="min-w-0 md:order-2">
+          <div className="min-w-0 order-2 md:order-2">
             <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
               <div className="flex items-end justify-between gap-3 mb-2">
                 <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
@@ -530,7 +530,7 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           {/* Column 2: Filters/selectors */}
-          <div className="min-w-0 md:order-1">
+          <div className="min-w-0 order-1 md:order-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
@@ -540,7 +540,7 @@ export default function CoachDashboardConsolePage() {
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-3">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-2">
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
@@ -610,7 +610,7 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 {/* Row 3 gap */}
-                <div className="col-span-1 md:col-span-2 h-2 md:h-3" aria-hidden="true" />
+                <div className="col-span-1 md:col-span-2 h-1 md:h-2" aria-hidden="true" />
 
                 {/* Row 4 */}
                 <div className="md:col-span-2 flex items-center justify-end gap-3">

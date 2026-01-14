@@ -40,13 +40,16 @@ test.describe('Mobile smoke', () => {
       await expect(page.getByText(day, { exact: true })).toHaveCount(0);
     }
 
+    const selectorHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
+    await expect(selectorHeading).toBeVisible();
     const needsAttentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
     await expect(needsAttentionHeading).toBeVisible();
-    const needsAttentionBox = await needsAttentionHeading.boundingBox();
+
+    const selectorBox = await selectorHeading.boundingBox();
     const viewportHeight = page.viewportSize()?.height ?? 0;
-    expect(needsAttentionBox, 'Needs your attention should have a bounding box').toBeTruthy();
-    if (needsAttentionBox && viewportHeight) {
-      expect(needsAttentionBox.y, 'Needs your attention should be above the fold on mobile').toBeLessThan(viewportHeight - 50);
+    expect(selectorBox, 'Make your selection should have a bounding box').toBeTruthy();
+    if (selectorBox && viewportHeight) {
+      expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThan(viewportHeight - 50);
     }
 
     await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
