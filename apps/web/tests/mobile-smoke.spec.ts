@@ -49,9 +49,8 @@ test.describe('Mobile smoke', () => {
       expect(needsAttentionBox.y, 'Needs your attention should be above the fold on mobile').toBeLessThan(viewportHeight - 50);
     }
 
-    const kpiSection = page.getByRole('heading', { level: 2, name: 'At a glance' }).locator('..');
-    await expect(kpiSection).toBeVisible();
-    const kpiGrid = kpiSection.locator('div.grid').first();
+    await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
+    const kpiGrid = page.getByTestId('coach-dashboard-at-a-glance-grid');
     await expect(kpiGrid).toBeVisible();
     await expect(kpiGrid.locator('div.rounded-2xl')).toHaveCount(4);
     const kpiColumns = await kpiGrid.evaluate((el) => {

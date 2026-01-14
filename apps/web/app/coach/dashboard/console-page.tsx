@@ -490,7 +490,7 @@ export default function CoachDashboardConsolePage() {
           {/* Column 1: Needs your attention */}
           <div className="min-w-0 md:order-2">
             <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-              <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-end justify-between gap-3 mb-2">
                 <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
                 <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
               </div>
@@ -535,8 +535,8 @@ export default function CoachDashboardConsolePage() {
               className="rounded-2xl bg-[var(--bg-card)] p-3"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <h2 className="text-sm font-semibold text-[var(--text)]">Select</h2>
+              <div className="flex items-end justify-between gap-3 mb-2">
+                <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
@@ -627,10 +627,18 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3"
+              data-testid="coach-dashboard-at-a-glance"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
-              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6">
+              <div className="flex items-end justify-between gap-3 mb-2">
+                <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
+                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
+              </div>
+
+              <div
+                className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6"
+                data-testid="coach-dashboard-at-a-glance-grid"
+              >
                 {[
                   { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
                   { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
