@@ -179,7 +179,7 @@ function AlertStripItem({
       onClick={onClick}
       className={cn(
         'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
-        'bg-[var(--bg-card)] transition-colors',
+        'bg-[var(--bg-card)] border border-black/15 transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60'
       )}
     >
