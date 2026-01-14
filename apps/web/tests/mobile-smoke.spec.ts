@@ -51,7 +51,7 @@ test.describe('Mobile smoke', () => {
 
     const kpiSection = page.getByRole('heading', { level: 2, name: 'At a glance' }).locator('..');
     await expect(kpiSection).toBeVisible();
-    const kpiGrid = kpiSection.locator('div.grid.grid-cols-2');
+    const kpiGrid = kpiSection.locator('div.grid').first();
     await expect(kpiGrid).toBeVisible();
     await expect(kpiGrid.locator('div.rounded-2xl')).toHaveCount(4);
     const kpiColumns = await kpiGrid.evaluate((el) => {
@@ -62,8 +62,8 @@ test.describe('Mobile smoke', () => {
       return parts.length;
     });
     const viewportWidth = page.viewportSize()?.width ?? 0;
-    const expectedKpiColumns = viewportWidth && viewportWidth < 768 ? 2 : 4;
-    expect(kpiColumns, 'KPI tiles should render as a 2x2 grid on mobile').toBe(expectedKpiColumns);
+    const expectedKpiColumns = viewportWidth < 768 ? 1 : viewportWidth < 1024 ? 2 : 4;
+    expect(kpiColumns, 'KPI tiles should use expected columns for viewport width').toBe(expectedKpiColumns);
 
     const disciplineSection = page.getByRole('heading', { level: 2, name: 'Discipline load' }).locator('..');
     await expect(disciplineSection).toBeVisible();
