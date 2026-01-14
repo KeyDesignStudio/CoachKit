@@ -465,7 +465,7 @@ export default function CoachDashboardConsolePage() {
         </div>
 
         {/* Top grid shell: 1 col (mobile), 2 cols (tablet), 3 cols (desktop) */}
-        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-[minmax(240px,320px)_minmax(280px,1fr)_minmax(240px,320px)]">
+        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {/* Column 2 on desktop: Filters */}
           <div className="min-w-0 xl:col-start-2">
             <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
