@@ -535,6 +535,11 @@ export default function CoachDashboardConsolePage() {
               className="rounded-2xl bg-[var(--bg-card)] p-3"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h2 className="text-sm font-semibold text-[var(--text)]">Select</h2>
+                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
+              </div>
+
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-3">
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
@@ -595,17 +600,18 @@ export default function CoachDashboardConsolePage() {
                   ) : null}
                 </div>
 
-                <div className="hidden md:block md:col-start-2 md:row-start-2" aria-hidden="true" />
+                <div className="md:col-start-2 md:row-start-2">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
+                  <div className="text-sm font-semibold text-[var(--text)]">
+                    {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                  </div>
+                </div>
 
                 {/* Row 3 gap */}
                 <div className="col-span-1 md:col-span-2 h-2 md:h-3" aria-hidden="true" />
 
                 {/* Row 4 */}
-                <div className="md:col-span-2 flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-[var(--text)]">
-                    {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
-                  </div>
-
+                <div className="md:col-span-2 flex items-center justify-end gap-3">
                   <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
                     <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                     Refresh
