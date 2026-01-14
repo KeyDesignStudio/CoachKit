@@ -1,7 +1,7 @@
 import ConsoleDashboardPage from './console-page';
 import { BuildInfoFooter } from '@/components/BuildInfoFooter';
 
-export default function CoachDashboardPage() {
+export default function AthleteDashboardPage() {
   return (
     <>
       <ConsoleDashboardPage />

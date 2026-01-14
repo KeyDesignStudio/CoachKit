@@ -300,6 +300,7 @@ model MessageThread {
   coachId   String
   athleteId String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   coach   User @relation("CoachThreads", fields: [coachId], references: [id], onDelete: Cascade)
   athlete User @relation("AthleteThreads", fields: [athleteId], references: [id], onDelete: Cascade)
@@ -313,12 +314,17 @@ model MessageThread {
 model Message {
   id        String   @id @default(cuid())
   threadId  String
-  authorId  String
+  senderUserId  String   @map("authorId")
+  senderRole    UserRole @default(COACH)
   body      String
   createdAt DateTime @default(now())
 
+  coachReadAt     DateTime?
+  athleteReadAt   DateTime?
+  coachReviewedAt DateTime?
+
   thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
 }

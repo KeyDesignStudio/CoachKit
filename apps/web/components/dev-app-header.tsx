@@ -21,6 +21,7 @@ const ALL_NAV_LINKS: NavLink[] = [
   { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'Group Sessions', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
+  { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];

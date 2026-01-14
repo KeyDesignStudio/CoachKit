@@ -161,4 +161,21 @@ test.describe('Mobile smoke', () => {
     await expect(page.locator('h1', { hasText: 'Weekly Calendar' })).toBeVisible();
     await assertNoHorizontalScroll(page);
   });
+
+  test('Athlete dashboard loads and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
+
+    const kpiGrid = page.getByTestId('athlete-dashboard-at-a-glance-grid');
+    await expect(kpiGrid).toBeVisible();
+    await expect(kpiGrid.locator('div.rounded-2xl')).toHaveCount(4);
+
+    const compose = page.getByTestId('athlete-dashboard-messages-compose');
+    await expect(compose).toBeVisible();
+    await expect(compose.getByRole('button', { name: /^Send$/ })).toBeVisible();
+
+    await assertNoHorizontalScroll(page);
+  });
 });

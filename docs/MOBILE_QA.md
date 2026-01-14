@@ -41,6 +41,8 @@ Safari iOS checks (required)
 - Bulk select UX works (tap targets)
 - Bulk mark reviewed reachable without scrolling hunt
 - Open detail drawer; return back
+- Messages section renders (separate from inbox)
+- Send message to one athlete; send broadcast
 3) Manage Athletes
 - Grid renders without horizontal scroll
 - Open athlete detail drawer; edit fields; save
@@ -63,14 +65,17 @@ Safari iOS checks (required)
 
 ### Athlete flows
 1) Sign in
-2) Workout Schedule
+2) Dashboard
+- KPI grid and discipline load render without horizontal scroll
+- Messages section: send message to coach; refresh shows message
+3) Workout Schedule
 - Week + month views render without horizontal scroll
 - Add workout (if allowed) or view-only interactions
-3) Open workout detail
-4) Strava detected flow
+4) Open workout detail
+5) Strava detected flow
 - Draft -> add notes/pain/RPE -> Confirm
 - Verify persistence on refresh
-5) Athlete settings
+6) Athlete settings
 - Timezone
 - Strava connect/sync now
 
@@ -107,14 +112,41 @@ Run before every push that affects UI:
 1) `cd apps/web && npm run build`
 2) Automated mobile smoke:
 - `cd apps/web && npm run test:mobile`
-- Covers `/coach/athletes` (iPhone + iPad)
+- Covers `/coach/athletes` and `/athlete/dashboard` (iPhone + iPad)
 3) Manual 5-minute sanity in Chrome DevTools:
 - iPhone SE -> Coach Dashboard + Coach Calendar week
-- iPhone 14 -> Athlete Calendar week + workout detail
+- iPhone 14 -> Athlete Dashboard + Athlete Calendar week + workout detail
 - iPad mini -> Coach Athletes + Group Sessions
 
 If regressions are found:
 - Add an entry to "Known Issues" below (date + device + steps + expected vs actual)
+
+## Athlete Console + Messaging - Production Verification
+
+Athlete Console (/athlete/dashboard)
+- Loads without layout shift.
+- No horizontal scroll on iPhone width.
+- Filters: Time range + Discipline dropdown exist.
+- “Showing Thu 8 Jan → Wed 14 Jan” date formatting matches calendar style.
+- Needs your attention counts render.
+- At a glance KPIs render as a 2x2 grid without internal scroll.
+- Discipline load renders without overflow.
+- Messages:
+	- Can send message
+	- Message appears in thread list immediately
+	- Refresh does not break auth (uses no-store + ?t=)
+	- Mark-read is triggered on viewing thread
+
+Coach Console (/coach/dashboard)
+- Athlete accountability section is gone (no UI, no API payload).
+- Review inbox still works.
+- Messaging area exists, can select athlete, send, and see thread.
+- Bulk send works (if implemented) OR UI is absent (no half-feature).
+
+Cross-account validation (manual)
+- Send from athlete -> coach sees it.
+- Send from coach -> athlete sees it.
+- Unread count behavior is correct (optional, but if shown it must be correct).
 
 ## Known Issues
 

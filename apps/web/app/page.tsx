@@ -36,6 +36,6 @@ export default async function HomePage() {
     redirect('/coach/dashboard');
   }
   
-  // Default to athlete calendar
-  redirect('/athlete/calendar');
+  // Default to athlete dashboard
+  redirect('/athlete/dashboard');
 }

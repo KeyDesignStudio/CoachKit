@@ -181,7 +181,6 @@ export async function GET(request: NextRequest) {
     let totalDistanceKm = 0;
 
     const disciplineTotals = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-    const athleteDisciplineSets = new Map<string, Set<string>>();
 
     completedItems.forEach((item) => {
       const latest = item.completedActivities?.[0];
@@ -196,9 +195,6 @@ export async function GET(request: NextRequest) {
       prev.totalMinutes += m;
       prev.totalDistanceKm += d;
       disciplineTotals.set(key, prev);
-
-      if (!athleteDisciplineSets.has(item.athleteId)) athleteDisciplineSets.set(item.athleteId, new Set());
-      athleteDisciplineSets.get(item.athleteId)!.add(key);
     });
 
     const disciplines = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
@@ -238,96 +234,6 @@ export async function GET(request: NextRequest) {
         },
       }),
     ]);
-
-    // Athlete accountability
-    const statusCounts = await prisma.calendarItem.groupBy({
-      by: ['athleteId', 'status'],
-      where: {
-        coachId: user.id,
-        ...rangeFilter,
-        ...athleteFilter,
-        ...disciplineFilter,
-        status: { in: [...REVIEWABLE_STATUSES] },
-      },
-      _count: { _all: true },
-    });
-
-    const completedMinutesByAthlete = await prisma.completedActivity.groupBy({
-      by: ['athleteId'],
-      where: {
-        calendarItem: {
-          coachId: user.id,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          status: { in: COMPLETED_STATUSES },
-        },
-      },
-      _sum: { durationMinutes: true, distanceKm: true },
-    });
-
-    const painByAthlete = await prisma.calendarItem.groupBy({
-      by: ['athleteId'],
-      where: {
-        coachId: user.id,
-        ...rangeFilter,
-        ...athleteFilter,
-        ...disciplineFilter,
-        completedActivities: { some: { painFlag: true } },
-      },
-      _count: { _all: true },
-    });
-
-    const athleteCommentsByAthlete = await prisma.calendarItem.groupBy({
-      by: ['athleteId'],
-      where: {
-        coachId: user.id,
-        ...rangeFilter,
-        ...athleteFilter,
-        ...disciplineFilter,
-        comments: { some: { author: { role: 'ATHLETE' } } },
-      },
-      _count: { _all: true },
-    });
-
-    const completedCountByAthlete = new Map<string, number>();
-    const skippedCountByAthlete = new Map<string, number>();
-
-    statusCounts.forEach((row) => {
-      const n = row._count?._all ?? 0;
-      if (COMPLETED_STATUSES.includes(row.status as CalendarItemStatus)) {
-        completedCountByAthlete.set(row.athleteId, (completedCountByAthlete.get(row.athleteId) ?? 0) + n);
-      } else if (row.status === CalendarItemStatus.SKIPPED) {
-        skippedCountByAthlete.set(row.athleteId, (skippedCountByAthlete.get(row.athleteId) ?? 0) + n);
-      }
-    });
-
-    const minutesByAthlete = new Map<string, number>();
-    completedMinutesByAthlete.forEach((row) => {
-      minutesByAthlete.set(row.athleteId, minutesOrZero(row._sum.durationMinutes));
-    });
-
-    const painCounts = new Map<string, number>();
-    painByAthlete.forEach((row) => painCounts.set(row.athleteId, row._count._all));
-
-    const commentWorkoutCounts = new Map<string, number>();
-    athleteCommentsByAthlete.forEach((row) => commentWorkoutCounts.set(row.athleteId, row._count._all));
-
-    const athleteSummaries = athleteRows
-      .map((ath) => {
-        const disciplineSet = athleteDisciplineSets.get(ath.id) ?? new Set<string>();
-        return {
-          athleteId: ath.id,
-          name: ath.name,
-          completedCount: completedCountByAthlete.get(ath.id) ?? 0,
-          skippedCount: skippedCountByAthlete.get(ath.id) ?? 0,
-          totalMinutes: minutesByAthlete.get(ath.id) ?? 0,
-          disciplinesPresent: Array.from(disciplineSet),
-          painFlagCount: painCounts.get(ath.id) ?? 0,
-          athleteCommentCount: commentWorkoutCounts.get(ath.id) ?? 0,
-        };
-      })
-      .sort((a, b) => (b.painFlagCount + b.athleteCommentCount) - (a.painFlagCount + a.athleteCommentCount) || b.totalMinutes - a.totalMinutes);
 
     // Review inbox items (unreviewed completed/skipped) for this range
     const inboxItems = await prisma.calendarItem.findMany({
@@ -450,11 +356,10 @@ export async function GET(request: NextRequest) {
           awaitingCoachReview: awaitingReviewCount,
         },
         disciplineLoad,
-        athleteSummaries,
         reviewInbox: formattedInbox,
       },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 15, staleWhileRevalidateSeconds: 30 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
       }
     );
   } catch (error) {

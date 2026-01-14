@@ -5,9 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
+import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
@@ -75,17 +77,26 @@ type DashboardResponse = {
     awaitingCoachReview: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
-  athleteSummaries: Array<{
-    athleteId: string;
-    name: string | null;
-    completedCount: number;
-    skippedCount: number;
-    totalMinutes: number;
-    disciplinesPresent: string[];
-    painFlagCount: number;
-    athleteCommentCount: number;
-  }>;
   reviewInbox: ReviewItem[];
+};
+
+type MessageThreadSummary = {
+  threadId: string;
+  athlete: { id: string; name: string | null };
+  lastMessagePreview: string;
+  lastMessageAt: string | null;
+  unreadCountForCoach: number;
+};
+
+type ThreadMessagesResponse = {
+  threadId: string;
+  messages: Array<{
+    id: string;
+    body: string;
+    createdAt: string;
+    senderRole: 'COACH' | 'ATHLETE';
+    senderUserId: string;
+  }>;
 };
 
 function formatMinutes(totalMinutes: number): string {
@@ -105,8 +116,7 @@ function formatDistanceKm(km: number): string {
 }
 
 function formatCalendarDayLabel(dateIso: string, timeZone: string): string {
-  const formatted = formatDisplayInTimeZone(dateIso, timeZone);
-  return formatted.split(',')[1]?.trim() || formatted;
+  return formatDisplayInTimeZone(dateIso, timeZone);
 }
 
 function getDateRangeFromPreset(preset: TimeRangePreset, coachTimeZone: string, customFrom: string, customTo: string) {
@@ -282,6 +292,22 @@ export default function CoachDashboardConsolePage() {
   const needsCardRef = useRef<HTMLDivElement | null>(null);
   const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
 
+  const [messageThreads, setMessageThreads] = useState<MessageThreadSummary[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messageAthleteId, setMessageAthleteId] = useState<string>('');
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ThreadMessagesResponse['messages']>([]);
+  const [messageDraft, setMessageDraft] = useState('');
+  const [messageSending, setMessageSending] = useState(false);
+  const [messageStatus, setMessageStatus] = useState('');
+  const [messageError, setMessageError] = useState('');
+
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkDraft, setBulkDraft] = useState('');
+  const [bulkSending, setBulkSending] = useState(false);
+
   const coachTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, coachTimeZone, customFrom, customTo), [
     timeRange,
@@ -322,6 +348,158 @@ export default function CoachDashboardConsolePage() {
       reload();
     }
   }, [reload, user?.role]);
+
+  const coachAthletesForSelector = useMemo(() => {
+    const athletes = data?.athletes ?? [];
+    return athletes.map((a) => ({
+      userId: a.id,
+      user: { id: a.id, name: a.name },
+    }));
+  }, [data?.athletes]);
+
+  const threadIdByAthleteId = useMemo(() => {
+    const map = new Map<string, string>();
+    messageThreads.forEach((t) => map.set(t.athlete.id, t.threadId));
+    return map;
+  }, [messageThreads]);
+
+  const loadMessageThreads = useCallback(
+    async (bypassCache = false) => {
+      if (!user?.userId || user.role !== 'COACH') return;
+
+      setThreadsLoading(true);
+      setMessageError('');
+
+      const qs = new URLSearchParams();
+      if (bypassCache) qs.set('t', String(Date.now()));
+
+      try {
+        const resp = await request<MessageThreadSummary[]>(
+          `/api/messages/threads${qs.toString() ? `?${qs.toString()}` : ''}`,
+          bypassCache ? { cache: 'no-store' } : undefined
+        );
+        setMessageThreads(resp);
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to load message threads.');
+      } finally {
+        setThreadsLoading(false);
+      }
+    },
+    [request, user?.role, user?.userId]
+  );
+
+  const loadThreadMessages = useCallback(
+    async (threadId: string, bypassCache = false) => {
+      if (!user?.userId || user.role !== 'COACH') return;
+
+      setMessagesLoading(true);
+      setMessageError('');
+
+      const qs = new URLSearchParams();
+      if (bypassCache) qs.set('t', String(Date.now()));
+
+      try {
+        const resp = await request<ThreadMessagesResponse>(
+          `/api/messages/threads/${threadId}${qs.toString() ? `?${qs.toString()}` : ''}`,
+          bypassCache ? { cache: 'no-store' } : undefined
+        );
+        setThreadMessages(resp.messages);
+        await request('/api/messages/mark-read', { method: 'POST', data: { threadId } });
+        void loadMessageThreads();
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to load messages.');
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [loadMessageThreads, request, user?.role, user?.userId]
+  );
+
+  useEffect(() => {
+    if (user?.role === 'COACH') {
+      void loadMessageThreads();
+    }
+  }, [loadMessageThreads, user?.role]);
+
+  useEffect(() => {
+    if (!messageAthleteId) {
+      setSelectedThreadId(null);
+      setThreadMessages([]);
+      return;
+    }
+
+    const tid = threadIdByAthleteId.get(messageAthleteId) ?? null;
+    setSelectedThreadId(tid);
+    if (tid) {
+      void loadThreadMessages(tid);
+    } else {
+      setThreadMessages([]);
+    }
+  }, [loadThreadMessages, messageAthleteId, threadIdByAthleteId]);
+
+  const sendMessageToSelectedAthlete = useCallback(async () => {
+    if (!messageAthleteId) {
+      setMessageError('Select an athlete first.');
+      return;
+    }
+
+    const body = messageDraft.trim();
+    if (!body) return;
+
+    setMessageSending(true);
+    setMessageError('');
+    setMessageStatus('');
+
+    try {
+      const resp = await request<{ sent: number; threadIds: string[] }>('/api/messages/send', {
+        method: 'POST',
+        data: { body, recipients: { athleteIds: [messageAthleteId] } },
+      });
+
+      setMessageDraft('');
+      setMessageStatus(`Sent to ${resp.sent} athlete${resp.sent === 1 ? '' : 's'}`);
+      void loadMessageThreads(true);
+
+      const tid = resp.threadIds[0] ?? null;
+      if (tid) {
+        setSelectedThreadId(tid);
+        void loadThreadMessages(tid, true);
+      }
+    } catch (err) {
+      setMessageError(err instanceof Error ? err.message : 'Failed to send message.');
+    } finally {
+      setMessageSending(false);
+    }
+  }, [loadMessageThreads, loadThreadMessages, messageAthleteId, messageDraft, request]);
+
+  const sendBulkMessage = useCallback(async () => {
+    const body = bulkDraft.trim();
+    if (!body) return;
+
+    setBulkSending(true);
+    setMessageError('');
+    setMessageStatus('');
+
+    try {
+      const allSelected = coachAthletesForSelector.length > 0 && bulkSelectedIds.size === coachAthletesForSelector.length;
+      const recipients = allSelected ? { allAthletes: true as const } : { athleteIds: Array.from(bulkSelectedIds) };
+
+      const resp = await request<{ sent: number; threadIds: string[] }>('/api/messages/send', {
+        method: 'POST',
+        data: { body, recipients },
+      });
+
+      setBulkDraft('');
+      setBulkSelectedIds(new Set());
+      setBulkOpen(false);
+      setMessageStatus(`Sent to ${resp.sent} athlete${resp.sent === 1 ? '' : 's'}`);
+      void loadMessageThreads(true);
+    } catch (err) {
+      setMessageError(err instanceof Error ? err.message : 'Failed to send bulk message.');
+    } finally {
+      setBulkSending(false);
+    }
+  }, [bulkDraft, bulkSelectedIds, coachAthletesForSelector.length, loadMessageThreads, request]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   // Note: this must initialize after the coach UI renders; during the loading gate the ref is null.
@@ -664,7 +842,7 @@ export default function CoachDashboardConsolePage() {
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
 
-        {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Accountability → Inbox */}
+        {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Inbox */}
 
         {/* Discipline load + Review inbox */}
         <div className="mt-10 grid grid-cols-1 gap-6 min-w-0 items-start md:mt-12 md:grid-cols-2">
@@ -742,7 +920,160 @@ export default function CoachDashboardConsolePage() {
             </div>
           </div>
         </div>
+
+        {/* Messages (separate from review inbox) */}
+        <div className="mt-10 min-w-0" data-testid="coach-dashboard-messages">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
+            <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+          </div>
+
+          <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+            <div className="grid gap-3 md:grid-cols-2 md:items-end">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
+                <Select
+                  className="min-h-[44px]"
+                  value={messageAthleteId}
+                  onChange={(e) => setMessageAthleteId(e.target.value)}
+                  aria-label="Select athlete thread"
+                >
+                  <option value="">Select an athlete</option>
+                  {(data?.athletes ?? []).map((a) => {
+                    const thread = messageThreads.find((t) => t.athlete.id === a.id);
+                    const unread = thread?.unreadCountForCoach ?? 0;
+                    const suffix = unread > 0 ? ` (${unread} new)` : '';
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {(a.name ?? 'Unnamed athlete') + suffix}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="secondary" className="min-h-[44px]" onClick={() => setBulkOpen(true)}>
+                  Send message
+                </Button>
+              </div>
+            </div>
+
+            {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
+            {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
+
+            <div className="mt-4 grid gap-2" data-testid="coach-dashboard-messages-compose">
+              <Textarea
+                rows={3}
+                placeholder={messageAthleteId ? 'Write a message…' : 'Select an athlete to message…'}
+                value={messageDraft}
+                onChange={(e) => setMessageDraft(e.target.value)}
+                className="text-sm"
+                disabled={!messageAthleteId || messageSending}
+              />
+
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  className="min-h-[44px]"
+                  onClick={sendMessageToSelectedAthlete}
+                  disabled={!messageAthleteId || messageSending || messageDraft.trim().length === 0}
+                >
+                  {messageSending ? 'Sending…' : 'Send'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-[var(--muted)]">
+                  {threadsLoading ? 'Loading threads…' : selectedThreadId ? 'Thread' : 'No thread selected'}
+                </div>
+                {selectedThreadId ? (
+                  <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => loadThreadMessages(selectedThreadId, true)}>
+                    <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
+                    Refresh
+                  </Button>
+                ) : null}
+              </div>
+
+              {messagesLoading ? <div className="mt-3 text-sm text-[var(--muted)]">Loading messages…</div> : null}
+              {!messagesLoading && selectedThreadId && threadMessages.length === 0 ? (
+                <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
+              ) : null}
+
+              <div className="mt-3 flex flex-col gap-2">
+                {threadMessages.map((m) => {
+                  const mine = m.senderRole === 'COACH';
+                  return (
+                    <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+                      <div
+                        className={cn(
+                          'max-w-[min(560px,92%)] rounded-2xl px-3 py-2 border',
+                          mine
+                            ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
+                            : 'bg-[var(--bg-structure)] border-black/10'
+                        )}
+                      >
+                        <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          {m.senderRole} · {new Date(m.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
+
+      {bulkOpen ? (
+        <div className="fixed inset-0 z-[200]">
+          <div className="absolute inset-0 bg-black/25" onClick={() => (bulkSending ? null : setBulkOpen(false))} />
+          <div className="absolute inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center p-4">
+            <div className="w-full md:max-w-[680px] rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-[var(--text)]">Send message</div>
+                <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => setBulkOpen(false)} disabled={bulkSending}>
+                  Close
+                </Button>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium text-[var(--muted)]">Recipients</div>
+                  <AthleteSelector athletes={coachAthletesForSelector} selectedIds={bulkSelectedIds} onChange={setBulkSelectedIds} />
+                </div>
+
+                <Textarea
+                  rows={4}
+                  placeholder="Write a message…"
+                  value={bulkDraft}
+                  onChange={(e) => setBulkDraft(e.target.value)}
+                  className="text-sm"
+                  disabled={bulkSending}
+                />
+
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    className="min-h-[44px]"
+                    onClick={sendBulkMessage}
+                    disabled={bulkSending || bulkDraft.trim().length === 0 || bulkSelectedIds.size === 0}
+                  >
+                    {bulkSending ? 'Sending…' : `Send (${bulkSelectedIds.size})`}
+                  </Button>
+                </div>
+
+                <div className="text-xs text-[var(--muted)]">
+                  Tip: use “Select all” in the picker to broadcast.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
     </>
