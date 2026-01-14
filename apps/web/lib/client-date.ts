@@ -27,27 +27,12 @@ export function formatDisplayInTimeZone(dateIso: string, timeZone?: string): str
   const date = new Date(`${dateIso}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return formatDisplay(dateIso);
 
-  const parts = new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     timeZone: timeZone || undefined,
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-  }).formatToParts(date);
-
-  const weekday = parts.find((p) => p.type === 'weekday')?.value;
-  const day = parts.find((p) => p.type === 'day')?.value;
-  const month = parts.find((p) => p.type === 'month')?.value;
-
-  if (!weekday || !day || !month) {
-    return new Intl.DateTimeFormat(undefined, {
-      timeZone: timeZone || undefined,
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    }).format(date);
-  }
-
-  return `${weekday} ${day} ${month}`;
+  }).format(date);
 }
 
 function getOrdinalSuffix(day: number): string {

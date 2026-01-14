@@ -105,6 +105,11 @@ function formatDistanceKm(km: number): string {
   return `${Math.round(value)} km`;
 }
 
+function formatCalendarDayLabel(dateIso: string, timeZone: string): string {
+  const formatted = formatDisplayInTimeZone(dateIso, timeZone);
+  return formatted.split(',')[1]?.trim() || formatted;
+}
+
 function getDateRangeFromPreset(preset: TimeRangePreset, coachTimeZone: string, customFrom: string, customTo: string) {
   const todayKey = getZonedDateKeyForNow(coachTimeZone);
   const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
@@ -524,7 +529,7 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               <div className="mt-2 text-xs text-[var(--muted)]">
-                Showing {formatDisplayInTimeZone(dateRange.from, coachTimeZone)} → {formatDisplayInTimeZone(dateRange.to, coachTimeZone)}
+                Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
               </div>
 
               <Button type="button" variant="ghost" onClick={() => reload(true)} className="mt-2 w-full min-h-[40px] md:min-h-[44px]">
