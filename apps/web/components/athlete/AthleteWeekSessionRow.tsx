@@ -194,7 +194,7 @@ export function AthleteWeekSessionRow({
             <Icon
               name={statusBar.iconName}
               size="xs"
-              className={cn('text-black leading-none scale-[1.15] origin-center')}
+              className={cn('text-black leading-none scale-[1.035] origin-center')}
               aria-hidden
             />
           </div>
