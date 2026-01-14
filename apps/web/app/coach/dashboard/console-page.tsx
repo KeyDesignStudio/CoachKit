@@ -894,7 +894,7 @@ export default function CoachDashboardConsolePage() {
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
               data-testid="coach-dashboard-at-a-glance"
-              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
             >
               <div className="flex items-end justify-between gap-3 mb-2">
                 <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
@@ -902,69 +902,74 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               <div
-                className="grid grid-cols-2 gap-x-4 gap-y-3"
+                className="grid grid-cols-1 min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 min-w-0"
                 data-testid="coach-dashboard-at-a-glance-grid"
               >
-                {[
-                  { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                  { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                  { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                  { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                ].map((tile) => (
-                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-1.5">
-                    <div className="text-[18px] sm:text-[20px] lg:text-[22px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
-                      {tile.value}
-                    </div>
-                    <div
-                      className="min-w-0 text-[10px] md:text-[11px] leading-snug uppercase tracking-wide text-[var(--muted)]/90 whitespace-nowrap overflow-hidden text-ellipsis"
-                      title={tile.label}
-                    >
-                      {tile.label}
-                    </div>
+                {/* Left: stats */}
+                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="coach-dashboard-at-a-glance-stats">
+                  <div className="grid gap-1">
+                    {[
+                      { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                      { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                      { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                      { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                    ].map((row, idx) => (
+                      <div
+                        key={row.label}
+                        className={cn(
+                          'min-w-0 flex items-baseline justify-between gap-3 py-1.5',
+                          idx < 3 ? 'border-b border-black/5' : ''
+                        )}
+                        data-testid="coach-dashboard-at-a-glance-stat-row"
+                      >
+                        <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
+                          {row.label}
+                        </div>
+                        <div className="flex-shrink-0 text-[18px] sm:text-[20px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                          {row.value}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
 
-              <div
-                className="mt-3 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
-                data-testid="coach-dashboard-discipline-load"
-              >
-                <div className="flex flex-col gap-2">
-                  {(() => {
-                    const rows = [...(data?.disciplineLoad ?? [])].sort((a, b) => b.totalMinutes - a.totalMinutes);
-                    const visibleRows = rows.slice(0, 4);
-                    const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                    return (
-                      <>
-                        {visibleRows.map((r) => {
-                          const theme = getDisciplineTheme(r.discipline);
-                          const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                          return (
-                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
-                              <div className="flex items-center gap-2 min-w-[64px]">
-                                <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
-                              </div>
+                {/* Right: discipline load */}
+                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="coach-dashboard-discipline-load">
+                  <div className="flex flex-col gap-2">
+                    {(() => {
+                      const rows = data?.disciplineLoad ?? [];
+                      const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
+                      return (
+                        <>
+                          {rows.map((r) => {
+                            const theme = getDisciplineTheme(r.discipline);
+                            const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
+                            const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
+                            return (
+                              <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-[64px]">
+                                  <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                                  <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                </div>
 
-                              <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                                <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
-                              </div>
+                                <div className="h-2 rounded-full bg-black/10 overflow-hidden">
+                                  <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                                </div>
 
-                              <div className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
-                                {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
+                                <div
+                                  className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
+                                  title={rightValue}
+                                >
+                                  {rightValue}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                        {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
-                        {rows.length > visibleRows.length ? (
-                          <div className="text-[11px] text-[var(--muted)] px-1 pt-1">
-                            +{rows.length - visibleRows.length} more
-                          </div>
-                        ) : null}
-                      </>
-                    );
-                  })()}
+                            );
+                          })}
+                          {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

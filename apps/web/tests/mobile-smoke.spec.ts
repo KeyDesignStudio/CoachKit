@@ -55,17 +55,9 @@ test.describe('Mobile smoke', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
     const kpiGrid = page.getByTestId('coach-dashboard-at-a-glance-grid');
     await expect(kpiGrid).toBeVisible();
-    await expect(kpiGrid.locator('div.rounded-2xl')).toHaveCount(4);
-    const kpiColumns = await kpiGrid.evaluate((el) => {
-      const tpl = window.getComputedStyle(el).gridTemplateColumns;
-      const repeatMatch = tpl.match(/repeat\((\d+)\s*,/);
-      if (repeatMatch) return Number(repeatMatch[1]);
-      const parts = tpl.split(' ').filter(Boolean);
-      return parts.length;
-    });
-    const viewportWidth = page.viewportSize()?.width ?? 0;
-    const expectedColumns = viewportWidth > 0 && viewportWidth < 360 ? 1 : 2;
-    expect(kpiColumns, `KPI tiles should use ${expectedColumns} column(s) at this viewport`).toBe(expectedColumns);
+    const statsBox = page.getByTestId('coach-dashboard-at-a-glance-stats');
+    await expect(statsBox).toBeVisible();
+    await expect(statsBox.getByTestId('coach-dashboard-at-a-glance-stat-row')).toHaveCount(4);
 
     const disciplineCard = page.getByTestId('coach-dashboard-discipline-load');
     await expect(disciplineCard).toBeVisible();
@@ -169,7 +161,9 @@ test.describe('Mobile smoke', () => {
 
     const kpiGrid = page.getByTestId('athlete-dashboard-at-a-glance-grid');
     await expect(kpiGrid).toBeVisible();
-    await expect(kpiGrid.locator('div.rounded-2xl')).toHaveCount(4);
+    const statsBox = page.getByTestId('athlete-dashboard-at-a-glance-stats');
+    await expect(statsBox).toBeVisible();
+    await expect(statsBox.getByTestId('athlete-dashboard-at-a-glance-stat-row')).toHaveCount(4);
 
     const compose = page.getByTestId('athlete-dashboard-messages-compose');
     await expect(compose).toBeVisible();
