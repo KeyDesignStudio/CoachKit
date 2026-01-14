@@ -532,10 +532,10 @@ export default function CoachDashboardConsolePage() {
           {/* Column 2: Filters/selectors */}
           <div className="min-w-0 md:order-1">
             <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3"
+              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <div className="flex items-end justify-between gap-3 mb-2">
+              <div className="flex items-end justify-between gap-3 mb-4">
                 <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
@@ -670,9 +670,8 @@ export default function CoachDashboardConsolePage() {
         <div className="mt-10 grid grid-cols-1 gap-6 min-w-0 items-start md:mt-12 md:grid-cols-2">
           {/* Column 1: Review inbox */}
           <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
               <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
-              <div className="text-xs uppercase tracking-wide text-[var(--muted)]">FILTER APPLIED: UNREVIEWED COMPLETED + SKIPPED</div>
             </div>
 
             <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
@@ -710,7 +709,7 @@ export default function CoachDashboardConsolePage() {
 
           {/* Column 2: Discipline load */}
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-[var(--text)] mb-2">Discipline load</h2>
+            <h2 className="text-sm font-semibold text-[var(--text)] mb-2 pl-3 md:pl-4">Discipline load</h2>
             <div className="rounded-2xl bg-[var(--bg-card)] p-3">
               {(() => {
                 const rows = data?.disciplineLoad ?? [];
