@@ -143,7 +143,7 @@ export async function AppHeader() {
           >
             <span className="text-sm">CoachKit</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/coachkit-logo.png" alt="CoachKit" className="h-6 w-6 object-contain" />
+            <img src="/brand/coachkit-logo.png" alt="CoachKit" className="h-[26.4px] w-[26.4px] object-contain" />
           </Link>
         </div>
       </div>
@@ -173,7 +173,7 @@ export async function AppHeader() {
               <img
                 src="/brand/coachkit-logo.png"
                 alt="CoachKit"
-                className="h-9 w-9 object-contain"
+                className="h-[39.6px] w-[39.6px] object-contain"
               />
             </Link>
           </div>
