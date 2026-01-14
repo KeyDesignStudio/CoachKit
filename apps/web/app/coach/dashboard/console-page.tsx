@@ -602,8 +602,10 @@ export default function CoachDashboardConsolePage() {
 
                 <div className="md:col-start-2 md:row-start-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                  <div className="text-sm font-semibold text-[var(--text)]">
-                    {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                  <div className="min-h-[44px] flex items-center">
+                    <div className="text-sm font-semibold text-[var(--text)]">
+                      {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                    </div>
                   </div>
                 </div>
 
