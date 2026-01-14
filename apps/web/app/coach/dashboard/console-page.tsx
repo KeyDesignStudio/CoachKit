@@ -279,6 +279,9 @@ export default function CoachDashboardConsolePage() {
 
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
 
+  const needsCardRef = useRef<HTMLDivElement | null>(null);
+  const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
+
   const coachTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, coachTimeZone, customFrom, customTo), [
     timeRange,
@@ -319,6 +322,36 @@ export default function CoachDashboardConsolePage() {
       reload();
     }
   }, [reload, user?.role]);
+
+  // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mql = window.matchMedia('(min-width: 1280px)');
+    const compute = () => {
+      if (!mql.matches) {
+        setXlTopCardHeightPx(null);
+        return;
+      }
+      const h = needsCardRef.current?.getBoundingClientRect().height;
+      if (!h || !Number.isFinite(h) || h <= 0) return;
+      setXlTopCardHeightPx(Math.round(h));
+    };
+
+    compute();
+
+    const ro = new ResizeObserver(() => compute());
+    if (needsCardRef.current) ro.observe(needsCardRef.current);
+    const onChange = () => compute();
+    mql.addEventListener('change', onChange);
+    window.addEventListener('resize', onChange);
+
+    return () => {
+      ro.disconnect();
+      mql.removeEventListener('change', onChange);
+      window.removeEventListener('resize', onChange);
+    };
+  }, []);
 
   // If the global filters change, clear any inbox shortcut filter.
   useEffect(() => {
@@ -453,7 +486,7 @@ export default function CoachDashboardConsolePage() {
         <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {/* Column 1: Needs your attention */}
           <div className="min-w-0">
-            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+            <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
                 <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
@@ -495,94 +528,108 @@ export default function CoachDashboardConsolePage() {
 
           {/* Column 2: Filters/selectors */}
           <div className="min-w-0">
-            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 h-full">
-              <div className="grid gap-2 md:gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Time range</div>
-                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                    <option value="LAST_7">Last 7 days</option>
-                    <option value="LAST_14">Last 14 days</option>
-                    <option value="LAST_30">Last 30 days</option>
-                    <option value="CUSTOM">Custom</option>
-                  </Select>
-                </div>
-
-                {timeRange === 'CUSTOM' ? (
-                  <div className="grid grid-cols-2 gap-2">
+            <div
+              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 overflow-hidden"
+              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+            >
+              <div className="h-full flex flex-col">
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <div className="grid gap-2 md:gap-3">
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">From</div>
-                      <input
-                        type="date"
-                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                        value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                      />
+                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Time range</div>
+                      <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                        <option value="LAST_7">Last 7 days</option>
+                        <option value="LAST_14">Last 14 days</option>
+                        <option value="LAST_30">Last 30 days</option>
+                        <option value="CUSTOM">Custom</option>
+                      </Select>
                     </div>
+
+                    {timeRange === 'CUSTOM' ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">From</div>
+                          <input
+                            type="date"
+                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            value={customFrom}
+                            onChange={(e) => setCustomFrom(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">To</div>
+                          <input
+                            type="date"
+                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            value={customTo}
+                            onChange={(e) => setCustomTo(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">To</div>
-                      <input
-                        type="date"
-                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                        value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                      />
+                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Athlete</div>
+                      <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
+                        <option value="">All athletes</option>
+                        {(data?.athletes ?? []).map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name ?? 'Unnamed athlete'}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Discipline (optional)</div>
+                      <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
+                        <option value="">All disciplines</option>
+                        {disciplineOptions.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
                   </div>
-                ) : null}
-
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Athlete</div>
-                  <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
-                    <option value="">All athletes</option>
-                    {(data?.athletes ?? []).map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name ?? 'Unnamed athlete'}
-                      </option>
-                    ))}
-                  </Select>
                 </div>
 
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Discipline (optional)</div>
-                  <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
-                    <option value="">All disciplines</option>
-                    {disciplineOptions.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <div className="text-xs text-[var(--muted)]">
+                    Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                  </div>
 
-              <div className="mt-2 flex items-end justify-between gap-3">
-                <div className="text-xs text-[var(--muted)]">
-                  Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                  <Button type="button" variant="ghost" onClick={() => reload(true)} className="min-h-[40px] md:min-h-[44px]">
+                    Refresh
+                  </Button>
                 </div>
-
-                <Button type="button" variant="ghost" onClick={() => reload(true)} className="min-h-[40px] md:min-h-[44px]">
-                  Refresh
-                </Button>
               </div>
             </div>
           </div>
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
           <div className="min-w-0 md:col-span-2 xl:col-span-1">
-            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-              <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
-              <div className="grid grid-cols-1 gap-2">
-                {[
-                  { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                  { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                  { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                  { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                ].map((tile) => (
-                  <div key={tile.label} className="rounded-2xl bg-[var(--bg-structure)]/60 px-3 py-2">
-                    <div className="text-[28px] leading-tight font-semibold tabular-nums text-[var(--text)]">{tile.value}</div>
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]/90 mt-0.5">{tile.label}</div>
+            <div
+              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 overflow-hidden"
+              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+            >
+              <div className="h-full flex flex-col">
+                <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                      { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                      { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                      { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                    ].map((tile) => (
+                      <div key={tile.label} className="rounded-2xl bg-[var(--bg-structure)]/60 px-3 py-2">
+                        <div className="text-[28px] leading-tight font-semibold tabular-nums text-[var(--text)]">{tile.value}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]/90 mt-0.5">{tile.label}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
