@@ -7,6 +7,7 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -302,6 +303,14 @@ export default function CoachDashboardConsolePage() {
   const [messageStatus, setMessageStatus] = useState('');
   const [messageError, setMessageError] = useState('');
 
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastAllAthletes, setBroadcastAllAthletes] = useState(false);
+  const [broadcastSelectedAthleteIds, setBroadcastSelectedAthleteIds] = useState<Set<string>>(() => new Set());
+  const [broadcastFilter, setBroadcastFilter] = useState('');
+  const [broadcastDraft, setBroadcastDraft] = useState('');
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [broadcastError, setBroadcastError] = useState('');
+
   const coachTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, coachTimeZone, customFrom, customTo), [
     timeRange,
@@ -356,6 +365,21 @@ export default function CoachDashboardConsolePage() {
     return fromThreads ?? fromData ?? 'Athlete';
   }, [data?.athletes, messageAthleteId, messageThreads]);
 
+  const openBroadcast = useCallback(() => {
+    setBroadcastError('');
+    setBroadcastDraft('');
+    setBroadcastFilter('');
+    setBroadcastAllAthletes(false);
+    setBroadcastSelectedAthleteIds(messageAthleteId ? new Set([messageAthleteId]) : new Set());
+    setBroadcastOpen(true);
+  }, [messageAthleteId]);
+
+  const closeBroadcast = useCallback(() => {
+    setBroadcastOpen(false);
+    setBroadcastError('');
+    setBroadcastSending(false);
+  }, []);
+
   const loadMessageThreads = useCallback(
     async (bypassCache = false) => {
       if (!user?.userId || user.role !== 'COACH') return;
@@ -380,6 +404,38 @@ export default function CoachDashboardConsolePage() {
     },
     [request, user?.role, user?.userId]
   );
+
+  const sendBroadcast = useCallback(async () => {
+    if (broadcastSending) return;
+    const body = broadcastDraft.trim();
+    if (!body) return;
+
+    const athleteIds = Array.from(broadcastSelectedAthleteIds);
+    if (!broadcastAllAthletes && athleteIds.length === 0) return;
+
+    setBroadcastSending(true);
+    setBroadcastError('');
+    setMessageStatus('');
+    setMessageError('');
+
+    try {
+      const resp = await request<{ sent: number; threadIds: string[] }>('/api/messages/send', {
+        method: 'POST',
+        data: {
+          body,
+          recipients: broadcastAllAthletes ? { allAthletes: true } : { athleteIds },
+        },
+      });
+
+      setMessageStatus(`Broadcast sent to ${resp.sent} athlete${resp.sent === 1 ? '' : 's'}.`);
+      closeBroadcast();
+      await loadMessageThreads(true);
+    } catch (err) {
+      setBroadcastError(err instanceof Error ? err.message : 'Failed to send broadcast message.');
+    } finally {
+      setBroadcastSending(false);
+    }
+  }, [broadcastAllAthletes, broadcastDraft, broadcastSelectedAthleteIds, broadcastSending, closeBroadcast, loadMessageThreads, request]);
 
   const loadThreadMessages = useCallback(
     async (threadId: string, bypassCache = false) => {
@@ -895,8 +951,12 @@ export default function CoachDashboardConsolePage() {
 
         {/* Messages (separate from review inbox) */}
         <div className="mt-10 min-w-0" data-testid="coach-dashboard-messages">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2 pl-3 md:pl-4">
             <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+
+            <Button type="button" variant="secondary" className="min-h-[44px]" onClick={openBroadcast} data-testid="coach-dashboard-messages-broadcast">
+              Broadcast
+            </Button>
           </div>
 
           <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
@@ -994,6 +1054,123 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
       </section>
+
+      {broadcastOpen ? (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={closeBroadcast} />
+
+          <div
+            className="fixed left-1/2 top-1/2 z-[60] w-[min(720px,calc(100%-24px))] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 md:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Broadcast message"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-[var(--text)]">Broadcast message</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Send one message to multiple athletes.</p>
+              </div>
+              <Button type="button" variant="ghost" className="min-h-[44px]" onClick={closeBroadcast} aria-label="Close broadcast modal">
+                <Icon name="close" size="sm" aria-hidden />
+              </Button>
+            </div>
+
+            {broadcastError ? <div className="mt-3 text-sm text-rose-700">{broadcastError}</div> : null}
+
+            <div className="mt-4 grid gap-3">
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={broadcastAllAthletes}
+                  onChange={(e) => setBroadcastAllAthletes(e.target.checked)}
+                />
+                <span>All athletes ({(data?.athletes ?? []).length})</span>
+              </label>
+
+              {!broadcastAllAthletes ? (
+                <>
+                  <div className="grid gap-1">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Select athletes</div>
+                    <Input
+                      value={broadcastFilter}
+                      onChange={(e) => setBroadcastFilter(e.target.value)}
+                      placeholder="Filter by name…"
+                      aria-label="Filter athletes"
+                    />
+                  </div>
+
+                  <div className="max-h-[260px] overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
+                    {(data?.athletes ?? [])
+                      .filter((a) => {
+                        const name = (a.name ?? 'Unnamed athlete').toLowerCase();
+                        return name.includes(broadcastFilter.trim().toLowerCase());
+                      })
+                      .map((a) => {
+                        const checked = broadcastSelectedAthleteIds.has(a.id);
+                        return (
+                          <label key={a.id} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-black/5">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setBroadcastSelectedAthleteIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(a.id);
+                                  else next.delete(a.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className="text-sm text-[var(--text)]">{a.name ?? 'Unnamed athlete'}</span>
+                          </label>
+                        );
+                      })}
+
+                    {(data?.athletes ?? []).length > 0 &&
+                    (data?.athletes ?? []).filter((a) => (a.name ?? 'Unnamed athlete').toLowerCase().includes(broadcastFilter.trim().toLowerCase()))
+                      .length === 0 ? (
+                      <div className="px-2 py-3 text-sm text-[var(--muted)]">No matches.</div>
+                    ) : null}
+                  </div>
+
+                  <div className="text-xs text-[var(--muted)]">
+                    Selected: {broadcastSelectedAthleteIds.size}
+                  </div>
+                </>
+              ) : null}
+
+              <div className="grid gap-2">
+                <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Message</div>
+                <Textarea
+                  rows={5}
+                  value={broadcastDraft}
+                  onChange={(e) => setBroadcastDraft(e.target.value)}
+                  placeholder="Write your broadcast message…"
+                  disabled={broadcastSending}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <Button type="button" variant="secondary" className="min-h-[44px]" onClick={closeBroadcast} disabled={broadcastSending}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="min-h-[44px]"
+                onClick={sendBroadcast}
+                disabled={
+                  broadcastSending ||
+                  broadcastDraft.trim().length === 0 ||
+                  (!broadcastAllAthletes && broadcastSelectedAthleteIds.size === 0)
+                }
+              >
+                {broadcastSending ? 'Sending…' : 'Send broadcast'}
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
     </>
