@@ -48,9 +48,10 @@ type ReviewDrawerProps = {
   item: ReviewItem | null;
   onClose: () => void;
   onMarkReviewed: (id: string) => Promise<void>;
+  showSessionTimes?: boolean;
 };
 
-export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProps) {
+export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes = true }: ReviewDrawerProps) {
   const [marking, setMarking] = useState(false);
 
   const handleMarkReviewed = useCallback(async () => {
@@ -91,9 +92,10 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
                 <Badge>{item.discipline}</Badge>
                 <Badge>{item.status.replace(/_/g, ' ')}</Badge>
               </div>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {formatDisplay(item.date)} · {item.plannedStartTimeLocal ?? 'n/a'}
-              </p>
+              <p className="mt-1 text-sm text-[var(--muted)]">{formatDisplay(item.date)}</p>
+              {showSessionTimes ? (
+                <p className="text-sm text-[var(--muted)]">Start: {item.plannedStartTimeLocal ?? 'n/a'}</p>
+              ) : null}
               <p className="text-sm text-[var(--muted)]">
                 Athlete: {item.athlete?.name ?? 'Unknown'}
               </p>
@@ -182,7 +184,14 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed }: ReviewDrawerProp
                   >
                     <p className="text-sm text-[var(--text)]">{comment.body}</p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {comment.author.name ?? comment.author.role} · {new Date(comment.createdAt).toLocaleString()}
+                      {comment.author.name ?? comment.author.role} ·{' '}
+                      {showSessionTimes
+                        ? new Date(comment.createdAt).toLocaleString()
+                        : new Date(comment.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
                     </p>
                   </li>
                 ))}
