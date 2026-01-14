@@ -535,18 +535,9 @@ export default function CoachDashboardConsolePage() {
               className="rounded-2xl bg-[var(--bg-card)] p-3"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-2">
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                    <option value="LAST_7">Last 7 days</option>
-                    <option value="LAST_14">Last 14 days</option>
-                    <option value="LAST_30">Last 30 days</option>
-                    <option value="CUSTOM">Custom</option>
-                  </Select>
-                </div>
-
-                <div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-3">
+                {/* Row 1 */}
+                <div className="md:col-start-1 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
                   <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
                     <option value="">All athletes</option>
@@ -558,7 +549,7 @@ export default function CoachDashboardConsolePage() {
                   </Select>
                 </div>
 
-                <div>
+                <div className="md:col-start-2 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
                   <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
                     <option value="">All disciplines</option>
@@ -570,37 +561,53 @@ export default function CoachDashboardConsolePage() {
                   </Select>
                 </div>
 
-                <div className="hidden md:block" aria-hidden="true" />
+                {/* Row 2 */}
+                <div className="md:col-start-1 md:row-start-2">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
+                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                    <option value="LAST_7">Last 7 days</option>
+                    <option value="LAST_14">Last 14 days</option>
+                    <option value="LAST_30">Last 30 days</option>
+                    <option value="CUSTOM">Custom</option>
+                  </Select>
 
-                {timeRange === 'CUSTOM' ? (
-                  <div className="md:col-span-2 grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">From</div>
-                      <input
-                        type="date"
-                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                        value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                      />
+                  {timeRange === 'CUSTOM' ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">From</div>
+                        <input
+                          type="date"
+                          className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                          value={customFrom}
+                          onChange={(e) => setCustomFrom(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">To</div>
+                        <input
+                          type="date"
+                          className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                          value={customTo}
+                          onChange={(e) => setCustomTo(e.target.value)}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">To</div>
-                      <input
-                        type="date"
-                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                        value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
 
-                <div className="md:col-span-2 mt-1 flex items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--muted)]">
-                    Showing {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                <div className="hidden md:block md:col-start-2 md:row-start-2" aria-hidden="true" />
+
+                {/* Row 3 gap */}
+                <div className="col-span-1 md:col-span-2 h-2 md:h-3" aria-hidden="true" />
+
+                {/* Row 4 */}
+                <div className="md:col-span-2 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-[var(--text)]">
+                    {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                   </div>
 
-                  <Button type="button" variant="ghost" onClick={() => reload(true)} className="min-h-[40px]">
+                  <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
+                    <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                     Refresh
                   </Button>
                 </div>
