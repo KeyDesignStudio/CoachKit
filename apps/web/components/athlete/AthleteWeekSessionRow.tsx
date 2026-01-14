@@ -57,18 +57,18 @@ function getStatusBarConfig(params: {
   const isMissed = indicator.iconName === 'missed';
 
   if (isCompleted) {
-    return { iconName: 'completed', ariaLabel: 'Completed', bgClassName: 'bg-emerald-600/85', title: null };
+    return { iconName: 'completed', ariaLabel: 'Completed', bgClassName: 'bg-emerald-600/45', title: null };
   }
 
   if (isSkipped) {
-    return { iconName: 'skipped', ariaLabel: 'Skipped', bgClassName: 'bg-rose-600/85', title: null };
+    return { iconName: 'skipped', ariaLabel: 'Skipped', bgClassName: 'bg-rose-600/45', title: null };
   }
 
   if (isMissed) {
     return {
       iconName: 'missed',
       ariaLabel: 'Missed workout',
-      bgClassName: 'bg-rose-600/85',
+      bgClassName: 'bg-rose-600/45',
       title: 'Missed workout – this workout was planned but not completed',
     };
   }
@@ -77,12 +77,12 @@ function getStatusBarConfig(params: {
     return {
       iconName: 'needsReview',
       ariaLabel: 'Draft completion (pending confirmation)',
-      bgClassName: 'bg-amber-500/85',
+      bgClassName: 'bg-amber-500/45',
       title: null,
     };
   }
 
-  return { iconName: 'planned', ariaLabel: 'Planned', bgClassName: 'bg-amber-500/85', title: null };
+  return { iconName: 'planned', ariaLabel: 'Planned', bgClassName: 'bg-amber-500/45', title: null };
 }
 
 export function AthleteWeekSessionRow({
@@ -194,7 +194,7 @@ export function AthleteWeekSessionRow({
             <Icon
               name={statusBar.iconName}
               size="xs"
-              className={cn('text-white leading-none scale-[1.15] origin-center')}
+              className={cn('text-black leading-none scale-[1.15] origin-center')}
               aria-hidden
             />
           </div>
