@@ -488,7 +488,7 @@ export default function CoachDashboardConsolePage() {
         {/* Top grid shell: mobile 1 col (Needs → Filters → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
         <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
           {/* Column 1: Needs your attention */}
-          <div className="min-w-0">
+          <div className="min-w-0 md:order-2">
             <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
@@ -530,7 +530,7 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           {/* Column 2: Filters/selectors */}
-          <div className="min-w-0">
+          <div className="min-w-0 md:order-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
@@ -609,7 +609,7 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
-          <div className="min-w-0 md:col-span-2 xl:col-span-1">
+          <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
