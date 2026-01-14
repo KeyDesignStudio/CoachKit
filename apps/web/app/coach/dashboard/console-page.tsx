@@ -615,16 +615,23 @@ export default function CoachDashboardConsolePage() {
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
               <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
-              <div className="grid grid-cols-1 gap-1.5">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6">
                 {[
                   { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
                   { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
                   { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
                   { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
                 ].map((tile) => (
-                  <div key={tile.label} className="rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-1.5">
-                    <div className="text-[24px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">{tile.value}</div>
-                    <div className="text-[10px] leading-snug uppercase tracking-wide text-[var(--muted)]/90">{tile.label}</div>
+                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-2">
+                    <div className="text-[22px] min-[420px]:text-[24px] lg:text-[26px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                      {tile.value}
+                    </div>
+                    <div
+                      className="min-w-0 text-[10px] md:text-[11px] leading-snug uppercase tracking-wide text-[var(--muted)]/90 whitespace-nowrap overflow-hidden text-ellipsis"
+                      title={tile.label}
+                    >
+                      {tile.label}
+                    </div>
                   </div>
                 ))}
               </div>
