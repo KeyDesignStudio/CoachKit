@@ -667,7 +667,7 @@ export default function CoachDashboardConsolePage() {
         {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Accountability → Inbox */}
 
         {/* Discipline load + Review inbox */}
-        <div className="mt-6 grid grid-cols-1 gap-6 min-w-0 items-start md:grid-cols-2">
+        <div className="mt-10 grid grid-cols-1 gap-6 min-w-0 items-start md:mt-12 md:grid-cols-2">
           {/* Column 1: Review inbox */}
           <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
