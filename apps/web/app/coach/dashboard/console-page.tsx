@@ -324,8 +324,11 @@ export default function CoachDashboardConsolePage() {
   }, [reload, user?.role]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
+  // Note: this must initialize after the coach UI renders; during the loading gate the ref is null.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (userLoading) return;
+    if (!user || user.role !== 'COACH') return;
 
     const mql = window.matchMedia('(min-width: 1280px)');
     const compute = () => {
@@ -340,18 +343,18 @@ export default function CoachDashboardConsolePage() {
 
     compute();
 
-    const ro = new ResizeObserver(() => compute());
-    if (needsCardRef.current) ro.observe(needsCardRef.current);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => compute()) : null;
+    if (ro && needsCardRef.current) ro.observe(needsCardRef.current);
     const onChange = () => compute();
     mql.addEventListener('change', onChange);
     window.addEventListener('resize', onChange);
 
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       mql.removeEventListener('change', onChange);
       window.removeEventListener('resize', onChange);
     };
-  }, []);
+  }, [user, userLoading]);
 
   // If the global filters change, clear any inbox shortcut filter.
   useEffect(() => {
