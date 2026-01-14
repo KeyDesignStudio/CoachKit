@@ -110,9 +110,9 @@ function formatMinutes(totalMinutes: number): string {
 
 function formatDistanceKm(km: number): string {
   const value = Number.isFinite(km) ? km : 0;
-  if (value === 0) return '0 km';
-  if (value < 10) return `${value.toFixed(1)} km`;
-  return `${Math.round(value)} km`;
+  if (value === 0) return '0km';
+  if (value < 10) return `${value.toFixed(1)}km`;
+  return `${Math.round(value)}km`;
 }
 
 function formatCalendarDayLabel(dateIso: string, timeZone: string): string {
@@ -304,6 +304,8 @@ export default function CoachDashboardConsolePage() {
   const [messageError, setMessageError] = useState('');
   const [messageThreadFilter, setMessageThreadFilter] = useState('');
 
+  const messagePollInFlightRef = useRef(false);
+
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastAllAthletes, setBroadcastAllAthletes] = useState(false);
   const [broadcastSelectedAthleteIds, setBroadcastSelectedAthleteIds] = useState<Set<string>>(() => new Set());
@@ -407,10 +409,10 @@ export default function CoachDashboardConsolePage() {
   }, []);
 
   const loadMessageThreads = useCallback(
-    async (bypassCache = false) => {
+    async (bypassCache = false, opts?: { silent?: boolean }) => {
       if (!user?.userId || user.role !== 'COACH') return;
 
-      setThreadsLoading(true);
+      if (!opts?.silent) setThreadsLoading(true);
       setMessageError('');
 
       const qs = new URLSearchParams();
@@ -425,7 +427,7 @@ export default function CoachDashboardConsolePage() {
       } catch (err) {
         setMessageError(err instanceof Error ? err.message : 'Failed to load message threads.');
       } finally {
-        setThreadsLoading(false);
+        if (!opts?.silent) setThreadsLoading(false);
       }
     },
     [request, user?.role, user?.userId]
@@ -464,10 +466,10 @@ export default function CoachDashboardConsolePage() {
   }, [broadcastAllAthletes, broadcastDraft, broadcastSelectedAthleteIds, broadcastSending, closeBroadcast, loadMessageThreads, request]);
 
   const loadThreadMessages = useCallback(
-    async (threadId: string, bypassCache = false) => {
+    async (threadId: string, bypassCache = false, opts?: { silent?: boolean }) => {
       if (!user?.userId || user.role !== 'COACH') return;
 
-      setMessagesLoading(true);
+      if (!opts?.silent) setMessagesLoading(true);
       setMessageError('');
 
       const qs = new URLSearchParams();
@@ -489,7 +491,7 @@ export default function CoachDashboardConsolePage() {
       } catch (err) {
         setMessageError(err instanceof Error ? err.message : 'Failed to load messages.');
       } finally {
-        setMessagesLoading(false);
+        if (!opts?.silent) setMessagesLoading(false);
       }
     },
     [request, user?.role, user?.userId]
@@ -500,6 +502,30 @@ export default function CoachDashboardConsolePage() {
       void loadMessageThreads();
     }
   }, [loadMessageThreads, user?.role]);
+
+  // Background refresh every 30s (avoid UI flicker by loading silently).
+  useEffect(() => {
+    if (user?.role !== 'COACH') return;
+
+    const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (messagePollInFlightRef.current) return;
+
+      messagePollInFlightRef.current = true;
+      (async () => {
+        try {
+          await loadMessageThreads(true, { silent: true });
+          if (selectedThreadId) {
+            await loadThreadMessages(selectedThreadId, true, { silent: true });
+          }
+        } finally {
+          messagePollInFlightRef.current = false;
+        }
+      })();
+    }, 30_000);
+
+    return () => window.clearInterval(id);
+  }, [loadMessageThreads, loadThreadMessages, selectedThreadId, user?.role]);
 
   useEffect(() => {
     if (user?.role !== 'COACH') return;
@@ -866,7 +892,7 @@ export default function CoachDashboardConsolePage() {
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
           <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
             <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3"
+              className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
               data-testid="coach-dashboard-at-a-glance"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
@@ -880,10 +906,10 @@ export default function CoachDashboardConsolePage() {
                 data-testid="coach-dashboard-at-a-glance-grid"
               >
                 {[
-                  { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                  { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                  { label: 'Total training time', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                  { label: 'Total distance', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                  { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                  { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                  { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                  { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
                 ].map((tile) => (
                   <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-2">
                     <div className="text-[22px] min-[420px]:text-[24px] lg:text-[26px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
@@ -898,6 +924,43 @@ export default function CoachDashboardConsolePage() {
                   </div>
                 ))}
               </div>
+
+              <div
+                className="mt-4 min-h-0 flex-1 overflow-auto rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
+                data-testid="coach-dashboard-discipline-load"
+              >
+                <div className="flex flex-col gap-2">
+                  {(() => {
+                    const rows = data?.disciplineLoad ?? [];
+                    const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
+                    return (
+                      <>
+                        {rows.map((r) => {
+                          const theme = getDisciplineTheme(r.discipline);
+                          const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
+                          return (
+                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
+                              <div className="flex items-center gap-2 min-w-[72px]">
+                                <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                                <span className="text-xs font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                              </div>
+
+                              <div className="h-2 rounded-full bg-black/10 overflow-hidden">
+                                <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                              </div>
+
+                              <div className="text-xs text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
+                                {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -906,10 +969,8 @@ export default function CoachDashboardConsolePage() {
 
         {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Inbox */}
 
-        {/* Discipline load + Review inbox */}
-        <div className="mt-10 grid grid-cols-1 gap-6 min-w-0 items-start md:mt-12 md:grid-cols-2">
-          {/* Column 1: Review inbox */}
-          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
+        {/* Review inbox */}
+        <div className="mt-10 min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
               <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
             </div>
@@ -945,42 +1006,6 @@ export default function CoachDashboardConsolePage() {
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Column 2: Discipline load */}
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-[var(--text)] mb-2 pl-3 md:pl-4">Discipline load</h2>
-            <div className="rounded-2xl bg-[var(--bg-card)] p-3">
-              {(() => {
-                const rows = data?.disciplineLoad ?? [];
-                const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                return (
-                  <div className="flex flex-col gap-2">
-                    {rows.map((r) => {
-                      const theme = getDisciplineTheme(r.discipline);
-                      const pct = Math.round((r.totalMinutes / maxMinutes) * 100);
-                      return (
-                        <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
-                          <div className="flex items-center gap-2 min-w-[72px]">
-                            <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                            <span className="text-xs font-medium text-[var(--text)]">{r.discipline}</span>
-                          </div>
-
-                          <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                            <div className={cn('h-full rounded-full', theme.textClass.replace('text-', 'bg-'))} style={{ width: `${pct}%` }} />
-                          </div>
-
-                          <div className="text-xs text-[var(--muted)] tabular-nums text-right">
-                            {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
         </div>
 
         {/* Messages (separate from review inbox) */}

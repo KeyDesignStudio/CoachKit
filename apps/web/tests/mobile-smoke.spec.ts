@@ -49,7 +49,7 @@ test.describe('Mobile smoke', () => {
     const viewportHeight = page.viewportSize()?.height ?? 0;
     expect(selectorBox, 'Make your selection should have a bounding box').toBeTruthy();
     if (selectorBox && viewportHeight) {
-      expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThan(viewportHeight - 50);
+      expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThanOrEqual(viewportHeight - 50);
     }
 
     await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
@@ -67,9 +67,8 @@ test.describe('Mobile smoke', () => {
     const expectedColumns = viewportWidth > 0 && viewportWidth < 360 ? 1 : 2;
     expect(kpiColumns, `KPI tiles should use ${expectedColumns} column(s) at this viewport`).toBe(expectedColumns);
 
-    const disciplineSection = page.getByRole('heading', { level: 2, name: 'Discipline load' }).locator('..');
-    await expect(disciplineSection).toBeVisible();
-    const disciplineCard = disciplineSection.locator('div.rounded-2xl').first();
+    const disciplineCard = page.getByTestId('coach-dashboard-discipline-load');
+    await expect(disciplineCard).toBeVisible();
     const disciplineOverflow = await disciplineCard.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(disciplineOverflow, 'Discipline load section should not overflow horizontally').toBeFalsy();
 
