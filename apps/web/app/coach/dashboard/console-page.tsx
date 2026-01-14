@@ -902,7 +902,7 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               <div
-                className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6"
+                className="grid grid-cols-2 gap-x-4 gap-y-3"
                 data-testid="coach-dashboard-at-a-glance-grid"
               >
                 {[
@@ -911,8 +911,8 @@ export default function CoachDashboardConsolePage() {
                   { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
                   { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
                 ].map((tile) => (
-                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-2">
-                    <div className="text-[22px] min-[420px]:text-[24px] lg:text-[26px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-1.5">
+                    <div className="text-[18px] sm:text-[20px] lg:text-[22px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
                       {tile.value}
                     </div>
                     <div
@@ -926,36 +926,42 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               <div
-                className="mt-4 min-h-0 flex-1 overflow-auto rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
+                className="mt-3 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
                 data-testid="coach-dashboard-discipline-load"
               >
                 <div className="flex flex-col gap-2">
                   {(() => {
-                    const rows = data?.disciplineLoad ?? [];
+                    const rows = [...(data?.disciplineLoad ?? [])].sort((a, b) => b.totalMinutes - a.totalMinutes);
+                    const visibleRows = rows.slice(0, 4);
                     const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
                     return (
                       <>
-                        {rows.map((r) => {
+                        {visibleRows.map((r) => {
                           const theme = getDisciplineTheme(r.discipline);
                           const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
                           return (
-                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-                              <div className="flex items-center gap-2 min-w-[72px]">
+                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-[64px]">
                                 <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                <span className="text-xs font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
                               </div>
 
                               <div className="h-2 rounded-full bg-black/10 overflow-hidden">
                                 <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
                               </div>
 
-                              <div className="text-xs text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
+                              <div className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
                                 {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
                               </div>
                             </div>
                           );
                         })}
                         {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                        {rows.length > visibleRows.length ? (
+                          <div className="text-[11px] text-[var(--muted)] px-1 pt-1">
+                            +{rows.length - visibleRows.length} more
+                          </div>
+                        ) : null}
                       </>
                     );
                   })()}

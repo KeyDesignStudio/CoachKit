@@ -48,6 +48,43 @@ type ThreadMessagesResponse = {
   }>;
 };
 
+function NeedsAttentionItem({
+  label,
+  count,
+  tone,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  tone: 'danger' | 'primary' | 'neutral';
+  onClick: () => void;
+}) {
+  const toneClasses =
+    tone === 'danger'
+      ? 'bg-rose-500/15 text-rose-700'
+      : tone === 'primary'
+        ? 'bg-blue-600/10 text-blue-700'
+        : 'bg-[var(--bg-card)] border border-black/15 text-[var(--text)]';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'transition-colors',
+        tone === 'neutral' ? 'hover:bg-white/60' : '',
+        toneClasses
+      )}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-sm font-medium">{label}</div>
+        <div className={cn('text-2xl font-semibold tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
+      </div>
+    </button>
+  );
+}
+
 function formatMinutes(totalMinutes: number): string {
   const minutes = Math.max(0, Math.round(totalMinutes));
   const h = Math.floor(minutes / 60);
@@ -329,67 +366,28 @@ export default function AthleteDashboardConsolePage() {
               </div>
 
               <div className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={() => (window.location.href = '/athlete/calendar')}
-                  className={cn(
-                    'w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-left',
-                    'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
-                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[var(--text)]">Workouts pending your confirmation</div>
-                      <div className="text-xs text-[var(--muted)]">Open your calendar to confirm</div>
-                    </div>
-                    <div className="tabular-nums text-lg font-semibold text-[var(--text)]">
-                      {String(data?.attention.pendingConfirmation ?? 0)}
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => (window.location.href = '/athlete/calendar')}
-                  className={cn(
-                    'w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-left',
-                    'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
-                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[var(--text)]">Workouts missed</div>
-                      <div className="text-xs text-[var(--muted)]">Past days with no completion</div>
-                    </div>
-                    <div className="tabular-nums text-lg font-semibold text-[var(--text)]">
-                      {String(data?.attention.workoutsMissed ?? 0)}
-                    </div>
-                  </div>
-                </button>
-
                 {typeof data?.attention.painFlagWorkouts === 'number' ? (
-                  <button
-                    type="button"
+                  <NeedsAttentionItem
+                    label="Workouts with pain flagged"
+                    count={data.attention.painFlagWorkouts}
+                    tone="danger"
                     onClick={() => (window.location.href = '/athlete/calendar')}
-                    className={cn(
-                      'w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-left',
-                      'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-[var(--text)]">Workouts with pain flagged</div>
-                        <div className="text-xs text-[var(--muted)]">Completed workouts reporting pain</div>
-                      </div>
-                      <div className="tabular-nums text-lg font-semibold text-[var(--text)]">
-                        {String(data.attention.painFlagWorkouts)}
-                      </div>
-                    </div>
-                  </button>
+                  />
                 ) : null}
+
+                <NeedsAttentionItem
+                  label="Workouts pending your confirmation"
+                  count={data?.attention.pendingConfirmation ?? 0}
+                  tone="primary"
+                  onClick={() => (window.location.href = '/athlete/calendar')}
+                />
+
+                <NeedsAttentionItem
+                  label="Workouts missed"
+                  count={data?.attention.workoutsMissed ?? 0}
+                  tone="neutral"
+                  onClick={() => (window.location.href = '/athlete/calendar')}
+                />
               </div>
             </div>
           </div>
@@ -405,19 +403,11 @@ export default function AthleteDashboardConsolePage() {
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-2">
-                <div className="md:col-start-1 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                    <option value="LAST_7">Last 7 days</option>
-                    <option value="LAST_14">Last 14 days</option>
-                    <option value="LAST_30">Last 30 days</option>
-                  </Select>
-                </div>
-
-                <div className="md:col-start-2 md:row-start-1">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
+                {/* Row 1 */}
+                <div className="min-w-0 col-start-1 row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
-                  <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
+                  <Select className="min-h-[44px] w-full" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
                     <option value="">All disciplines</option>
                     <option value="BIKE">Bike</option>
                     <option value="RUN">Run</option>
@@ -425,19 +415,29 @@ export default function AthleteDashboardConsolePage() {
                     <option value="OTHER">Other</option>
                   </Select>
                 </div>
+                <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
 
-                <div className="md:col-start-1 md:row-start-2 md:col-span-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Date range</div>
-                  <div className="min-h-[44px] flex items-center">
-                    <div className="text-sm font-semibold text-[var(--text)]">
+                {/* Row 2 */}
+                <div className="min-w-0 col-start-1 row-start-2">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
+                  <Select className="min-h-[44px] w-full" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                    <option value="LAST_7">Last 7 days</option>
+                    <option value="LAST_14">Last 14 days</option>
+                    <option value="LAST_30">Last 30 days</option>
+                  </Select>
+                </div>
+
+                <div className="min-w-0 col-start-2 row-start-2">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
+                  <div className="min-h-[44px] flex items-center min-w-0">
+                    <div className="text-sm font-semibold text-[var(--text)] truncate">
                       {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                     </div>
                   </div>
                 </div>
 
-                <div className="col-span-1 md:col-span-2 h-1 md:h-2" aria-hidden="true" />
-
-                <div className="md:col-span-2 flex items-center justify-end gap-3">
+                {/* Refresh (bottom-right, spans both columns) */}
+                <div className="col-span-2 flex items-center justify-end gap-3 pt-1">
                   <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
                     <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                     Refresh
@@ -459,15 +459,15 @@ export default function AthleteDashboardConsolePage() {
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6" data-testid="athlete-dashboard-at-a-glance-grid">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="athlete-dashboard-at-a-glance-grid">
                 {[
                   { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
                   { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
                   { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
                   { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
                 ].map((tile) => (
-                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-2">
-                    <div className="text-[22px] min-[420px]:text-[24px] lg:text-[26px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                  <div key={tile.label} className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/50 px-3 py-1.5">
+                    <div className="text-[18px] sm:text-[20px] lg:text-[22px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
                       {tile.value}
                     </div>
                     <div className="min-w-0 text-[10px] md:text-[11px] leading-snug uppercase tracking-wide text-[var(--muted)]/90 whitespace-nowrap overflow-hidden text-ellipsis" title={tile.label}>
@@ -478,36 +478,42 @@ export default function AthleteDashboardConsolePage() {
               </div>
 
               <div
-                className="mt-4 min-h-0 flex-1 overflow-auto rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
+                className="mt-3 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2"
                 data-testid="athlete-dashboard-discipline-load"
               >
                 <div className="flex flex-col gap-2">
                   {(() => {
-                    const rows = data?.disciplineLoad ?? [];
+                    const rows = [...(data?.disciplineLoad ?? [])].sort((a, b) => b.totalMinutes - a.totalMinutes);
+                    const visibleRows = rows.slice(0, 4);
                     const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
                     return (
                       <>
-                        {rows.map((r) => {
+                        {visibleRows.map((r) => {
                           const theme = getDisciplineTheme(r.discipline);
                           const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
                           return (
-                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-                              <div className="flex items-center gap-2 min-w-[72px]">
+                            <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-[64px]">
                                 <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                <span className="text-xs font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
                               </div>
 
                               <div className="h-2 rounded-full bg-black/10 overflow-hidden">
                                 <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
                               </div>
 
-                              <div className="text-xs text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
+                              <div className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap">
                                 {formatMinutes(r.totalMinutes)} · {formatDistanceKm(r.totalDistanceKm)}
                               </div>
                             </div>
                           );
                         })}
                         {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                        {rows.length > visibleRows.length ? (
+                          <div className="text-[11px] text-[var(--muted)] px-1 pt-1">
+                            +{rows.length - visibleRows.length} more
+                          </div>
+                        ) : null}
                       </>
                     );
                   })()}
