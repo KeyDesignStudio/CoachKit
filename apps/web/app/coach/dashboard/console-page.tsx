@@ -302,6 +302,7 @@ export default function CoachDashboardConsolePage() {
   const [messageSending, setMessageSending] = useState(false);
   const [messageStatus, setMessageStatus] = useState('');
   const [messageError, setMessageError] = useState('');
+  const [messageThreadFilter, setMessageThreadFilter] = useState('');
 
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastAllAthletes, setBroadcastAllAthletes] = useState(false);
@@ -356,6 +357,31 @@ export default function CoachDashboardConsolePage() {
     const map = new Map<string, string>();
     messageThreads.forEach((t) => map.set(t.athlete.id, t.threadId));
     return map;
+  }, [messageThreads]);
+
+  const sortedMessageThreads = useMemo(() => {
+    const normalizedFilter = messageThreadFilter.trim().toLowerCase();
+    const rows = [...messageThreads];
+    rows.sort((a, b) => {
+      const aUnread = a.unreadCountForCoach ?? 0;
+      const bUnread = b.unreadCountForCoach ?? 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      const aAt = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
+      const bAt = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
+      if (aAt !== bAt) return bAt - aAt;
+      return (a.athlete.name ?? '').localeCompare(b.athlete.name ?? '');
+    });
+
+    if (!normalizedFilter) return rows;
+    return rows.filter((t) => {
+      const name = (t.athlete.name ?? 'Unnamed athlete').toLowerCase();
+      const preview = (t.lastMessagePreview ?? '').toLowerCase();
+      return name.includes(normalizedFilter) || preview.includes(normalizedFilter);
+    });
+  }, [messageThreadFilter, messageThreads]);
+
+  const totalUnreadThreads = useMemo(() => {
+    return messageThreads.reduce((sum, t) => sum + Math.max(0, t.unreadCountForCoach ?? 0), 0);
   }, [messageThreads]);
 
   const selectedAthleteNameForThread = useMemo(() => {
@@ -474,6 +500,14 @@ export default function CoachDashboardConsolePage() {
       void loadMessageThreads();
     }
   }, [loadMessageThreads, user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== 'COACH') return;
+    if (messageAthleteId) return;
+    if (sortedMessageThreads.length === 0) return;
+    // Default selection: newest unread thread, else newest thread.
+    setMessageAthleteId(sortedMessageThreads[0].athlete.id);
+  }, [messageAthleteId, sortedMessageThreads, user?.role]);
 
   useEffect(() => {
     if (!messageAthleteId) {
@@ -960,95 +994,181 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-            <div className="grid gap-3 md:items-end">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
+              {/* Inbox */}
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
-                <Select
-                  className="min-h-[44px]"
-                  value={messageAthleteId}
-                  onChange={(e) => setMessageAthleteId(e.target.value)}
-                  aria-label="Select athlete thread"
-                >
-                  <option value="">Select an athlete</option>
-                  {(data?.athletes ?? []).map((a) => {
-                    const thread = messageThreads.find((t) => t.athlete.id === a.id);
-                    const unread = thread?.unreadCountForCoach ?? 0;
-                    const suffix = unread > 0 ? ` (${unread} new)` : '';
-                    return (
-                      <option key={a.id} value={a.id}>
-                        {(a.name ?? 'Unnamed athlete') + suffix}
-                      </option>
-                    );
-                  })}
-                </Select>
-              </div>
-            </div>
-
-            {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
-            {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
-
-            <div className="mt-4 grid gap-2" data-testid="coach-dashboard-messages-compose">
-              <Textarea
-                rows={3}
-                placeholder={messageAthleteId ? 'Write a message…' : 'Select an athlete to message…'}
-                value={messageDraft}
-                onChange={(e) => setMessageDraft(e.target.value)}
-                className="text-sm"
-                disabled={!messageAthleteId || messageSending}
-              />
-
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  className="min-h-[44px]"
-                  onClick={sendMessageToSelectedAthlete}
-                  disabled={!messageAthleteId || messageSending || messageDraft.trim().length === 0}
-                >
-                  {messageSending ? 'Sending…' : 'Send'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs text-[var(--muted)]">
-                  {threadsLoading ? 'Loading threads…' : selectedThreadId ? 'Thread' : 'No thread selected'}
-                </div>
-                {selectedThreadId ? (
-                  <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => loadThreadMessages(selectedThreadId, true)}>
-                    <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                    Refresh
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
+                    Inbox{totalUnreadThreads > 0 ? ` (${totalUnreadThreads} new)` : ''}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-[36px] px-2"
+                    onClick={() => loadMessageThreads(true)}
+                    aria-label="Refresh inbox"
+                  >
+                    <Icon name="refresh" size="sm" aria-hidden />
                   </Button>
-                ) : null}
+                </div>
+
+                <div className="mt-2">
+                  <Input
+                    value={messageThreadFilter}
+                    onChange={(e) => setMessageThreadFilter(e.target.value)}
+                    placeholder="Search athlete or message…"
+                    aria-label="Search message threads"
+                  />
+                </div>
+
+                <div className="mt-2 max-h-[360px] overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  {threadsLoading ? <div className="px-3 py-3 text-sm text-[var(--muted)]">Loading…</div> : null}
+                  {!threadsLoading && messageThreads.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-[var(--muted)]">
+                      No messages yet. Send a message to start a thread.
+                    </div>
+                  ) : null}
+
+                  {!threadsLoading && messageThreads.length > 0 && sortedMessageThreads.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-[var(--muted)]">No matches.</div>
+                  ) : null}
+
+                  <div className="divide-y divide-black/5">
+                    {sortedMessageThreads.map((t) => {
+                      const active = t.athlete.id === messageAthleteId;
+                      const unread = t.unreadCountForCoach ?? 0;
+                      const when = t.lastMessageAt ? new Date(t.lastMessageAt).toLocaleString() : '';
+                      return (
+                        <button
+                          key={t.threadId}
+                          type="button"
+                          onClick={() => {
+                            setMessageAthleteId(t.athlete.id);
+                            setMessageStatus('');
+                            setMessageError('');
+                          }}
+                          className={cn(
+                            'w-full text-left px-3 py-3 transition-colors',
+                            active ? 'bg-black/5' : 'hover:bg-black/5'
+                          )}
+                          aria-label={`Open thread with ${t.athlete.name ?? 'Unnamed athlete'}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-[var(--text)] truncate">
+                                {t.athlete.name ?? 'Unnamed athlete'}
+                              </div>
+                              <div className="mt-0.5 text-xs text-[var(--muted)] truncate">{t.lastMessagePreview}</div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              {unread > 0 ? (
+                                <div className="rounded-full bg-blue-600/10 text-blue-700 px-2 py-0.5 text-[10px] font-medium">
+                                  {unread} new
+                                </div>
+                              ) : null}
+                              {when ? <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">{when}</div> : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
-              {messagesLoading ? <div className="mt-3 text-sm text-[var(--muted)]">Loading messages…</div> : null}
-              {!messagesLoading && selectedThreadId && threadMessages.length === 0 ? (
-                <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
-              ) : null}
+              {/* Compose + thread */}
+              <div className="min-w-0">
+                <div className="grid gap-3 md:items-end">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
+                    <Select
+                      className="min-h-[44px]"
+                      value={messageAthleteId}
+                      onChange={(e) => setMessageAthleteId(e.target.value)}
+                      aria-label="Select athlete thread"
+                    >
+                      <option value="">Select an athlete</option>
+                      {(data?.athletes ?? []).map((a) => {
+                        const thread = messageThreads.find((mt) => mt.athlete.id === a.id);
+                        const unread = thread?.unreadCountForCoach ?? 0;
+                        const suffix = unread > 0 ? ` (${unread} new)` : '';
+                        return (
+                          <option key={a.id} value={a.id}>
+                            {(a.name ?? 'Unnamed athlete') + suffix}
+                          </option>
+                        );
+                      })}
+                    </Select>
+                  </div>
+                </div>
 
-              <div className="mt-3 flex flex-col gap-2">
-                {threadMessages.map((m) => {
-                  const mine = m.senderRole === 'COACH';
-                  const senderLabel = mine ? 'COACH' : selectedAthleteNameForThread;
-                  return (
-                    <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-                      <div
-                        className={cn(
-                          'max-w-[min(560px,92%)] rounded-2xl px-3 py-2 border',
-                          mine
-                            ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
-                            : 'bg-[var(--bg-structure)] border-black/10'
-                        )}
-                      >
-                        <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          {senderLabel} · {new Date(m.createdAt).toLocaleString()}
-                        </div>
-                      </div>
+                {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
+                {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
+
+                <div className="mt-4 grid gap-2" data-testid="coach-dashboard-messages-compose">
+                  <Textarea
+                    rows={3}
+                    placeholder={messageAthleteId ? 'Write a message…' : 'Select a thread (or athlete) to reply…'}
+                    value={messageDraft}
+                    onChange={(e) => setMessageDraft(e.target.value)}
+                    className="text-sm"
+                    disabled={!messageAthleteId || messageSending}
+                  />
+
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      className="min-h-[44px]"
+                      onClick={sendMessageToSelectedAthlete}
+                      disabled={!messageAthleteId || messageSending || messageDraft.trim().length === 0}
+                    >
+                      {messageSending ? 'Sending…' : 'Send'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-[var(--muted)]">
+                      {messagesLoading ? 'Loading messages…' : selectedThreadId ? 'Thread' : 'Select a thread from inbox'}
                     </div>
-                  );
-                })}
+                    {selectedThreadId ? (
+                      <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => loadThreadMessages(selectedThreadId, true)}>
+                        <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
+                        Refresh
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {!messagesLoading && selectedThreadId && threadMessages.length === 0 ? (
+                    <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-col gap-2">
+                    {threadMessages.map((m) => {
+                      const mine = m.senderRole === 'COACH';
+                      const senderLabel = mine ? 'COACH' : selectedAthleteNameForThread;
+                      return (
+                        <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+                          <div
+                            className={cn(
+                              'max-w-[min(560px,92%)] rounded-2xl px-3 py-2 border',
+                              mine
+                                ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
+                                : 'bg-[var(--bg-structure)] border-black/10'
+                            )}
+                          >
+                            <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
+                            <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                              {senderLabel} · {new Date(m.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
