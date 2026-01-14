@@ -466,8 +466,8 @@ export default function CoachDashboardConsolePage() {
 
         {/* Top grid shell: 1 col (mobile), 2 cols (tablet), 3 cols (desktop) */}
         <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-[minmax(240px,320px)_minmax(280px,1fr)_minmax(240px,320px)]">
-          {/* Column 1: Filters */}
-          <div className="min-w-0">
+          {/* Column 2 on desktop: Filters */}
+          <div className="min-w-0 xl:col-start-2">
             <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
               <div className="grid gap-2 md:gap-3">
                 <div>
@@ -538,8 +538,8 @@ export default function CoachDashboardConsolePage() {
             </div>
           </div>
 
-          {/* Column 2 on desktop; stacked under filters on tablet */}
-          <div className="min-w-0 md:col-start-1 md:row-start-2 xl:col-start-2 xl:row-start-1">
+          {/* Column 1 on desktop; stacked under filters on tablet */}
+          <div className="min-w-0 md:col-start-1 md:row-start-2 xl:col-start-1 xl:row-start-1">
             <div className="flex items-center justify-between gap-3 mb-1 md:mb-2">
               <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
               <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
