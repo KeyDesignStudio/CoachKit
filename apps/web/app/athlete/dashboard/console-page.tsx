@@ -460,7 +460,7 @@ export default function AthleteDashboardConsolePage() {
               </div>
 
               <div
-                className="grid grid-cols-1 min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 min-w-0"
+                className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
                 data-testid="athlete-dashboard-at-a-glance-grid"
               >
                 {/* Left: stats */}
@@ -475,7 +475,7 @@ export default function AthleteDashboardConsolePage() {
                       <div
                         key={row.label}
                         className={cn(
-                          'min-w-0 flex items-baseline justify-between gap-3 py-1.5',
+                          'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
                           idx < 3 ? 'border-b border-black/5' : ''
                         )}
                         data-testid="athlete-dashboard-at-a-glance-stat-row"
@@ -483,7 +483,7 @@ export default function AthleteDashboardConsolePage() {
                         <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
                           {row.label}
                         </div>
-                        <div className="flex-shrink-0 text-[18px] sm:text-[20px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                        <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
                           {row.value}
                         </div>
                       </div>
