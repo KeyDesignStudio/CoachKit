@@ -85,6 +85,8 @@ export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
 
+  const athleteDisplayName = user?.name ?? 'You';
+
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
 
@@ -468,9 +470,11 @@ export default function AthleteDashboardConsolePage() {
                 onChange={(e) => setMessageDraft(e.target.value)}
                 disabled={messageSending}
               />
-              <Button type="button" className="min-h-[44px]" onClick={sendMessage} disabled={messageSending || messageDraft.trim().length === 0}>
-                {messageSending ? 'Sending…' : 'Send'}
-              </Button>
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" className="min-h-[44px]" onClick={sendMessage} disabled={messageSending || messageDraft.trim().length === 0}>
+                  {messageSending ? 'Sending…' : 'Send'}
+                </Button>
+              </div>
               {messageStatus ? <div className="text-xs text-emerald-700">{messageStatus}</div> : null}
               {messageError ? <div className="text-xs text-rose-700">{messageError}</div> : null}
             </div>
@@ -496,6 +500,7 @@ export default function AthleteDashboardConsolePage() {
               <div className="mt-3 flex flex-col gap-2">
                 {messages.map((m) => {
                   const mine = m.senderRole === 'ATHLETE';
+                  const senderLabel = mine ? athleteDisplayName : 'COACH';
                   return (
                     <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
                       <div
@@ -508,7 +513,7 @@ export default function AthleteDashboardConsolePage() {
                       >
                         <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
                         <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          {m.senderRole} · {new Date(m.createdAt).toLocaleString()}
+                          {senderLabel} · {new Date(m.createdAt).toLocaleString()}
                         </div>
                       </div>
                     </div>

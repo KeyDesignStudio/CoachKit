@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
-import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
@@ -303,11 +302,6 @@ export default function CoachDashboardConsolePage() {
   const [messageStatus, setMessageStatus] = useState('');
   const [messageError, setMessageError] = useState('');
 
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(() => new Set());
-  const [bulkDraft, setBulkDraft] = useState('');
-  const [bulkSending, setBulkSending] = useState(false);
-
   const coachTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, coachTimeZone, customFrom, customTo), [
     timeRange,
@@ -349,19 +343,18 @@ export default function CoachDashboardConsolePage() {
     }
   }, [reload, user?.role]);
 
-  const coachAthletesForSelector = useMemo(() => {
-    const athletes = data?.athletes ?? [];
-    return athletes.map((a) => ({
-      userId: a.id,
-      user: { id: a.id, name: a.name },
-    }));
-  }, [data?.athletes]);
-
   const threadIdByAthleteId = useMemo(() => {
     const map = new Map<string, string>();
     messageThreads.forEach((t) => map.set(t.athlete.id, t.threadId));
     return map;
   }, [messageThreads]);
+
+  const selectedAthleteNameForThread = useMemo(() => {
+    if (!messageAthleteId) return 'Athlete';
+    const fromThreads = messageThreads.find((t) => t.athlete.id === messageAthleteId)?.athlete.name;
+    const fromData = (data?.athletes ?? []).find((a) => a.id === messageAthleteId)?.name;
+    return fromThreads ?? fromData ?? 'Athlete';
+  }, [data?.athletes, messageAthleteId, messageThreads]);
 
   const loadMessageThreads = useCallback(
     async (bypassCache = false) => {
@@ -479,35 +472,6 @@ export default function CoachDashboardConsolePage() {
       setMessageSending(false);
     }
   }, [loadMessageThreads, loadThreadMessages, messageAthleteId, messageDraft, request]);
-
-  const sendBulkMessage = useCallback(async () => {
-    const body = bulkDraft.trim();
-    if (!body) return;
-
-    setBulkSending(true);
-    setMessageError('');
-    setMessageStatus('');
-
-    try {
-      const allSelected = coachAthletesForSelector.length > 0 && bulkSelectedIds.size === coachAthletesForSelector.length;
-      const recipients = allSelected ? { allAthletes: true as const } : { athleteIds: Array.from(bulkSelectedIds) };
-
-      const resp = await request<{ sent: number; threadIds: string[] }>('/api/messages/send', {
-        method: 'POST',
-        data: { body, recipients },
-      });
-
-      setBulkDraft('');
-      setBulkSelectedIds(new Set());
-      setBulkOpen(false);
-      setMessageStatus(`Sent to ${resp.sent} athlete${resp.sent === 1 ? '' : 's'}`);
-      void loadMessageThreads(true);
-    } catch (err) {
-      setMessageError(err instanceof Error ? err.message : 'Failed to send bulk message.');
-    } finally {
-      setBulkSending(false);
-    }
-  }, [bulkDraft, bulkSelectedIds, coachAthletesForSelector.length, loadMessageThreads, request]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   // Note: this must initialize after the coach UI renders; during the loading gate the ref is null.
@@ -936,7 +900,7 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-            <div className="grid gap-3 md:grid-cols-2 md:items-end">
+            <div className="grid gap-3 md:items-end">
               <div className="min-w-0">
                 <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
                 <Select
@@ -957,12 +921,6 @@ export default function CoachDashboardConsolePage() {
                     );
                   })}
                 </Select>
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <Button type="button" variant="secondary" className="min-h-[44px]" onClick={() => setBulkOpen(true)}>
-                  Send message
-                </Button>
               </div>
             </div>
 
@@ -1012,6 +970,7 @@ export default function CoachDashboardConsolePage() {
               <div className="mt-3 flex flex-col gap-2">
                 {threadMessages.map((m) => {
                   const mine = m.senderRole === 'COACH';
+                  const senderLabel = mine ? 'COACH' : selectedAthleteNameForThread;
                   return (
                     <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
                       <div
@@ -1024,7 +983,7 @@ export default function CoachDashboardConsolePage() {
                       >
                         <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
                         <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          {m.senderRole} · {new Date(m.createdAt).toLocaleString()}
+                          {senderLabel} · {new Date(m.createdAt).toLocaleString()}
                         </div>
                       </div>
                     </div>
@@ -1035,53 +994,6 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
       </section>
-
-      {bulkOpen ? (
-        <div className="fixed inset-0 z-[200]">
-          <div className="absolute inset-0 bg-black/25" onClick={() => (bulkSending ? null : setBulkOpen(false))} />
-          <div className="absolute inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center p-4">
-            <div className="w-full md:max-w-[680px] rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-[var(--text)]">Send message</div>
-                <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => setBulkOpen(false)} disabled={bulkSending}>
-                  Close
-                </Button>
-              </div>
-
-              <div className="mt-3 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-medium text-[var(--muted)]">Recipients</div>
-                  <AthleteSelector athletes={coachAthletesForSelector} selectedIds={bulkSelectedIds} onChange={setBulkSelectedIds} />
-                </div>
-
-                <Textarea
-                  rows={4}
-                  placeholder="Write a message…"
-                  value={bulkDraft}
-                  onChange={(e) => setBulkDraft(e.target.value)}
-                  className="text-sm"
-                  disabled={bulkSending}
-                />
-
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    className="min-h-[44px]"
-                    onClick={sendBulkMessage}
-                    disabled={bulkSending || bulkDraft.trim().length === 0 || bulkSelectedIds.size === 0}
-                  >
-                    {bulkSending ? 'Sending…' : `Send (${bulkSelectedIds.size})`}
-                  </Button>
-                </div>
-
-                <div className="text-xs text-[var(--muted)]">
-                  Tip: use “Select all” in the picker to broadcast.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
     </>
