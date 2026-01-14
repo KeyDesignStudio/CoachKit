@@ -405,14 +405,19 @@ export default function CoachDashboardConsolePage() {
         );
         setThreadMessages(resp.messages);
         await request('/api/messages/mark-read', { method: 'POST', data: { threadId } });
-        void loadMessageThreads();
+        // Avoid a refresh loop: refreshing threads changes `threadIdByAthleteId`, which can
+        // retrigger message loading effects and cause UI flicker. Instead, update local
+        // unread count optimistically.
+        setMessageThreads((prev) =>
+          prev.map((t) => (t.threadId === threadId ? { ...t, unreadCountForCoach: 0 } : t))
+        );
       } catch (err) {
         setMessageError(err instanceof Error ? err.message : 'Failed to load messages.');
       } finally {
         setMessagesLoading(false);
       }
     },
-    [loadMessageThreads, request, user?.role, user?.userId]
+    [request, user?.role, user?.userId]
   );
 
   useEffect(() => {
@@ -429,13 +434,16 @@ export default function CoachDashboardConsolePage() {
     }
 
     const tid = threadIdByAthleteId.get(messageAthleteId) ?? null;
-    setSelectedThreadId(tid);
-    if (tid) {
-      void loadThreadMessages(tid);
-    } else {
-      setThreadMessages([]);
+    // Only reload when the selected thread actually changes.
+    if (tid !== selectedThreadId) {
+      setSelectedThreadId(tid);
+      if (tid) {
+        void loadThreadMessages(tid);
+      } else {
+        setThreadMessages([]);
+      }
     }
-  }, [loadThreadMessages, messageAthleteId, threadIdByAthleteId]);
+  }, [loadThreadMessages, messageAthleteId, selectedThreadId, threadIdByAthleteId]);
 
   const sendMessageToSelectedAthlete = useCallback(async () => {
     if (!messageAthleteId) {
