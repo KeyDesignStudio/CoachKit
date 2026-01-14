@@ -21,6 +21,35 @@ export function formatDisplay(dateIso: string): string {
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+export function formatDisplayInTimeZone(dateIso: string, timeZone?: string): string {
+  // dateIso is expected to be a YYYY-MM-DD string.
+  // Use UTC midnight as a stable anchor and then format into the requested timezone.
+  const date = new Date(`${dateIso}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return formatDisplay(dateIso);
+
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone: timeZone || undefined,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).formatToParts(date);
+
+  const weekday = parts.find((p) => p.type === 'weekday')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+
+  if (!weekday || !day || !month) {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timeZone || undefined,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+  }
+
+  return `${weekday} ${day} ${month}`;
+}
+
 function getOrdinalSuffix(day: number): string {
   const mod100 = day % 100;
   if (mod100 >= 11 && mod100 <= 13) return 'th';

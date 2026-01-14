@@ -61,9 +61,7 @@ test.describe('Mobile smoke', () => {
       const parts = tpl.split(' ').filter(Boolean);
       return parts.length;
     });
-    const viewportWidth = page.viewportSize()?.width ?? 0;
-    const expectedKpiColumns = viewportWidth < 768 ? 1 : viewportWidth < 1024 ? 2 : 4;
-    expect(kpiColumns, 'KPI tiles should use expected columns for viewport width').toBe(expectedKpiColumns);
+    expect(kpiColumns, 'KPI tiles should be stacked in one column').toBe(1);
 
     const disciplineSection = page.getByRole('heading', { level: 2, name: 'Discipline load' }).locator('..');
     await expect(disciplineSection).toBeVisible();

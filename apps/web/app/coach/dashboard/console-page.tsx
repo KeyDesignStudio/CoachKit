@@ -11,7 +11,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
-import { addDays, toDateInput } from '@/lib/client-date';
+import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 
@@ -454,91 +454,88 @@ export default function CoachDashboardConsolePage() {
   return (
     <>
       <section className="px-4 pb-10 md:px-6">
-        <div className="pt-4 md:pt-6">
+        <div className="pt-3 md:pt-6">
           <h1 className={cn(uiH1, 'font-semibold')}>Coach Console</h1>
-          <p className={cn(uiMuted, 'text-sm')}>Fast triage and accountability. No calendar.</p>
+          <p className={cn(uiMuted, 'text-sm hidden md:block')}>Fast triage and accountability.</p>
         </div>
 
-        {/* Sticky controls */}
-        <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-[var(--bg)]/85 backdrop-blur border-b border-[var(--border-subtle)]">
-          <div className="grid gap-2 md:grid-cols-3">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Time range</div>
-              <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                <option value="LAST_7">Last 7 days</option>
-                <option value="LAST_14">Last 14 days</option>
-                <option value="LAST_30">Last 30 days</option>
-                <option value="CUSTOM">Custom</option>
-              </Select>
-            </div>
+        {/* Top grid shell: 1 col (mobile), 2 cols (tablet), 3 cols (desktop) */}
+        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-[minmax(240px,320px)_minmax(280px,1fr)_minmax(240px,320px)]">
+          {/* Column 1: Filters */}
+          <div className="min-w-0">
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+              <div className="grid gap-2 md:gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Time range</div>
+                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                    <option value="LAST_7">Last 7 days</option>
+                    <option value="LAST_14">Last 14 days</option>
+                    <option value="LAST_30">Last 30 days</option>
+                    <option value="CUSTOM">Custom</option>
+                  </Select>
+                </div>
 
-            <div>
-              <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Athlete</div>
-              <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
-                <option value="">All athletes</option>
-                {(data?.athletes ?? []).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name ?? 'Unnamed athlete'}
-                  </option>
-                ))}
-              </Select>
-            </div>
+                {timeRange === 'CUSTOM' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">From</div>
+                      <input
+                        type="date"
+                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                        value={customFrom}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">To</div>
+                      <input
+                        type="date"
+                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                        value={customTo}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
-            <div>
-              <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Discipline (optional)</div>
-              <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
-                <option value="">All disciplines</option>
-                {disciplineOptions.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Athlete</div>
+                  <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
+                    <option value="">All athletes</option>
+                    {(data?.athletes ?? []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name ?? 'Unnamed athlete'}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">Discipline (optional)</div>
+                  <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
+                    <option value="">All disciplines</option>
+                    {disciplineOptions.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              <div className="mt-2 text-xs text-[var(--muted)]">
+                Showing {formatDisplayInTimeZone(dateRange.from, coachTimeZone)} → {formatDisplayInTimeZone(dateRange.to, coachTimeZone)}
+              </div>
+
+              <Button type="button" variant="ghost" onClick={() => reload(true)} className="mt-2 w-full min-h-[40px] md:min-h-[44px]">
+                Refresh
+              </Button>
             </div>
           </div>
 
-          {timeRange === 'CUSTOM' ? (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">From</div>
-                <input
-                  type="date"
-                  className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                />
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-[var(--muted)] mb-1">To</div>
-                <input
-                  type="date"
-                  className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <div className="text-xs text-[var(--muted)]">
-              Showing {dateRange.from} → {dateRange.to}
-            </div>
-            <Button type="button" variant="ghost" onClick={() => reload(true)} className="min-h-[44px]">
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
-
-        {/* Priority order on mobile: Needs → KPIs → Load → Accountability → Inbox */}
-
-        {/* 1–2. Needs + KPIs (two-column on desktop) */}
-        <div className="mt-4 grid gap-6 lg:grid-cols-2">
-          {/* Needs your attention */}
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-2">
+          {/* Column 2 on desktop; stacked under filters on tablet */}
+          <div className="min-w-0 md:col-start-1 md:row-start-2 xl:col-start-2 xl:row-start-1">
+            <div className="flex items-center justify-between gap-3 mb-1 md:mb-2">
               <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
               <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
             </div>
@@ -577,10 +574,10 @@ export default function CoachDashboardConsolePage() {
             </div>
           </div>
 
-          {/* KPI tiles */}
-          <div>
+          {/* Column 3: At a glance (right), spans tablet right column */}
+          <div className="min-w-0 md:col-start-2 md:row-start-1 md:row-span-2 xl:col-start-3 xl:row-span-1">
             <h2 className="text-sm font-semibold text-[var(--text)] mb-2">At a glance</h2>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2">
               {[
                 { label: 'Workouts completed', value: String(data?.kpis.workoutsCompleted ?? 0) },
                 { label: 'Workouts skipped', value: String(data?.kpis.workoutsSkipped ?? 0) },
@@ -595,6 +592,10 @@ export default function CoachDashboardConsolePage() {
             </div>
           </div>
         </div>
+
+        {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
+
+        {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Accountability → Inbox */}
 
         {/* 3. Discipline load */}
         <div className="mt-6">
