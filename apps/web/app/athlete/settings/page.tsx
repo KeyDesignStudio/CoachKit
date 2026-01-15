@@ -8,6 +8,7 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 
@@ -32,6 +33,12 @@ type PollSummary = {
   errors: Array<{ athleteId?: string; message: string }>;
 };
 
+type DefaultLocationResponse = {
+  defaultLat: number | null;
+  defaultLon: number | null;
+  defaultLocationLabel: string | null;
+};
+
 export default function AthleteSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -49,6 +56,13 @@ export default function AthleteSettingsPage() {
   const [timezoneMessage, setTimezoneMessage] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
 
+  const [defaultLocationLabel, setDefaultLocationLabel] = useState('');
+  const [defaultLat, setDefaultLat] = useState('');
+  const [defaultLon, setDefaultLon] = useState('');
+  const [savingDefaultLocation, setSavingDefaultLocation] = useState(false);
+  const [defaultLocationMessage, setDefaultLocationMessage] = useState('');
+  const [defaultLocationError, setDefaultLocationError] = useState('');
+
   useEffect(() => {
     const raw = user?.timezone?.trim() ?? '';
     if (raw) {
@@ -60,6 +74,21 @@ export default function AthleteSettingsPage() {
     const guessed = Intl.DateTimeFormat().resolvedOptions().timeZone;
     setTimezone(TIMEZONE_VALUES.has(guessed) ? guessed : 'Australia/Brisbane');
   }, [user?.timezone]);
+
+  useEffect(() => {
+    if (user?.role !== 'ATHLETE') return;
+
+    void (async () => {
+      try {
+        const data = await request<DefaultLocationResponse>('/api/me/default-location');
+        setDefaultLocationLabel(data.defaultLocationLabel ?? '');
+        setDefaultLat(data.defaultLat == null ? '' : String(data.defaultLat));
+        setDefaultLon(data.defaultLon == null ? '' : String(data.defaultLon));
+      } catch {
+        // If the profile is missing or the endpoint errors, keep UI usable.
+      }
+    })();
+  }, [request, user?.role]);
 
   const resultMessage = useMemo(() => {
     const result = searchParams.get('strava');
@@ -148,6 +177,83 @@ export default function AthleteSettingsPage() {
     }
   };
 
+  const handleSaveDefaultLocation = async () => {
+    const label = defaultLocationLabel.trim();
+    const latRaw = defaultLat.trim();
+    const lonRaw = defaultLon.trim();
+
+    setSavingDefaultLocation(true);
+    setDefaultLocationMessage('');
+    setDefaultLocationError('');
+
+    try {
+      let latValue: number | null = null;
+      let lonValue: number | null = null;
+
+      if (latRaw || lonRaw) {
+        if (!latRaw || !lonRaw) {
+          setDefaultLocationError('Latitude and longitude must be provided together.');
+          return;
+        }
+
+        const latParsed = Number(latRaw);
+        const lonParsed = Number(lonRaw);
+
+        if (!Number.isFinite(latParsed) || !Number.isFinite(lonParsed)) {
+          setDefaultLocationError('Latitude and longitude must be valid numbers.');
+          return;
+        }
+
+        latValue = latParsed;
+        lonValue = lonParsed;
+      }
+
+      const updated = await request<DefaultLocationResponse>('/api/me/default-location', {
+        method: 'PATCH',
+        data: {
+          defaultLat: latValue,
+          defaultLon: lonValue,
+          defaultLocationLabel: latValue == null ? null : label ? label : null,
+        },
+      });
+
+      setDefaultLocationLabel(updated.defaultLocationLabel ?? '');
+      setDefaultLat(updated.defaultLat == null ? '' : String(updated.defaultLat));
+      setDefaultLon(updated.defaultLon == null ? '' : String(updated.defaultLon));
+      setDefaultLocationMessage(latValue == null ? 'Default location cleared.' : 'Default location saved.');
+    } catch (err) {
+      setDefaultLocationError(err instanceof Error ? err.message : 'Failed to save default location.');
+    } finally {
+      setSavingDefaultLocation(false);
+    }
+  };
+
+  const handleClearDefaultLocation = async () => {
+    setSavingDefaultLocation(true);
+    setDefaultLocationMessage('');
+    setDefaultLocationError('');
+
+    try {
+      const updated = await request<DefaultLocationResponse>('/api/me/default-location', {
+        method: 'PATCH',
+        data: {
+          defaultLat: null,
+          defaultLon: null,
+          defaultLocationLabel: null,
+        },
+      });
+
+      setDefaultLocationLabel(updated.defaultLocationLabel ?? '');
+      setDefaultLat(updated.defaultLat == null ? '' : String(updated.defaultLat));
+      setDefaultLon(updated.defaultLon == null ? '' : String(updated.defaultLon));
+      setDefaultLocationMessage('Default location cleared.');
+    } catch (err) {
+      setDefaultLocationError(err instanceof Error ? err.message : 'Failed to clear default location.');
+    } finally {
+      setSavingDefaultLocation(false);
+    }
+  };
+
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading...</p>;
   }
@@ -187,6 +293,45 @@ export default function AthleteSettingsPage() {
             <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
             {timezoneMessage ? <p className="text-sm text-emerald-700">{timezoneMessage}</p> : null}
             {timezoneError ? <p className="text-sm text-red-700">{timezoneError}</p> : null}
+          </Card>
+        </div>
+
+        <div className="min-w-0">
+          <Card className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold">Default workout location</h2>
+              <p className="text-sm text-[var(--muted)]">Used for weather on workout detail pages. Use decimal degrees.</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">Label (optional)</p>
+                <Input value={defaultLocationLabel} onChange={(e) => setDefaultLocationLabel(e.target.value)} placeholder="Gold Coast" disabled={savingDefaultLocation} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">Latitude</p>
+                  <Input value={defaultLat} onChange={(e) => setDefaultLat(e.target.value)} placeholder="-27.468" inputMode="decimal" disabled={savingDefaultLocation} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">Longitude</p>
+                  <Input value={defaultLon} onChange={(e) => setDefaultLon(e.target.value)} placeholder="153.023" inputMode="decimal" disabled={savingDefaultLocation} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleSaveDefaultLocation} disabled={savingDefaultLocation}>
+                {savingDefaultLocation ? 'Saving…' : 'Save'}
+              </Button>
+              <Button variant="secondary" onClick={handleClearDefaultLocation} disabled={savingDefaultLocation}>
+                Clear
+              </Button>
+            </div>
+
+            {defaultLocationMessage ? <p className="text-sm text-emerald-700">{defaultLocationMessage}</p> : null}
+            {defaultLocationError ? <p className="text-sm text-red-700">{defaultLocationError}</p> : null}
           </Card>
         </div>
 

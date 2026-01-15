@@ -93,6 +93,11 @@ model AthleteProfile {
   coachNotes      String?
   dateOfBirth     DateTime?
 
+  // v1: Default location for weather on workout detail pages.
+  defaultLat           Float?
+  defaultLon           Float?
+  defaultLocationLabel String?
+
   user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
   coach User @relation("CoachToAthletes", fields: [coachId], references: [id], onDelete: Restrict)
 

@@ -46,6 +46,16 @@ export const ICON_NAMES = [
   'settings',
   'info',
   'warning',
+
+  // Weather
+  'weatherSunny',
+  'weatherPartlyCloudy',
+  'weatherCloudy',
+  'weatherRain',
+  'weatherStorm',
+  'weatherFog',
+  'weatherSnow',
+  'weatherWind',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -93,6 +103,16 @@ export const ICONS: Record<IconName, string> = {
   settings: 'settings',
   info: 'info',
   warning: 'warning_amber',
+
+  // Weather
+  weatherSunny: 'sunny',
+  weatherPartlyCloudy: 'partly_cloudy_day',
+  weatherCloudy: 'cloud',
+  weatherRain: 'rainy',
+  weatherStorm: 'thunderstorm',
+  weatherFog: 'foggy',
+  weatherSnow: 'weather_snowy',
+  weatherWind: 'air',
 };
 
 export function getIcon(name: IconName): string {

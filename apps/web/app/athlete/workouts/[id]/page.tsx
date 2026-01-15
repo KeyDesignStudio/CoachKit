@@ -45,6 +45,36 @@ type CalendarItem = {
   completedActivities?: CompletedActivity[];
 };
 
+type WeatherResponse =
+  | {
+      enabled: true;
+      source: 'open-meteo';
+      date: string;
+      timezone: string;
+      icon: 'sunny' | 'partly_cloudy' | 'cloudy' | 'rain' | 'storm' | 'fog' | 'snow' | 'wind';
+      maxTempC: number;
+      sunriseLocal: string;
+      sunsetLocal: string;
+    }
+  | {
+      enabled: false;
+      reason: 'NO_LOCATION';
+    };
+
+const WEATHER_ICON_NAME: Record<
+  Extract<WeatherResponse, { enabled: true }>['icon'],
+  Parameters<typeof Icon>[0]['name']
+> = {
+  sunny: 'weatherSunny',
+  partly_cloudy: 'weatherPartlyCloudy',
+  cloudy: 'weatherCloudy',
+  rain: 'weatherRain',
+  storm: 'weatherStorm',
+  fog: 'weatherFog',
+  snow: 'weatherSnow',
+  wind: 'weatherWind',
+};
+
 export default function AthleteWorkoutDetailPage({ params }: { params: { id: string } }) {
   const workoutId = params.id;
   const router = useRouter();
@@ -62,6 +92,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     painFlag: false,
   });
   const [commentDraft, setCommentDraft] = useState('');
+  const [weather, setWeather] = useState<WeatherResponse | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState('');
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
@@ -190,6 +223,28 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }
   }, [request, user?.role, user?.userId, workoutId]);
 
+  const loadWeather = useCallback(
+    async (bypassCache = false) => {
+      if (user?.role !== 'ATHLETE' || !user.userId) return;
+
+      setWeatherLoading(true);
+      setWeatherError('');
+
+      try {
+        const data = await request<WeatherResponse>(
+          bypassCache ? `/api/athlete/workouts/${workoutId}/weather?t=${Date.now()}` : `/api/athlete/workouts/${workoutId}/weather`,
+          bypassCache ? { cache: 'no-store' } : undefined
+        );
+        setWeather(data);
+      } catch (err) {
+        setWeatherError(err instanceof Error ? err.message : 'Failed to load weather.');
+      } finally {
+        setWeatherLoading(false);
+      }
+    },
+    [request, user?.role, user?.userId, workoutId]
+  );
+
   const handleClose = useCallback(() => {
     if (submitting) return;
 
@@ -204,6 +259,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (userLoading) return;
+    if (!user || user.role !== 'ATHLETE') return;
+    void loadWeather();
+  }, [loadWeather, user, userLoading]);
 
   // Dev-only perf mark for frame.
   useEffect(() => {
@@ -321,6 +382,54 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               {item.groupSession ? (
                 <p className="mt-1 text-xs text-[var(--muted)]">Group: {item.groupSession.title}</p>
               ) : null}
+            </Card>
+
+            {/* Weather panel (non-blocking) */}
+            <Card className="rounded-3xl">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className={uiLabel}>Weather</p>
+
+                  {weatherLoading ? (
+                    <div className="mt-2 animate-pulse">
+                      <div className="h-4 w-40 rounded bg-black/10" />
+                      <div className="mt-2 h-4 w-52 rounded bg-black/10" />
+                      <div className="mt-2 h-4 w-48 rounded bg-black/10" />
+                    </div>
+                  ) : weather?.enabled ? (
+                    <div className="mt-2 flex items-center gap-4">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/30">
+                        <Icon name={WEATHER_ICON_NAME[weather.icon]} size="lg" className="text-[var(--text)]" />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-sm text-[var(--text)]">Max: {Math.round(weather.maxTempC)}°C</p>
+                        <p className="text-sm text-[var(--muted)]">Sunrise: {weather.sunriseLocal}</p>
+                        <p className="text-sm text-[var(--muted)]">Sunset: {weather.sunsetLocal}</p>
+                      </div>
+                    </div>
+                  ) : weather?.enabled === false ? (
+                    <p className="mt-2 text-sm text-[var(--muted)]">Add a default workout location in Settings to enable weather.</p>
+                  ) : weatherError ? (
+                    <p className="mt-2 text-sm text-[var(--muted)]">Weather unavailable.</p>
+                  ) : (
+                    <p className="mt-2 text-sm text-[var(--muted)]">Loading weather…</p>
+                  )}
+                </div>
+
+                {weather?.enabled === false ? null : (
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/30 text-[var(--text)] hover:bg-white/40 disabled:opacity-50"
+                    onClick={() => void loadWeather(true)}
+                    disabled={weatherLoading}
+                    aria-label="Refresh weather"
+                    title="Refresh weather"
+                  >
+                    <Icon name="refresh" size="sm" />
+                  </button>
+                )}
+              </div>
             </Card>
 
             {/* Workout detail card (only if present) */}
