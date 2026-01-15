@@ -232,11 +232,13 @@ async function main() {
     update: {
       displayName: 'Multisport Gold',
       logoUrl: null,
+      darkLogoUrl: null,
     },
     create: {
       coachId: coach.id,
       displayName: 'Multisport Gold',
       logoUrl: null,
+      darkLogoUrl: null,
     },
   });
 

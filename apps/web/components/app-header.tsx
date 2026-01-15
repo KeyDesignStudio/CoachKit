@@ -40,7 +40,11 @@ export async function AppHeader() {
 
   // Get user from database if authenticated
   let userRole: 'COACH' | 'ATHLETE' | null = null;
-  let clubBranding = { displayName: DEFAULT_BRAND_NAME, logoUrl: null as string | null };
+  let clubBranding = {
+    displayName: DEFAULT_BRAND_NAME,
+    logoUrl: null as string | null,
+    darkLogoUrl: null as string | null,
+  };
   let brandingCoachId: string | null = null;
 
   if (userId) {
@@ -94,13 +98,14 @@ export async function AppHeader() {
       if (brandingCoachId) {
         const coachBranding = await prisma.coachBranding.findUnique({
           where: { coachId: brandingCoachId },
-          select: { displayName: true, logoUrl: true },
+          select: { displayName: true, logoUrl: true, darkLogoUrl: true },
         });
 
         if (coachBranding) {
           clubBranding = {
             displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
             logoUrl: coachBranding.logoUrl,
+            darkLogoUrl: coachBranding.darkLogoUrl ?? null,
           };
         }
       }
@@ -123,12 +128,17 @@ export async function AppHeader() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {headerClubBranding.type === 'logo' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={headerClubBranding.logoUrl}
-                alt={`${headerClubBranding.name} logo`}
-                className="h-8 w-auto object-contain"
-              />
+              <picture>
+                {headerClubBranding.darkLogoUrl ? (
+                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
+                ) : null}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={headerClubBranding.logoUrl}
+                  alt={`${headerClubBranding.name} logo`}
+                  className="h-8 w-auto object-contain"
+                />
+              </picture>
             ) : (
               <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">
                 {headerClubBranding.name}
@@ -142,8 +152,15 @@ export async function AppHeader() {
             aria-label="CoachKit"
           >
             <span className="text-sm">CoachKit</span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/coachkit-logo.png" alt="CoachKit" className="h-[26.4px] w-[26.4px] object-contain" />
+            <picture>
+              <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/coachkit-logo.png"
+                alt="CoachKit"
+                className="h-[26.4px] w-[26.4px] object-contain"
+              />
+            </picture>
           </Link>
         </div>
       </div>
@@ -169,24 +186,32 @@ export async function AppHeader() {
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
             >
               <span className="hidden text-base sm:inline">CoachKit</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/coachkit-logo.png"
-                alt="CoachKit"
-                className="h-[39.6px] w-[39.6px] object-contain"
-              />
+              <picture>
+                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/brand/coachkit-logo.png"
+                  alt="CoachKit"
+                  className="h-[39.6px] w-[39.6px] object-contain"
+                />
+              </picture>
             </Link>
           </div>
 
           {/* Left block: Club branding (logo-only else text fallback) */}
           <div className="flex min-w-0 items-center">
             {headerClubBranding.type === 'logo' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={headerClubBranding.logoUrl}
-                alt={`${headerClubBranding.name} logo`}
-                className="h-12 w-auto object-contain sm:h-14"
-              />
+              <picture>
+                {headerClubBranding.darkLogoUrl ? (
+                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
+                ) : null}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={headerClubBranding.logoUrl}
+                  alt={`${headerClubBranding.name} logo`}
+                  className="h-12 w-auto object-contain sm:h-14"
+                />
+              </picture>
             ) : (
               <span
                 className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"

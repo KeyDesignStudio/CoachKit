@@ -374,6 +374,7 @@ model CoachBranding {
   coachId     String  @id
   displayName String  @default("CoachKit")
   logoUrl     String?
+  darkLogoUrl String?
   updatedAt   DateTime @updatedAt
 
   coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)

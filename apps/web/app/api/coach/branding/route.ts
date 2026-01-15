@@ -17,6 +17,13 @@ const updateSchema = z.object({
       z.null(),
     ])
     .optional(),
+  darkLogoUrl: z
+    .union([
+      z.string().trim().min(1).max(1024),
+      z.literal(''),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -28,21 +35,27 @@ export async function PATCH(request: NextRequest) {
     const rawLogoValue = payload.logoUrl;
     const normalizedLogo = rawLogoValue === '' || rawLogoValue === null ? null : rawLogoValue;
 
+    const rawDarkLogoValue = payload.darkLogoUrl;
+    const normalizedDarkLogo = rawDarkLogoValue === '' || rawDarkLogoValue === null ? null : rawDarkLogoValue;
+
     const updated = await prisma.coachBranding.upsert({
       where: { coachId: user.id },
       update: {
         ...(displayName !== undefined ? { displayName } : {}),
         ...(rawLogoValue !== undefined ? { logoUrl: normalizedLogo } : {}),
+        ...(rawDarkLogoValue !== undefined ? { darkLogoUrl: normalizedDarkLogo } : {}),
       },
       create: {
         coachId: user.id,
         displayName: displayName ?? DEFAULT_BRAND_NAME,
         logoUrl: normalizedLogo ?? null,
+        darkLogoUrl: normalizedDarkLogo ?? null,
       },
       select: {
         coachId: true,
         displayName: true,
         logoUrl: true,
+        darkLogoUrl: true,
       },
     });
 

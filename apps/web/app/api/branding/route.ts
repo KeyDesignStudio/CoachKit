@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         coachId: true,
         displayName: true,
         logoUrl: true,
+        darkLogoUrl: true,
       },
     });
 

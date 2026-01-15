@@ -18,6 +18,7 @@ export default function CoachSettingsPage() {
   const [form, setForm] = useState({
     displayName: DEFAULT_BRAND_NAME,
     logoUrl: '',
+    darkLogoUrl: '',
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -33,8 +34,9 @@ export default function CoachSettingsPage() {
     setForm({
       displayName: branding.displayName || DEFAULT_BRAND_NAME,
       logoUrl: branding.logoUrl ?? '',
+      darkLogoUrl: branding.darkLogoUrl ?? '',
     });
-  }, [branding.displayName, branding.logoUrl]);
+  }, [branding.displayName, branding.logoUrl, branding.darkLogoUrl]);
 
   useEffect(() => {
     const raw = user?.timezone?.trim() ?? '';
@@ -69,7 +71,7 @@ export default function CoachSettingsPage() {
     }
   };
 
-  const uploadLogo = async (file: File) => {
+  const uploadLogo = async (file: File, variant: 'light' | 'dark') => {
     if (!user?.userId) {
       throw new Error('User not authenticated.');
     }
@@ -77,7 +79,7 @@ export default function CoachSettingsPage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('/api/coach/branding/logo', {
+    const response = await fetch(`/api/coach/branding/logo?variant=${variant}`, {
       method: 'POST',
       body: formData,
     });
@@ -91,8 +93,8 @@ export default function CoachSettingsPage() {
     return (payload.data?.url ?? '') as string;
   };
 
-  const removeLogo = async () => {
-    const response = await fetch('/api/coach/branding/logo', { method: 'DELETE' });
+  const removeLogo = async (variant: 'light' | 'dark') => {
+    const response = await fetch(`/api/coach/branding/logo?variant=${variant}`, { method: 'DELETE' });
     const payload = await response.json();
 
     if (!response.ok) {
@@ -111,12 +113,34 @@ export default function CoachSettingsPage() {
     setError('');
 
     try {
-      const url = await uploadLogo(file);
+      const url = await uploadLogo(file, 'light');
       setForm((prev) => ({ ...prev, logoUrl: url }));
       await refreshBranding();
       setMessage('Logo uploaded.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Logo upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDarkLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const url = await uploadLogo(file, 'dark');
+      setForm((prev) => ({ ...prev, darkLogoUrl: url }));
+      await refreshBranding();
+      setMessage('Dark-mode logo uploaded.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dark-mode logo upload failed.');
     } finally {
       setUploading(false);
     }
@@ -128,12 +152,29 @@ export default function CoachSettingsPage() {
     setError('');
 
     try {
-      await removeLogo();
+      await removeLogo('light');
       setForm((prev) => ({ ...prev, logoUrl: '' }));
       await refreshBranding();
       setMessage('Logo removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove logo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveDarkLogo = async () => {
+    setUploading(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await removeLogo('dark');
+      setForm((prev) => ({ ...prev, darkLogoUrl: '' }));
+      await refreshBranding();
+      setMessage('Dark-mode logo removed.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove dark-mode logo.');
     } finally {
       setUploading(false);
     }
@@ -149,6 +190,7 @@ export default function CoachSettingsPage() {
         method: 'PATCH',
         data: {
           logoUrl: '/_dev/msg-logo.jpeg',
+          darkLogoUrl: '/brand/MSG_DarkLogo.png',
         },
       });
       await refreshBranding();
@@ -178,6 +220,7 @@ export default function CoachSettingsPage() {
         data: {
           displayName: form.displayName.trim(),
           logoUrl: form.logoUrl || null,
+          darkLogoUrl: form.darkLogoUrl || null,
         },
       });
 
@@ -196,6 +239,7 @@ export default function CoachSettingsPage() {
     setForm({
       displayName: branding.displayName || DEFAULT_BRAND_NAME,
       logoUrl: branding.logoUrl ?? '',
+      darkLogoUrl: branding.darkLogoUrl ?? '',
     });
     await refreshBranding();
   };
@@ -233,16 +277,33 @@ export default function CoachSettingsPage() {
           <input type="file" accept="image/*" onChange={handleLogoChange} disabled={uploading} style={{ display: 'block', marginTop: '0.25rem' }} />
           <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>Upload a small square image (PNG/JPG).</p>
         </label>
+        <label style={{ display: 'block', marginBottom: '1rem' }}>
+          Dark mode logo image
+          <input type="file" accept="image/*" onChange={handleDarkLogoChange} disabled={uploading} style={{ display: 'block', marginTop: '0.25rem' }} />
+          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>
+            Optional: if set, this logo is used automatically in dark mode.
+          </p>
+        </label>
         <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolveLogoUrl(form.logoUrl || branding.logoUrl)}
-            alt="Current logo"
-            style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}
-          />
-          <button type="button" onClick={handleRemoveLogo} disabled={uploading || saving}>
-            Remove logo
-          </button>
+          <picture>
+            {(form.darkLogoUrl || branding.darkLogoUrl) ? (
+              <source srcSet={(form.darkLogoUrl || branding.darkLogoUrl) as string} media="(prefers-color-scheme: dark)" />
+            ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={resolveLogoUrl(form.logoUrl || branding.logoUrl)}
+              alt="Current logo"
+              style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}
+            />
+          </picture>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button type="button" onClick={handleRemoveLogo} disabled={uploading || saving}>
+              Remove logo
+            </button>
+            <button type="button" onClick={handleRemoveDarkLogo} disabled={uploading || saving}>
+              Remove dark logo
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button type="submit" disabled={saving}>
