@@ -1,14 +1,75 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { useBranding } from '@/components/branding-context';
-import { DEFAULT_BRAND_NAME, resolveLogoUrl } from '@/lib/branding';
+import { DEFAULT_BRAND_NAME } from '@/lib/branding';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
+import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
+
+type SaveState =
+  | { kind: 'idle' }
+  | { kind: 'saving' }
+  | { kind: 'saved' }
+  | { kind: 'error'; message: string };
+
+function filenameFromUrl(url: string | null | undefined): string | null {
+  const raw = typeof url === 'string' ? url.trim() : '';
+  if (!raw) return null;
+
+  const withoutHash = raw.split('#')[0] ?? raw;
+  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+
+  try {
+    const parsed = new URL(withoutQuery, 'http://local');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (!last) return 'Uploaded';
+    const decoded = decodeURIComponent(last);
+    return decoded || 'Uploaded';
+  } catch {
+    const last = withoutQuery.split('/').filter(Boolean).pop();
+    if (!last) return 'Uploaded';
+    try {
+      return decodeURIComponent(last) || 'Uploaded';
+    } catch {
+      return last || 'Uploaded';
+    }
+  }
+}
+
+function useAutoClearSaved(setState: (next: SaveState) => void) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setSaved = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    setState({ kind: 'saved' });
+    timerRef.current = setTimeout(() => {
+      setState({ kind: 'idle' });
+      timerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  return { setSaved };
+}
 
 export default function CoachSettingsPage() {
   const router = useRouter();
@@ -17,15 +78,22 @@ export default function CoachSettingsPage() {
   const { branding, loading: brandingLoading, error: brandingError, refresh: refreshBranding } = useBranding();
   const showDevBrandingSampleButton =
     process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_SHOW_DEV_PAGES === 'true';
-  const [form, setForm] = useState({
-    displayName: DEFAULT_BRAND_NAME,
-    logoUrl: '',
-    darkLogoUrl: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+
+  const [displayName, setDisplayName] = useState(DEFAULT_BRAND_NAME);
+  const [nameSave, setNameSave] = useState<SaveState>({ kind: 'idle' });
+  const [lightSave, setLightSave] = useState<SaveState>({ kind: 'idle' });
+  const [darkSave, setDarkSave] = useState<SaveState>({ kind: 'idle' });
+  const { setSaved: setNameSaved } = useAutoClearSaved(setNameSave);
+  const { setSaved: setLightSaved } = useAutoClearSaved(setLightSave);
+  const { setSaved: setDarkSaved } = useAutoClearSaved(setDarkSave);
+
+  const lightInputRef = useRef<HTMLInputElement | null>(null);
+  const darkInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingLightFileRef = useRef<File | null>(null);
+  const pendingDarkFileRef = useRef<File | null>(null);
+  const lastLightActionRef = useRef<'upload' | 'remove' | null>(null);
+  const lastDarkActionRef = useRef<'upload' | 'remove' | null>(null);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [timezone, setTimezone] = useState('Australia/Brisbane');
   const [savingTimezone, setSavingTimezone] = useState(false);
@@ -33,12 +101,8 @@ export default function CoachSettingsPage() {
   const [timezoneError, setTimezoneError] = useState('');
 
   useEffect(() => {
-    setForm({
-      displayName: branding.displayName || DEFAULT_BRAND_NAME,
-      logoUrl: branding.logoUrl ?? '',
-      darkLogoUrl: branding.darkLogoUrl ?? '',
-    });
-  }, [branding.displayName, branding.logoUrl, branding.darkLogoUrl]);
+    setDisplayName(branding.displayName || DEFAULT_BRAND_NAME);
+  }, [branding.displayName]);
 
   useEffect(() => {
     const raw = user?.timezone?.trim() ?? '';
@@ -104,92 +168,81 @@ export default function CoachSettingsPage() {
     }
   };
 
-  const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadOrReplace = async (variant: 'light' | 'dark', file: File) => {
+    if (variant === 'light') {
+      pendingLightFileRef.current = file;
+      lastLightActionRef.current = 'upload';
+      setLightSave({ kind: 'saving' });
+    } else {
+      pendingDarkFileRef.current = file;
+      lastDarkActionRef.current = 'upload';
+      setDarkSave({ kind: 'saving' });
+    }
+
+    try {
+      await uploadLogo(file, variant);
+      await refreshBranding();
+      router.refresh();
+      if (variant === 'light') {
+        pendingLightFileRef.current = null;
+        setLightSaved();
+      } else {
+        pendingDarkFileRef.current = null;
+        setDarkSaved();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      if (variant === 'light') {
+        setLightSave({ kind: 'error', message });
+      } else {
+        setDarkSave({ kind: 'error', message });
+      }
+    }
+  };
+
+  const handleLightFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setUploading(true);
-    setError('');
-
-    try {
-      const url = await uploadLogo(file, 'light');
-      setForm((prev) => ({ ...prev, logoUrl: url }));
-      await refreshBranding();
-      router.refresh();
-      setMessage('Logo uploaded.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Logo upload failed.');
-    } finally {
-      setUploading(false);
-    }
+    if (!file) return;
+    await uploadOrReplace('light', file);
   };
 
-  const handleDarkLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDarkFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setUploading(true);
-    setError('');
-
-    try {
-      const url = await uploadLogo(file, 'dark');
-      setForm((prev) => ({ ...prev, darkLogoUrl: url }));
-      await refreshBranding();
-      router.refresh();
-      setMessage('Dark-mode logo uploaded.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Dark-mode logo upload failed.');
-    } finally {
-      setUploading(false);
-    }
+    if (!file) return;
+    await uploadOrReplace('dark', file);
   };
 
-  const handleRemoveLogo = async () => {
-    setUploading(true);
-    setMessage('');
-    setError('');
-
-    try {
-      await removeLogo('light');
-      setForm((prev) => ({ ...prev, logoUrl: '' }));
-      await refreshBranding();
-      router.refresh();
-      setMessage('Logo removed.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove logo.');
-    } finally {
-      setUploading(false);
+  const handleRemove = async (variant: 'light' | 'dark') => {
+    if (variant === 'light') {
+      lastLightActionRef.current = 'remove';
+      setLightSave({ kind: 'saving' });
+    } else {
+      lastDarkActionRef.current = 'remove';
+      setDarkSave({ kind: 'saving' });
     }
-  };
-
-  const handleRemoveDarkLogo = async () => {
-    setUploading(true);
-    setMessage('');
-    setError('');
 
     try {
-      await removeLogo('dark');
-      setForm((prev) => ({ ...prev, darkLogoUrl: '' }));
+      await removeLogo(variant);
       await refreshBranding();
       router.refresh();
-      setMessage('Dark-mode logo removed.');
+      if (variant === 'light') {
+        setLightSaved();
+      } else {
+        setDarkSaved();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove dark-mode logo.');
-    } finally {
-      setUploading(false);
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      if (variant === 'light') {
+        setLightSave({ kind: 'error', message });
+      } else {
+        setDarkSave({ kind: 'error', message });
+      }
     }
   };
 
   const handleUseSampleLogo = async () => {
-    setSaving(true);
-    setMessage('');
-    setError('');
+    setLightSave({ kind: 'saving' });
+    setDarkSave({ kind: 'saving' });
 
     try {
       await request('/api/coach/branding', {
@@ -201,56 +254,164 @@ export default function CoachSettingsPage() {
       });
       await refreshBranding();
       router.refresh();
-      setMessage('Sample dev logo applied.');
+      setLightSaved();
+      setDarkSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to apply sample logo.');
-    } finally {
-      setSaving(false);
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      setLightSave({ kind: 'error', message });
+      setDarkSave({ kind: 'error', message });
     }
   };
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const lightFilename = useMemo(() => filenameFromUrl(branding.logoUrl), [branding.logoUrl]);
+  const darkFilename = useMemo(() => filenameFromUrl(branding.darkLogoUrl), [branding.darkLogoUrl]);
 
-    if (user?.role !== 'COACH') {
-      setError('Coach access required.');
+  const displayNameDirty = (displayName || '').trim() !== (branding.displayName || '').trim();
+
+  const saveDisplayName = async (nextName: string) => {
+    const trimmed = nextName.trim();
+    if (!trimmed) {
+      setNameSave({ kind: 'error', message: 'Display name is required.' });
       return;
     }
 
-    setSaving(true);
-    setMessage('');
-    setError('');
-
+    setNameSave({ kind: 'saving' });
     try {
       await request('/api/coach/branding', {
         method: 'PATCH',
-        data: {
-          displayName: form.displayName.trim(),
-          logoUrl: form.logoUrl || null,
-          darkLogoUrl: form.darkLogoUrl || null,
-        },
+        data: { displayName: trimmed },
       });
-
       await refreshBranding();
       router.refresh();
-      setMessage('Branding updated.');
+      setNameSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update branding.');
-    } finally {
-      setSaving(false);
+      setNameSave({ kind: 'error', message: err instanceof Error ? err.message : 'Something went wrong' });
     }
   };
 
-  const handleReset = async () => {
-    setMessage('');
-    setError('');
-    setForm({
-      displayName: branding.displayName || DEFAULT_BRAND_NAME,
-      logoUrl: branding.logoUrl ?? '',
-      darkLogoUrl: branding.darkLogoUrl ?? '',
-    });
-    await refreshBranding();
+  useEffect(() => {
+    if (!displayNameDirty) {
+      if (nameDebounceRef.current) {
+        clearTimeout(nameDebounceRef.current);
+        nameDebounceRef.current = null;
+      }
+      return;
+    }
+
+    if (nameDebounceRef.current) {
+      clearTimeout(nameDebounceRef.current);
+    }
+
+    nameDebounceRef.current = setTimeout(() => {
+      void saveDisplayName(displayName);
+    }, 600);
+
+    return () => {
+      if (nameDebounceRef.current) {
+        clearTimeout(nameDebounceRef.current);
+        nameDebounceRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayNameDirty, displayName]);
+
+  const openPicker = (variant: 'light' | 'dark') => {
+    const input = variant === 'light' ? lightInputRef.current : darkInputRef.current;
+    if (!input) return;
+    // Allow selecting the same file again.
+    input.value = '';
+    input.click();
   };
+
+  const retryVariant = (variant: 'light' | 'dark') => {
+    const lastAction = variant === 'light' ? lastLightActionRef.current : lastDarkActionRef.current;
+    if (lastAction === 'remove') {
+      void handleRemove(variant);
+      return;
+    }
+
+    const file = variant === 'light' ? pendingLightFileRef.current : pendingDarkFileRef.current;
+    if (file) {
+      void uploadOrReplace(variant, file);
+      return;
+    }
+
+    openPicker(variant);
+  };
+
+  function LogoRow({
+    label,
+    filename,
+    variant,
+    saveState,
+  }: {
+    label: string;
+    filename: string | null;
+    variant: 'light' | 'dark';
+    saveState: SaveState;
+  }) {
+    const hasFile = Boolean(filename);
+    const isSaving = saveState.kind === 'saving';
+
+    return (
+      <div>
+        <div className="text-sm font-medium text-[var(--text)]">{label}</div>
+        <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 max-w-full truncate text-sm text-[var(--text)]" title={filename || 'No file uploaded'}>
+            {filename || 'No file uploaded'}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
+            <button
+              type="button"
+              onClick={() => openPicker(variant)}
+              disabled={isSaving}
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+            >
+              {isSaving ? 'Saving…' : hasFile ? 'Replace' : 'Upload'}
+            </button>
+
+            {hasFile ? (
+              <button
+                type="button"
+                onClick={() => void handleRemove(variant)}
+                disabled={isSaving}
+                aria-label={variant === 'light' ? 'Remove logo' : 'Remove dark logo'}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] text-red-600 hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+              >
+                <Icon
+                  name={isSaving ? 'refresh' : 'delete'}
+                  size="md"
+                  className={isSaving ? 'animate-spin' : ''}
+                  aria-hidden
+                />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-1 text-xs text-[var(--muted)]">Recommended: 512×512 PNG/JPG (square, under 200 KB)</div>
+
+        <div className="mt-1 text-xs">
+          {saveState.kind === 'saving' ? <span className="text-[var(--muted)]">Saving…</span> : null}
+          {saveState.kind === 'saved' ? <span className="text-emerald-600">Saved</span> : null}
+          {saveState.kind === 'idle' && hasFile ? <span className="text-[var(--muted)]">Uploaded</span> : null}
+          {saveState.kind === 'error' ? (
+            <div className="flex items-center gap-2">
+              <span className="text-red-600">Something went wrong</span>
+              <button
+                type="button"
+                onClick={() => retryVariant(variant)}
+                className="text-xs font-medium text-[var(--text)] underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   if (userLoading) {
     return <p style={{ padding: '2rem' }}>Loading...</p>;
@@ -261,81 +422,107 @@ export default function CoachSettingsPage() {
   }
 
   return (
-    <section style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <section className="px-4 py-6 md:px-6 flex flex-col gap-6">
       <header>
-        <h1 style={{ margin: 0 }}>Coach Branding</h1>
-        <p style={{ color: '#475569', margin: '0.25rem 0 0' }}>Update the logo and name athletes will see across CoachKit.</p>
+        <h1 className="m-0 text-lg font-semibold text-[var(--text)]">Coach Settings</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">Manage program branding and timezone.</p>
       </header>
-      {brandingLoading ? <p>Loading current branding…</p> : null}
-      {error || brandingError ? <p style={{ color: '#b91c1c' }}>{error || brandingError}</p> : null}
-      {message ? <p style={{ color: '#047857' }}>{message}</p> : null}
-      <form onSubmit={handleSubmit} style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', maxWidth: 520 }}>
-        <label style={{ display: 'block', marginBottom: '1rem' }}>
-          Display name
-          <input
-            type="text"
-            value={form.displayName}
-            onChange={(event) => setForm((prev) => ({ ...prev, displayName: event.target.value }))}
-            style={{ display: 'block', marginTop: '0.25rem', width: '100%' }}
-            required
-          />
-        </label>
-        <label style={{ display: 'block', marginBottom: '1rem' }}>
-          Logo image
-          <input type="file" accept="image/*" onChange={handleLogoChange} disabled={uploading} style={{ display: 'block', marginTop: '0.25rem' }} />
-          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>Upload a small square image (PNG/JPG).</p>
-        </label>
-        <label style={{ display: 'block', marginBottom: '1rem' }}>
-          Dark mode logo image
-          <input type="file" accept="image/*" onChange={handleDarkLogoChange} disabled={uploading} style={{ display: 'block', marginTop: '0.25rem' }} />
-          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0' }}>
-            Optional: if set, this logo is used automatically in dark mode.
-          </p>
-        </label>
-        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <picture>
-            {(form.darkLogoUrl || branding.darkLogoUrl) ? (
-              <source srcSet={(form.darkLogoUrl || branding.darkLogoUrl) as string} media="(prefers-color-scheme: dark)" />
-            ) : null}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolveLogoUrl(form.logoUrl || branding.logoUrl)}
-              alt="Current logo"
-              style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}
-            />
-          </picture>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <button type="button" onClick={handleRemoveLogo} disabled={uploading || saving}>
-              Remove logo
-            </button>
-            <button type="button" onClick={handleRemoveDarkLogo} disabled={uploading || saving}>
-              Remove dark logo
-            </button>
+
+      <Card className="max-w-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="m-0 text-base font-semibold text-[var(--text)]">Branding</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save branding'}
-          </button>
-          <button type="button" onClick={handleReset} disabled={brandingLoading || saving}>
-            Reset
-          </button>
-          {showDevBrandingSampleButton ? (
-            <button type="button" onClick={handleUseSampleLogo} disabled={saving || uploading}>
-              Use sample club logo (dev)
-            </button>
+          {brandingLoading ? (
+            <span className="text-xs text-[var(--muted)]">Loading…</span>
           ) : null}
         </div>
-      </form>
 
-      <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', maxWidth: 520 }}>
-        <h2 style={{ margin: 0 }}>Timezone</h2>
-        <p style={{ color: '#475569', margin: '0.25rem 0 1rem' }}>Times and day-boundaries use your timezone.</p>
-        <p style={{ color: '#64748b', margin: '0 0 0.75rem' }}>Current: <span style={{ color: '#0f172a', fontWeight: 500 }}>{getTimezoneLabel(timezone)}</span></p>
-        <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
-        {timezoneMessage ? <p style={{ color: '#047857', margin: '0.75rem 0 0' }}>{timezoneMessage}</p> : null}
-        {timezoneError ? <p style={{ color: '#b91c1c', margin: '0.75rem 0 0' }}>{timezoneError}</p> : null}
-      </div>
+        {brandingError ? <p className="mt-3 text-sm text-red-600">{brandingError}</p> : null}
+
+        {/* Display name (autosave) */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-[var(--text)]" htmlFor="coach-branding-display-name">
+            Display name
+          </label>
+          <div className="mt-2 flex items-start gap-3">
+            <input
+              id="coach-branding-display-name"
+              type="text"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              onBlur={() => void saveDisplayName(displayName)}
+              className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+              required
+            />
+          </div>
+          <div className="mt-1 text-xs">
+            {nameSave.kind === 'saving' ? <span className="text-[var(--muted)]">Saving…</span> : null}
+            {nameSave.kind === 'saved' ? <span className="text-emerald-600">Saved</span> : null}
+            {nameSave.kind === 'error' ? (
+              <div className="flex items-center gap-2">
+                <span className="text-red-600">Something went wrong</span>
+                <button
+                  type="button"
+                  onClick={() => void saveDisplayName(displayName)}
+                  className="text-xs font-medium text-[var(--text)] underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Hidden file inputs (no native 'no file chosen') */}
+        <input
+          ref={lightInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={handleLightFilePicked}
+        />
+        <input
+          ref={darkInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={handleDarkFilePicked}
+        />
+
+        {/* Logo rows */}
+        <div className="mt-5 flex flex-col gap-4">
+          <LogoRow label="Logo image" filename={lightFilename} variant="light" saveState={lightSave} />
+          <LogoRow label="Dark mode logo image" filename={darkFilename} variant="dark" saveState={darkSave} />
+        </div>
+
+        {showDevBrandingSampleButton ? (
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => void handleUseSampleLogo()}
+              disabled={lightSave.kind === 'saving' || darkSave.kind === 'saving'}
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+            >
+              Use sample club logo (dev)
+            </button>
+          </div>
+        ) : null}
+      </Card>
+
+      <Card className="max-w-xl">
+        <h2 className="m-0 text-base font-semibold text-[var(--text)]">Timezone</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
+        <p className="mt-3 text-sm text-[var(--muted)]">
+          Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
+        </p>
+        <div className="mt-3">
+          <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
+        </div>
+        {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
+        {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
+      </Card>
     </section>
   );
 }
