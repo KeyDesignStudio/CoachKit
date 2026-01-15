@@ -9,6 +9,7 @@ import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
+import { formatUtcDayKey } from '@/lib/day-key';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...item,
+        date: formatUtcDayKey(item.date),
         latestCompletedActivity,
         completedActivities: undefined,
       };

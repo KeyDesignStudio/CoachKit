@@ -1,5 +1,6 @@
 import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
+import { getLocalDayKey, getTodayDayKey } from '@/lib/day-key';
 
 type CalendarItemLike = {
   id?: string;
@@ -22,26 +23,8 @@ type CalendarItemLike = {
   } | null;
 };
 
-function getZonedDateKey(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-
-  const lookup = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-  return `${lookup.year}-${lookup.month}-${lookup.day}`;
-}
-
-function getItemDateKey(value: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  if (value.includes('T')) return value.split('T')[0];
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-  return value;
+function getItemDateKey(value: string, timeZone: string): string {
+  return getLocalDayKey(value, timeZone);
 }
 
 /**
@@ -90,8 +73,8 @@ export function getCalendarDisplayTime(
     return formattedLocalTime;
   }
 
-  const itemDayKey = getItemDateKey(item.date);
-  const todayKey = getZonedDateKey(now, athleteTimezone);
+  const itemDayKey = getItemDateKey(item.date, athleteTimezone);
+  const todayKey = getTodayDayKey(athleteTimezone, now);
   const isFuture = itemDayKey > todayKey;
 
   if (isFuture) return planned;
@@ -100,5 +83,5 @@ export function getCalendarDisplayTime(
 }
 
 export function getZonedDateKeyForNow(timeZone: string, now: Date = new Date()): string {
-  return getZonedDateKey(now, timeZone);
+  return getTodayDayKey(timeZone, now);
 }

@@ -2,7 +2,7 @@ import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 
 type CalendarItem = {
   id: string;
-  date: string | Date;
+  date: string;
   plannedStartTimeLocal: string | null;
   discipline: string;
   title: string;
@@ -52,7 +52,7 @@ export function MonthDayCell({
       isCurrentMonth={isCurrentMonth}
       isToday={isToday}
       athleteTimezone={athleteTimezone}
-      onDayClick={() => onDayClick()}
+      onDayClick={(_dateStr) => onDayClick()}
       onItemClick={(itemId) => {
         const found = itemsById.get(itemId);
         if (found) {

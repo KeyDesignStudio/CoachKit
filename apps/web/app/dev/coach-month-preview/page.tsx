@@ -8,7 +8,7 @@ import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
-import { addDays, toDateInput } from '@/lib/client-date';
+import { addDaysToDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,17 +23,11 @@ type PreviewWorkout = {
 };
 
 function buildPreviewItems(now: Date): PreviewWorkout[] {
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-
-  const yesterday = addDays(today, -1);
-  const tomorrow = addDays(today, 1);
-  const inThreeDays = addDays(today, 3);
-
-  const todayStr = toDateInput(today);
-  const yStr = toDateInput(yesterday);
-  const tStr = toDateInput(tomorrow);
-  const d3Str = toDateInput(inThreeDays);
+  const tz = 'Australia/Brisbane';
+  const todayStr = getTodayDayKey(tz, now);
+  const yStr = addDaysToDayKey(todayStr, -1);
+  const tStr = addDaysToDayKey(todayStr, 1);
+  const d3Str = addDaysToDayKey(todayStr, 3);
 
   return [
     { id: 'coach-today-1', date: todayStr, plannedStartTimeLocal: '06:30', discipline: 'RUN', status: 'PLANNED', title: 'Easy run' },
@@ -64,22 +58,21 @@ export default function DevCoachMonthPreviewPage() {
   if (process.env.NEXT_PUBLIC_SHOW_DEV_PAGES !== 'true') notFound();
 
   const now = useMemo(() => new Date('2026-01-03T10:00:00.000Z'), []);
+  const tz = 'Australia/Brisbane';
+  const todayKey = useMemo(() => getTodayDayKey(tz, now), [now]);
   const [selected, setSelected] = useState<{ kind: 'day' | 'workout'; value: string } | null>(null);
 
   const previewItems = useMemo(() => buildPreviewItems(now), [now]);
 
   const month = useMemo(() => {
-    const d = new Date(now);
-    return { year: d.getFullYear(), month: d.getMonth() };
-  }, [now]);
+    return {
+      year: Number(todayKey.slice(0, 4)),
+      month: Number(todayKey.slice(5, 7)) - 1,
+    };
+  }, [todayKey]);
 
   const monthDays = useMemo(() => {
-    const gridStart = (() => {
-      const firstDayOfMonth = new Date(month.year, month.month, 1);
-      const dayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      return new Date(month.year, month.month, 1 + mondayOffset);
-    })();
+    const gridStartKey = startOfWeekDayKey(`${month.year}-${String(month.month + 1).padStart(2, '0')}-01`);
 
     const byDate: Record<string, PreviewWorkout[]> = {};
     for (const item of previewItems) {
@@ -87,31 +80,29 @@ export default function DevCoachMonthPreviewPage() {
       byDate[item.date].push(item);
     }
 
-    const tz = 'Australia/Brisbane';
     const sortedByDate: Record<string, any[]> = {};
     for (const dateStr of Object.keys(byDate)) {
       sortedByDate[dateStr] = sortSessionsForDay(
         byDate[dateStr].map((item) => ({
           ...item,
           displayTimeLocal: getCalendarDisplayTime(item as any, tz, now),
-          latestCompletedActivity: null,
         })) as any,
         tz
       ) as any;
     }
 
     return Array.from({ length: 42 }, (_, i) => {
-      const date = addDays(gridStart, i);
-      const dateStr = toDateInput(date);
+      const dateStr = addDaysToDayKey(gridStartKey, i);
+      const date = parseDayKeyToUtcDate(dateStr);
       return {
         date,
         dateStr,
-        isCurrentMonth: date.getMonth() === month.month,
-        isToday: dateStr === toDateInput(now),
+        isCurrentMonth: dateStr.slice(0, 7) === `${month.year}-${String(month.month + 1).padStart(2, '0')}`,
+        isToday: dateStr === todayKey,
         items: (sortedByDate[dateStr] || []) as any,
       };
     });
-  }, [month.year, month.month, now, previewItems]);
+  }, [month.year, month.month, now, previewItems, todayKey]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -137,7 +128,7 @@ export default function DevCoachMonthPreviewPage() {
               items={day.items as any}
               isCurrentMonth={day.isCurrentMonth}
               isToday={day.isToday}
-              onDayClick={(date) => setSelected({ kind: 'day', value: toDateInput(date) })}
+              onDayClick={(dateStr) => setSelected({ kind: 'day', value: dateStr })}
               onItemClick={(itemId) => setSelected({ kind: 'workout', value: itemId })}
             />
           ))}

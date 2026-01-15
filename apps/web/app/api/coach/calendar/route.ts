@@ -10,6 +10,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
+import { formatUtcDayKey } from '@/lib/day-key';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,7 +157,7 @@ export async function GET(request: NextRequest) {
         id: item.id,
         athleteId: item.athleteId,
         coachId: item.coachId,
-        date: item.date,
+        date: formatUtcDayKey(item.date),
         plannedStartTimeLocal: item.plannedStartTimeLocal,
         discipline: item.discipline,
         subtype: item.subtype,

@@ -23,8 +23,9 @@ import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
-import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
+import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { addDaysToDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -46,7 +47,7 @@ type AthleteOption = {
 
 type CalendarItem = {
   id: string;
-  date: string | Date;
+  date: string;
   plannedStartTimeLocal: string | null;
   displayTimeLocal?: string | null;
   discipline: string;
@@ -95,13 +96,22 @@ const emptyForm = (date: string): SessionFormState => ({
   workoutDetail: '',
 });
 
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function getMonthGridStartKey(year: number, monthIndex: number): string {
+  const firstOfMonth = `${year}-${pad2(monthIndex + 1)}-01`;
+  return startOfWeekDayKey(firstOfMonth);
+}
+
 // Helper to group items by date
 function groupItemsByDate(items: CalendarItem[]): Record<string, CalendarItem[]> {
   const grouped: Record<string, CalendarItem[]> = {};
   
   items.forEach((item) => {
-    // Always extract just the date part (YYYY-MM-DD) from either string or Date
-    const dateStr = typeof item.date === 'string' ? item.date.split('T')[0] : item.date.toISOString().split('T')[0];
+    // API returns canonical YYYY-MM-DD day keys.
+    const dateStr = item.date;
     if (!grouped[dateStr]) {
       grouped[dateStr] = [];
     }
@@ -120,29 +130,6 @@ function groupItemsByDate(items: CalendarItem[]): Record<string, CalendarItem[]>
   return grouped;
 }
 
-// Helper to get first Monday of month grid (may be in previous month)
-function getMonthGridStart(year: number, month: number): Date {
-  const firstDayOfMonth = new Date(year, month, 1);
-  const dayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  return new Date(year, month, 1 + mondayOffset);
-}
-
-// Helper to get last Sunday of month grid (may be in next month)
-function getMonthGridEnd(year: number, month: number): Date {
-  const gridStart = getMonthGridStart(year, month);
-  // Always show 6 weeks (42 days) for consistency
-  return addDays(gridStart, 41);
-}
-
-// Helper to check if date is today
-function isToday(date: Date): boolean {
-  const today = new Date();
-  return date.getDate() === today.getDate() &&
-         date.getMonth() === today.getMonth() &&
-         date.getFullYear() === today.getFullYear();
-}
-
 export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -152,8 +139,8 @@ export default function CoachCalendarPage() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
-  const [weekStart, setWeekStart] = useState(() => startOfWeek());
   const [athleteTimezone, setAthleteTimezone] = useState('Australia/Brisbane');
+  const [weekStartKey, setWeekStartKey] = useState(() => startOfWeekDayKey(getTodayDayKey(athleteTimezone)));
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -161,15 +148,15 @@ export default function CoachCalendarPage() {
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
   const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit'>('closed');
-  const [sessionForm, setSessionForm] = useState(() => emptyForm(toDateInput(startOfWeek())));
+  const [sessionForm, setSessionForm] = useState(() => emptyForm(weekStartKey));
   const [editItemId, setEditItemId] = useState('');
   const [drawerAthleteId, setDrawerAthleteId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [copyFormOpen, setCopyFormOpen] = useState(false);
   const [copyForm, setCopyForm] = useState(() => ({
-    fromWeekStart: toDateInput(startOfWeek()),
-    toWeekStart: toDateInput(addDays(startOfWeek(), 7)),
+    fromWeekStart: weekStartKey,
+    toWeekStart: addDaysToDayKey(weekStartKey, 7),
     mode: 'skipExisting' as CopyMode,
   }));
   const [copyLoading, setCopyLoading] = useState(false);
@@ -211,19 +198,19 @@ export default function CoachCalendarPage() {
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
-      const from = toDateInput(weekStart);
-      const to = toDateInput(addDays(weekStart, 6));
-      return { from, to };
-    } else {
-      // Month view: get full grid range (Monday to Sunday)
-      const gridStart = getMonthGridStart(currentMonth.year, currentMonth.month);
-      const gridEnd = getMonthGridEnd(currentMonth.year, currentMonth.month);
       return {
-        from: toDateInput(gridStart),
-        to: toDateInput(gridEnd),
+        from: weekStartKey,
+        to: addDaysToDayKey(weekStartKey, 6),
+      };
+    } else {
+      const gridStartKey = getMonthGridStartKey(currentMonth.year, currentMonth.month);
+      const gridEndKey = addDaysToDayKey(gridStartKey, 41);
+      return {
+        from: gridStartKey,
+        to: gridEndKey,
       };
     }
-  }, [viewMode, weekStart, currentMonth]);
+  }, [viewMode, weekStartKey, currentMonth]);
 
   const itemsByDate = useMemo(() => groupItemsByDate(items), [items]);
 
@@ -244,22 +231,13 @@ export default function CoachCalendarPage() {
     const now = new Date();
 
     return Array.from({ length: 7 }, (_, i) => {
-      const date = addDays(weekStart, i);
-      const dateStr = toDateInput(date);
-      const formatted = formatDisplay(dateStr);
+      const dateStr = addDaysToDayKey(weekStartKey, i);
+      const formatted = formatDisplayInTimeZone(dateStr, athleteTimezone);
 
       const dayItems = sortSessionsForDay(
         (itemsByDate[dateStr] || []).map((item) => ({
           ...item,
-          date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-          displayTimeLocal: getCalendarDisplayTime(
-            {
-              ...item,
-              date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-            } as any,
-            athleteTimezone,
-            now
-          ),
+          displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
         })),
         athleteTimezone
       );
@@ -272,19 +250,20 @@ export default function CoachCalendarPage() {
         items: dayItems,
       };
     });
-  }, [weekStart, itemsByDate, athleteTimezone, dayWeatherByDate]);
+  }, [weekStartKey, itemsByDate, athleteTimezone, dayWeatherByDate]);
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
-    
+
     const now = new Date();
-    const gridStart = getMonthGridStart(currentMonth.year, currentMonth.month);
+
+    const gridStartKey = getMonthGridStartKey(currentMonth.year, currentMonth.month);
     const days: Array<{ date: Date; dateStr: string; isCurrentMonth: boolean; weather?: WeatherSummary; items: CalendarItem[] }> = [];
-    
+
     for (let i = 0; i < 42; i++) {
-      const date = addDays(gridStart, i);
-      const dateStr = toDateInput(date);
-      const isCurrentMonth = date.getMonth() === currentMonth.month;
+      const dateStr = addDaysToDayKey(gridStartKey, i);
+      const date = parseDayKeyToUtcDate(dateStr);
+      const isCurrentMonth = dateStr.slice(0, 7) === `${currentMonth.year}-${pad2(currentMonth.month + 1)}`;
       
       days.push({
         date,
@@ -294,15 +273,7 @@ export default function CoachCalendarPage() {
         items: sortSessionsForDay(
           (itemsByDate[dateStr] || []).map((item) => ({
             ...item,
-            date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-            displayTimeLocal: getCalendarDisplayTime(
-              {
-                ...item,
-                date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
-              } as any,
-              athleteTimezone,
-              now
-            ),
+            displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
           })),
           athleteTimezone
         ),
@@ -627,7 +598,7 @@ export default function CoachCalendarPage() {
   const goToToday = () => {
     const now = new Date();
     if (viewMode === 'week') {
-      setWeekStart(startOfWeek());
+      setWeekStartKey(startOfWeekDayKey(getTodayDayKey(athleteTimezone)));
     } else {
       setCurrentMonth({ year: now.getFullYear(), month: now.getMonth() });
     }
@@ -635,7 +606,7 @@ export default function CoachCalendarPage() {
 
   const navigatePrev = () => {
     if (viewMode === 'week') {
-      setWeekStart(addDays(weekStart, -7));
+      setWeekStartKey(addDaysToDayKey(weekStartKey, -7));
     } else {
       const newMonth = currentMonth.month === 0 ? 11 : currentMonth.month - 1;
       const newYear = currentMonth.month === 0 ? currentMonth.year - 1 : currentMonth.year;
@@ -645,7 +616,7 @@ export default function CoachCalendarPage() {
 
   const navigateNext = () => {
     if (viewMode === 'week') {
-      setWeekStart(addDays(weekStart, 7));
+      setWeekStartKey(addDaysToDayKey(weekStartKey, 7));
     } else {
       const newMonth = currentMonth.month === 11 ? 0 : currentMonth.month + 1;
       const newYear = currentMonth.month === 11 ? currentMonth.year + 1 : currentMonth.year;
@@ -682,7 +653,7 @@ export default function CoachCalendarPage() {
   };
 
   const openEditDrawer = (item: CalendarItem) => {
-    const dateStr = (typeof item.date === 'string' ? item.date : item.date.toISOString()).split('T')[0];
+    const dateStr = item.date;
     const displayTimeLocal = item.displayTimeLocal ?? null;
     setDrawerAthleteId(item.athleteId || singleAthleteId);
     setSessionForm({
@@ -808,8 +779,8 @@ export default function CoachCalendarPage() {
     }
 
     setCopyForm({
-      fromWeekStart: toDateInput(weekStart),
-      toWeekStart: toDateInput(addDays(weekStart, 7)),
+      fromWeekStart: weekStartKey,
+      toWeekStart: addDaysToDayKey(weekStartKey, 7),
       mode: 'skipExisting',
     });
     setCopyError('');
@@ -829,7 +800,7 @@ export default function CoachCalendarPage() {
         method: 'POST',
         data: {
           athleteId: singleAthleteId,
-          weekStart: toDateInput(weekStart),
+          weekStart: weekStartKey,
         },
       });
       setWeekStatus('PUBLISHED');
@@ -853,7 +824,7 @@ export default function CoachCalendarPage() {
         method: 'POST',
         data: {
           athleteId: singleAthleteId,
-          weekStart: toDateInput(weekStart),
+          weekStart: weekStartKey,
         },
       });
       setWeekStatus('DRAFT');
@@ -1074,7 +1045,7 @@ export default function CoachCalendarPage() {
             <WeekGrid>
               {weekDays.map((day) => {
                 const dateKey = day.date;
-                const isDayToday = isToday(new Date(dateKey));
+                const isDayToday = dateKey === getTodayDayKey(athleteTimezone);
                 const selected = selectedAthletes;
 
                 return (
@@ -1095,11 +1066,9 @@ export default function CoachCalendarPage() {
                         const dayItems = sortSessionsForDay(
                           dayItemsRaw.map((item) => ({
                             ...item,
-                            date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
                             displayTimeLocal: getCalendarDisplayTime(
                               {
                                 ...item,
-                                date: typeof item.date === 'string' ? item.date : item.date.toISOString(),
                               } as any,
                               tz,
                               new Date()
@@ -1175,20 +1144,20 @@ export default function CoachCalendarPage() {
                   dayWeather={day.weather}
                   items={day.items as any}
                   isCurrentMonth={day.isCurrentMonth}
-                  isToday={isToday(day.date)}
+                  isToday={day.dateStr === getTodayDayKey(athleteTimezone)}
                   canAdd={selectedAthleteIds.size === 1}
-                  onDayClick={(date) => {
+                  onDayClick={(dateStr) => {
                     if (isMobile) {
-                      openMobileDaySheet(toDateInput(date));
+                      openMobileDaySheet(dateStr);
                       return;
                     }
 
                     setViewMode('week');
-                    setWeekStart(startOfWeek(date));
+                    setWeekStartKey(startOfWeekDayKey(dateStr));
                   }}
-                  onAddClick={(date) => {
+                  onAddClick={(dateStr) => {
                     if (!singleAthleteId) return;
-                    openCreateDrawerForAthlete(singleAthleteId, toDateInput(date));
+                    openCreateDrawerForAthlete(singleAthleteId, dateStr);
                   }}
                   onItemClick={(itemId) => {
                     const found = itemsById.get(itemId);

@@ -129,7 +129,7 @@ export default function DevMonthPreviewPage() {
               items={day.items}
               isCurrentMonth={day.isCurrentMonth}
               isToday={day.isToday}
-              onDayClick={(d) => setSelected({ kind: 'day', value: toDateInput(d) })}
+              onDayClick={(dateStr) => setSelected({ kind: 'day', value: dateStr })}
               onItemClick={(id) => setSelected({ kind: 'workout', value: id })}
             />
           ))}

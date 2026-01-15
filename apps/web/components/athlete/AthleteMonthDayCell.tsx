@@ -10,7 +10,7 @@ import { WeatherTooltip } from '@/components/calendar/WeatherTooltip';
 
 export type MonthSession = {
   id: string;
-  date: string | Date;
+  date: string;
   plannedStartTimeLocal: string | null;
   displayTimeLocal?: string | null;
   discipline: string;
@@ -26,9 +26,9 @@ type AthleteMonthDayCellProps = {
   isCurrentMonth: boolean;
   isToday: boolean;
   athleteTimezone?: string;
-  onDayClick: (date: Date) => void;
+  onDayClick: (dateStr: string) => void;
   onItemClick: (itemId: string) => void;
-  onAddClick?: (date: Date) => void;
+  onAddClick?: (dateStr: string) => void;
   canAdd?: boolean;
 };
 
@@ -47,7 +47,7 @@ export function AthleteMonthDayCell({
   onAddClick,
   canAdd = true,
 }: AthleteMonthDayCellProps) {
-  const dayNumber = date.getDate();
+  const dayNumber = Number(dateStr.slice(8, 10));
   const sortedItems = sortSessionsForDay(items, athleteTimezone);
   const visible = sortedItems.slice(0, MAX_VISIBLE_ROWS);
   const remainingCount = Math.max(0, sortedItems.length - MAX_VISIBLE_ROWS);
@@ -71,13 +71,13 @@ export function AthleteMonthDayCell({
         !isCurrentMonth ? 'opacity-70' : '',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
       )}
-      onClick={() => onDayClick(date)}
+      onClick={() => onDayClick(dateStr)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onDayClick(date);
+          onDayClick(dateStr);
         }
       }}
     >
@@ -123,7 +123,7 @@ export function AthleteMonthDayCell({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onDayClick(date);
+                onDayClick(dateStr);
               }}
               className={cn(
                 'h-11 min-w-11 md:h-6 md:min-w-6 md:px-1 rounded text-xs inline-flex items-center justify-center',
@@ -147,7 +147,7 @@ export function AthleteMonthDayCell({
                   e.preventDefault();
                   e.stopPropagation();
                   if (!addEnabled) return;
-                  onAddClick(date);
+                  onAddClick(dateStr);
                 }}
                 className={cn(
                   'inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full',
@@ -236,7 +236,7 @@ export function AthleteMonthDayCell({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onDayClick(date);
+                onDayClick(dateStr);
               }}
               className="rounded-md px-1.5 py-0.5 hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]"
               aria-label={`Open day ${dateStr} (${remainingCount} more)`}
