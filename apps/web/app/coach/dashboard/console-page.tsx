@@ -1172,6 +1172,16 @@ export default function CoachDashboardConsolePage() {
 
                   <Button
                     type="button"
+                    variant="ghost"
+                    className="min-h-[44px] px-3"
+                    onClick={() => loadMessageThreads(true)}
+                    aria-label="Refresh inbox"
+                  >
+                    <Icon name="refresh" size="sm" aria-hidden />
+                  </Button>
+
+                  <Button
+                    type="button"
                     variant="secondary"
                     className="min-h-[44px]"
                     onClick={openBroadcast}
@@ -1188,22 +1198,7 @@ export default function CoachDashboardConsolePage() {
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
                 {/* Inbox */}
                 <div className="min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
-                    Inbox{totalUnreadThreads > 0 ? ` (${totalUnreadThreads} new)` : ''}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-[36px] px-2"
-                    onClick={() => loadMessageThreads(true)}
-                    aria-label="Refresh inbox"
-                  >
-                    <Icon name="refresh" size="sm" aria-hidden />
-                  </Button>
-                </div>
-
-                <div className="divide-y divide-black/5">
+                  <div className="divide-y divide-black/5">
                     {sortedMessageThreads.map((t) => {
                       const active = t.athlete.id === messageAthleteId;
                       const unread = t.unreadCountForCoach ?? 0;
