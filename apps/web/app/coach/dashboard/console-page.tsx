@@ -1195,59 +1195,12 @@ export default function CoachDashboardConsolePage() {
               {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
               {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
 
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
-                {/* Inbox */}
-                <div className="min-w-0">
-                  <div className="divide-y divide-black/5">
-                    {sortedMessageThreads.map((t) => {
-                      const active = t.athlete.id === messageAthleteId;
-                      const unread = t.unreadCountForCoach ?? 0;
-                      const when = t.lastMessageAt ? new Date(t.lastMessageAt).toLocaleString() : '';
-                      return (
-                        <button
-                          key={t.threadId}
-                          type="button"
-                          onClick={() => {
-                            setMessageAthleteId(t.athlete.id);
-                            setMessageStatus('');
-                            setMessageError('');
-                          }}
-                          className={cn(
-                            'w-full text-left px-3 py-3 transition-colors',
-                            active ? 'bg-black/5' : 'hover:bg-black/5'
-                          )}
-                          aria-label={`Open thread with ${t.athlete.name ?? 'Unnamed athlete'}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-[var(--text)] truncate">
-                                {t.athlete.name ?? 'Unnamed athlete'}
-                              </div>
-                              <div className="mt-0.5 text-xs text-[var(--muted)] truncate">{t.lastMessagePreview}</div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              {unread > 0 ? (
-                                <div className="rounded-full bg-blue-600/10 text-blue-700 px-2 py-0.5 text-[10px] font-medium">
-                                  {unread} new
-                                </div>
-                              ) : null}
-                              {when ? <div className="text-[10px] text-[var(--muted)] whitespace-nowrap">{when}</div> : null}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
               {/* Compose + thread */}
               <div className="min-w-0">
                 <div className="grid gap-2" data-testid="coach-dashboard-messages-compose">
                   <Textarea
                     rows={3}
-                    placeholder={messageAthleteId ? 'Write a message…' : 'Select a thread (or athlete) to reply…'}
+                    placeholder={messageAthleteId ? 'Write a message…' : 'Select an athlete to reply…'}
                     value={messageDraft}
                     onChange={(e) => setMessageDraft(e.target.value)}
                     className="text-sm"
@@ -1269,7 +1222,7 @@ export default function CoachDashboardConsolePage() {
                 <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-xs text-[var(--muted)]">
-                      {messagesLoading ? 'Loading messages…' : selectedThreadId ? 'Thread' : 'Select a thread from inbox'}
+                      {messagesLoading ? 'Loading messages…' : selectedThreadId ? 'Thread' : 'Select an athlete above'}
                     </div>
                     {selectedThreadId ? (
                       <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => loadThreadMessages(selectedThreadId, true)}>
