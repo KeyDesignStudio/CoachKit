@@ -5,6 +5,7 @@ import { notFound, forbidden } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
 import { privateCacheHeaders } from '@/lib/cache';
+import { getWeatherSummariesForRange } from '@/lib/weather-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,85 +48,6 @@ function formatZonedDateKey(date: Date, timeZone: string): string {
   }).format(date);
 }
 
-function hhmm(value: string): string {
-  const t = value.includes('T') ? value.split('T')[1] : value;
-  return t.slice(0, 5);
-}
-
-function iconFromWeatherCode(code: number): WeatherIcon {
-  if (code === 0) return 'sunny';
-  if (code === 1 || code === 2) return 'partly_cloudy';
-  if (code === 3) return 'cloudy';
-
-  if (code === 45 || code === 48) return 'fog';
-
-  // Drizzle / rain / freezing rain.
-  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
-
-  // Snow.
-  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return 'snow';
-
-  // Thunderstorm.
-  if (code >= 95 && code <= 99) return 'storm';
-
-  return 'cloudy';
-}
-
-async function fetchOpenMeteoDaily(params: {
-  lat: number;
-  lon: number;
-  date: string;
-  timezone: string;
-}): Promise<WeatherResponseEnabled> {
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(params.lat));
-  url.searchParams.set('longitude', String(params.lon));
-  url.searchParams.set('daily', 'weathercode,temperature_2m_max,sunrise,sunset');
-  url.searchParams.set('timezone', params.timezone);
-  url.searchParams.set('start_date', params.date);
-  url.searchParams.set('end_date', params.date);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4_000);
-
-  try {
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      throw new Error(`Open-Meteo request failed (${res.status})`);
-    }
-
-    const json = (await res.json()) as any;
-    const daily = json?.daily;
-
-    const weathercode = Number(daily?.weathercode?.[0]);
-    const maxTempC = Number(daily?.temperature_2m_max?.[0]);
-    const sunrise = String(daily?.sunrise?.[0] ?? '');
-    const sunset = String(daily?.sunset?.[0] ?? '');
-
-    if (!Number.isFinite(weathercode) || !Number.isFinite(maxTempC) || !sunrise || !sunset) {
-      throw new Error('Open-Meteo response missing required daily fields.');
-    }
-
-    return {
-      enabled: true,
-      source: 'open-meteo',
-      date: params.date,
-      timezone: params.timezone,
-      icon: iconFromWeatherCode(weathercode),
-      maxTempC,
-      sunriseLocal: hhmm(sunrise),
-      sunsetLocal: hhmm(sunset),
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export async function GET(_request: NextRequest, context: { params: { itemId: string } }) {
   try {
     const { user } = await requireAuth();
@@ -163,10 +85,13 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
 
     const headers = privateCacheHeaders({ maxAgeSeconds: 1800 });
 
-    if (profile?.defaultLat == null || profile?.defaultLon == null) {
+    if (!profile || profile.defaultLat == null || profile.defaultLon == null) {
       const disabled: WeatherResponseDisabled = { enabled: false, reason: 'NO_LOCATION' };
       return success(disabled, { headers });
     }
+
+    const lat = profile.defaultLat;
+    const lon = profile.defaultLon;
 
     const athleteUser = await prisma.user.findUnique({
       where: { id: item.athleteId },
@@ -176,8 +101,8 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
     const athleteTz = athleteUser?.timezone ?? 'UTC';
     const dateKey = formatZonedDateKey(item.date, athleteTz);
 
-    const latKey = profile.defaultLat.toFixed(4);
-    const lonKey = profile.defaultLon.toFixed(4);
+    const latKey = lat.toFixed(4);
+    const lonKey = lon.toFixed(4);
     const cacheKey = `${item.athleteId}|${dateKey}|${latKey}|${lonKey}|${athleteTz}`;
 
     const now = Date.now();
@@ -191,12 +116,31 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
       return success(value, { headers });
     }
 
-    const promise = fetchOpenMeteoDaily({
-      lat: profile.defaultLat,
-      lon: profile.defaultLon,
-      date: dateKey,
-      timezone: athleteTz,
-    });
+    const promise: Promise<WeatherResponseEnabled> = (async () => {
+      const map = await getWeatherSummariesForRange({
+        lat,
+        lon,
+        from: dateKey,
+        to: dateKey,
+        timezone: athleteTz,
+      });
+
+      const summary = map[dateKey];
+      if (!summary) {
+        throw new Error('Open-Meteo response missing required daily fields.');
+      }
+
+      return {
+        enabled: true as const,
+        source: 'open-meteo' as const,
+        date: dateKey,
+        timezone: athleteTz,
+        icon: summary.icon as WeatherIcon,
+        maxTempC: summary.maxTempC,
+        sunriseLocal: summary.sunriseLocal,
+        sunsetLocal: summary.sunsetLocal,
+      };
+    })();
 
     inFlight.set(cacheKey, promise);
 

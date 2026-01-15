@@ -23,6 +23,7 @@ import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
 import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplay, formatWeekOfLabel, startOfWeek, toDateInput } from '@/lib/client-date';
+import type { WeatherSummary } from '@/lib/weather-model';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -123,6 +124,7 @@ export default function AthleteCalendarPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [items, setItems] = useState<CalendarItem[]>([]);
+  const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -179,6 +181,7 @@ export default function AthleteCalendarPage() {
         date,
         dateStr,
         isCurrentMonth,
+        weather: dayWeatherByDate[dateStr],
         items: sortSessionsForDay(
           (itemsByDate[dateStr] || []).map((item) => ({
             ...item,
@@ -190,7 +193,7 @@ export default function AthleteCalendarPage() {
     }
     
     return days;
-  }, [viewMode, currentMonth, itemsByDate, athleteTimezone]);
+  }, [viewMode, currentMonth, itemsByDate, athleteTimezone, dayWeatherByDate]);
 
   const loadItems = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
@@ -207,11 +210,12 @@ export default function AthleteCalendarPage() {
         ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&t=${Date.now()}`
         : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}`;
 
-      const data = await request<{ items: CalendarItem[] }>(
+      const data = await request<{ items: CalendarItem[]; dayWeather?: Record<string, WeatherSummary> }>(
         url,
         bypassCache ? { cache: 'no-store' } : undefined
       );
       setItems(data.items);
+      setDayWeatherByDate(data.dayWeather ?? {});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
     } finally {
@@ -453,6 +457,7 @@ export default function AthleteCalendarPage() {
                     key={day.date}
                     dayName={day.name}
                     formattedDate={day.formatted}
+                    dayWeather={dayWeatherByDate[day.date]}
                     isEmpty={dayItems.length === 0}
                     isToday={isToday(dayDate)}
                     onAddClick={() => openCreateDrawer(day.date)}
@@ -483,6 +488,7 @@ export default function AthleteCalendarPage() {
                   key={day.dateStr}
                   date={day.date}
                   dateStr={day.dateStr}
+                  dayWeather={day.weather}
                   items={day.items}
                   isCurrentMonth={day.isCurrentMonth}
                   isToday={isToday(day.date)}

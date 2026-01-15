@@ -9,6 +9,7 @@ import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
+import { getWeatherSummariesForRange } from '@/lib/weather-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,58 +58,61 @@ export async function GET(request: NextRequest) {
 
     prof.mark('auth+parse');
 
-    const items = await prisma.calendarItem.findMany({
-      where: {
-        athleteId: params.athleteId,
-        coachId: user.id,
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
-      orderBy: [
-        { date: 'asc' },
-        { plannedStartTimeLocal: 'asc' },
-      ],
-      select: {
-        id: true,
-        athleteId: true,
-        coachId: true,
-        date: true,
-        plannedStartTimeLocal: true,
-        discipline: true,
-        subtype: true,
-        title: true,
-        plannedDurationMinutes: true,
-        plannedDistanceKm: true,
-        intensityType: true,
-        intensityTargetJson: true,
-        workoutDetail: true,
-        attachmentsJson: true,
-        status: true,
-        templateId: true,
-        groupSessionId: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        template: { select: { id: true, title: true } },
-        groupSession: { select: { id: true, title: true } },
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: COMPLETIONS_TAKE,
-          where: {
-            source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
-          },
-          select: {
-            id: true,
-            painFlag: true,
-            startTime: true,
-            source: true,
-            metricsJson: true,
+    const [items, athleteProfile] = await Promise.all([
+      prisma.calendarItem.findMany({
+        where: {
+          athleteId: params.athleteId,
+          coachId: user.id,
+          date: {
+            gte: fromDate,
+            lte: toDate,
           },
         },
-      },
-    });
+        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+        select: {
+          id: true,
+          athleteId: true,
+          coachId: true,
+          date: true,
+          plannedStartTimeLocal: true,
+          discipline: true,
+          subtype: true,
+          title: true,
+          plannedDurationMinutes: true,
+          plannedDistanceKm: true,
+          intensityType: true,
+          intensityTargetJson: true,
+          workoutDetail: true,
+          attachmentsJson: true,
+          status: true,
+          templateId: true,
+          groupSessionId: true,
+          reviewedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          template: { select: { id: true, title: true } },
+          groupSession: { select: { id: true, title: true } },
+          completedActivities: {
+            orderBy: [{ startTime: 'desc' as const }],
+            take: COMPLETIONS_TAKE,
+            where: {
+              source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
+            },
+            select: {
+              id: true,
+              painFlag: true,
+              startTime: true,
+              source: true,
+              metricsJson: true,
+            },
+          },
+        },
+      }),
+      prisma.athleteProfile.findUnique({
+        where: { userId: params.athleteId },
+        select: { defaultLat: true, defaultLon: true },
+      }),
+    ]);
 
     prof.mark('db');
 
@@ -175,11 +179,29 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    let dayWeather: Record<string, any> | undefined;
+    if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {
+      try {
+        const map = await getWeatherSummariesForRange({
+          lat: athleteProfile.defaultLat,
+          lon: athleteProfile.defaultLon,
+          from: params.from,
+          to: params.to,
+          timezone: athleteTimezone,
+        });
+        if (Object.keys(map).length > 0) {
+          dayWeather = map;
+        }
+      } catch {
+        // Best-effort: calendar should still load.
+      }
+    }
+
     prof.mark('format');
     prof.done({ itemCount: formattedItems.length });
 
     return success(
-      { items: formattedItems, athleteTimezone },
+      { items: formattedItems, athleteTimezone, dayWeather },
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       }

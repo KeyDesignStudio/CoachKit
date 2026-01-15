@@ -8,6 +8,7 @@ import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
+import { getWeatherSummariesForRange } from '@/lib/weather-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     const [athleteProfile, items] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: user.id },
-        select: { coachId: true },
+        select: { coachId: true, defaultLat: true, defaultLon: true },
       }),
       prisma.calendarItem.findMany({
         where: {
@@ -134,8 +135,28 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    let dayWeather: Record<string, any> | undefined;
+    if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {
+      try {
+        const tz = user.timezone ?? 'UTC';
+        const map = await getWeatherSummariesForRange({
+          lat: athleteProfile.defaultLat,
+          lon: athleteProfile.defaultLon,
+          from: params.from,
+          to: params.to,
+          timezone: tz,
+        });
+
+        if (Object.keys(map).length > 0) {
+          dayWeather = map;
+        }
+      } catch {
+        // Best-effort: calendar should still load.
+      }
+    }
+
     return success(
-      { items: formattedItems },
+      { items: formattedItems, dayWeather },
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       }

@@ -5,6 +5,8 @@ import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVi
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { mobileDayCellPadding, mobilePillGap, mobilePillPadding } from '@/components/calendar/calendarDensity';
+import type { WeatherSummary } from '@/lib/weather-model';
+import { WeatherTooltip } from '@/components/calendar/WeatherTooltip';
 
 export type MonthSession = {
   id: string;
@@ -19,6 +21,7 @@ export type MonthSession = {
 type AthleteMonthDayCellProps = {
   date: Date;
   dateStr: string;
+  dayWeather?: WeatherSummary;
   items: MonthSession[];
   isCurrentMonth: boolean;
   isToday: boolean;
@@ -34,6 +37,7 @@ const MAX_VISIBLE_ROWS = 3;
 export function AthleteMonthDayCell({
   date,
   dateStr,
+  dayWeather,
   items,
   isCurrentMonth,
   isToday,
@@ -113,23 +117,25 @@ export function AthleteMonthDayCell({
       <div className="hidden md:block">
         {/* A) Header row */}
         <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDayClick(date);
-            }}
-            className={cn(
-              'h-11 min-w-11 md:h-6 md:min-w-6 md:px-1 rounded text-xs inline-flex items-center justify-center',
-              'bg-[var(--bg-structure)] hover:bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
-              'active:bg-[var(--bg-structure)]',
-              !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
-            )}
-            aria-label={`Open day ${dateStr}`}
-          >
-            {dayNumber}
-          </button>
+          <WeatherTooltip weather={dayWeather}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDayClick(date);
+              }}
+              className={cn(
+                'h-11 min-w-11 md:h-6 md:min-w-6 md:px-1 rounded text-xs inline-flex items-center justify-center',
+                'bg-[var(--bg-structure)] hover:bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
+                'active:bg-[var(--bg-structure)]',
+                !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
+              )}
+              aria-label={`Open day ${dateStr}`}
+            >
+              {dayNumber}
+            </button>
+          </WeatherTooltip>
           <div className="flex items-center gap-2">
             {isToday ? (
               <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">Today</span>

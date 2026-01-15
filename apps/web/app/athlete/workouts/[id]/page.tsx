@@ -17,6 +17,7 @@ import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatu
 import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthleteWorkoutDetail';
 import { uiLabel } from '@/components/ui/typography';
+import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 
 type CompletedActivity = {
   id: string;
@@ -60,20 +61,6 @@ type WeatherResponse =
       enabled: false;
       reason: 'NO_LOCATION';
     };
-
-const WEATHER_ICON_NAME: Record<
-  Extract<WeatherResponse, { enabled: true }>['icon'],
-  Parameters<typeof Icon>[0]['name']
-> = {
-  sunny: 'weatherSunny',
-  partly_cloudy: 'weatherPartlyCloudy',
-  cloudy: 'weatherCloudy',
-  rain: 'weatherRain',
-  storm: 'weatherStorm',
-  fog: 'weatherFog',
-  snow: 'weatherSnow',
-  wind: 'weatherWind',
-};
 
 export default function AthleteWorkoutDetailPage({ params }: { params: { id: string } }) {
   const workoutId = params.id;

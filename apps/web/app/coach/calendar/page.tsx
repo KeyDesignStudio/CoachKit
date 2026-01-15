@@ -28,6 +28,7 @@ import { mapWithConcurrency } from '@/lib/concurrency';
 import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
+import type { WeatherSummary } from '@/lib/weather-model';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -158,6 +159,7 @@ export default function CoachCalendarPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [items, setItems] = useState<CalendarItem[]>([]);
+  const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
   const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit'>('closed');
   const [sessionForm, setSessionForm] = useState(() => emptyForm(toDateInput(startOfWeek())));
   const [editItemId, setEditItemId] = useState('');
@@ -266,17 +268,18 @@ export default function CoachCalendarPage() {
         dayName: DAY_NAMES[i],
         date: dateStr,
         formattedDate: formatted.split(',')[1]?.trim() || formatted,
+        weather: dayWeatherByDate[dateStr],
         items: dayItems,
       };
     });
-  }, [weekStart, itemsByDate, athleteTimezone]);
+  }, [weekStart, itemsByDate, athleteTimezone, dayWeatherByDate]);
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
     
     const now = new Date();
     const gridStart = getMonthGridStart(currentMonth.year, currentMonth.month);
-    const days: Array<{ date: Date; dateStr: string; isCurrentMonth: boolean; items: CalendarItem[] }> = [];
+    const days: Array<{ date: Date; dateStr: string; isCurrentMonth: boolean; weather?: WeatherSummary; items: CalendarItem[] }> = [];
     
     for (let i = 0; i < 42; i++) {
       const date = addDays(gridStart, i);
@@ -287,6 +290,7 @@ export default function CoachCalendarPage() {
         date,
         dateStr,
         isCurrentMonth,
+        weather: dayWeatherByDate[dateStr],
         items: sortSessionsForDay(
           (itemsByDate[dateStr] || []).map((item) => ({
             ...item,
@@ -306,7 +310,7 @@ export default function CoachCalendarPage() {
     }
     
     return days;
-  }, [viewMode, currentMonth, itemsByDate, athleteTimezone]);
+  }, [viewMode, currentMonth, itemsByDate, athleteTimezone, dayWeatherByDate]);
 
   const ensureDiscipline = (value: string): DisciplineOption => {
     const normalized = (value || '').toUpperCase();
@@ -458,7 +462,7 @@ export default function CoachCalendarPage() {
     try {
       if (selectedAthleteIds.size === 1) {
         const athleteId = Array.from(selectedAthleteIds)[0];
-        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string }>(
+        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string; dayWeather?: Record<string, WeatherSummary> }>(
           `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
         );
 
@@ -479,6 +483,7 @@ export default function CoachCalendarPage() {
 
         const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
         setItems(itemsData.items.map((item) => ({ ...item, athleteId, athleteName, athleteTimezone: itemsData.athleteTimezone })));
+        setDayWeatherByDate(itemsData.dayWeather ?? {});
         if (itemsData.athleteTimezone) {
           setAthleteTimezone(itemsData.athleteTimezone);
         }
@@ -492,6 +497,7 @@ export default function CoachCalendarPage() {
       } else {
         // Stacked mode: load each athlete in parallel and tag items.
         const selected = Array.from(selectedAthleteIds);
+        setDayWeatherByDate({});
         const results = await mapWithConcurrency(selected, 5, async (athleteId) => {
           const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
             `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
@@ -1076,6 +1082,7 @@ export default function CoachCalendarPage() {
                     key={dateKey}
                     dayName={day.dayName}
                     formattedDate={day.formattedDate}
+                    dayWeather={day.weather}
                     isEmpty={false}
                     isToday={isDayToday}
                     onAddClick={selected.length === 1 ? () => openCreateDrawerForAthlete(selected[0].userId, dateKey) : undefined}
@@ -1165,6 +1172,7 @@ export default function CoachCalendarPage() {
                   key={day.dateStr}
                   date={day.date}
                   dateStr={day.dateStr}
+                  dayWeather={day.weather}
                   items={day.items as any}
                   isCurrentMonth={day.isCurrentMonth}
                   isToday={isToday(day.date)}

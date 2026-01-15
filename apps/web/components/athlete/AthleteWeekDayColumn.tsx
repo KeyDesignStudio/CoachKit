@@ -4,10 +4,13 @@ import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { mobileHeaderPadding } from '@/components/calendar/calendarDensity';
+import type { WeatherSummary } from '@/lib/weather-model';
+import { WeatherTooltip } from '@/components/calendar/WeatherTooltip';
 
 type AthleteWeekDayColumnProps = {
   dayName: string;
   formattedDate: string;
+  dayWeather?: WeatherSummary;
   isToday?: boolean;
   isEmpty: boolean;
   onHeaderClick?: () => void;
@@ -20,6 +23,7 @@ type AthleteWeekDayColumnProps = {
 export function AthleteWeekDayColumn({
   dayName,
   formattedDate,
+  dayWeather,
   isToday = false,
   isEmpty,
   onHeaderClick,
@@ -57,6 +61,8 @@ export function AthleteWeekDayColumn({
     </button>
   ) : null;
 
+  const headerNeedsTabStop = Boolean(dayWeather) && !onHeaderClick && !onAddClick;
+
   return (
     <div
       data-athlete-week-day-card="v2"
@@ -65,26 +71,32 @@ export function AthleteWeekDayColumn({
         isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
       )}
     >
-      <div className={cn('flex items-center justify-between gap-2', headerClassName)}>
-        {onHeaderClick ? (
-          <button type="button" onClick={onHeaderClick} className="min-w-0 text-left">
-            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
-            <p className="text-sm font-medium truncate">{formattedDate}</p>
-          </button>
-        ) : (
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
-            <p className="text-sm font-medium truncate">{formattedDate}</p>
-          </div>
-        )}
+      <WeatherTooltip weather={dayWeather}>
+        <div
+          className={cn('flex items-center justify-between gap-2', headerClassName)}
+          tabIndex={headerNeedsTabStop ? 0 : undefined}
+          aria-label={headerNeedsTabStop ? `${dayName} ${formattedDate}` : undefined}
+        >
+          {onHeaderClick ? (
+            <button type="button" onClick={onHeaderClick} className="min-w-0 text-left">
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
+              <p className="text-sm font-medium truncate">{formattedDate}</p>
+            </button>
+          ) : (
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
+              <p className="text-sm font-medium truncate">{formattedDate}</p>
+            </div>
+          )}
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isToday ? (
-            <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
-          ) : null}
-          {addButton}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isToday ? (
+              <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
+            ) : null}
+            {addButton}
+          </div>
         </div>
-      </div>
+      </WeatherTooltip>
 
       <div className={bodyClassName}>
         {children}
