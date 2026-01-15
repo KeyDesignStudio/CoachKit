@@ -319,6 +319,9 @@ model Message {
   body      String
   createdAt DateTime @default(now())
 
+  deletedAt       DateTime?
+  deletedByUserId String?
+
   coachReadAt     DateTime?
   athleteReadAt   DateTime?
   coachReviewedAt DateTime?

@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest, context: { params: { threadId: 
     }
 
     const messagesDesc = await prisma.message.findMany({
-      where: { threadId },
+      where: { threadId, deletedAt: null },
       orderBy: [{ createdAt: 'desc' }],
       take: 50,
       select: {

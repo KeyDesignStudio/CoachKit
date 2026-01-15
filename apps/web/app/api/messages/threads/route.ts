@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
             id: true,
             athlete: { select: { id: true, name: true } },
             messages: {
+              where: { deletedAt: null },
               orderBy: [{ createdAt: 'desc' as const }],
               take: 1,
               select: { body: true, createdAt: true },
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
           by: ['threadId'],
           where: {
             thread: { coachId: user.id },
+            deletedAt: null,
             coachReadAt: null,
             senderRole: 'ATHLETE',
           },
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
         coachId: true,
         athleteId: true,
         messages: {
+          where: { deletedAt: null },
           orderBy: [{ createdAt: 'desc' as const }],
           take: 1,
           select: { body: true, createdAt: true },

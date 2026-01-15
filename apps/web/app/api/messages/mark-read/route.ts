@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
             where: {
               threadId: thread.id,
               senderRole: 'ATHLETE',
+              deletedAt: null,
               coachReadAt: null,
             },
             data: { coachReadAt: now },
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
             where: {
               threadId: thread.id,
               senderRole: 'COACH',
+              deletedAt: null,
               athleteReadAt: null,
             },
             data: { athleteReadAt: now },
