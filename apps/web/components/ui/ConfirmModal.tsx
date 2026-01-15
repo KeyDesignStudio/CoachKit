@@ -29,7 +29,7 @@ export function ConfirmModal({
       {/* Modal */}
       <div className="fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6">
         <h3 className="mb-2 text-lg font-semibold">{title}</h3>
-        <p className="mb-6 text-sm text-[var(--muted)]">{message}</p>
+        <p className="mb-6 whitespace-pre-line text-sm text-[var(--muted)]">{message}</p>
         <div className="flex gap-3">
           <button
             onClick={onConfirm}

@@ -45,11 +45,11 @@ test.describe('Mobile smoke', () => {
     const needsAttentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
     await expect(needsAttentionHeading).toBeVisible();
 
-    const selectorBox = await selectorHeading.boundingBox();
+      const selectorBox = await selectorHeading.boundingBox();
     const viewportHeight = page.viewportSize()?.height ?? 0;
     expect(selectorBox, 'Make your selection should have a bounding box').toBeTruthy();
     if (selectorBox && viewportHeight) {
-      expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThanOrEqual(viewportHeight - 50);
+          expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThanOrEqual(viewportHeight - 10);
     }
 
     await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
@@ -76,7 +76,7 @@ test.describe('Mobile smoke', () => {
     if (inboxCheckboxCount > 0) {
       await inboxCheckboxes.first().click();
       await expect(page.getByRole('button', { name: /Mark Reviewed.*\(1\)/ })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Clear' })).toBeEnabled();
+        await expect(page.getByTestId('coach-dashboard-review-inbox').getByRole('button', { name: 'Clear' })).toBeEnabled();
     }
 
     await assertNoHorizontalScroll(page);

@@ -6,6 +6,7 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -304,6 +305,12 @@ export default function CoachDashboardConsolePage() {
   const [messageError, setMessageError] = useState('');
   const [messageThreadFilter, setMessageThreadFilter] = useState('');
 
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [clearAllConfirmOpen, setClearAllConfirmOpen] = useState(false);
+  const [messageDeleteLoading, setMessageDeleteLoading] = useState(false);
+
   const messagePollInFlightRef = useRef(false);
 
   const [broadcastOpen, setBroadcastOpen] = useState(false);
@@ -385,6 +392,21 @@ export default function CoachDashboardConsolePage() {
   const totalUnreadThreads = useMemo(() => {
     return messageThreads.reduce((sum, t) => sum + Math.max(0, t.unreadCountForCoach ?? 0), 0);
   }, [messageThreads]);
+
+  const visibleThreadMessageIds = useMemo(() => threadMessages.map((m) => m.id), [threadMessages]);
+
+  const selectedVisibleMessageCount = useMemo(() => {
+    if (visibleThreadMessageIds.length === 0 || selectedMessageIds.size === 0) return 0;
+    let count = 0;
+    for (const id of visibleThreadMessageIds) {
+      if (selectedMessageIds.has(id)) count += 1;
+    }
+    return count;
+  }, [selectedMessageIds, visibleThreadMessageIds]);
+
+  const allVisibleMessagesSelected = useMemo(() => {
+    return visibleThreadMessageIds.length > 0 && selectedVisibleMessageCount === visibleThreadMessageIds.length;
+  }, [selectedVisibleMessageCount, visibleThreadMessageIds.length]);
 
   const selectedAthleteNameForThread = useMemo(() => {
     if (!messageAthleteId) return 'Athlete';
@@ -497,6 +519,78 @@ export default function CoachDashboardConsolePage() {
     [request, user?.role, user?.userId]
   );
 
+  const deleteSingleMessage = useCallback(
+    async (messageId: string) => {
+      if (!messageId) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request(`/api/messages/${messageId}`, { method: 'DELETE' });
+        setThreadMessages((prev) => prev.filter((m) => m.id !== messageId));
+        setSelectedMessageIds((prev) => {
+          if (!prev.has(messageId)) return prev;
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+
+        // Refresh thread previews/unread counts without disrupting the open thread.
+        void loadMessageThreads(true, { silent: true });
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete message.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [loadMessageThreads, request]
+  );
+
+  const deleteSelectedMessages = useCallback(
+    async (messageIds: string[]) => {
+      if (messageIds.length === 0) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request<{ deleted: number }>('/api/messages/bulk-delete', {
+          method: 'POST',
+          data: { messageIds },
+        });
+
+        const toDelete = new Set(messageIds);
+        setThreadMessages((prev) => prev.filter((m) => !toDelete.has(m.id)));
+        setSelectedMessageIds(new Set());
+        void loadMessageThreads(true, { silent: true });
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete messages.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [loadMessageThreads, request]
+  );
+
+  const clearAllMessagesInThread = useCallback(
+    async (threadId: string) => {
+      if (!threadId) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request<{ deleted: number }>(`/api/messages/thread/${threadId}`, { method: 'DELETE' });
+        setThreadMessages([]);
+        setSelectedMessageIds(new Set());
+        void loadMessageThreads(true, { silent: true });
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete thread messages.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [loadMessageThreads, request]
+  );
+
   useEffect(() => {
     if (user?.role === 'COACH') {
       void loadMessageThreads();
@@ -553,6 +647,14 @@ export default function CoachDashboardConsolePage() {
       }
     }
   }, [loadThreadMessages, messageAthleteId, selectedThreadId, threadIdByAthleteId]);
+
+  // Reset selection + dialogs when switching threads.
+  useEffect(() => {
+    setSelectedMessageIds(new Set());
+    setDeleteMessageId(null);
+    setBulkDeleteConfirmOpen(false);
+    setClearAllConfirmOpen(false);
+  }, [selectedThreadId]);
 
   const sendMessageToSelectedAthlete = useCallback(async () => {
     if (!messageAthleteId) {
@@ -978,10 +1080,10 @@ export default function CoachDashboardConsolePage() {
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
 
-        {/* Priority order on mobile: Title → Filters → Needs → KPIs → Load → Inbox */}
-
-        {/* Review inbox */}
-        <div className="mt-10 min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
+        {/* Review Inbox + Messages split (desktop/tablet); stacked on mobile */}
+        <div className="mt-10 grid grid-cols-1 gap-6 items-start md:grid-cols-2">
+          {/* LEFT: Review inbox */}
+          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
               <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
             </div>
@@ -1017,22 +1119,72 @@ export default function CoachDashboardConsolePage() {
                 ))}
               </div>
             </div>
-        </div>
-
-        {/* Messages (separate from review inbox) */}
-        <div className="mt-10 min-w-0" data-testid="coach-dashboard-messages">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2 pl-3 md:pl-4">
-            <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-
-            <Button type="button" variant="secondary" className="min-h-[44px]" onClick={openBroadcast} data-testid="coach-dashboard-messages-broadcast">
-              Broadcast
-            </Button>
           </div>
 
-          <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
-              {/* Inbox */}
-              <div className="min-w-0">
+          {/* RIGHT: Messages */}
+          <div className="min-w-0" data-testid="coach-dashboard-messages">
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+                  <div className="mt-2 min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
+                    <Select
+                      className="min-h-[44px]"
+                      value={messageAthleteId}
+                      onChange={(e) => setMessageAthleteId(e.target.value)}
+                      aria-label="Select athlete thread"
+                    >
+                      <option value="">Select an athlete</option>
+                      {(data?.athletes ?? []).map((a) => {
+                        const thread = messageThreads.find((mt) => mt.athlete.id === a.id);
+                        const unread = thread?.unreadCountForCoach ?? 0;
+                        const suffix = unread > 0 ? ` (${unread} new)` : '';
+                        return (
+                          <option key={a.id} value={a.id}>
+                            {(a.name ?? 'Unnamed athlete') + suffix}
+                          </option>
+                        );
+                      })}
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      'min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                      'border border-[var(--border-subtle)]',
+                      selectedThreadId && threadMessages.length > 0 && !messageDeleteLoading
+                        ? 'bg-rose-600 text-white hover:bg-rose-700'
+                        : 'bg-[var(--bg-surface)] text-[var(--muted)]'
+                    )}
+                    onClick={() => setClearAllConfirmOpen(true)}
+                    disabled={!selectedThreadId || threadMessages.length === 0 || messageDeleteLoading}
+                    aria-label="Clear all messages in this conversation"
+                  >
+                    Clear all
+                  </button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-[44px]"
+                    onClick={openBroadcast}
+                    data-testid="coach-dashboard-messages-broadcast"
+                  >
+                    Broadcast
+                  </Button>
+                </div>
+              </div>
+
+              {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
+              {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
+
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
+                {/* Inbox */}
+                <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
                     Inbox{totalUnreadThreads > 0 ? ` (${totalUnreadThreads} new)` : ''}
@@ -1048,28 +1200,7 @@ export default function CoachDashboardConsolePage() {
                   </Button>
                 </div>
 
-                <div className="mt-2">
-                  <Input
-                    value={messageThreadFilter}
-                    onChange={(e) => setMessageThreadFilter(e.target.value)}
-                    placeholder="Search athlete or message…"
-                    aria-label="Search message threads"
-                  />
-                </div>
-
-                <div className="mt-2 max-h-[360px] overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                  {threadsLoading ? <div className="px-3 py-3 text-sm text-[var(--muted)]">Loading…</div> : null}
-                  {!threadsLoading && messageThreads.length === 0 ? (
-                    <div className="px-3 py-3 text-sm text-[var(--muted)]">
-                      No messages yet. Send a message to start a thread.
-                    </div>
-                  ) : null}
-
-                  {!threadsLoading && messageThreads.length > 0 && sortedMessageThreads.length === 0 ? (
-                    <div className="px-3 py-3 text-sm text-[var(--muted)]">No matches.</div>
-                  ) : null}
-
-                  <div className="divide-y divide-black/5">
+                <div className="divide-y divide-black/5">
                     {sortedMessageThreads.map((t) => {
                       const active = t.athlete.id === messageAthleteId;
                       const unread = t.unreadCountForCoach ?? 0;
@@ -1115,34 +1246,7 @@ export default function CoachDashboardConsolePage() {
 
               {/* Compose + thread */}
               <div className="min-w-0">
-                <div className="grid gap-3 md:items-end">
-                  <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
-                    <Select
-                      className="min-h-[44px]"
-                      value={messageAthleteId}
-                      onChange={(e) => setMessageAthleteId(e.target.value)}
-                      aria-label="Select athlete thread"
-                    >
-                      <option value="">Select an athlete</option>
-                      {(data?.athletes ?? []).map((a) => {
-                        const thread = messageThreads.find((mt) => mt.athlete.id === a.id);
-                        const unread = thread?.unreadCountForCoach ?? 0;
-                        const suffix = unread > 0 ? ` (${unread} new)` : '';
-                        return (
-                          <option key={a.id} value={a.id}>
-                            {(a.name ?? 'Unnamed athlete') + suffix}
-                          </option>
-                        );
-                      })}
-                    </Select>
-                  </div>
-                </div>
-
-                {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
-                {messageError ? <div className="mt-3 text-sm text-rose-700">{messageError}</div> : null}
-
-                <div className="mt-4 grid gap-2" data-testid="coach-dashboard-messages-compose">
+                <div className="grid gap-2" data-testid="coach-dashboard-messages-compose">
                   <Textarea
                     rows={3}
                     placeholder={messageAthleteId ? 'Write a message…' : 'Select a thread (or athlete) to reply…'}
@@ -1177,6 +1281,25 @@ export default function CoachDashboardConsolePage() {
                     ) : null}
                   </div>
 
+                  {selectedThreadId && threadMessages.length > 0 ? (
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-rose-600"
+                          checked={allVisibleMessagesSelected}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedMessageIds(() => (checked ? new Set(visibleThreadMessageIds) : new Set()));
+                          }}
+                          aria-label="Select all messages"
+                        />
+                        <span>Select all</span>
+                      </label>
+                      <div className="text-xs text-[var(--muted)] tabular-nums">{threadMessages.length} messages</div>
+                    </div>
+                  ) : null}
+
                   {!messagesLoading && selectedThreadId && threadMessages.length === 0 ? (
                     <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
                   ) : null}
@@ -1185,31 +1308,138 @@ export default function CoachDashboardConsolePage() {
                     {threadMessages.map((m) => {
                       const mine = m.senderRole === 'COACH';
                       const senderLabel = mine ? 'COACH' : selectedAthleteNameForThread;
+                      const checked = selectedMessageIds.has(m.id);
                       return (
                         <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-                          <div
-                            className={cn(
-                              'max-w-[min(560px,92%)] rounded-2xl px-3 py-2 border',
-                              mine
-                                ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
-                                : 'bg-[var(--bg-structure)] border-black/10'
-                            )}
-                          >
-                            <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
-                            <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                              {senderLabel} · {new Date(m.createdAt).toLocaleString()}
+                          <div className="flex items-start gap-2 max-w-[min(560px,92%)]">
+                            <label className="h-9 w-9 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-rose-600"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const nextChecked = e.target.checked;
+                                  setSelectedMessageIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (nextChecked) next.add(m.id);
+                                    else next.delete(m.id);
+                                    return next;
+                                  });
+                                }}
+                                aria-label="Select message"
+                              />
+                            </label>
+
+                            <div
+                              className={cn(
+                                'min-w-0 flex-1 rounded-2xl px-3 py-2 border',
+                                mine
+                                  ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
+                                  : 'bg-[var(--bg-structure)] border-black/10'
+                              )}
+                            >
+                              <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
+                              <div className="mt-1 flex items-center justify-between gap-2">
+                                <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                                  {senderLabel} · {new Date(m.createdAt).toLocaleString()}
+                                </div>
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    'h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors',
+                                    'border border-black/10 bg-white/40 text-rose-700 hover:bg-white/60',
+                                    messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
+                                  )}
+                                  onClick={() => setDeleteMessageId(m.id)}
+                                  disabled={messageDeleteLoading}
+                                  aria-label="Delete message"
+                                >
+                                  <Icon name="delete" size="sm" aria-hidden />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+
+                  {selectedVisibleMessageCount > 0 ? (
+                    <div className="sticky bottom-0 mt-3 rounded-2xl border border-black/10 bg-[var(--bg-card)] p-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-[var(--muted)] tabular-nums">{selectedVisibleMessageCount} selected</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className={cn(
+                              'min-h-[36px] rounded-full px-3 py-1.5 text-sm font-medium',
+                              'bg-rose-600 text-white hover:bg-rose-700',
+                              messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
+                            )}
+                            onClick={() => setBulkDeleteConfirmOpen(true)}
+                            disabled={messageDeleteLoading}
+                          >
+                            Delete selected
+                          </button>
+                          <button
+                            type="button"
+                            className="min-h-[36px] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                            onClick={() => setSelectedMessageIds(new Set())}
+                            disabled={messageDeleteLoading}
+                          >
+                            Clear selection
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      <ConfirmModal
+        isOpen={deleteMessageId !== null}
+        title="Delete message?"
+        message="This will remove the message from this conversation."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={async () => {
+          const id = deleteMessageId;
+          setDeleteMessageId(null);
+          if (id) await deleteSingleMessage(id);
+        }}
+        onCancel={() => setDeleteMessageId(null)}
+      />
+
+      <ConfirmModal
+        isOpen={bulkDeleteConfirmOpen}
+        title={`Delete ${selectedVisibleMessageCount} messages?`}
+        message="This will remove the message from this conversation."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={async () => {
+          setBulkDeleteConfirmOpen(false);
+          const ids = visibleThreadMessageIds.filter((id) => selectedMessageIds.has(id));
+          await deleteSelectedMessages(ids);
+        }}
+        onCancel={() => setBulkDeleteConfirmOpen(false)}
+      />
+
+      <ConfirmModal
+        isOpen={clearAllConfirmOpen}
+        title="Delete all messages in this conversation?"
+        message="This cannot be undone."
+        confirmLabel="Delete all"
+        cancelLabel="Cancel"
+        onConfirm={async () => {
+          setClearAllConfirmOpen(false);
+          if (selectedThreadId) await clearAllMessagesInThread(selectedThreadId);
+        }}
+        onCancel={() => setClearAllConfirmOpen(false)}
+      />
 
       {broadcastOpen ? (
         <>

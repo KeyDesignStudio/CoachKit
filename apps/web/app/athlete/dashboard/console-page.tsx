@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
@@ -132,12 +133,99 @@ export default function AthleteDashboardConsolePage() {
   const [messageStatus, setMessageStatus] = useState('');
   const [messageError, setMessageError] = useState('');
 
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [clearAllConfirmOpen, setClearAllConfirmOpen] = useState(false);
+  const [messageDeleteLoading, setMessageDeleteLoading] = useState(false);
+
   const needsCardRef = useRef<HTMLDivElement | null>(null);
   const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
   const messagePollInFlightRef = useRef(false);
 
   const athleteTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, athleteTimeZone), [timeRange, athleteTimeZone]);
+
+  const visibleThreadMessageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+
+  const selectedVisibleMessageCount = useMemo(() => {
+    if (visibleThreadMessageIds.length === 0 || selectedMessageIds.size === 0) return 0;
+    let count = 0;
+    for (const id of visibleThreadMessageIds) {
+      if (selectedMessageIds.has(id)) count += 1;
+    }
+    return count;
+  }, [selectedMessageIds, visibleThreadMessageIds]);
+
+  const allVisibleMessagesSelected = useMemo(() => {
+    return visibleThreadMessageIds.length > 0 && selectedVisibleMessageCount === visibleThreadMessageIds.length;
+  }, [selectedVisibleMessageCount, visibleThreadMessageIds.length]);
+
+  const deleteSingleMessage = useCallback(
+    async (messageId: string) => {
+      if (!messageId) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request(`/api/messages/${messageId}`, { method: 'DELETE' });
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        setSelectedMessageIds((prev) => {
+          if (!prev.has(messageId)) return prev;
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete message.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [request]
+  );
+
+  const deleteSelectedMessages = useCallback(
+    async (messageIds: string[]) => {
+      if (messageIds.length === 0) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request<{ deleted: number }>('/api/messages/bulk-delete', {
+          method: 'POST',
+          data: { messageIds },
+        });
+        const toDelete = new Set(messageIds);
+        setMessages((prev) => prev.filter((m) => !toDelete.has(m.id)));
+        setSelectedMessageIds(new Set());
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete messages.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [request]
+  );
+
+  const clearAllMessagesInThread = useCallback(
+    async (tid: string) => {
+      if (!tid) return;
+      setMessageDeleteLoading(true);
+      setMessageError('');
+
+      try {
+        await request<{ deleted: number }>(`/api/messages/thread/${tid}`, { method: 'DELETE' });
+        setMessages([]);
+        setSelectedMessageIds(new Set());
+      } catch (err) {
+        setMessageError(err instanceof Error ? err.message : 'Failed to delete thread messages.');
+      } finally {
+        setMessageDeleteLoading(false);
+      }
+    },
+    [request]
+  );
 
   const reload = useCallback(
     async (bypassCache = false) => {
@@ -299,6 +387,14 @@ export default function AthleteDashboardConsolePage() {
     }
   }, [loadMessages, threadId]);
 
+  // Reset selection + dialogs when the thread changes.
+  useEffect(() => {
+    setSelectedMessageIds(new Set());
+    setDeleteMessageId(null);
+    setBulkDeleteConfirmOpen(false);
+    setClearAllConfirmOpen(false);
+  }, [threadId]);
+
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -355,214 +451,244 @@ export default function AthleteDashboardConsolePage() {
           <h1 className={cn(uiH1, 'font-semibold')}>Athlete Console</h1>
         </div>
 
-        {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {/* Column 1: Needs your attention */}
-          <div className="min-w-0 order-2 md:order-2">
-            <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
-                <div className="text-xs text-[var(--muted)]">Tap to open calendar</div>
-              </div>
+        <div className="mt-4 grid grid-cols-1 gap-6 items-start md:grid-cols-2">
+          {/* LEFT: main dashboard content */}
+          <div className="min-w-0">
+            {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
+            <div className="grid grid-cols-1 gap-4 min-w-0 items-start md:gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {/* Column 1: Needs your attention */}
+              <div className="min-w-0 order-2 md:order-2">
+                <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+                  <div className="flex items-end justify-between gap-3 mb-2">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
+                    <div className="text-xs text-[var(--muted)]">Tap to open calendar</div>
+                  </div>
 
-              <div className="grid gap-2">
-                {typeof data?.attention.painFlagWorkouts === 'number' ? (
-                  <NeedsAttentionItem
-                    label="Workouts with pain flagged"
-                    count={data.attention.painFlagWorkouts}
-                    tone="danger"
-                    onClick={() => (window.location.href = '/athlete/calendar')}
-                  />
-                ) : null}
+                  <div className="grid gap-2">
+                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
+                      <NeedsAttentionItem
+                        label="Workouts with pain flagged"
+                        count={data.attention.painFlagWorkouts}
+                        tone="danger"
+                        onClick={() => (window.location.href = '/athlete/calendar')}
+                      />
+                    ) : null}
 
-                <NeedsAttentionItem
-                  label="Workouts pending your confirmation"
-                  count={data?.attention.pendingConfirmation ?? 0}
-                  tone="primary"
-                  onClick={() => (window.location.href = '/athlete/calendar')}
-                />
+                    <NeedsAttentionItem
+                      label="Workouts pending your confirmation"
+                      count={data?.attention.pendingConfirmation ?? 0}
+                      tone="primary"
+                      onClick={() => (window.location.href = '/athlete/calendar')}
+                    />
 
-                <NeedsAttentionItem
-                  label="Workouts missed"
-                  count={data?.attention.workoutsMissed ?? 0}
-                  tone="neutral"
-                  onClick={() => (window.location.href = '/athlete/calendar')}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Column 2: Filters/selectors */}
-          <div className="min-w-0 order-1 md:order-1">
-            <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
-              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
-            >
-              <div className="flex items-end justify-between gap-3 mb-4">
-                <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
-                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
-                {/* Row 1 */}
-                <div className="min-w-0 col-start-1 row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
-                  <Select className="min-h-[44px] w-full" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
-                    <option value="">All disciplines</option>
-                    <option value="BIKE">Bike</option>
-                    <option value="RUN">Run</option>
-                    <option value="SWIM">Swim</option>
-                    <option value="OTHER">Other</option>
-                  </Select>
+                    <NeedsAttentionItem
+                      label="Workouts missed"
+                      count={data?.attention.workoutsMissed ?? 0}
+                      tone="neutral"
+                      onClick={() => (window.location.href = '/athlete/calendar')}
+                    />
+                  </div>
                 </div>
-                <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
+              </div>
 
-                {/* Row 2 */}
-                <div className="min-w-0 col-start-1 row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                  <Select className="min-h-[44px] w-full" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                    <option value="LAST_7">Last 7 days</option>
-                    <option value="LAST_14">Last 14 days</option>
-                    <option value="LAST_30">Last 30 days</option>
-                  </Select>
-                </div>
+              {/* Column 2: Filters/selectors */}
+              <div className="min-w-0 order-1 md:order-1">
+                <div
+                  className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
+                  style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+                >
+                  <div className="flex items-end justify-between gap-3 mb-4">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
+                    <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
+                  </div>
 
-                <div className="min-w-0 col-start-2 row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                  <div className="min-h-[44px] flex items-center min-w-0">
-                    <div className="text-sm font-semibold text-[var(--text)] truncate">
-                      {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
+                    {/* Row 1 */}
+                    <div className="min-w-0 col-start-1 row-start-1">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
+                      <Select
+                        className="min-h-[44px] w-full"
+                        value={discipline ?? ''}
+                        onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
+                      >
+                        <option value="">All disciplines</option>
+                        <option value="BIKE">Bike</option>
+                        <option value="RUN">Run</option>
+                        <option value="SWIM">Swim</option>
+                        <option value="OTHER">Other</option>
+                      </Select>
+                    </div>
+                    <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
+
+                    {/* Row 2 */}
+                    <div className="min-w-0 col-start-1 row-start-2">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
+                      <Select className="min-h-[44px] w-full" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                        <option value="LAST_7">Last 7 days</option>
+                        <option value="LAST_14">Last 14 days</option>
+                        <option value="LAST_30">Last 30 days</option>
+                      </Select>
+                    </div>
+
+                    <div className="min-w-0 col-start-2 row-start-2">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
+                      <div className="min-h-[44px] flex items-center min-w-0">
+                        <div className="text-sm font-semibold text-[var(--text)] truncate">
+                          {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Refresh (bottom-right, spans both columns) */}
+                    <div className="col-span-2 flex items-center justify-end gap-3 pt-1">
+                      <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
+                        <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
+                        Refresh
+                      </Button>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Refresh (bottom-right, spans both columns) */}
-                <div className="col-span-2 flex items-center justify-end gap-3 pt-1">
-                  <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                    <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                    Refresh
+              {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
+              <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
+                <div
+                  className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
+                  data-testid="athlete-dashboard-at-a-glance"
+                  style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
+                >
+                  <div className="flex items-end justify-between gap-3 mb-2">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
+                    <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
+                  </div>
+
+                  <div
+                    className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
+                    data-testid="athlete-dashboard-at-a-glance-grid"
+                  >
+                    {/* Left: stats */}
+                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-at-a-glance-stats">
+                      <div className="grid gap-1">
+                        {[
+                          { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                          { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                          { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                          { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                        ].map((row, idx) => (
+                          <div
+                            key={row.label}
+                            className={cn(
+                              'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
+                              idx < 3 ? 'border-b border-black/5' : ''
+                            )}
+                            data-testid="athlete-dashboard-at-a-glance-stat-row"
+                          >
+                            <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
+                              {row.label}
+                            </div>
+                            <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                              {row.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right: discipline load */}
+                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-discipline-load">
+                      <div className="flex flex-col gap-2">
+                        {(() => {
+                          const rows = data?.disciplineLoad ?? [];
+                          const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
+                          return (
+                            <>
+                              {rows.map((r) => {
+                                const theme = getDisciplineTheme(r.discipline);
+                                const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
+                                const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
+                                return (
+                                  <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-2 min-w-[64px]">
+                                      <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                                      <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                    </div>
+
+                                    <div className="h-2 rounded-full bg-black/10 overflow-hidden">
+                                      <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                                    </div>
+
+                                    <div
+                                      className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
+                                      title={rightValue}
+                                    >
+                                      {rightValue}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
+            {loading ? <div className="mt-4 text-sm text-[var(--muted)]">Loading…</div> : null}
+          </div>
+
+          {/* RIGHT: Messages */}
+          <div className="min-w-0" data-testid="athlete-dashboard-messages">
+            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+                  <div className="mt-1 text-xs font-medium text-[var(--muted)]">Message your coach</div>
+                </div>
+
+                <button
+                  type="button"
+                  className={cn(
+                    'min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                    'border border-[var(--border-subtle)]',
+                    threadId && messages.length > 0 && !messageDeleteLoading
+                      ? 'bg-rose-600 text-white hover:bg-rose-700'
+                      : 'bg-[var(--bg-surface)] text-[var(--muted)]'
+                  )}
+                  onClick={() => setClearAllConfirmOpen(true)}
+                  disabled={!threadId || messages.length === 0 || messageDeleteLoading}
+                  aria-label="Clear all messages in this conversation"
+                >
+                  Clear all
+                </button>
+              </div>
+
+              <div className="mt-2 grid gap-2" data-testid="athlete-dashboard-messages-compose">
+                <Textarea
+                  rows={3}
+                  placeholder="Write a message…"
+                  className="text-sm"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  disabled={messageSending}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    className="min-h-[44px]"
+                    onClick={sendMessage}
+                    disabled={messageSending || messageDraft.trim().length === 0}
+                  >
+                    {messageSending ? 'Sending…' : 'Send'}
                   </Button>
                 </div>
+                {messageStatus ? <div className="text-xs text-emerald-700">{messageStatus}</div> : null}
+                {messageError ? <div className="text-xs text-rose-700">{messageError}</div> : null}
               </div>
-            </div>
-          </div>
-
-          {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
-          <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
-            <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
-              data-testid="athlete-dashboard-at-a-glance"
-              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
-            >
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
-                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-              </div>
-
-              <div
-                className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
-                data-testid="athlete-dashboard-at-a-glance-grid"
-              >
-                {/* Left: stats */}
-                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-at-a-glance-stats">
-                  <div className="grid gap-1">
-                    {[
-                      { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                      { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                      { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                      { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                    ].map((row, idx) => (
-                      <div
-                        key={row.label}
-                        className={cn(
-                          'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
-                          idx < 3 ? 'border-b border-black/5' : ''
-                        )}
-                        data-testid="athlete-dashboard-at-a-glance-stat-row"
-                      >
-                        <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
-                          {row.label}
-                        </div>
-                        <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
-                          {row.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Right: discipline load */}
-                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-discipline-load">
-                  <div className="flex flex-col gap-2">
-                    {(() => {
-                      const rows = data?.disciplineLoad ?? [];
-                      const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                      return (
-                        <>
-                          {rows.map((r) => {
-                            const theme = getDisciplineTheme(r.discipline);
-                            const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                            const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
-                            return (
-                              <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
-                                <div className="flex items-center gap-2 min-w-[64px]">
-                                  <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                  <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
-                                </div>
-
-                                <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                                  <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
-                                </div>
-
-                                <div
-                                  className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
-                                  title={rightValue}
-                                >
-                                  {rightValue}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
-        {loading ? <div className="mt-4 text-sm text-[var(--muted)]">Loading…</div> : null}
-
-        {/* Messages */}
-        <div className="mt-10 min-w-0" data-testid="athlete-dashboard-messages">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
-            <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-          </div>
-
-          <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-            <div className="text-xs font-medium text-[var(--muted)]">Message your coach</div>
-
-            <div className="mt-2 grid gap-2" data-testid="athlete-dashboard-messages-compose">
-              <Textarea
-                rows={3}
-                placeholder="Write a message…"
-                className="text-sm"
-                value={messageDraft}
-                onChange={(e) => setMessageDraft(e.target.value)}
-                disabled={messageSending}
-              />
-              <div className="flex items-center justify-end gap-2">
-                <Button type="button" className="min-h-[44px]" onClick={sendMessage} disabled={messageSending || messageDraft.trim().length === 0}>
-                  {messageSending ? 'Sending…' : 'Send'}
-                </Button>
-              </div>
-              {messageStatus ? <div className="text-xs text-emerald-700">{messageStatus}</div> : null}
-              {messageError ? <div className="text-xs text-rose-700">{messageError}</div> : null}
-            </div>
 
             <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
               <div className="flex items-center justify-between gap-3">
@@ -577,6 +703,25 @@ export default function AthleteDashboardConsolePage() {
                 ) : null}
               </div>
 
+              {threadId && messages.length > 0 ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-rose-600"
+                      checked={allVisibleMessagesSelected}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelectedMessageIds(() => (checked ? new Set(visibleThreadMessageIds) : new Set()));
+                      }}
+                      aria-label="Select all messages"
+                    />
+                    <span>Select all</span>
+                  </label>
+                  <div className="text-xs text-[var(--muted)] tabular-nums">{messages.length} messages</div>
+                </div>
+              ) : null}
+
               {messagesLoading ? <div className="mt-3 text-sm text-[var(--muted)]">Loading messages…</div> : null}
               {!messagesLoading && threadId && messages.length === 0 ? (
                 <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
@@ -586,28 +731,142 @@ export default function AthleteDashboardConsolePage() {
                 {messages.map((m) => {
                   const mine = m.senderRole === 'ATHLETE';
                   const senderLabel = mine ? athleteDisplayName : 'COACH';
+                  const checked = selectedMessageIds.has(m.id);
                   return (
                     <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-                      <div
-                        className={cn(
-                          'max-w-[min(560px,92%)] rounded-2xl px-3 py-2 border',
-                          mine
-                            ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
-                            : 'bg-[var(--bg-structure)] border-black/10'
-                        )}
-                      >
-                        <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          {senderLabel} · {new Date(m.createdAt).toLocaleString()}
+                      <div className="flex items-start gap-2 max-w-[min(560px,92%)]">
+                        <label className="h-9 w-9 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-rose-600"
+                            checked={checked}
+                            onChange={(e) => {
+                              const nextChecked = e.target.checked;
+                              setSelectedMessageIds((prev) => {
+                                const next = new Set(prev);
+                                if (nextChecked) next.add(m.id);
+                                else next.delete(m.id);
+                                return next;
+                              });
+                            }}
+                            aria-label="Select message"
+                          />
+                        </label>
+
+                        <div
+                          className={cn(
+                            'min-w-0 flex-1 rounded-2xl px-3 py-2 border',
+                            mine
+                              ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
+                              : 'bg-[var(--bg-structure)] border-black/10'
+                          )}
+                        >
+                          <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                              {senderLabel} · {new Date(m.createdAt).toLocaleString()}
+                            </div>
+                            <button
+                              type="button"
+                              className={cn(
+                                'h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors',
+                                'border border-black/10 bg-white/40 text-rose-700 hover:bg-white/60',
+                                messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
+                              )}
+                              onClick={() => setDeleteMessageId(m.id)}
+                              disabled={messageDeleteLoading}
+                              aria-label="Delete message"
+                            >
+                              <Icon name="delete" size="sm" aria-hidden />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+
+              {selectedVisibleMessageCount > 0 ? (
+                <div className="sticky bottom-0 mt-3 rounded-2xl border border-black/10 bg-[var(--bg-card)] p-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-[var(--muted)] tabular-nums">{selectedVisibleMessageCount} selected</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className={cn(
+                          'min-h-[36px] rounded-full px-3 py-1.5 text-sm font-medium',
+                          'bg-rose-600 text-white hover:bg-rose-700',
+                          messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
+                        )}
+                        onClick={() => setBulkDeleteConfirmOpen(true)}
+                        disabled={messageDeleteLoading}
+                      >
+                        Delete selected
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-[36px] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                        onClick={() => setSelectedMessageIds(new Set())}
+                        disabled={messageDeleteLoading}
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
+        </div>
+
+        <ConfirmModal
+          isOpen={Boolean(deleteMessageId)}
+          title="Delete message?"
+          message="This will remove the message from this conversation."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onCancel={() => setDeleteMessageId(null)}
+          onConfirm={async () => {
+            if (messageDeleteLoading) return;
+            if (!deleteMessageId) return;
+            const id = deleteMessageId;
+            setDeleteMessageId(null);
+            await deleteSingleMessage(id);
+          }}
+        />
+
+        <ConfirmModal
+          isOpen={bulkDeleteConfirmOpen}
+          title={`Delete ${selectedVisibleMessageCount} messages?`}
+          message="This will remove the message from this conversation."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onCancel={() => setBulkDeleteConfirmOpen(false)}
+          onConfirm={async () => {
+            if (messageDeleteLoading) return;
+            const ids = visibleThreadMessageIds.filter((id) => selectedMessageIds.has(id));
+            setBulkDeleteConfirmOpen(false);
+            await deleteSelectedMessages(ids);
+          }}
+        />
+
+        <ConfirmModal
+          isOpen={clearAllConfirmOpen}
+          title="Delete all messages in this conversation?"
+          message="This cannot be undone."
+          confirmLabel="Delete all"
+          cancelLabel="Cancel"
+          onCancel={() => setClearAllConfirmOpen(false)}
+          onConfirm={async () => {
+            if (messageDeleteLoading) return;
+            if (!threadId) return;
+            const tid = threadId;
+            setClearAllConfirmOpen(false);
+            await clearAllMessagesInThread(tid);
+          }}
+        />
       </section>
     </>
   );
