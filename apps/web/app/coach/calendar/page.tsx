@@ -1136,7 +1136,7 @@ export default function CoachCalendarPage() {
                               </button>
                             </div>
 
-                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2 md:min-h-[72px] md:max-h-[72px] md:overflow-y-auto">
+                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2 md:min-h-[72px]">
                               {dayItems.map((item) => (
                                 <AthleteWeekSessionRow
                                   key={item.id}
