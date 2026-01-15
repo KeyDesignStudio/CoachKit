@@ -146,7 +146,18 @@ export default function AthleteDashboardConsolePage() {
   const athleteTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, athleteTimeZone), [timeRange, athleteTimeZone]);
 
-  const visibleThreadMessageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const displayMessages = useMemo(() => {
+    const rows = [...messages];
+    rows.sort((a, b) => {
+      const aAt = +new Date(a.createdAt);
+      const bAt = +new Date(b.createdAt);
+      if (aAt !== bAt) return bAt - aAt;
+      return a.id.localeCompare(b.id);
+    });
+    return rows;
+  }, [messages]);
+
+  const visibleThreadMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
 
   const selectedVisibleMessageCount = useMemo(() => {
     if (visibleThreadMessageIds.length === 0 || selectedMessageIds.size === 0) return 0;
@@ -641,11 +652,14 @@ export default function AthleteDashboardConsolePage() {
           {/* Messages (below top row; half-width on desktop/tablet, right-aligned) */}
           <div className="mt-6 flex justify-end">
             <div className="w-full min-w-0 md:w-1/2" data-testid="athlete-dashboard-messages">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
+                <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+              </div>
+
               <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-                    <div className="mt-1 text-xs font-medium text-[var(--muted)]">Message your coach</div>
+                    <div className="text-xs font-medium text-[var(--muted)]">Message your coach</div>
                   </div>
 
                   <button
@@ -726,7 +740,7 @@ export default function AthleteDashboardConsolePage() {
                   ) : null}
 
                   <div className="mt-3 flex flex-col gap-2">
-                    {messages.map((m) => {
+                    {displayMessages.map((m) => {
                       const mine = m.senderRole === 'ATHLETE';
                       const senderLabel = mine ? athleteDisplayName : 'COACH';
                       const checked = selectedMessageIds.has(m.id);

@@ -393,7 +393,18 @@ export default function CoachDashboardConsolePage() {
     return messageThreads.reduce((sum, t) => sum + Math.max(0, t.unreadCountForCoach ?? 0), 0);
   }, [messageThreads]);
 
-  const visibleThreadMessageIds = useMemo(() => threadMessages.map((m) => m.id), [threadMessages]);
+  const displayThreadMessages = useMemo(() => {
+    const rows = [...threadMessages];
+    rows.sort((a, b) => {
+      const aAt = +new Date(a.createdAt);
+      const bAt = +new Date(b.createdAt);
+      if (aAt !== bAt) return bAt - aAt;
+      return a.id.localeCompare(b.id);
+    });
+    return rows;
+  }, [threadMessages]);
+
+  const visibleThreadMessageIds = useMemo(() => displayThreadMessages.map((m) => m.id), [displayThreadMessages]);
 
   const selectedVisibleMessageCount = useMemo(() => {
     if (visibleThreadMessageIds.length === 0 || selectedMessageIds.size === 0) return 0;
@@ -1256,7 +1267,7 @@ export default function CoachDashboardConsolePage() {
                   ) : null}
 
                   <div className="mt-3 flex flex-col gap-2">
-                    {threadMessages.map((m) => {
+                    {displayThreadMessages.map((m) => {
                       const mine = m.senderRole === 'COACH';
                       const senderLabel = mine ? 'COACH' : selectedAthleteNameForThread;
                       const checked = selectedMessageIds.has(m.id);
