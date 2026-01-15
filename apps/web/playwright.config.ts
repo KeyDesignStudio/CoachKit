@@ -13,9 +13,16 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `DISABLE_AUTH=true next dev -p ${PORT}`,
+    // IMPORTANT: keep this cross-platform. Do not use `FOO=bar cmd` shell prefixes.
+    // The server must inherit DATABASE_URL from the parent environment (e.g. Neon).
+    command: `next dev -p ${PORT}`,
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV ?? 'test',
+      DISABLE_AUTH: 'true',
+    },
     port: PORT,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [
