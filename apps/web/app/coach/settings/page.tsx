@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -10,6 +11,7 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 
 export default function CoachSettingsPage() {
+  const router = useRouter();
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const { branding, loading: brandingLoading, error: brandingError, refresh: refreshBranding } = useBranding();
@@ -116,6 +118,7 @@ export default function CoachSettingsPage() {
       const url = await uploadLogo(file, 'light');
       setForm((prev) => ({ ...prev, logoUrl: url }));
       await refreshBranding();
+      router.refresh();
       setMessage('Logo uploaded.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Logo upload failed.');
@@ -138,6 +141,7 @@ export default function CoachSettingsPage() {
       const url = await uploadLogo(file, 'dark');
       setForm((prev) => ({ ...prev, darkLogoUrl: url }));
       await refreshBranding();
+      router.refresh();
       setMessage('Dark-mode logo uploaded.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Dark-mode logo upload failed.');
@@ -155,6 +159,7 @@ export default function CoachSettingsPage() {
       await removeLogo('light');
       setForm((prev) => ({ ...prev, logoUrl: '' }));
       await refreshBranding();
+      router.refresh();
       setMessage('Logo removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove logo.');
@@ -172,6 +177,7 @@ export default function CoachSettingsPage() {
       await removeLogo('dark');
       setForm((prev) => ({ ...prev, darkLogoUrl: '' }));
       await refreshBranding();
+      router.refresh();
       setMessage('Dark-mode logo removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove dark-mode logo.');
@@ -194,6 +200,7 @@ export default function CoachSettingsPage() {
         },
       });
       await refreshBranding();
+      router.refresh();
       setMessage('Sample dev logo applied.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply sample logo.');
@@ -225,6 +232,7 @@ export default function CoachSettingsPage() {
       });
 
       await refreshBranding();
+      router.refresh();
       setMessage('Branding updated.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update branding.');
