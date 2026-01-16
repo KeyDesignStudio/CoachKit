@@ -50,6 +50,15 @@ enum TrainingPlanFrequency {
   AD_HOC
 }
 
+enum WorkoutLibraryDiscipline {
+  RUN
+  BIKE
+  SWIM
+  BRICK
+  STRENGTH
+  OTHER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -76,8 +85,64 @@ model User {
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
   oauthStates         OAuthState[]
+  workoutLibrarySessionsCreated WorkoutLibrarySession[]
+  workoutLibraryFavorites       WorkoutLibraryFavorite[]
+  workoutLibraryUsage           WorkoutLibraryUsage[]
 
   @@index([role])
+}
+
+model WorkoutLibrarySession {
+  id                 String                  @id @default(cuid())
+  title              String
+  discipline         WorkoutLibraryDiscipline
+  tags               String[]
+  description        String
+  durationSec        Int
+  intensityTarget    String
+  distanceMeters     Float?
+  elevationGainMeters Float?
+  notes              String?
+  equipment          String[]
+  workoutStructure   Json?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  createdByUserId    String?
+
+  createdByUser      User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  favorites          WorkoutLibraryFavorite[]
+  usage              WorkoutLibraryUsage[]
+
+  @@index([discipline])
+  @@index([title])
+  @@index([tags], type: Gin)
+}
+
+model WorkoutLibraryFavorite {
+  id               String               @id @default(cuid())
+  coachId          String
+  librarySessionId String
+  createdAt        DateTime             @default(now())
+
+  coach           User                @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  librarySession  WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, librarySessionId])
+  @@index([coachId])
+  @@index([librarySessionId])
+}
+
+model WorkoutLibraryUsage {
+  id               String               @id @default(cuid())
+  coachId          String
+  librarySessionId String
+  usedAt           DateTime             @default(now())
+
+  coach           User                @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  librarySession  WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
+
+  @@index([librarySessionId, usedAt])
+  @@index([coachId, usedAt])
 }
 
 model AthleteProfile {
