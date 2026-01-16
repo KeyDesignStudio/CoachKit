@@ -428,101 +428,89 @@ export default function CoachSettingsPage() {
         <p className="mt-1 text-sm text-[var(--muted)]">Manage program branding and timezone.</p>
       </header>
 
-      <Card className="max-w-xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="m-0 text-base font-semibold text-[var(--text)]">Branding</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="w-full">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="m-0 text-base font-semibold text-[var(--text)]">Branding</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
+            </div>
+            {brandingLoading ? <span className="text-xs text-[var(--muted)]">Loading…</span> : null}
           </div>
-          {brandingLoading ? (
-            <span className="text-xs text-[var(--muted)]">Loading…</span>
+
+          {brandingError ? <p className="mt-3 text-sm text-red-600">{brandingError}</p> : null}
+
+          {/* Display name (autosave) */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-[var(--text)]" htmlFor="coach-branding-display-name">
+              Display name
+            </label>
+            <div className="mt-2 flex items-start gap-3">
+              <input
+                id="coach-branding-display-name"
+                type="text"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                onBlur={() => void saveDisplayName(displayName)}
+                className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+                required
+              />
+            </div>
+            <div className="mt-1 text-xs">
+              {nameSave.kind === 'saving' ? <span className="text-[var(--muted)]">Saving…</span> : null}
+              {nameSave.kind === 'saved' ? <span className="text-emerald-600">Saved</span> : null}
+              {nameSave.kind === 'error' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-red-600">Something went wrong</span>
+                  <button
+                    type="button"
+                    onClick={() => void saveDisplayName(displayName)}
+                    className="text-xs font-medium text-[var(--text)] underline underline-offset-2"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Hidden file inputs (no native 'no file chosen') */}
+          <input ref={lightInputRef} type="file" accept="image/*" className="sr-only" onChange={handleLightFilePicked} />
+          <input ref={darkInputRef} type="file" accept="image/*" className="sr-only" onChange={handleDarkFilePicked} />
+
+          {/* Logo rows */}
+          <div className="mt-5 flex flex-col gap-4">
+            <LogoRow label="Logo image" filename={lightFilename} variant="light" saveState={lightSave} />
+            <LogoRow label="Dark mode logo image" filename={darkFilename} variant="dark" saveState={darkSave} />
+          </div>
+
+          {showDevBrandingSampleButton ? (
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={() => void handleUseSampleLogo()}
+                disabled={lightSave.kind === 'saving' || darkSave.kind === 'saving'}
+                className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+              >
+                Use sample club logo (dev)
+              </button>
+            </div>
           ) : null}
-        </div>
+        </Card>
 
-        {brandingError ? <p className="mt-3 text-sm text-red-600">{brandingError}</p> : null}
-
-        {/* Display name (autosave) */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-[var(--text)]" htmlFor="coach-branding-display-name">
-            Display name
-          </label>
-          <div className="mt-2 flex items-start gap-3">
-            <input
-              id="coach-branding-display-name"
-              type="text"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              onBlur={() => void saveDisplayName(displayName)}
-              className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
-              required
-            />
+        <Card className="w-full">
+          <h2 className="m-0 text-base font-semibold text-[var(--text)]">Timezone</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
+          <p className="mt-3 text-sm text-[var(--muted)]">
+            Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
+          </p>
+          <div className="mt-3">
+            <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
           </div>
-          <div className="mt-1 text-xs">
-            {nameSave.kind === 'saving' ? <span className="text-[var(--muted)]">Saving…</span> : null}
-            {nameSave.kind === 'saved' ? <span className="text-emerald-600">Saved</span> : null}
-            {nameSave.kind === 'error' ? (
-              <div className="flex items-center gap-2">
-                <span className="text-red-600">Something went wrong</span>
-                <button
-                  type="button"
-                  onClick={() => void saveDisplayName(displayName)}
-                  className="text-xs font-medium text-[var(--text)] underline underline-offset-2"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Hidden file inputs (no native 'no file chosen') */}
-        <input
-          ref={lightInputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={handleLightFilePicked}
-        />
-        <input
-          ref={darkInputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={handleDarkFilePicked}
-        />
-
-        {/* Logo rows */}
-        <div className="mt-5 flex flex-col gap-4">
-          <LogoRow label="Logo image" filename={lightFilename} variant="light" saveState={lightSave} />
-          <LogoRow label="Dark mode logo image" filename={darkFilename} variant="dark" saveState={darkSave} />
-        </div>
-
-        {showDevBrandingSampleButton ? (
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => void handleUseSampleLogo()}
-              disabled={lightSave.kind === 'saving' || darkSave.kind === 'saving'}
-              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
-            >
-              Use sample club logo (dev)
-            </button>
-          </div>
-        ) : null}
-      </Card>
-
-      <Card className="max-w-xl">
-        <h2 className="m-0 text-base font-semibold text-[var(--text)]">Timezone</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
-        <p className="mt-3 text-sm text-[var(--muted)]">
-          Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
-        </p>
-        <div className="mt-3">
-          <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
-        </div>
-        {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
-        {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
-      </Card>
+          {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
+          {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
+        </Card>
+      </div>
     </section>
   );
 }
