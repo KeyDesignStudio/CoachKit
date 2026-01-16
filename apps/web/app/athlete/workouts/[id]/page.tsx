@@ -18,6 +18,7 @@ import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
 import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthleteWorkoutDetail';
 import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
+import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
 
 type CompletedActivity = {
   id: string;
@@ -40,6 +41,14 @@ type CalendarItem = {
   discipline: string;
   status: string;
   workoutDetail?: string | null;
+  plannedDurationMinutes?: number | null;
+  plannedDistanceKm?: number | null;
+  distanceMeters?: number | null;
+  intensityTarget?: string | null;
+  tags?: string[];
+  equipment?: string[];
+  workoutStructure?: unknown | null;
+  notes?: string | null;
   template?: { id: string; title: string } | null;
   groupSession?: { id: string; title: string } | null;
   comments?: Array<{ id: string; authorId: string; body: string; createdAt: string }>;

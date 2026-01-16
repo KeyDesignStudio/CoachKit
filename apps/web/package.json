@@ -8,6 +8,7 @@
     "vercel-build": "node scripts/build.mjs",
     "start": "next start",
     "test:mobile": "playwright test",
+    "test:mobile:local": "playwright test",
     "test:mobile:neon": "node scripts/assert-env.mjs && playwright test",
     "test:mobile:neon:allowprod": "cross-env ALLOW_PROD_TEST_DB=YES node scripts/assert-env.mjs && playwright test",
     "postinstall": "prisma generate --schema prisma/schema.prisma",

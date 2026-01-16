@@ -29,9 +29,15 @@ const createCalendarItemSchema = z.object({
   title: z.string().trim().min(1).optional(),
   plannedDurationMinutes: z.number().int().positive().max(1000).optional(),
   plannedDistanceKm: z.number().nonnegative().max(1000).optional(),
+  distanceMeters: z.number().positive().optional().nullable(),
+  intensityTarget: z.string().trim().min(1).optional(),
+  tags: z.array(z.string().trim().min(1)).optional().default([]),
+  equipment: z.array(z.string().trim().min(1)).optional().default([]),
+  workoutStructure: z.unknown().optional().nullable(),
+  notes: z.string().trim().max(20000).optional().nullable(),
   intensityType: z.string().trim().min(1).optional(),
   intensityTargetJson: z.unknown().optional(),
-  workoutDetail: z.string().trim().max(4000).optional(),
+  workoutDetail: z.string().trim().max(20000).optional(),
   attachmentsJson: z.unknown().optional(),
   templateId: cuid.optional(),
 });
@@ -59,6 +65,20 @@ export async function POST(request: NextRequest) {
       throw new ApiError(400, 'DISCIPLINE_REQUIRED', 'discipline is required when no template discipline is provided.');
     }
 
+    const distanceMeters =
+      payload.distanceMeters != null
+        ? payload.distanceMeters
+        : payload.plannedDistanceKm != null
+          ? payload.plannedDistanceKm * 1000
+          : null;
+
+    const plannedDistanceKm =
+      payload.plannedDistanceKm != null
+        ? payload.plannedDistanceKm
+        : distanceMeters != null
+          ? distanceMeters / 1000
+          : null;
+
     const item = await prisma.calendarItem.create({
       data: {
         coach: {
@@ -73,7 +93,13 @@ export async function POST(request: NextRequest) {
         subtype,
         title,
         plannedDurationMinutes: payload.plannedDurationMinutes ?? null,
-        plannedDistanceKm: payload.plannedDistanceKm ?? null,
+        plannedDistanceKm,
+        distanceMeters,
+        intensityTarget: payload.intensityTarget ?? null,
+        tags: payload.tags ?? [],
+        equipment: payload.equipment ?? [],
+        workoutStructure: (payload.workoutStructure ?? null) as Prisma.InputJsonValue,
+        notes: payload.notes ?? null,
         intensityType: payload.intensityType ?? null,
         intensityTargetJson: (payload.intensityTargetJson ?? null) as Prisma.InputJsonValue,
         workoutDetail: payload.workoutDetail ?? null,

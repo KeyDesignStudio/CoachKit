@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { GroupVisibilityType } from '@prisma/client';
 import { z } from 'zod';
 
@@ -23,7 +24,13 @@ const createGroupSessionSchema = z.object({
   location: nonEmptyString.optional(),
   startTimeLocal: localTime,
   durationMinutes: z.number().int().min(1).max(600),
-  description: z.string().trim().max(4000).optional(),
+  distanceMeters: z.number().positive().optional().nullable(),
+  intensityTarget: z.string().trim().min(1).optional(),
+  tags: z.array(z.string().trim().min(1)).optional().default([]),
+  equipment: z.array(z.string().trim().min(1)).optional().default([]),
+  workoutStructure: z.unknown().optional().nullable(),
+  notes: z.string().trim().max(20000).optional().nullable(),
+  description: z.string().trim().max(20000).optional(),
   recurrenceRule: nonEmptyString,
   visibilityType: z.nativeEnum(GroupVisibilityType).default(GroupVisibilityType.ALL),
   optionalFlag: z.boolean().optional().default(false),
@@ -84,6 +91,12 @@ export async function POST(request: NextRequest) {
           location: payload.location ?? null,
           startTimeLocal: payload.startTimeLocal,
           durationMinutes: payload.durationMinutes,
+          distanceMeters: payload.distanceMeters ?? null,
+          intensityTarget: payload.intensityTarget ?? null,
+          tags: payload.tags ?? [],
+          equipment: payload.equipment ?? [],
+          workoutStructure: (payload.workoutStructure ?? null) as Prisma.InputJsonValue,
+          notes: payload.notes ?? null,
           description: payload.description ?? null,
           recurrenceRule: payload.recurrenceRule,
           visibilityType: payload.visibilityType,

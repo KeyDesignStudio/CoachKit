@@ -29,6 +29,7 @@ import { addDaysToDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKe
 import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
+import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
 import type { WeatherSummary } from '@/lib/weather-model';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
@@ -60,6 +61,12 @@ type CalendarItem = {
   template?: { id: string; title: string } | null;
   plannedDurationMinutes?: number | null;
   plannedDistanceKm?: number | null;
+  distanceMeters?: number | null;
+  intensityTarget?: string | null;
+  tags?: string[];
+  equipment?: string[];
+  workoutStructure?: unknown | null;
+  notes?: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
     source?: 'MANUAL' | 'STRAVA';
@@ -74,6 +81,13 @@ type SessionFormState = {
   title: string;
   discipline: DisciplineOption | string;
   templateId: string;
+  plannedDurationMinutes: string;
+  plannedDistanceKm: string;
+  intensityTarget: string;
+  tagsText: string;
+  equipmentText: string;
+  notes: string;
+  workoutStructureText: string;
   workoutDetail: string;
 };
 
@@ -93,8 +107,50 @@ const emptyForm = (date: string): SessionFormState => ({
   title: '',
   discipline: DEFAULT_DISCIPLINE,
   templateId: '',
+  plannedDurationMinutes: '',
+  plannedDistanceKm: '',
+  intensityTarget: '',
+  tagsText: '',
+  equipmentText: '',
+  notes: '',
+  workoutStructureText: '',
   workoutDetail: '',
 });
+
+function splitCommaList(input: string): string[] {
+  return input
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function formatCommaList(values: string[] | null | undefined): string {
+  return (values ?? []).join(', ');
+}
+
+function parseOptionalFloat(text: string): number | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return null;
+  return value;
+}
+
+function parseOptionalInt(text: string): number | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value);
+}
+
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return '';
+  }
+}
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0');
@@ -663,6 +719,13 @@ export default function CoachCalendarPage() {
       title: item.title,
       discipline: item.discipline,
       templateId: item.template?.id || '',
+      plannedDurationMinutes: typeof item.plannedDurationMinutes === 'number' ? String(item.plannedDurationMinutes) : '',
+      plannedDistanceKm: typeof item.plannedDistanceKm === 'number' ? String(item.plannedDistanceKm) : '',
+      intensityTarget: item.intensityTarget ?? '',
+      tagsText: formatCommaList(item.tags),
+      equipmentText: formatCommaList(item.equipment),
+      notes: item.notes ?? '',
+      workoutStructureText: item.workoutStructure ? safeJsonStringify(item.workoutStructure) : '',
       workoutDetail: item.workoutDetail || '',
     });
     setEditItemId(item.id);
@@ -695,6 +758,51 @@ export default function CoachCalendarPage() {
 
     try {
       const normalizedDiscipline = ensureDiscipline(sessionForm.discipline);
+
+      const isCreate = drawerMode === 'create';
+
+      const durationMinutes = parseOptionalInt(sessionForm.plannedDurationMinutes);
+      if (sessionForm.plannedDurationMinutes.trim() && durationMinutes === null) {
+        setError('Duration must be a number of minutes.');
+        return;
+      }
+      if (durationMinutes != null && durationMinutes <= 0) {
+        setError('Duration must be a positive number of minutes.');
+        return;
+      }
+
+      const distanceKm = parseOptionalFloat(sessionForm.plannedDistanceKm);
+      if (sessionForm.plannedDistanceKm.trim() && distanceKm === null) {
+        setError('Distance must be a number (km).');
+        return;
+      }
+      if (distanceKm != null && distanceKm < 0) {
+        setError('Distance cannot be negative.');
+        return;
+      }
+
+      const distanceMeters = distanceKm != null ? distanceKm * 1000 : null;
+
+      const tags = splitCommaList(sessionForm.tagsText);
+      const equipment = splitCommaList(sessionForm.equipmentText);
+
+      const workoutDetailTrimmed = sessionForm.workoutDetail.trim();
+      const intensityTargetTrimmed = sessionForm.intensityTarget.trim();
+      const notesTrimmed = sessionForm.notes.trim();
+
+      const structureText = sessionForm.workoutStructureText.trim();
+      let workoutStructure: unknown | null | undefined = undefined;
+      if (structureText) {
+        try {
+          workoutStructure = JSON.parse(structureText);
+        } catch {
+          setError('Workout structure must be valid JSON.');
+          return;
+        }
+      } else {
+        workoutStructure = isCreate ? undefined : null;
+      }
+
       const payload = {
         athleteId: trimmedAthleteId,
         date: sessionForm.date,
@@ -702,7 +810,15 @@ export default function CoachCalendarPage() {
         title: sessionForm.title,
         discipline: normalizedDiscipline,
         templateId: sessionForm.templateId || undefined,
-        workoutDetail: sessionForm.workoutDetail.trim() ? sessionForm.workoutDetail.trim() : undefined,
+        plannedDurationMinutes: isCreate ? (durationMinutes ?? undefined) : durationMinutes,
+        plannedDistanceKm: isCreate ? (distanceKm ?? undefined) : distanceKm,
+        distanceMeters: isCreate ? (distanceMeters ?? undefined) : distanceMeters,
+        intensityTarget: intensityTargetTrimmed ? intensityTargetTrimmed : isCreate ? undefined : null,
+        tags,
+        equipment,
+        notes: notesTrimmed ? notesTrimmed : isCreate ? undefined : null,
+        workoutStructure,
+        workoutDetail: workoutDetailTrimmed ? workoutDetailTrimmed : isCreate ? undefined : null,
       };
 
       if (drawerMode === 'create') {
@@ -1244,19 +1360,170 @@ export default function CoachCalendarPage() {
               🗑 Remove
             </Button>
           </div>
-          <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-            Template ID (optional)
-            <Input value={sessionForm.templateId} onChange={(event) => setSessionForm({ ...sessionForm, templateId: event.target.value })} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-            Workout detail
-            <Textarea
-              placeholder="Optional: add instructions the athlete will see for this workout"
-              value={sessionForm.workoutDetail}
-              onChange={(event) => setSessionForm({ ...sessionForm, workoutDetail: event.target.value })}
-              rows={4}
-            />
-          </label>
+
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Workout Detail</h3>
+                <p className="text-xs text-[var(--muted)]">Rich fields from the library render for both coach and athlete.</p>
+              </div>
+            </div>
+
+            {/* Overview row */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {(() => {
+                const theme = getDisciplineTheme(String(sessionForm.discipline) as any);
+                return (
+                  <span className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text)]">
+                    <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                    <span className="font-medium">{String(sessionForm.discipline)}</span>
+                  </span>
+                );
+              })()}
+              {sessionForm.plannedDurationMinutes.trim() ? (
+                <span className="inline-flex items-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text)]">
+                  {sessionForm.plannedDurationMinutes.trim()} min
+                </span>
+              ) : null}
+              {sessionForm.plannedDistanceKm.trim() ? (
+                <span className="inline-flex items-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text)]">
+                  {sessionForm.plannedDistanceKm.trim()} km
+                </span>
+              ) : null}
+              {sessionForm.intensityTarget.trim() ? (
+                <span className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text)]">
+                  {sessionForm.intensityTarget.trim()}
+                </span>
+              ) : null}
+            </div>
+
+            {/* Editable fields */}
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+                Duration (min)
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={sessionForm.plannedDurationMinutes}
+                  onChange={(event) => setSessionForm({ ...sessionForm, plannedDurationMinutes: event.target.value })}
+                  placeholder="e.g. 60"
+                  className="min-h-[44px]"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+                Distance (km)
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={sessionForm.plannedDistanceKm}
+                  onChange={(event) => setSessionForm({ ...sessionForm, plannedDistanceKm: event.target.value })}
+                  placeholder="optional"
+                  className="min-h-[44px]"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)] sm:col-span-2">
+                Intensity target
+                <Input
+                  value={sessionForm.intensityTarget}
+                  onChange={(event) => setSessionForm({ ...sessionForm, intensityTarget: event.target.value })}
+                  placeholder="e.g. Z2 steady, RPE 6, 4×5' @ threshold"
+                  className="min-h-[44px]"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)] sm:col-span-2">
+                Tags (comma separated)
+                <Input
+                  value={sessionForm.tagsText}
+                  onChange={(event) => setSessionForm({ ...sessionForm, tagsText: event.target.value })}
+                  placeholder="e.g. aerobic, hills"
+                  className="min-h-[44px]"
+                />
+                {splitCommaList(sessionForm.tagsText).length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {splitCommaList(sessionForm.tagsText).map((tag) => (
+                      <span key={tag} className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text)] break-words">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)] sm:col-span-2">
+                Equipment (comma separated)
+                <Input
+                  value={sessionForm.equipmentText}
+                  onChange={(event) => setSessionForm({ ...sessionForm, equipmentText: event.target.value })}
+                  placeholder="e.g. trainer, pull buoy"
+                  className="min-h-[44px]"
+                />
+                {splitCommaList(sessionForm.equipmentText).length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {splitCommaList(sessionForm.equipmentText).map((eq) => (
+                      <span key={eq} className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm text-[var(--text)] break-words">
+                        {eq}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </label>
+            </div>
+
+            {/* Structure panel */}
+            <details className="mt-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+              <summary className="cursor-pointer select-none text-sm font-medium text-[var(--text)]">Structure</summary>
+              <div className="mt-3 space-y-3">
+                <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+                  workoutStructure (JSON)
+                  <Textarea
+                    value={sessionForm.workoutStructureText}
+                    onChange={(event) => setSessionForm({ ...sessionForm, workoutStructureText: event.target.value })}
+                    rows={6}
+                    placeholder='e.g. { "segments": [ ... ] }'
+                  />
+                </label>
+
+                {sessionForm.workoutStructureText.trim() ? (
+                  (() => {
+                    try {
+                      const parsed = JSON.parse(sessionForm.workoutStructureText);
+                      return <WorkoutStructureView structure={parsed} />;
+                    } catch {
+                      return <p className="text-sm text-rose-500">Workout structure must be valid JSON.</p>;
+                    }
+                  })()
+                ) : null}
+              </div>
+            </details>
+
+            {/* Notes panel */}
+            <details className="mt-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+              <summary className="cursor-pointer select-none text-sm font-medium text-[var(--text)]">Notes</summary>
+              <div className="mt-3">
+                <Textarea
+                  value={sessionForm.notes}
+                  onChange={(event) => setSessionForm({ ...sessionForm, notes: event.target.value })}
+                  rows={4}
+                  placeholder="Optional prep/cooldown cues"
+                />
+              </div>
+            </details>
+
+            <div className="mt-4 grid grid-cols-1 gap-3">
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+                Template ID (optional)
+                <Input value={sessionForm.templateId} onChange={(event) => setSessionForm({ ...sessionForm, templateId: event.target.value })} />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
+                Workout detail (instructions)
+                <Textarea
+                  placeholder="Optional: add instructions the athlete will see for this workout"
+                  value={sessionForm.workoutDetail}
+                  onChange={(event) => setSessionForm({ ...sessionForm, workoutDetail: event.target.value })}
+                  rows={6}
+                />
+              </label>
+            </div>
+          </div>
           {titleMessage ? <p className="text-xs text-emerald-600">{titleMessage}</p> : null}
           {error && drawerMode !== 'closed' ? <p className="text-xs text-rose-500">{error}</p> : null}
         </div>

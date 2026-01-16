@@ -259,6 +259,12 @@ model GroupSession {
   location        String?
   startTimeLocal  String // "06:00" etc (keep MVP simple)
   durationMinutes Int
+  distanceMeters  Float?
+  intensityTarget String?
+  tags            String[]           @default([])
+  equipment       String[]           @default([])
+  workoutStructure Json?
+  notes           String?
   description     String?
   recurrenceRule  String // iCal RRULE string
   visibilityType  GroupVisibilityType @default(ALL)
@@ -298,6 +304,12 @@ model CalendarItem {
   title                  String
   plannedDurationMinutes Int?
   plannedDistanceKm      Float?
+  distanceMeters         Float?
+  intensityTarget        String?
+  tags                   String[] @default([])
+  equipment              String[] @default([])
+  workoutStructure        Json?
+  notes                  String?
   intensityType          String?
   intensityTargetJson    Json?
   workoutDetail          String?

@@ -33,6 +33,8 @@ export async function GET(request: NextRequest) {
     const disciplineRaw = parseMulti(searchParams, 'discipline');
     const tags = parseMulti(searchParams, 'tags');
     const intensityTarget = (searchParams.get('intensityTarget') ?? '').trim();
+    const favoritesOnlyRaw = (searchParams.get('favoritesOnly') ?? '').trim().toLowerCase();
+    const favoritesOnly = favoritesOnlyRaw === '1' || favoritesOnlyRaw === 'true' || favoritesOnlyRaw === 'yes';
 
     const page = clamp(parseIntOrNull(searchParams.get('page')) ?? 1, 1, 10_000);
     const pageSize = clamp(parseIntOrNull(searchParams.get('pageSize')) ?? 20, 1, 100);
@@ -80,6 +82,15 @@ export async function GET(request: NextRequest) {
             intensityTarget: {
               contains: intensityTarget,
               mode: 'insensitive' as const,
+            },
+          }
+        : {}),
+      ...(favoritesOnly
+        ? {
+            favorites: {
+              some: {
+                coachId: user.id,
+              },
             },
           }
         : {}),
