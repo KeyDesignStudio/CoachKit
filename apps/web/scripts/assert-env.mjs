@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 const PROD_HOST = 'ep-soft-tooth-a767udjk-pooler.ap-southeast-2.aws.neon.tech';
-const ALLOW_PROD_TEST_DB = process.env.ALLOW_PROD_TEST_DB === 'YES';
+const PROD_HOST_SUBSTRING = 'ep-soft-tooth-a767udjk';
+const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
 const databaseUrlRaw = process.env.DATABASE_URL;
 
@@ -48,7 +49,7 @@ try {
   ]);
 }
 
-const hostname = parsedUrl.hostname;
+const hostname = String(parsedUrl.hostname || '').trim();
 if (!hostname) {
   fail([
     'DATABASE_URL is missing a hostname. Refusing to run.',
@@ -56,26 +57,34 @@ if (!hostname) {
   ]);
 }
 
-const safeHint = `${hostname}${parsedUrl.pathname}${parsedUrl.search}`.toLowerCase();
-const looksLikeTestDb = safeHint.includes('-test') || safeHint.includes('coachkit-test');
-const isProdHost = hostname === PROD_HOST;
+const hostnameLower = hostname.toLowerCase();
+const isProdHost = hostnameLower === PROD_HOST || hostnameLower.includes(PROD_HOST_SUBSTRING);
 
-if (isProdHost && !ALLOW_PROD_TEST_DB) {
+if (LOCALHOST_HOSTS.has(hostnameLower)) {
   fail([
-    `Refusing to run Playwright against production DB host: ${hostname}`,
-    'Use a test/branch Neon DB for Playwright runs (recommended).',
-    'If you *must* run against production (strongly discouraged), set:',
-    '  ALLOW_PROD_TEST_DB=YES',
+    `Refusing to run Playwright "neon" tests against localhost DB host: ${hostname}`,
+    'Use a non-production Neon branch DATABASE_URL for `npm run test:mobile:neon`.',
+    'If you want local Postgres, use `npm run test:mobile` or `npm run test:mobile:local` instead.',
   ]);
 }
 
-if (isProdHost && ALLOW_PROD_TEST_DB) {
-  console.warn(`WARNING: ALLOW_PROD_TEST_DB=YES set; running against production DB host: ${hostname}`);
+if (isProdHost) {
+  fail([
+    `Refusing to run Playwright against production DB host: ${hostname}`,
+    'Use a non-production Neon branch DATABASE_URL for Playwright runs.',
+  ]);
 }
 
-if (!isProdHost && !looksLikeTestDb) {
-  console.warn(`WARNING: DATABASE_URL host does not look like a test DB: ${hostname}`);
-  console.warn('Proceeding anyway. Prefer a Neon test project/branch for Playwright.');
+// Only allow non-prod Neon branch hosts.
+// Neon connection hosts are typically of the form: ep-<branch>-<id>[-pooler].<region>.aws.neon.tech
+const isNeonHost = hostnameLower.endsWith('.neon.tech') && hostnameLower.startsWith('ep-');
+if (!isNeonHost) {
+  fail([
+    `Refusing to run: DATABASE_URL host is not a Neon host: ${hostname}`,
+    'Expected a non-production Neon branch host (ep-*.neon.tech).',
+    'Use `npm run test:mobile` for local-only runs.',
+  ]);
 }
 
-console.log(`Using DATABASE_URL host: ${hostname}`);
+// Success output must be hostname only.
+console.log(hostname);
