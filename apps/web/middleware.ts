@@ -1,7 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-const DISABLE_AUTH = process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH === 'true';
+const DISABLE_AUTH =
+  process.env.NODE_ENV === 'development' &&
+  (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
