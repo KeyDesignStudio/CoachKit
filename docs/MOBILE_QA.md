@@ -114,6 +114,8 @@ Run before every push that affects UI:
 2) Automated mobile smoke:
 - Preferred (Neon DB): `cd apps/web && npm run test:mobile:neon`
 - Covers `/coach/athletes` and `/athlete/dashboard` (iPhone + iPad)
+
+To run: `export DATABASE_URL=<non-prod neon branch>` then `npm run test:mobile:neon`
 3) Manual 5-minute sanity in Chrome DevTools:
 - iPhone SE -> Coach Dashboard + Coach Calendar week
 - iPhone 14 -> Athlete Dashboard + Athlete Calendar week + workout detail

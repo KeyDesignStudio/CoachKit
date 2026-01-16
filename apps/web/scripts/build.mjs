@@ -59,6 +59,13 @@ function isVercelBuild() {
   return Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
 }
 
+function isProductionRuntime() {
+  // Explicitly block any migration behavior in production environments.
+  // - NODE_ENV=production is typical for Next/Vercel builds
+  // - VERCEL_ENV=production is Vercel-specific
+  return process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+}
+
 function isLocalDatabaseUrl(url) {
   try {
     const u = new URL(url);
@@ -71,8 +78,9 @@ function isLocalDatabaseUrl(url) {
 // CoachKit policy: do not run Prisma migrations automatically during Vercel builds.
 // Migrations are applied manually against Neon.
 const canAutoMigrate =
-  process.env.RUN_PRISMA_MIGRATIONS_ON_BUILD === '1' ||
-  (!isVercelBuild() && process.env.DATABASE_URL && isLocalDatabaseUrl(process.env.DATABASE_URL));
+  !isProductionRuntime() &&
+  (process.env.RUN_PRISMA_MIGRATIONS_ON_BUILD === '1' ||
+    (!isVercelBuild() && process.env.DATABASE_URL && isLocalDatabaseUrl(process.env.DATABASE_URL)));
 
 if (process.env.DATABASE_URL && canAutoMigrate) {
   runWithRetry('prisma', ['migrate', 'deploy', ...schemaArgs], {
@@ -84,6 +92,8 @@ if (process.env.DATABASE_URL && canAutoMigrate) {
     baseDelayMs: 1500,
     maxDelayMs: 15000,
   });
+} else if (process.env.DATABASE_URL && isProductionRuntime()) {
+  console.warn('[build] Skipping prisma migrate deploy in production (manual migrations required).');
 } else if (process.env.DATABASE_URL && isVercelBuild()) {
   console.warn('[build] Skipping prisma migrate deploy on Vercel build (manual migrations required).');
 }
