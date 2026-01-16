@@ -3,6 +3,7 @@
 const PROD_HOST = 'ep-soft-tooth-a767udjk-pooler.ap-southeast-2.aws.neon.tech';
 const PROD_HOST_SUBSTRING = 'ep-soft-tooth-a767udjk';
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+const ALLOW_PROD_TEST_DB = process.env.ALLOW_PROD_TEST_DB === 'YES';
 
 const databaseUrlRaw = process.env.DATABASE_URL;
 
@@ -62,18 +63,20 @@ const isProdHost = hostnameLower === PROD_HOST || hostnameLower.includes(PROD_HO
 
 if (LOCALHOST_HOSTS.has(hostnameLower)) {
   fail([
-    `Refusing to run Playwright "neon" tests against localhost DB host: ${hostname}`,
-    'Use a non-production Neon branch DATABASE_URL for `npm run test:mobile:neon`.',
-    'If you want local Postgres, use `npm run test:mobile` or `npm run test:mobile:local` instead.',
+    'Refusing localhost for test:mobile:neon. Use npm run test:mobile:local instead.',
   ]);
 }
 
-if (isProdHost) {
+if (isProdHost && !ALLOW_PROD_TEST_DB) {
   fail([
     `Refusing to run Playwright against production DB host: ${hostname}`,
     'Use a non-production Neon branch DATABASE_URL for Playwright runs.',
+    'If you *must* run against production (strongly discouraged), set:',
+    '  ALLOW_PROD_TEST_DB=YES',
   ]);
 }
+
+// If explicitly allowed, continue without printing anything other than the hostname.
 
 // Only allow non-prod Neon branch hosts.
 // Neon connection hosts are typically of the form: ep-<branch>-<id>[-pooler].<region>.aws.neon.tech

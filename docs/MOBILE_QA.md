@@ -138,6 +138,7 @@ macOS/Linux:
 Notes:
 - `test:mobile:neon` requires a non-production Neon branch host (ep-*.neon.tech).
 - It will fail fast if `DATABASE_URL` points to `localhost` / `127.0.0.1` / `0.0.0.0`.
+	- Use `npm run test:mobile:local` when `DATABASE_URL` points to localhost/docker.
 
 PowerShell (optional):
 - `$env:DATABASE_URL = 'postgresql://...'; cd apps/web; npm run test:mobile:neon`
@@ -147,8 +148,14 @@ If `DATABASE_URL` is missing, the command fails fast with a clear message.
 ### Optional alternative (local DB)
 
 If you prefer a local Postgres instead of Neon, start the repo's docker Postgres and run local-only tests:
-- `cd apps/web && npm run test:mobile` (relies on your current `DATABASE_URL` env)
-- Or explicit: `cd apps/web && npm run test:mobile:local`
+- Set local DB URL (example):
+	- `export DATABASE_URL='postgresql://user:***@localhost:5432/<db>?schema=public'`
+- Then run:
+	- `cd apps/web && npm run test:mobile:local`
+
+Local vs Neon:
+- `npm run test:mobile:local`: local-only (guard-free). You are responsible for pointing `DATABASE_URL` at localhost/docker.
+- `npm run test:mobile:neon`: Neon-only (guarded). Refuses localhost and refuses prod by default.
 
 If regressions are found:
 - Add an entry to "Known Issues" below (date + device + steps + expected vs actual)
