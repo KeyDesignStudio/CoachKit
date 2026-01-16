@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
+import { AdminHeader } from '@/components/admin/AdminHeader';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
@@ -16,11 +17,11 @@ const DESKTOP_NAV_LINK_CLASS =
   'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
 
 const allNavLinks: NavLink[] = [
-  { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH', 'ADMIN'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH', 'ADMIN'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH', 'ADMIN'] },
-  { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH', 'ADMIN'] },
-  { href: '/coach/settings', label: 'Settings', roles: ['COACH', 'ADMIN'] },
+  { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
+  { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
+  { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
@@ -117,6 +118,11 @@ export async function AppHeader() {
   const navLinks = userRole
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
+
+  // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
+  if (userRole === 'ADMIN') {
+    return <AdminHeader />;
+  }
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 

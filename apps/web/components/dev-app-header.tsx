@@ -8,9 +8,9 @@ import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 
-type Role = 'COACH' | 'ATHLETE' | null;
+type Role = 'COACH' | 'ATHLETE' | 'ADMIN' | null;
 
-type NavLink = { href: string; label: string; roles: Array<'COACH' | 'ATHLETE'> };
+type NavLink = { href: string; label: string; roles: Array<'COACH' | 'ATHLETE' | 'ADMIN'> };
 
 const DESKTOP_NAV_LINK_CLASS =
   'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
@@ -21,6 +21,7 @@ const ALL_NAV_LINKS: NavLink[] = [
   { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
+  { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
@@ -37,7 +38,7 @@ export function DevAppHeader() {
 
   useEffect(() => {
     const raw = getCookie('coachkit-role');
-    setRole(raw === 'COACH' || raw === 'ATHLETE' ? raw : 'COACH');
+    setRole(raw === 'COACH' || raw === 'ATHLETE' || raw === 'ADMIN' ? raw : 'COACH');
   }, []);
 
   const navLinks = useMemo(() => {
