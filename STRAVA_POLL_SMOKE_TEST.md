@@ -47,6 +47,19 @@ Response shape:
 2. **Verify**: `Created` is `0` (or very low) and `Skipped` increases
 3. **Verify**: No duplicate `CompletedActivity` rows for the same Strava activity
 
+## Test 2b: Backfill / refresh recent activities (forceDays=14)
+**Expected**: Re-fetches recent Strava activities and updates `metricsJson.strava` with any newly-added fields (e.g. calories, elevation gain, cadence, max speed, polyline) when Strava provides them.
+
+**Steps**:
+1. Login as the athlete (or coach)
+2. Trigger a forced backfill poll:
+   - Athlete (in DevTools console):
+     - `fetch('/api/integrations/strava/poll?forceDays=14', { method: 'POST' }).then(r => r.json()).then(console.log)`
+   - Coach (for a specific athlete):
+     - `fetch('/api/integrations/strava/poll?athleteId=<athleteUserId>&forceDays=14', { method: 'POST' }).then(r => r.json()).then(console.log)`
+3. **Verify**: `Updated` is non-zero at least once when existing recent activities lacked the new metrics
+4. Open a known Strava-synced workout detail and **verify** the “From Strava” card shows calories/elevation/etc when present in Strava
+
 ## Test 3: Coach poll (optional)
 **Expected**: Coach can poll all connected athletes, or a single athlete they own.
 

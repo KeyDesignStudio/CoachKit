@@ -25,13 +25,22 @@ type StravaActivity = {
   sport_type?: string;
   start_date?: string; // UTC
   start_date_local?: string; // local
+  timezone?: string;
   elapsed_time?: number; // seconds
   moving_time?: number; // seconds
   distance?: number; // meters
+  total_elevation_gain?: number; // meters
+  elev_high?: number; // meters
+  elev_low?: number; // meters
   average_speed?: number; // meters per second
+  max_speed?: number; // meters per second
   average_heartrate?: number;
   max_heartrate?: number;
-  timezone?: string;
+  average_cadence?: number;
+  calories?: number;
+  map?: {
+    summary_polyline?: string;
+  };
 };
 
 function mapStravaDiscipline(activity: StravaActivity) {
@@ -64,6 +73,15 @@ function compactObject<T extends Record<string, unknown>>(obj: T): Partial<T> {
 function deriveAvgPaceSecPerKm(avgSpeedMps: number | undefined) {
   if (!avgSpeedMps || !Number.isFinite(avgSpeedMps) || avgSpeedMps <= 0) return undefined;
   return Math.round(1000 / avgSpeedMps);
+}
+
+function shouldUpdateStravaMetrics(existing: unknown, next: Record<string, unknown>) {
+  if (!existing || typeof existing !== 'object') return true;
+  const prev = existing as Record<string, unknown>;
+  for (const [key, value] of Object.entries(next)) {
+    if (prev[key] !== value) return true;
+  }
+  return false;
 }
 
 function parseTimeToMinutes(value: string) {
@@ -440,19 +458,56 @@ export async function POST(request: NextRequest) {
           const distanceKm = typeof activity.distance === 'number' ? metersToKm(activity.distance) : null;
 
           const stravaType = activity.sport_type ?? activity.type;
-          const avgSpeedMps = typeof activity.average_speed === 'number' ? activity.average_speed : undefined;
-          const avgHr = typeof activity.average_heartrate === 'number' ? Math.round(activity.average_heartrate) : undefined;
-          const maxHr = typeof activity.max_heartrate === 'number' ? Math.round(activity.max_heartrate) : undefined;
+          const distanceMeters = typeof activity.distance === 'number' ? activity.distance : undefined;
+          const movingTimeSec = typeof activity.moving_time === 'number' ? activity.moving_time : undefined;
+          const elapsedTimeSec = typeof activity.elapsed_time === 'number' ? activity.elapsed_time : undefined;
+          const totalElevationGainM = typeof activity.total_elevation_gain === 'number' ? activity.total_elevation_gain : undefined;
+          const elevHighM = typeof activity.elev_high === 'number' ? activity.elev_high : undefined;
+          const elevLowM = typeof activity.elev_low === 'number' ? activity.elev_low : undefined;
+          const averageSpeedMps = typeof activity.average_speed === 'number' ? activity.average_speed : undefined;
+          const maxSpeedMps = typeof activity.max_speed === 'number' ? activity.max_speed : undefined;
+          const averageHeartrateBpm = typeof activity.average_heartrate === 'number' ? activity.average_heartrate : undefined;
+          const maxHeartrateBpm = typeof activity.max_heartrate === 'number' ? activity.max_heartrate : undefined;
+          const averageCadenceRpm = typeof activity.average_cadence === 'number' ? activity.average_cadence : undefined;
+          const caloriesKcal = typeof activity.calories === 'number' ? activity.calories : undefined;
+          const summaryPolyline = typeof activity.map?.summary_polyline === 'string' ? activity.map.summary_polyline : undefined;
 
           const stravaMetrics = compactObject({
-            name: activity.name,
-            type: stravaType,
-            startDateLocal: activity.start_date_local,
+            // Identity / time
+            activityId: externalActivityId,
             startDateUtc: activity.start_date,
-            avgSpeedMps,
-            avgPaceSecPerKm: discipline === 'RUN' ? deriveAvgPaceSecPerKm(avgSpeedMps) : undefined,
-            avgHr,
-            maxHr,
+            startDateLocal: activity.start_date_local,
+            timezone: activity.timezone,
+
+            // Activity basics
+            name: activity.name,
+            sportType: activity.sport_type,
+            type: activity.type ?? stravaType,
+            distanceMeters,
+            movingTimeSec,
+            elapsedTimeSec,
+
+            // Performance
+            totalElevationGainM,
+            elevHighM,
+            elevLowM,
+            averageSpeedMps,
+            maxSpeedMps,
+            averageHeartrateBpm,
+            maxHeartrateBpm,
+            averageCadenceRpm,
+
+            // Energy
+            caloriesKcal,
+
+            // Map
+            summaryPolyline,
+
+            // Backwards-compatible fields (legacy keys)
+            avgSpeedMps: averageSpeedMps,
+            avgPaceSecPerKm: discipline === 'RUN' ? deriveAvgPaceSecPerKm(averageSpeedMps) : undefined,
+            avgHr: typeof averageHeartrateBpm === 'number' ? Math.round(averageHeartrateBpm) : undefined,
+            maxHr: typeof maxHeartrateBpm === 'number' ? Math.round(maxHeartrateBpm) : undefined,
           });
 
           const canonicalStartUtc = (stravaMetrics as any)?.startDateUtc ?? activity.start_date;
@@ -517,11 +572,19 @@ export async function POST(request: NextRequest) {
               existing &&
               existing.durationMinutes === durationMinutes &&
               (existing.distanceKm ?? null) === (distanceKm ?? null) &&
-              new Date(existing.startTime).getTime() === startTime.getTime()
+              new Date(existing.startTime).getTime() === startTime.getTime() &&
+              !shouldUpdateStravaMetrics((existing.metricsJson as any)?.strava, stravaMetrics as any)
             ) {
               completed = existing;
               summary.skippedExisting += 1;
             } else {
+              const mergedStrava = {
+                ...(((existing?.metricsJson as any)?.strava && typeof (existing?.metricsJson as any)?.strava === 'object'
+                  ? ((existing?.metricsJson as any)?.strava as any)
+                  : {}) as Record<string, unknown>),
+                ...(stravaMetrics as any),
+              };
+
               completed = await prisma.completedActivity.update({
                 where: {
                   source_externalActivityId: {
@@ -536,7 +599,7 @@ export async function POST(request: NextRequest) {
                   // Preserve any existing athlete notes; Strava fields belong in metricsJson.
                   metricsJson: {
                     ...(typeof existing?.metricsJson === 'object' && existing?.metricsJson ? (existing.metricsJson as any) : {}),
-                    strava: stravaMetrics,
+                    strava: mergedStrava,
                   },
                 },
                 select: {

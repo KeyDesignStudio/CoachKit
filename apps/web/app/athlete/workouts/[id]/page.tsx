@@ -115,6 +115,20 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     return `${(mps * 3.6).toFixed(1)} km/h`;
   };
 
+  const formatDuration = (seconds: number | undefined) => {
+    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
+    const totalMinutes = Math.round(seconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  };
+
+  const formatIntUnit = (value: number | undefined, unit: string) => {
+    if (value === undefined || value === null || !Number.isFinite(value)) return null;
+    return `${Math.round(value)} ${unit}`;
+  };
+
   const formatPace = (secPerKm: number | undefined) => {
     if (!secPerKm || !Number.isFinite(secPerKm) || secPerKm <= 0) return null;
     const minutes = Math.floor(secPerKm / 60);
@@ -124,18 +138,33 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     return `${mm}:${ss} /km`;
   };
 
-  const stravaType = (strava.type ?? strava.sport_type ?? strava.activityType) as string | undefined;
+  const stravaType = (strava.sportType ?? strava.type ?? strava.sport_type ?? strava.activityType) as string | undefined;
   const stravaName = (strava.name ?? strava.activityName) as string | undefined;
   const stravaStartUtc = latestCompletion?.effectiveStartTimeUtc;
-  const stravaAvgSpeedMps = (strava.avgSpeedMps ?? strava.average_speed) as number | undefined;
-  const stravaAvgPaceSecPerKm = (strava.avgPaceSecPerKm ?? strava.avg_pace_sec_per_km) as number | undefined;
-  const stravaAvgHr = (strava.avgHr ?? strava.average_heartrate) as number | undefined;
-  const stravaMaxHr = (strava.maxHr ?? strava.max_heartrate) as number | undefined;
+  const stravaAvgSpeedMps = (strava.averageSpeedMps ?? strava.avgSpeedMps ?? strava.average_speed) as number | undefined;
+  const stravaAvgPaceSecPerKm =
+    (strava.avgPaceSecPerKm ?? strava.avg_pace_sec_per_km) as number | undefined;
+  const derivedPaceSecPerKm =
+    item?.discipline === 'RUN' && stravaAvgSpeedMps && Number.isFinite(stravaAvgSpeedMps) && stravaAvgSpeedMps > 0
+      ? Math.round(1000 / stravaAvgSpeedMps)
+      : undefined;
+  const stravaAvgHr = (strava.averageHeartrateBpm ?? strava.avgHr ?? strava.average_heartrate) as number | undefined;
+  const stravaMaxHr = (strava.maxHeartrateBpm ?? strava.maxHr ?? strava.max_heartrate) as number | undefined;
+  const stravaMaxSpeedMps = (strava.maxSpeedMps ?? strava.max_speed) as number | undefined;
+  const stravaMovingTimeSec = (strava.movingTimeSec ?? strava.moving_time) as number | undefined;
+  const stravaElevationGainM = (strava.totalElevationGainM ?? strava.total_elevation_gain) as number | undefined;
+  const stravaCaloriesKcal = (strava.caloriesKcal ?? strava.calories) as number | undefined;
+  const stravaCadenceRpm = (strava.averageCadenceRpm ?? strava.average_cadence) as number | undefined;
 
   const actualTimeLabel = formatZonedTime(stravaStartUtc);
   const actualDateTimeLabel = formatZonedDateTime(stravaStartUtc);
   const avgSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaAvgSpeedMps) : null;
-  const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm) : null;
+  const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm ?? derivedPaceSecPerKm) : null;
+  const maxSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaMaxSpeedMps) : null;
+  const movingTimeLabel = formatDuration(stravaMovingTimeSec);
+  const elevationGainLabel = formatIntUnit(stravaElevationGainM, 'm');
+  const caloriesLabel = formatIntUnit(stravaCaloriesKcal, 'kcal');
+  const cadenceLabel = formatIntUnit(stravaCadenceRpm, 'rpm');
   const statusLabel = isDraftStrava
     ? 'Strava detected'
     : item?.status
@@ -482,10 +511,45 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                     </div>
                   ) : null}
 
+                  {maxSpeedLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Max speed</p>
+                      <p className="text-sm mt-1">{maxSpeedLabel}</p>
+                    </div>
+                  ) : null}
+
                   {avgPaceLabel ? (
                     <div>
                       <p className="text-xs font-medium text-[var(--muted)]">Avg pace</p>
                       <p className="text-sm mt-1">{avgPaceLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {movingTimeLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Moving time</p>
+                      <p className="text-sm mt-1">{movingTimeLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {elevationGainLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Elevation gain</p>
+                      <p className="text-sm mt-1">{elevationGainLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {caloriesLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Calories</p>
+                      <p className="text-sm mt-1">{caloriesLabel}</p>
+                    </div>
+                  ) : null}
+
+                  {cadenceLabel ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Cadence</p>
+                      <p className="text-sm mt-1">{cadenceLabel}</p>
                     </div>
                   ) : null}
 
