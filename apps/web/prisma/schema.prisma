@@ -60,6 +60,16 @@ enum WorkoutLibraryDiscipline {
   OTHER
 }
 
+enum WorkoutLibraryIntensityCategory {
+  Z1
+  Z2
+  Z3
+  Z4
+  Z5
+  RPE
+  OTHER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -101,6 +111,7 @@ model WorkoutLibrarySession {
   description        String
   durationSec        Int
   intensityTarget    String
+  intensityCategory  WorkoutLibraryIntensityCategory?
   distanceMeters     Float?
   elevationGainMeters Float?
   notes              String?
@@ -116,6 +127,7 @@ model WorkoutLibrarySession {
 
   @@index([discipline])
   @@index([title])
+  @@index([intensityCategory])
   @@index([tags], type: Gin)
 }
 

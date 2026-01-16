@@ -5,6 +5,7 @@ import { WorkoutLibraryDiscipline } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
+import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -172,7 +173,11 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      normalized.push(candidate.data);
+      normalized.push({
+        ...candidate.data,
+        tags: normalizeTags(candidate.data.tags),
+        equipment: normalizeEquipment(candidate.data.equipment),
+      });
     }
 
     const preview = normalized.slice(0, 20);
@@ -214,6 +219,7 @@ export async function POST(request: NextRequest) {
             description: item.description,
             durationSec: item.durationSec ?? 0,
             intensityTarget: item.intensityTarget,
+            intensityCategory: deriveIntensityCategory(item.intensityTarget),
             distanceMeters: item.distanceMeters ?? null,
             elevationGainMeters: item.elevationGainMeters ?? null,
             notes: item.notes ?? null,
