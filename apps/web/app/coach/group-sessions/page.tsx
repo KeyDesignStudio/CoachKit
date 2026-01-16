@@ -183,7 +183,7 @@ export default function CoachGroupSessionsPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Coaching</p>
-              <h1 className="text-2xl md:text-3xl font-semibold">Group Sessions</h1>
+              <h1 className="text-2xl md:text-3xl font-semibold">Session Builder</h1>
               <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring sessions to apply to athlete calendars</p>
             </div>
             <Button type="button" onClick={() => setIsCreateModalOpen(true)} variant="primary" className="min-h-[44px] w-full md:w-auto">

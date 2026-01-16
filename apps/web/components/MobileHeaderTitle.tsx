@@ -13,7 +13,7 @@ function fallbackTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/coach/calendar')) return 'Calendar';
   if (pathname.startsWith('/coach/dashboard')) return 'Dashboard';
   if (pathname.startsWith('/coach/athletes')) return 'Athletes';
-  if (pathname.startsWith('/coach/group-sessions')) return 'Group Sessions';
+  if (pathname.startsWith('/coach/group-sessions')) return 'Session Builder';
   if (pathname.startsWith('/coach/settings')) return 'Settings';
 
   if (pathname.startsWith('/athlete/calendar')) return 'Calendar';

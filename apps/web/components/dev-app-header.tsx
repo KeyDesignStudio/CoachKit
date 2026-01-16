@@ -19,7 +19,7 @@ const ALL_NAV_LINKS: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
   { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
   { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
-  { href: '/coach/group-sessions', label: 'Group Sessions', roles: ['COACH'] },
+  { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },

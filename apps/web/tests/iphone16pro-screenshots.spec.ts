@@ -40,7 +40,7 @@ test.describe('iPhone 16 Pro screenshots (390px)', () => {
     await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Manage Athletes' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Workout Scheduling' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Group Sessions' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'SESSION BUILDER' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
     await page.screenshot({ path: screenshotPath(testInfo, 'mobile-menu-drawer.png'), fullPage: true });
     await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: 'Close menu' }).click();
