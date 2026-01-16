@@ -74,20 +74,9 @@ type LibraryDetailSession = {
 };
 
 function buildSessionDescriptionFromLibrary(session: LibraryDetailSession): string {
-  const lines: string[] = [];
-  if (session.description?.trim()) lines.push(session.description.trim());
-  if (session.intensityTarget?.trim()) lines.push(`Intensity: ${session.intensityTarget.trim()}`);
-  if (session.distanceMeters && session.distanceMeters > 0) lines.push(`Distance: ${Math.round(session.distanceMeters)}m`);
-  if (session.elevationGainMeters && session.elevationGainMeters > 0)
-    lines.push(`Elevation gain: ${Math.round(session.elevationGainMeters)}m`);
-  if (session.equipment?.length) lines.push(`Equipment: ${session.equipment.join(', ')}`);
-  if (session.tags?.length) lines.push(`Tags: ${session.tags.join(', ')}`);
-  if (session.notes?.trim()) {
-    lines.push('');
-    lines.push(session.notes.trim());
-  }
-
-  return lines.join('\n');
+  // Keep the instruction text as-is. Structured fields (tags/equipment/intensity/notes/structure)
+  // are persisted separately on the resulting scheduled workouts.
+  return session.description?.trim() ? session.description.trim() : '';
 }
 
 export default function CoachGroupSessionsPage() {
@@ -205,6 +194,12 @@ export default function CoachGroupSessionsPage() {
       discipline: librarySession.discipline,
       durationMinutes: String(minutes),
       description: buildSessionDescriptionFromLibrary(librarySession),
+      distanceMeters: librarySession.distanceMeters,
+      intensityTarget: librarySession.intensityTarget,
+      tags: librarySession.tags ?? [],
+      equipment: librarySession.equipment ?? [],
+      notes: librarySession.notes,
+      workoutStructure: librarySession.workoutStructure,
     });
     setIsCreateModalOpen(true);
     setActiveTab('sessions');

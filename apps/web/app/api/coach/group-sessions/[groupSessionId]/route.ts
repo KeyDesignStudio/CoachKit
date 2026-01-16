@@ -25,7 +25,13 @@ const updateGroupSessionSchema = z
     location: nonEmptyString.optional().nullable(),
     startTimeLocal: localTime.optional(),
     durationMinutes: z.number().int().min(1).max(600).optional(),
-    description: z.string().trim().max(4000).optional().nullable(),
+    distanceMeters: z.number().positive().optional().nullable(),
+    intensityTarget: z.string().trim().min(1).optional().nullable(),
+    tags: z.array(z.string().trim().min(1)).optional(),
+    equipment: z.array(z.string().trim().min(1)).optional(),
+    workoutStructure: z.unknown().optional().nullable(),
+    notes: z.string().trim().max(20000).optional().nullable(),
+    description: z.string().trim().max(20000).optional().nullable(),
     recurrenceRule: nonEmptyString.optional(),
     visibilityType: z.nativeEnum(GroupVisibilityType).optional(),
     optionalFlag: z.boolean().optional(),
@@ -93,6 +99,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (payload.durationMinutes !== undefined) {
       patchData.durationMinutes = payload.durationMinutes;
+    }
+
+    if (payload.distanceMeters !== undefined) {
+      patchData.distanceMeters = payload.distanceMeters ?? null;
+    }
+
+    if (payload.intensityTarget !== undefined) {
+      patchData.intensityTarget = payload.intensityTarget ?? null;
+    }
+
+    if (payload.tags !== undefined) {
+      patchData.tags = payload.tags;
+    }
+
+    if (payload.equipment !== undefined) {
+      patchData.equipment = payload.equipment;
+    }
+
+    if (payload.workoutStructure !== undefined) {
+      patchData.workoutStructure = payload.workoutStructure as Prisma.InputJsonValue;
+    }
+
+    if (payload.notes !== undefined) {
+      patchData.notes = payload.notes ?? null;
     }
 
     if (payload.description !== undefined) {

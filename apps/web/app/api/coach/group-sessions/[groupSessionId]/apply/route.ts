@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { CalendarItemStatus, GroupVisibilityType } from '@prisma/client';
 import { z } from 'zod';
 
@@ -92,6 +93,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             discipline: groupSession.discipline,
             title: groupSession.title,
             workoutDetail: groupSession.description ?? null,
+            distanceMeters: groupSession.distanceMeters ?? null,
+            plannedDistanceKm:
+              groupSession.distanceMeters && groupSession.distanceMeters > 0
+                ? groupSession.distanceMeters / 1000
+                : null,
+            intensityTarget: groupSession.intensityTarget ?? null,
+            tags: groupSession.tags ?? [],
+            equipment: groupSession.equipment ?? [],
+            workoutStructure: (groupSession.workoutStructure ?? null) as Prisma.InputJsonValue,
+            notes: groupSession.notes ?? null,
             groupSessionId: groupSession.id,
             status: CalendarItemStatus.PLANNED,
           },
