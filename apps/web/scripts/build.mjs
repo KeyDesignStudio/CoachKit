@@ -55,22 +55,37 @@ if (!process.env.NEXT_PUBLIC_BUILD_SHA) {
 
 const schemaArgs = ['--schema', 'prisma/schema.prisma'];
 
-// In production (e.g. Vercel), DATABASE_URL is present and migrations must be deployed
-// before the app starts querying new columns.
-if (process.env.DATABASE_URL) {
-  runWithRetry(
-    'prisma',
-    ['migrate', 'deploy', ...schemaArgs],
-    {
-      attempts: 8,
-      isRetryable: (output) =>
-        output.includes('Error: P1002') ||
-        output.includes('Timed out trying to acquire a postgres advisory lock') ||
-        output.includes('pg_advisory_lock'),
-      baseDelayMs: 1500,
-      maxDelayMs: 15000,
-    }
-  );
+function isVercelBuild() {
+  return Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
+}
+
+function isLocalDatabaseUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+// CoachKit policy: do not run Prisma migrations automatically during Vercel builds.
+// Migrations are applied manually against Neon.
+const canAutoMigrate =
+  process.env.RUN_PRISMA_MIGRATIONS_ON_BUILD === '1' ||
+  (!isVercelBuild() && process.env.DATABASE_URL && isLocalDatabaseUrl(process.env.DATABASE_URL));
+
+if (process.env.DATABASE_URL && canAutoMigrate) {
+  runWithRetry('prisma', ['migrate', 'deploy', ...schemaArgs], {
+    attempts: 8,
+    isRetryable: (output) =>
+      output.includes('Error: P1002') ||
+      output.includes('Timed out trying to acquire a postgres advisory lock') ||
+      output.includes('pg_advisory_lock'),
+    baseDelayMs: 1500,
+    maxDelayMs: 15000,
+  });
+} else if (process.env.DATABASE_URL && isVercelBuild()) {
+  console.warn('[build] Skipping prisma migrate deploy on Vercel build (manual migrations required).');
 }
 
 run('prisma', ['generate', ...schemaArgs]);
