@@ -6,7 +6,6 @@ import { useApi } from '@/components/api-client';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
 
@@ -45,12 +44,19 @@ type LibraryDetailResponse = {
 
 type WorkoutLibraryPanelProps = {
   onUseTemplate: (session: LibraryDetailSession) => void;
+  mode?: 'library' | 'favorites';
 };
 
 function formatDurationMinutes(durationSec: number): string {
   if (!Number.isFinite(durationSec) || durationSec <= 0) return '';
   const minutes = Math.round(durationSec / 60);
   return `${minutes} min`;
+}
+
+function formatDistance(distanceMeters: number | null): string {
+  if (!distanceMeters || !Number.isFinite(distanceMeters) || distanceMeters <= 0) return '';
+  if (distanceMeters < 1000) return `${Math.round(distanceMeters)} m`;
+  return `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
 function disciplineLabel(d: Discipline) {
@@ -77,12 +83,55 @@ function parseCsv(input: string): string[] {
     .filter(Boolean);
 }
 
-export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps) {
+function asStructureSegments(structure: unknown): Array<Record<string, unknown>> | null {
+  if (!structure) return null;
+  if (Array.isArray(structure)) {
+    return structure.filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === 'object');
+  }
+
+  if (typeof structure === 'object') {
+    const maybe = structure as Record<string, unknown>;
+    const segments = maybe.segments;
+    if (Array.isArray(segments)) {
+      return segments.filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === 'object');
+    }
+  }
+
+  return null;
+}
+
+function segmentLabel(segment: Record<string, unknown>): string {
+  const label = typeof segment.label === 'string' ? segment.label.trim() : '';
+  const name = typeof segment.name === 'string' ? segment.name.trim() : '';
+  const title = typeof segment.title === 'string' ? segment.title.trim() : '';
+  const kind = typeof segment.type === 'string' ? segment.type.trim() : '';
+  return label || name || title || kind || 'Segment';
+}
+
+function segmentMeta(segment: Record<string, unknown>): string {
+  const durationSec = typeof segment.durationSec === 'number' ? segment.durationSec : null;
+  const distanceMeters = typeof segment.distanceMeters === 'number' ? segment.distanceMeters : null;
+  const reps = typeof segment.reps === 'number' ? segment.reps : null;
+  const intensity = typeof segment.intensity === 'string' ? segment.intensity.trim() : '';
+
+  const parts: string[] = [];
+  if (typeof reps === 'number' && Number.isFinite(reps) && reps > 1) parts.push(`${reps}x`);
+  if (typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0) parts.push(formatDurationMinutes(durationSec));
+  const dist = formatDistance(distanceMeters);
+  if (dist) parts.push(dist);
+  if (intensity) parts.push(intensity);
+  return parts.join(' • ');
+}
+
+export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: WorkoutLibraryPanelProps) {
   const { request } = useApi();
 
   const [q, setQ] = useState('');
-  const [discipline, setDiscipline] = useState<Discipline | ''>('');
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [tagsInput, setTagsInput] = useState('');
+  const [durationMin, setDurationMin] = useState('');
+  const [durationMax, setDurationMax] = useState('');
+  const [intensityTarget, setIntensityTarget] = useState('');
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(false);
@@ -99,15 +148,23 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
 
   const tags = useMemo(() => parseCsv(tagsInput), [tagsInput]);
 
+  const favoritesOnly = mode === 'favorites';
+
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
-    if (discipline) params.append('discipline', discipline);
+    for (const d of disciplines) params.append('discipline', d);
     for (const tag of tags) params.append('tags', tag);
+    const dMin = Number.parseInt(durationMin, 10);
+    const dMax = Number.parseInt(durationMax, 10);
+    if (Number.isFinite(dMin) && dMin >= 0) params.set('durationMin', String(dMin));
+    if (Number.isFinite(dMax) && dMax >= 0) params.set('durationMax', String(dMax));
+    if (intensityTarget.trim()) params.set('intensityTarget', intensityTarget.trim());
+    if (favoritesOnly) params.set('favoritesOnly', '1');
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
     return `/api/coach/workout-library?${params.toString()}`;
-  }, [q, discipline, tags, page]);
+  }, [q, disciplines, durationMin, durationMax, intensityTarget, favoritesOnly, tags, page]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -173,12 +230,16 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
         <div className="flex flex-col gap-3">
           <div>
             <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Library</p>
-            <h2 className="text-xl md:text-2xl font-semibold">Workout Library</h2>
-            <p className="text-xs md:text-sm text-[var(--muted)]">Browse templates, favorite, and inject into Session Builder</p>
+            <h2 className="text-xl md:text-2xl font-semibold">{mode === 'favorites' ? 'Favorites' : 'Workout Library'}</h2>
+            <p className="text-xs md:text-sm text-[var(--muted)]">
+              {mode === 'favorites'
+                ? 'Your saved templates'
+                : 'Browse templates, favorite, and inject into Session Builder'}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="relative md:col-span-2">
+            <div className="relative md:col-span-3">
               <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
               <Input
                 type="text"
@@ -192,22 +253,42 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
               />
             </div>
 
-            <Select
-              value={discipline}
-              onChange={(e) => {
-                setDiscipline(e.target.value as Discipline | '');
-                setPage(1);
-              }}
-              className="min-h-[44px]"
-            >
-              <option value="">All disciplines</option>
-              <option value="RUN">Run</option>
-              <option value="BIKE">Bike</option>
-              <option value="SWIM">Swim</option>
-              <option value="BRICK">Brick</option>
-              <option value="STRENGTH">Strength</option>
-              <option value="OTHER">Other</option>
-            </Select>
+            <div className="md:col-span-3 flex flex-wrap gap-2">
+              {(['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const).map((d) => {
+                const active = disciplines.includes(d);
+                return (
+                  <Button
+                    key={d}
+                    type="button"
+                    size="sm"
+                    variant={active ? 'primary' : 'secondary'}
+                    onClick={() => {
+                      setDisciplines((prev) => {
+                        const next = prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d];
+                        return next;
+                      });
+                      setPage(1);
+                    }}
+                  >
+                    {disciplineLabel(d)}
+                  </Button>
+                );
+              })}
+
+              {disciplines.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setDisciplines([]);
+                    setPage(1);
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
 
             <Input
               type="text"
@@ -219,6 +300,76 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
                 setPage(1);
               }}
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
+              <div className="md:col-span-2">
+                <Input
+                  type="text"
+                  placeholder="Intensity (e.g. Z2, Tempo, Easy)"
+                  className="min-h-[44px]"
+                  value={intensityTarget}
+                  onChange={(e) => {
+                    setIntensityTarget(e.target.value);
+                    setPage(1);
+                  }}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map((z) => (
+                    <Button
+                      key={z}
+                      type="button"
+                      size="sm"
+                      variant={intensityTarget.trim().toUpperCase() === z ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setIntensityTarget(z);
+                        setPage(1);
+                      }}
+                    >
+                      {z}
+                    </Button>
+                  ))}
+
+                  {intensityTarget.trim() && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setIntensityTarget('');
+                        setPage(1);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="Min (min)"
+                  className="min-h-[44px]"
+                  value={durationMin}
+                  onChange={(e) => {
+                    setDurationMin(e.target.value);
+                    setPage(1);
+                  }}
+                />
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="Max (min)"
+                  className="min-h-[44px]"
+                  value={durationMax}
+                  onChange={(e) => {
+                    setDurationMax(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           {error && <p className="text-sm text-rose-500">{error}</p>}
@@ -267,6 +418,11 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
               {formatDurationMinutes(it.durationSec) && (
                 <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
                   {formatDurationMinutes(it.durationSec)}
+                </span>
+              )}
+              {formatDistance(it.distanceMeters) && (
+                <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                  {formatDistance(it.distanceMeters)}
                 </span>
               )}
               {it.tags.slice(0, 3).map((tag) => (
@@ -348,23 +504,83 @@ export function WorkoutLibraryPanel({ onUseTemplate }: WorkoutLibraryPanelProps)
 
               {detail?.session && (
                 <>
-                  <div className="flex flex-wrap gap-2">
-                    {formatDurationMinutes(detail.session.durationSec) && (
+                  <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Overview</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formatDurationMinutes(detail.session.durationSec) && (
+                        <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                          {formatDurationMinutes(detail.session.durationSec)}
+                        </span>
+                      )}
+                      {formatDistance(detail.session.distanceMeters) && (
+                        <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                          {formatDistance(detail.session.distanceMeters)}
+                        </span>
+                      )}
                       <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
-                        {formatDurationMinutes(detail.session.durationSec)}
+                        {detail.session.intensityTarget}
                       </span>
-                    )}
-                    <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
-                      {detail.session.intensityTarget}
-                    </span>
+                    </div>
                   </div>
 
-                  <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{detail.session.description}</p>
+                  <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Workout Detail</p>
+                    <p className="mt-2 text-sm text-[var(--text)] whitespace-pre-wrap">{detail.session.description}</p>
+                  </div>
 
                   {detail.session.notes && (
                     <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
                       <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Notes</p>
                       <p className="mt-2 text-sm whitespace-pre-wrap">{detail.session.notes}</p>
+                    </div>
+                  )}
+
+                  {!!detail.session.equipment?.length && (
+                    <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Equipment</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {detail.session.equipment.map((eq) => (
+                          <span
+                            key={eq}
+                            className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]"
+                          >
+                            {eq}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {detail.session.workoutStructure && (
+                    <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Structure</p>
+                      {(() => {
+                        const segments = asStructureSegments(detail.session.workoutStructure);
+                        if (segments && segments.length > 0) {
+                          return (
+                            <div className="mt-2 flex flex-col gap-2">
+                              {segments.slice(0, 50).map((seg, idx) => (
+                                <div key={idx} className="rounded-xl border border-white/20 bg-white/40 p-3">
+                                  <p className="text-sm font-medium">{segmentLabel(seg)}</p>
+                                  {segmentMeta(seg) && <p className="mt-1 text-xs text-[var(--muted)]">{segmentMeta(seg)}</p>}
+                                  {typeof seg.notes === 'string' && seg.notes.trim() && (
+                                    <p className="mt-2 text-sm whitespace-pre-wrap">{seg.notes.trim()}</p>
+                                  )}
+                                </div>
+                              ))}
+                              {segments.length > 50 && (
+                                <p className="text-xs text-[var(--muted)]">Showing first 50 segments…</p>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-white/20 bg-white/40 p-3 text-xs text-[var(--muted)]">
+                            {JSON.stringify(detail.session.workoutStructure, null, 2)}
+                          </pre>
+                        );
+                      })()}
                     </div>
                   )}
 
