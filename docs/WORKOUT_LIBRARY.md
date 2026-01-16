@@ -5,7 +5,9 @@
 
 - No feature flags required.
 - Rollout includes Prisma migration `20260116124208_workout_detail_fields`.
-- Post-merge, ensure the deploy pipeline runs migrations (e.g. `prisma migrate deploy`).
+- After merging to `main` and before validating production UI, run migrations against Neon PROD (manual):
+  - `DATABASE_URL="<NEON_PROD_DATABASE_URL_DIRECT>" npm run migrate:prod`
+  - See `docs/DEPLOY_MIGRATIONS.md` for details and expected output.
   - No retroactive mutation of existing `CalendarItem` history.
 - Keep existing auth/Strava/calendar behavior unchanged.
 
