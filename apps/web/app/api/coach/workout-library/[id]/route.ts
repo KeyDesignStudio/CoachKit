@@ -23,6 +23,7 @@ export async function GET(_request: NextRequest, context: { params: { id: string
         description: true,
         durationSec: true,
         intensityTarget: true,
+        intensityCategory: true,
         distanceMeters: true,
         elevationGainMeters: true,
         notes: true,
@@ -30,6 +31,11 @@ export async function GET(_request: NextRequest, context: { params: { id: string
         workoutStructure: true,
         createdAt: true,
         updatedAt: true,
+        _count: {
+          select: {
+            usage: true,
+          },
+        },
       },
     });
 
@@ -49,7 +55,13 @@ export async function GET(_request: NextRequest, context: { params: { id: string
 
     return success(
       {
-        session,
+        session: (() => {
+          const { _count, ...rest } = session;
+          return {
+            ...rest,
+            usageCount: _count.usage,
+          };
+        })(),
         favorite: Boolean(favorite),
       },
       {

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "migrate:prod": "prisma migrate deploy --schema apps/web/prisma/schema.prisma",
+    "migrate:prod": "npx prisma migrate deploy --schema apps/web/prisma/schema.prisma",
     "prisma:generate:web": "prisma generate --schema apps/web/prisma/schema.prisma"
   },
   "dependencies": {
