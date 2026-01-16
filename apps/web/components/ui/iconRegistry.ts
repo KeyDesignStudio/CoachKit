@@ -47,6 +47,9 @@ export const ICON_NAMES = [
   'info',
   'warning',
 
+  // Common UI
+  'favorite',
+
   // Weather
   'weatherSunny',
   'weatherPartlyCloudy',
@@ -103,6 +106,9 @@ export const ICONS: Record<IconName, string> = {
   settings: 'settings',
   info: 'info',
   warning: 'warning_amber',
+
+  // Common UI
+  favorite: 'star',
 
   // Weather
   weatherSunny: 'sunny',

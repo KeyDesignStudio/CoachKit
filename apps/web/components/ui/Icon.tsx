@@ -27,6 +27,7 @@ type IconProps = {
   name: IconName;
   size?: IconSize;
   className?: string;
+  filled?: boolean;
   'aria-hidden'?: boolean;
   'aria-label'?: string;
 };
@@ -35,6 +36,7 @@ export function Icon({
   name, 
   size = 'sm', 
   className,
+  filled = false,
   'aria-hidden': ariaHidden = true,
   'aria-label': ariaLabel,
 }: IconProps) {
@@ -53,7 +55,7 @@ export function Icon({
       aria-label={ariaLabel}
       style={{ 
         fontSize,
-        fontVariationSettings: `'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' ${opsz}`,
+        fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 300, 'GRAD' 0, 'opsz' ${opsz}`,
       }}
     >
       {materialSymbol}

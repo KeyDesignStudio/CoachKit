@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -47,6 +47,7 @@ type CreateSessionModalProps = {
   athletes: AthleteOption[];
   onClose: () => void;
   onCreate: (data: any) => Promise<string>;
+  initialValues?: Partial<SessionFormState> | null;
 };
 
 function buildWeeklyRule(days: string[]) {
@@ -61,22 +62,41 @@ function parseSquadIds(input: string) {
     .filter(Boolean);
 }
 
-export function CreateSessionModal({ isOpen, athletes, onClose, onCreate }: CreateSessionModalProps) {
-  const [form, setForm] = useState<SessionFormState>({
-    title: '',
-    discipline: '',
-    location: '',
-    startTimeLocal: '05:30',
-    durationMinutes: '60',
-    description: '',
-    optionalFlag: false,
-    selectedDays: ['MO'],
-    visibilityType: 'ALL',
-    targetAthleteIds: [],
-    squadInput: '',
-  });
+export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initialValues }: CreateSessionModalProps) {
+  const defaultForm = useMemo<SessionFormState>(
+    () => ({
+      title: '',
+      discipline: '',
+      location: '',
+      startTimeLocal: '05:30',
+      durationMinutes: '60',
+      description: '',
+      optionalFlag: false,
+      selectedDays: ['MO'],
+      visibilityType: 'ALL',
+      targetAthleteIds: [],
+      squadInput: '',
+    }),
+    []
+  );
+
+  const [form, setForm] = useState<SessionFormState>(defaultForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+
+  // Re-initialize form each time the modal opens (supports template injection).
+  useEffect(() => {
+    if (!isOpen) return;
+    const merged: SessionFormState = {
+      ...defaultForm,
+      ...(initialValues ?? {}),
+      // Ensure arrays default correctly
+      selectedDays: initialValues?.selectedDays?.length ? initialValues.selectedDays : defaultForm.selectedDays,
+      targetAthleteIds: initialValues?.targetAthleteIds ?? defaultForm.targetAthleteIds,
+    };
+    setForm(merged);
+    setError('');
+  }, [defaultForm, initialValues, isOpen]);
 
   if (!isOpen) return null;
 

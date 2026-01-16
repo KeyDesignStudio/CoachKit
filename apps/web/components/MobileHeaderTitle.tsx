@@ -10,6 +10,7 @@ type MobileHeaderTitleProps = {
 };
 
 function fallbackTitleFromPath(pathname: string): string {
+  if (pathname.startsWith('/admin/workout-library')) return 'Workout Library';
   if (pathname.startsWith('/coach/calendar')) return 'Calendar';
   if (pathname.startsWith('/coach/dashboard')) return 'Dashboard';
   if (pathname.startsWith('/coach/athletes')) return 'Athletes';
