@@ -1,13 +1,11 @@
 # Workout Library (Triathlon / Multisport)
 
-Owner: Agent
-Status: Phase 4 (Admin UI + import tooling)
 
-## Goals
-- Provide a curated, searchable library of multisport workout templates (RUN/BIKE/SWIM/BRICK/STRENGTH/OTHER).
-- Allow coaches to browse/preview/favorite and inject workouts into **Session Builder** (`/coach/group-sessions`).
-- Keep the library **independent from athlete history**:
-  - No writes to `CompletedActivity`.
+## Rollout Notes
+
+- No feature flags required.
+- Rollout includes Prisma migration `20260116124208_workout_detail_fields`.
+- Post-merge, ensure the deploy pipeline runs migrations (e.g. `prisma migrate deploy`).
   - No retroactive mutation of existing `CalendarItem` history.
 - Keep existing auth/Strava/calendar behavior unchanged.
 
@@ -28,7 +26,7 @@ Fields:
 - `discipline`: enum (`RUN`, `BIKE`, `SWIM`, `BRICK`, `STRENGTH`, `OTHER`)
 - `tags`: string[]
 - `description`: string (text)
-- `durationSec`: int
+- `durationSec`: int (stored as `0` when distance-only)
 - `intensityTarget`: string
 - `distanceMeters?`: float
 - `elevationGainMeters?`: float
@@ -69,11 +67,41 @@ Index:
 
 ---
 
+## How Coaches Use the Library
+
+Primary flow:
+1) Open Session Builder: `/coach/group-sessions`.
+2) Use the **Library** tab to search/filter and preview a workout.
+3) Optional: favorite workouts (Favorites tab is a filtered view).
+4) Click “Use in Session Builder” to prefill a new Group Session.
+5) Create the session, then **Apply** it to athletes/squads.
+6) Verify scheduled workouts render rich detail in:
+  - Coach Calendar edit drawer (`/coach/calendar`)
+  - Athlete workout detail (`/athlete/workouts/[id]`)
+
+Notes:
+- Coaches cannot create/edit library sessions; only Admin can.
+- Coaches can write per-coach favorites and usage signals.
+
+---
+
+## Scheduling + Workout Detail Persistence
+
+Session Builder creates a `GroupSession`. When it is applied to athletes, Calendar Items are created.
+
+To preserve rich detail:
+- `WorkoutLibrarySession` fields are copied into `GroupSession` when injected.
+- `GroupSession` fields are copied into `CalendarItem` during apply.
+- Coach calendar drawer edits persist on `CalendarItem`.
+- Athlete workout detail reads from `CalendarItem`.
+
+---
+
 ## API Endpoints
 
 ### Coach (read-only)
 - `GET /api/coach/workout-library`
-  - Query: `q`, `discipline`
+  - Query: `q`, `discipline`, `tags`, `durationMin`, `durationMax`, `intensityTarget`, `favoritesOnly`
   - Returns: `items[]` with `isFavorite` and `usageCount`
 - `GET /api/coach/workout-library/:id` (full detail)
 - `POST /api/coach/workout-library/:id/favorite`

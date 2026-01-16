@@ -58,6 +58,7 @@ Safari iOS checks (required)
 - Month view readable; +N more behavior works
 5) Group Sessions
 - Grid renders; cards are tappable
+- Library tab loads; search/filter/preview usable on mobile
 - Create; edit; apply
 6) Settings
 - Timezone
