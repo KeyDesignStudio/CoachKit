@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { SessionCard } from '@/components/coach/SessionCard';
 import { GroupSessionDrawer } from '@/components/coach/GroupSessionDrawer';
 import { CreateSessionModal } from '@/components/coach/CreateSessionModal';
+import { WorkoutLibraryPanel } from '@/components/coach/WorkoutLibraryPanel';
 
 type GroupVisibility = 'ALL' | 'SQUAD' | 'SELECTED';
 
@@ -55,6 +56,40 @@ type ApplyResult = {
   createdIds: string[];
 };
 
+type LibraryDetailSession = {
+  id: string;
+  title: string;
+  discipline: string;
+  tags: string[];
+  description: string;
+  durationSec: number;
+  intensityTarget: string;
+  distanceMeters: number | null;
+  elevationGainMeters: number | null;
+  notes: string | null;
+  equipment: string[];
+  workoutStructure: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function buildSessionDescriptionFromLibrary(session: LibraryDetailSession): string {
+  const lines: string[] = [];
+  if (session.description?.trim()) lines.push(session.description.trim());
+  if (session.intensityTarget?.trim()) lines.push(`Intensity: ${session.intensityTarget.trim()}`);
+  if (session.distanceMeters && session.distanceMeters > 0) lines.push(`Distance: ${Math.round(session.distanceMeters)}m`);
+  if (session.elevationGainMeters && session.elevationGainMeters > 0)
+    lines.push(`Elevation gain: ${Math.round(session.elevationGainMeters)}m`);
+  if (session.equipment?.length) lines.push(`Equipment: ${session.equipment.join(', ')}`);
+  if (session.tags?.length) lines.push(`Tags: ${session.tags.join(', ')}`);
+  if (session.notes?.trim()) {
+    lines.push('');
+    lines.push(session.notes.trim());
+  }
+
+  return lines.join('\n');
+}
+
 export default function CoachGroupSessionsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -66,6 +101,8 @@ export default function CoachGroupSessionsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'sessions' | 'library'>('sessions');
+  const [createInitialValues, setCreateInitialValues] = useState<any>(null);
 
   const isCoach = user?.role === 'COACH';
 
@@ -154,9 +191,23 @@ export default function CoachGroupSessionsPage() {
   const handleCreateSuccess = async (payload: any): Promise<string> => {
     const newSessionId = await handleCreate(payload);
     setIsCreateModalOpen(false);
+    setCreateInitialValues(null);
     // Open the newly created session in the drawer
     setSelectedSessionId(newSessionId);
     return newSessionId;
+  };
+
+  const handleUseLibraryTemplate = async (librarySession: LibraryDetailSession) => {
+    const minutes = Math.max(1, Math.round((librarySession.durationSec ?? 0) / 60));
+
+    setCreateInitialValues({
+      title: librarySession.title,
+      discipline: librarySession.discipline,
+      durationMinutes: String(minutes),
+      description: buildSessionDescriptionFromLibrary(librarySession),
+    });
+    setIsCreateModalOpen(true);
+    setActiveTab('sessions');
   };
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || null;
@@ -193,15 +244,38 @@ export default function CoachGroupSessionsPage() {
           </div>
 
           {/* Search Bar */}
-          <div className="relative">
-            <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-            <Input
-              type="text"
-              placeholder="Search by title or discipline..."
-              className="min-h-[44px] pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={activeTab === 'sessions' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('sessions')}
+              >
+                Sessions
+              </Button>
+              <Button
+                type="button"
+                variant={activeTab === 'library' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('library')}
+              >
+                Library
+              </Button>
+            </div>
+
+            {activeTab === 'sessions' && (
+              <div className="relative">
+                <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                <Input
+                  type="text"
+                  placeholder="Search by title or discipline..."
+                  className="min-h-[44px] pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -210,35 +284,41 @@ export default function CoachGroupSessionsPage() {
         {loadingSessions && <p className="mt-3 text-sm text-[var(--muted)]">Loading sessions...</p>}
       </header>
 
-      {/* Sessions List */}
-      <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
-          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
-            <p className="text-[var(--muted)]">No group sessions yet. Create one to get started.</p>
+      {activeTab === 'sessions' ? (
+        <>
+          {/* Sessions List */}
+          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
+              <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+                <p className="text-[var(--muted)]">No group sessions yet. Create one to get started.</p>
+              </div>
+            )}
+
+            {!loadingSessions && filteredSessions.length === 0 && searchQuery && (
+              <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+                <p className="text-[var(--muted)]">No sessions match your search.</p>
+              </div>
+            )}
+
+            {filteredSessions.map((session) => (
+              <SessionCard key={session.id} session={session} onClick={() => setSelectedSessionId(session.id)} />
+            ))}
           </div>
-        )}
 
-        {!loadingSessions && filteredSessions.length === 0 && searchQuery && (
-          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
-            <p className="text-[var(--muted)]">No sessions match your search.</p>
-          </div>
-        )}
-
-        {filteredSessions.map((session) => (
-          <SessionCard key={session.id} session={session} onClick={() => setSelectedSessionId(session.id)} />
-        ))}
-      </div>
-
-      {/* Drawer for Editing */}
-      {selectedSession && (
-        <GroupSessionDrawer
-          session={selectedSession}
-          athletes={athletes}
-          onClose={() => setSelectedSessionId(null)}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onApply={handleApply}
-        />
+          {/* Drawer for Editing */}
+          {selectedSession && (
+            <GroupSessionDrawer
+              session={selectedSession}
+              athletes={athletes}
+              onClose={() => setSelectedSessionId(null)}
+              onSave={handleSave}
+              onDelete={handleDelete}
+              onApply={handleApply}
+            />
+          )}
+        </>
+      ) : (
+        <WorkoutLibraryPanel onUseTemplate={handleUseLibraryTemplate} />
       )}
 
       {/* Modal for Creating */}
@@ -247,6 +327,7 @@ export default function CoachGroupSessionsPage() {
         athletes={athletes}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateSuccess}
+        initialValues={createInitialValues}
       />
     </section>
   );
