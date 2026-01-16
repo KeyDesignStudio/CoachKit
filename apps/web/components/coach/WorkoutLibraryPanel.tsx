@@ -9,6 +9,10 @@ import { Input } from '@/components/ui/Input';
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
 
+type IntensityCategory = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | 'RPE' | 'OTHER';
+
+type SortKey = 'relevance' | 'newest' | 'popular' | 'durationAsc' | 'durationDesc' | 'intensityAsc' | 'intensityDesc' | 'titleAsc';
+
 type LibraryListItem = {
   id: string;
   title: string;
@@ -17,9 +21,12 @@ type LibraryListItem = {
   description: string;
   durationSec: number;
   intensityTarget: string;
+  intensityCategory: IntensityCategory | null;
   distanceMeters: number | null;
   elevationGainMeters: number | null;
   equipment: string[];
+  usageCount: number;
+  createdAt: string;
   updatedAt: string;
   favorite: boolean;
 };
@@ -132,7 +139,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
   const [durationMin, setDurationMin] = useState('');
   const [durationMax, setDurationMax] = useState('');
   const [intensityTarget, setIntensityTarget] = useState('');
+  const [intensityCategory, setIntensityCategory] = useState<IntensityCategory | ''>('');
+  const [sort, setSort] = useState<SortKey>('relevance');
   const [page, setPage] = useState(1);
+
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -147,8 +158,41 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
   const pageSize = 20;
 
   const tags = useMemo(() => parseCsv(tagsInput), [tagsInput]);
+  const activeTagSet = useMemo(() => new Set(tags.map((t) => t.toLowerCase())), [tags]);
 
   const favoritesOnly = mode === 'favorites';
+
+  const setTagsFromArray = useCallback((nextTags: string[]) => {
+    const next = nextTags
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join(', ');
+    setTagsInput(next);
+  }, []);
+
+  const toggleTagFilter = useCallback(
+    (tag: string) => {
+      const normalized = tag.trim();
+      if (!normalized) return;
+      const isActive = activeTagSet.has(normalized.toLowerCase());
+      const nextTags = isActive ? tags.filter((t) => t.toLowerCase() !== normalized.toLowerCase()) : [...tags, normalized];
+      setTagsFromArray(nextTags);
+      setPage(1);
+    },
+    [activeTagSet, setTagsFromArray, tags]
+  );
+
+  const clearFilters = useCallback(() => {
+    setQ('');
+    setDisciplines([]);
+    setTagsInput('');
+    setDurationMin('');
+    setDurationMax('');
+    setIntensityTarget('');
+    setIntensityCategory('');
+    setSort('relevance');
+    setPage(1);
+  }, []);
 
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -160,18 +204,25 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
     if (Number.isFinite(dMin) && dMin >= 0) params.set('durationMin', String(dMin));
     if (Number.isFinite(dMax) && dMax >= 0) params.set('durationMax', String(dMax));
     if (intensityTarget.trim()) params.set('intensityTarget', intensityTarget.trim());
+    if (intensityCategory) params.set('intensityCategory', intensityCategory);
+    if (sort !== 'relevance') params.set('sort', sort);
     if (favoritesOnly) params.set('favoritesOnly', '1');
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
     return `/api/coach/workout-library?${params.toString()}`;
-  }, [q, disciplines, durationMin, durationMax, intensityTarget, favoritesOnly, tags, page]);
+  }, [q, disciplines, durationMin, durationMax, intensityTarget, intensityCategory, sort, favoritesOnly, tags, page]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const data = await request<LibraryListResponse>(listUrl);
-      setItems(data.items);
+      setItems((prev) => {
+        if (data.page <= 1) return data.items;
+        const seen = new Set(prev.map((it) => it.id));
+        const next = data.items.filter((it) => !seen.has(it.id));
+        return [...prev, ...next];
+      });
       setTotal(data.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load workout library.');
@@ -184,7 +235,7 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
     loadList();
   }, [loadList]);
 
-  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  const canLoadMore = !loading && items.length < total;
 
   const loadDetail = useCallback(
     async (id: string) => {
@@ -253,89 +304,194 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
               />
             </div>
 
-            <div className="md:col-span-3 flex flex-wrap gap-2">
-              {(['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const).map((d) => {
-                const active = disciplines.includes(d);
-                return (
-                  <Button
-                    key={d}
-                    type="button"
-                    size="sm"
-                    variant={active ? 'primary' : 'secondary'}
-                    onClick={() => {
-                      setDisciplines((prev) => {
-                        const next = prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d];
-                        return next;
-                      });
-                      setPage(1);
-                    }}
-                  >
-                    {disciplineLabel(d)}
-                  </Button>
-                );
-              })}
+            <div className="md:col-span-3 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2">
+                {(['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const).map((d) => {
+                  const active = disciplines.includes(d);
+                  return (
+                    <Button
+                      key={d}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setDisciplines((prev) => {
+                          const next = prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d];
+                          return next;
+                        });
+                        setPage(1);
+                      }}
+                    >
+                      {disciplineLabel(d)}
+                    </Button>
+                  );
+                })}
 
-              {disciplines.length > 0 && (
+                {(disciplines.length > 0 || q.trim() || tags.length > 0 || durationMin.trim() || durationMax.trim() || intensityTarget.trim() || intensityCategory) && (
+                  <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <label className="text-xs text-[var(--muted)]">Sort</label>
+                <select
+                  className="min-h-[36px] rounded-xl border border-white/30 bg-white/60 px-3 text-sm text-[var(--text)]"
+                  value={sort}
+                  onChange={(e) => {
+                    setSort(e.target.value as SortKey);
+                    setPage(1);
+                  }}
+                  aria-label="Sort workouts"
+                >
+                  <option value="relevance">Relevance</option>
+                  <option value="popular">Most used</option>
+                  <option value="newest">Newest</option>
+                  <option value="durationAsc">Duration (short → long)</option>
+                  <option value="durationDesc">Duration (long → short)</option>
+                  <option value="intensityAsc">Intensity (easy → hard)</option>
+                  <option value="intensityDesc">Intensity (hard → easy)</option>
+                  <option value="titleAsc">Title (A → Z)</option>
+                </select>
+
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
-                    setDisciplines([]);
-                    setPage(1);
-                  }}
+                  onClick={() => setShowMoreFilters((v) => !v)}
                 >
-                  Clear
+                  {showMoreFilters ? 'Less filters' : 'More filters'}
                 </Button>
-              )}
+              </div>
             </div>
 
-            <Input
-              type="text"
-              placeholder="Tags (comma-separated)"
-              className="min-h-[44px] md:col-span-3"
-              value={tagsInput}
-              onChange={(e) => {
-                setTagsInput(e.target.value);
-                setPage(1);
-              }}
-            />
+            {tags.length > 0 && (
+              <div className="md:col-span-3 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-[var(--muted)]">Tags:</p>
+                {tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)] hover:bg-white/60"
+                    onClick={() => toggleTagFilter(tag)}
+                    aria-label={`Remove tag filter ${tag}`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
-              <div className="md:col-span-2">
+            {showMoreFilters && (
+              <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Input
                   type="text"
-                  placeholder="Intensity (e.g. Z2, Tempo, Easy)"
-                  className="min-h-[44px]"
-                  value={intensityTarget}
+                  placeholder="Tags (comma-separated)"
+                  className="min-h-[44px] md:col-span-3"
+                  value={tagsInput}
                   onChange={(e) => {
-                    setIntensityTarget(e.target.value);
+                    setTagsInput(e.target.value);
                     setPage(1);
                   }}
                 />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map((z) => (
-                    <Button
-                      key={z}
-                      type="button"
-                      size="sm"
-                      variant={intensityTarget.trim().toUpperCase() === z ? 'primary' : 'secondary'}
-                      onClick={() => {
-                        setIntensityTarget(z);
-                        setPage(1);
-                      }}
-                    >
-                      {z}
-                    </Button>
-                  ))}
 
-                  {intensityTarget.trim() && (
+                <div className="md:col-span-2">
+                  <Input
+                    type="text"
+                    placeholder="Intensity (e.g. Z2, Tempo, Easy)"
+                    className="min-h-[44px]"
+                    value={intensityTarget}
+                    onChange={(e) => {
+                      setIntensityTarget(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map((z) => (
+                      <Button
+                        key={z}
+                        type="button"
+                        size="sm"
+                        variant={intensityTarget.trim().toUpperCase() === z ? 'primary' : 'secondary'}
+                        onClick={() => {
+                          setIntensityTarget(z);
+                          setPage(1);
+                        }}
+                      >
+                        {z}
+                      </Button>
+                    ))}
+
+                    {intensityTarget.trim() && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setIntensityTarget('');
+                          setPage(1);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Min (min)"
+                    className="min-h-[44px]"
+                    value={durationMin}
+                    onChange={(e) => {
+                      setDurationMin(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Max (min)"
+                    className="min-h-[44px]"
+                    value={durationMax}
+                    onChange={(e) => {
+                      setDurationMax(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+
+                <div className="md:col-span-3 flex flex-wrap items-center gap-2">
+                  <label className="text-xs text-[var(--muted)]">Intensity category</label>
+                  <select
+                    className="min-h-[44px] rounded-xl border border-white/30 bg-white/60 px-3 text-sm text-[var(--text)]"
+                    value={intensityCategory}
+                    onChange={(e) => {
+                      setIntensityCategory(e.target.value as IntensityCategory | '');
+                      setPage(1);
+                    }}
+                    aria-label="Intensity category"
+                  >
+                    <option value="">All</option>
+                    <option value="Z1">Z1</option>
+                    <option value="Z2">Z2</option>
+                    <option value="Z3">Z3</option>
+                    <option value="Z4">Z4</option>
+                    <option value="Z5">Z5</option>
+                    <option value="RPE">RPE</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+
+                  {intensityCategory && (
                     <Button
                       type="button"
                       size="sm"
                       variant="secondary"
                       onClick={() => {
-                        setIntensityTarget('');
+                        setIntensityCategory('');
                         setPage(1);
                       }}
                     >
@@ -344,32 +500,7 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                   )}
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="Min (min)"
-                  className="min-h-[44px]"
-                  value={durationMin}
-                  onChange={(e) => {
-                    setDurationMin(e.target.value);
-                    setPage(1);
-                  }}
-                />
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="Max (min)"
-                  className="min-h-[44px]"
-                  value={durationMax}
-                  onChange={(e) => {
-                    setDurationMax(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-rose-500">{error}</p>}
@@ -425,14 +556,28 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                   {formatDistance(it.distanceMeters)}
                 </span>
               )}
-              {it.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]"
-                >
-                  {tag}
-                </span>
-              ))}
+              {it.tags.slice(0, 3).map((tag) => {
+                const active = activeTagSet.has(tag.toLowerCase());
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={
+                      'rounded-full border px-3 py-1 text-xs hover:bg-white/60 ' +
+                      (active
+                        ? 'border-white/60 bg-white/70 text-[var(--text)]'
+                        : 'border-white/30 bg-white/40 text-[var(--muted)]')
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTagFilter(tag);
+                    }}
+                    aria-label={`Filter by tag ${tag}`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
               {it.tags.length > 3 && (
                 <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
                   +{it.tags.length - 3}
@@ -445,32 +590,17 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
         ))}
       </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--muted)]">
-          {total === 0 ? '0 results' : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}`}
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            <Icon name="prev" />
-            Prev
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={page >= maxPage}
-            onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
-          >
-            Next
-            <Icon name="next" />
-          </Button>
-        </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-[var(--muted)]">{total === 0 ? '0 results' : `Showing ${items.length} of ${total}`}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={!canLoadMore}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Load more
+        </Button>
       </div>
 
       {/* Detail drawer */}
@@ -587,12 +717,19 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                   {!!detail.session.tags.length && (
                     <div className="flex flex-wrap gap-2">
                       {detail.session.tags.map((tag) => (
-                        <span
+                        <button
                           key={tag}
+                          type="button"
                           className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]"
+                          onClick={() => {
+                            toggleTagFilter(tag);
+                            setSelectedId(null);
+                            setDetail(null);
+                          }}
+                          aria-label={`Filter by tag ${tag}`}
                         >
                           {tag}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
