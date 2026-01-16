@@ -60,6 +60,10 @@ Safari iOS checks (required)
 - Grid renders; cards are tappable
 - Library tab loads; search/filter/preview usable on mobile
 - Create; edit; apply
+
+Workout Library (Coach + Admin)
+- Coach: Library tab only shows `PUBLISHED` workouts; search/filter/preview works on mobile
+- Admin (desktop OK): can access `/admin/workout-library`, create/edit, import dry-run, confirm apply, and purge drafts
 6) Settings
 - Timezone
 - Logo upload
@@ -73,6 +77,7 @@ Safari iOS checks (required)
 - Week + month views render without horizontal scroll
 - Add workout (if allowed) or view-only interactions
 4) Open workout detail
+ - Verify rich workout detail renders (structure/notes) when scheduled from the Coach library
 5) Strava detected flow
 - Draft -> add notes/pain/RPE -> Confirm
 - Verify persistence on refresh

@@ -19,6 +19,7 @@ export async function GET(_request: NextRequest, context: { params: { id: string
         id: true,
         title: true,
         discipline: true,
+        status: true,
         tags: true,
         description: true,
         durationSec: true,
@@ -39,7 +40,7 @@ export async function GET(_request: NextRequest, context: { params: { id: string
       },
     });
 
-    if (!session) {
+    if (!session || session.status !== 'PUBLISHED') {
       throw notFound('Library session not found.');
     }
 

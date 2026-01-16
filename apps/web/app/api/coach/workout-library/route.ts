@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { Prisma, WorkoutLibraryDiscipline, WorkoutLibraryIntensityCategory } from '@prisma/client';
+import { Prisma, WorkoutLibraryDiscipline, WorkoutLibraryIntensityCategory, WorkoutLibrarySessionStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
     );
 
     const where: Prisma.WorkoutLibrarySessionWhereInput = {
+      status: WorkoutLibrarySessionStatus.PUBLISHED,
       ...(q
         ? {
             title: {
