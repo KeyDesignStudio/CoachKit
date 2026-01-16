@@ -10,17 +10,18 @@ import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 
-type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE')[] };
+type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
 const DESKTOP_NAV_LINK_CLASS =
   'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
 
 const allNavLinks: NavLink[] = [
-  { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
-  { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
-  { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
+  { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH', 'ADMIN'] },
+  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH', 'ADMIN'] },
+  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH', 'ADMIN'] },
+  { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH', 'ADMIN'] },
+  { href: '/coach/settings', label: 'Settings', roles: ['COACH', 'ADMIN'] },
+  { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
@@ -39,7 +40,7 @@ export async function AppHeader() {
   const { userId } = await auth();
 
   // Get user from database if authenticated
-  let userRole: 'COACH' | 'ATHLETE' | null = null;
+  let userRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null = null;
   let clubBranding = {
     displayName: DEFAULT_BRAND_NAME,
     logoUrl: null as string | null,
@@ -84,7 +85,7 @@ export async function AppHeader() {
       userRole = user.role;
 
       // Resolve the coachId we should use for club branding
-      if (user.role === 'COACH') {
+      if (user.role === 'COACH' || user.role === 'ADMIN') {
         brandingCoachId = user.id;
       } else {
         const athleteProfile = await prisma.athleteProfile.findUnique({

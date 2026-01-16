@@ -40,21 +40,59 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') ?? '').trim();
+    const discipline = (searchParams.get('discipline') ?? '').trim();
+    const tagContains = (searchParams.get('tag') ?? '').trim();
+
+    const disciplineFilter = discipline
+      ? z.nativeEnum(WorkoutLibraryDiscipline).safeParse(discipline)
+      : null;
+
+    if (disciplineFilter && !disciplineFilter.success) {
+      return success({ items: [] });
+    }
 
     const items = await prisma.workoutLibrarySession.findMany({
-      where: q
-        ? {
-            title: {
-              contains: q,
-              mode: 'insensitive',
-            },
-          }
-        : {},
+      where: {
+        ...(q
+          ? {
+              title: {
+                contains: q,
+                mode: 'insensitive',
+              },
+            }
+          : {}),
+        ...(disciplineFilter?.success
+          ? {
+              discipline: disciplineFilter.data,
+            }
+          : {}),
+      },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      take: 200,
+      take: tagContains ? 500 : 200,
+      include: {
+        _count: {
+          select: {
+            usage: true,
+          },
+        },
+      },
     });
 
-    return success({ items });
+    const filtered = tagContains
+      ? items.filter((item) =>
+          item.tags.some((tag) => tag.toLowerCase().includes(tagContains.toLowerCase()))
+        )
+      : items;
+
+    const responseItems = filtered.slice(0, 200).map((item) => {
+      const { _count, ...rest } = item;
+      return {
+        ...rest,
+        usageCount: _count.usage,
+      };
+    });
+
+    return success({ items: responseItems });
   } catch (error) {
     return handleError(error);
   }

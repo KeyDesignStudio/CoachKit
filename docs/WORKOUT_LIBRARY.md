@@ -1,7 +1,7 @@
 # Workout Library (Triathlon / Multisport)
 
 Owner: Agent
-Status: Phase 0 (stub)
+Status: Phase 4 (Admin UI + import tooling)
 
 ## Goals
 - Provide a curated, searchable library of multisport workout templates (RUN/BIKE/SWIM/BRICK/STRENGTH/OTHER).
@@ -17,12 +17,12 @@ Status: Phase 0 (stub)
 
 ---
 
-## Data Model (planned)
+## Data Model
 
 ### `WorkoutLibrarySession`
 Represents a reusable workout template (not tied to an athlete).
 
-Fields (Phase 1 target):
+Fields:
 - `id`: `cuid()` or `uuid`
 - `title`: string
 - `discipline`: enum (`RUN`, `BIKE`, `SWIM`, `BRICK`, `STRENGTH`, `OTHER`)
@@ -38,7 +38,7 @@ Fields (Phase 1 target):
 - `createdAt`, `updatedAt`
 - `createdByUserId?`: string (FK → `User.id`)
 
-Indexes (Phase 1 target):
+Indexes:
 - `discipline`
 - `title` (for search)
 - `tags` (prefer GIN if supported; revisit if schema needs a join table)
@@ -46,7 +46,7 @@ Indexes (Phase 1 target):
 ### `WorkoutLibraryFavorite`
 Per-coach favorites.
 
-Fields (Phase 1 target):
+Fields:
 - `id`
 - `coachId` (FK → `User.id`)
 - `librarySessionId` (FK → `WorkoutLibrarySession.id`)
@@ -58,7 +58,7 @@ Constraints:
 ### `WorkoutLibraryUsage`
 Logs “used” events to enable “most used” sorting later.
 
-Fields (Phase 1 target):
+Fields:
 - `id`
 - `coachId` (FK → `User.id`)
 - `librarySessionId` (FK → `WorkoutLibrarySession.id`)
@@ -69,12 +69,12 @@ Index:
 
 ---
 
-## API Endpoints (planned)
+## API Endpoints
 
 ### Coach (read-only)
 - `GET /api/coach/workout-library`
-  - Query: `q`, `discipline[]`, `tags[]`, `durationMin`, `durationMax`, `intensityTarget`, `page`, `pageSize`
-  - Returns: `items[]`, `total`, `favorites` flag per item
+  - Query: `q`, `discipline`
+  - Returns: `items[]` with `isFavorite` and `usageCount`
 - `GET /api/coach/workout-library/:id` (full detail)
 - `POST /api/coach/workout-library/:id/favorite`
 - `DELETE /api/coach/workout-library/:id/favorite`
@@ -97,32 +97,40 @@ Validation rules (planned):
 
 ---
 
-## Admin Role Behavior (planned)
+## Admin Role Behavior
 
-Definition (Phase 2 initial):
-- Admin-only access to `/api/admin/**` routes.
-- Implementation options:
-  - Prefer: `User.isAdmin` boolean (if it exists or is added).
-  - Temporary fallback: allowlist via env var of admin emails/userIds.
+Definition:
+- Admin-only access to `/api/admin/**` routes and `/admin/workout-library` UI.
+- Implemented as `UserRole.ADMIN` (Prisma enum).
 
 Rules:
 - Coaches without admin permissions must receive 403 for admin routes.
-- No coach navigation link to admin UI by default.
+- Admin navigation link is only visible to `ADMIN` users.
+
+Dev note (auth disabled):
+- If `DISABLE_AUTH=true`, you must set cookie `coachkit-role=ADMIN` to access admin UI/routes.
 
 ---
 
-## Import Workflow (datasets)
+## Import Workflow
 
 Important: DO NOT commit Kaggle/raw datasets into the repo.
 
-Planned local ingestion scripts:
-- Location: `apps/web/prisma/scripts/library-import/`
-- Inputs via env vars:
-  - `KAGGLE_WORKOUT_DATA_PATH=/absolute/path/to/file.csv|json`
-  - `EXERCISE_DB_PATH=/absolute/path/to/free-exercise-db.json`
-- Safety:
-  - `CONFIRM_LIBRARY_IMPORT=YES` required to write
-  - Default `DRY_RUN=true`
+Admin UI import:
+- Location: `/admin/workout-library` → Import tab
+- Upload `.csv` or `.json`
+- Default is **dry-run** validation with per-row errors; import is blocked until errors are fixed.
+
+CSV format:
+- Header columns:
+  - Required: `title`, `discipline`, `description`, `intensityTarget`
+  - Optional: `tags`, `durationSec`, `distanceMeters`, `elevationGainMeters`, `notes`, `equipment`, `workoutStructure`
+- `tags` and `equipment` accept comma-separated strings.
+- `workoutStructure` accepts JSON text in the cell (or leave blank).
+
+JSON format:
+- Either an array of items, or `{ "items": [...] }`.
+- Items accept the same keys as above. `tags`/`equipment` can be arrays or comma-separated strings.
 
 Where to place datasets locally:
 - Anywhere outside the repo (recommended): `~/Downloads/coachkit-datasets/`.

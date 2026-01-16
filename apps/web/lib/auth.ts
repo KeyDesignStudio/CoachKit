@@ -28,6 +28,7 @@ function getRoleCookie(): UserRole {
     const value = cookies().get('coachkit-role')?.value;
     if (value === 'ATHLETE') return UserRole.ATHLETE;
     if (value === 'COACH') return UserRole.COACH;
+    if (value === 'ADMIN') return UserRole.ADMIN;
   } catch {
     // no-op: cookies() not available in all server contexts
   }
@@ -179,13 +180,37 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
  */
 export async function requireCoach() {
   if (isAuthDisabled()) {
+    // Keep existing behavior for most dev flows; allow ADMINs to function as coaches.
+    const role = getRoleCookie();
+    if (role === UserRole.ADMIN) return getDevUserContext(UserRole.ADMIN);
     return getDevUserContext(UserRole.COACH);
   }
 
   const context = await requireAuth();
 
-  if (context.user.role !== UserRole.COACH) {
+  if (context.user.role !== UserRole.COACH && context.user.role !== UserRole.ADMIN) {
     throw forbidden('Coach access required.');
+  }
+
+  return context;
+}
+
+/**
+ * Require ADMIN role
+ */
+export async function requireAdmin() {
+  if (isAuthDisabled()) {
+    const role = getRoleCookie();
+    if (role !== UserRole.ADMIN) {
+      throw forbidden('Admin access required.');
+    }
+    return getDevUserContext(UserRole.ADMIN);
+  }
+
+  const context = await requireAuth();
+
+  if (context.user.role !== UserRole.ADMIN) {
+    throw forbidden('Admin access required.');
   }
 
   return context;
