@@ -38,6 +38,11 @@ export default async function AthleteLayout({ children }: { children: ReactNode 
     redirect('/access-denied');
   }
 
+  // Admins are invited users but should land in admin by default
+  if (user.role === 'ADMIN') {
+    redirect('/admin/workout-library');
+  }
+
   // Must have ATHLETE role
   if (user.role !== 'ATHLETE') {
     console.log(`[Athlete Layout] User with role ${user.role} blocked from athlete routes`);

@@ -9,6 +9,7 @@ const DISABLE_AUTH =
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
   '/athlete(.*)',
+  '/admin(.*)',
 ]);
 
 /**

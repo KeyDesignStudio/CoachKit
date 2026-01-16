@@ -30,7 +30,9 @@ export default function AccessDenied() {
           const data = await response.json();
           if (data.data && data.data.user) {
             const user = data.data.user;
-            if (user.role === 'COACH') {
+            if (user.role === 'ADMIN') {
+              router.replace('/admin/workout-library' as any);
+            } else if (user.role === 'COACH') {
               router.replace('/coach/dashboard' as any);
             } else if (user.role === 'ATHLETE') {
               router.replace('/athlete/calendar' as any);

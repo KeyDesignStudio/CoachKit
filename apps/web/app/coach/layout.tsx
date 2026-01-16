@@ -38,6 +38,11 @@ export default async function CoachLayout({ children }: { children: ReactNode })
     redirect('/access-denied');
   }
 
+  // Admins are invited users but should land in admin by default
+  if (user.role === 'ADMIN') {
+    redirect('/admin/workout-library');
+  }
+
   // Must have COACH role
   if (user.role !== 'COACH') {
     console.log(`[Coach Layout] User with role ${user.role} blocked from coach routes`);

@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 
+// Auth-dependent; must be dynamic to avoid static caching of redirects.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function HomePage() {
   // Dev-only escape hatch used by screenshot automation (no Clerk keys in CI).
   // Do not enable this in production.
@@ -32,10 +36,18 @@ export default async function HomePage() {
   }
 
   // Redirect based on role
+  if (user.role === 'ADMIN') {
+    redirect('/admin/workout-library');
+  }
+
   if (user.role === 'COACH') {
     redirect('/coach/dashboard');
   }
-  
-  // Default to athlete dashboard
-  redirect('/athlete/dashboard');
+
+  if (user.role === 'ATHLETE') {
+    redirect('/athlete/calendar');
+  }
+
+  // Unknown role should be treated as not invited.
+  redirect('/access-denied');
 }
