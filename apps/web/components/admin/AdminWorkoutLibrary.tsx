@@ -436,6 +436,7 @@ export function AdminWorkoutLibrary() {
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             <Input
+              data-testid="admin-workout-library-search"
               placeholder="Search title…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -536,6 +537,7 @@ export function AdminWorkoutLibrary() {
             {mode === 'create' ? 'Create' : 'Edit'}
           </Button>
           <Button
+            data-testid="admin-workout-library-import"
             variant={activeRightTab === 'import' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setActiveRightTab('import')}

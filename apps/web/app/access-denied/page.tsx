@@ -1,16 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
 export default function AccessDenied() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason');
   const [isChecking, setIsChecking] = useState(true);
   const [showDenied, setShowDenied] = useState(false);
 
   useEffect(() => {
+    // Explicit forbidden state (e.g. role-gated admin pages) should show denied UI.
+    if (reason === 'forbidden') {
+      setIsChecking(false);
+      setShowDenied(true);
+      return;
+    }
+
     // Check if user is authenticated and determine their role home
     async function checkAuth() {
       try {
@@ -54,7 +63,7 @@ export default function AccessDenied() {
     }
 
     checkAuth();
-  }, [router]);
+  }, [reason, router]);
 
   const handleReturnHome = () => {
     router.push('/sign-in' as any);
@@ -77,6 +86,25 @@ export default function AccessDenied() {
   // Only show denied card if truly denied
   if (!showDenied) {
     return null;
+  }
+
+  if (reason === 'forbidden') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Card className="max-w-md rounded-3xl p-8 text-center">
+          <h1 className="mb-4 text-2xl font-semibold">Access denied</h1>
+          <p className="mb-6 text-[var(--muted)]">You do not have permission to view this page.</p>
+          <div className="flex flex-col gap-3">
+            <Button onClick={() => router.back()} className="w-full">
+              Go Back
+            </Button>
+            <a href="/" className="text-sm text-[var(--muted)] hover:underline">
+              Return Home
+            </a>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
