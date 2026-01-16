@@ -3,6 +3,8 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import type { ReactNode } from 'react';
 
+import { requireAuth } from '@/lib/auth';
+
 /**
  * Coach Layout - Role-Based Access Control
  * 
@@ -17,6 +19,12 @@ export default async function CoachLayout({ children }: { children: ReactNode })
     (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
   if (disableAuth) {
+    const { user } = await requireAuth();
+
+    if (user.role !== 'COACH') {
+      redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/athlete/calendar');
+    }
+
     return <>{children}</>;
   }
 
@@ -39,14 +47,8 @@ export default async function CoachLayout({ children }: { children: ReactNode })
   }
 
   // Admins are invited users but should land in admin by default
-  if (user.role === 'ADMIN') {
-    redirect('/admin/workout-library');
-  }
-
-  // Must have COACH role
   if (user.role !== 'COACH') {
-    console.log(`[Coach Layout] User with role ${user.role} blocked from coach routes`);
-    redirect('/athlete/calendar');
+    redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/athlete/calendar');
   }
 
   // Authorized - render coach pages

@@ -41,4 +41,20 @@ test.describe('Admin workout library gating', () => {
     await expect(page.getByTestId('admin-workout-library-search')).toBeVisible();
     await expect(page.getByTestId('admin-workout-library-import')).toBeVisible();
   });
+
+  test('ADMIN visiting coach routes gets redirected to admin', async ({ page }) => {
+    await setRoleCookie(page, 'ADMIN');
+
+    await page.goto('/coach/dashboard', { waitUntil: 'networkidle' });
+    await expect(page).toHaveURL(/\/admin\/workout-library/);
+    await expect(page.getByTestId('admin-workout-library-page')).toBeVisible();
+  });
+
+  test('ADMIN visiting athlete routes gets redirected to admin', async ({ page }) => {
+    await setRoleCookie(page, 'ADMIN');
+
+    await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
+    await expect(page).toHaveURL(/\/admin\/workout-library/);
+    await expect(page.getByTestId('admin-workout-library-page')).toBeVisible();
+  });
 });

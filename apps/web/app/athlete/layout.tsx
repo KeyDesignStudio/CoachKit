@@ -3,6 +3,8 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import type { ReactNode } from 'react';
 
+import { requireAuth } from '@/lib/auth';
+
 /**
  * Athlete Layout - Role-Based Access Control
  * 
@@ -17,6 +19,12 @@ export default async function AthleteLayout({ children }: { children: ReactNode 
     (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
   if (disableAuth) {
+    const { user } = await requireAuth();
+
+    if (user.role !== 'ATHLETE') {
+      redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/coach/dashboard');
+    }
+
     return <>{children}</>;
   }
 
@@ -38,15 +46,8 @@ export default async function AthleteLayout({ children }: { children: ReactNode 
     redirect('/access-denied');
   }
 
-  // Admins are invited users but should land in admin by default
-  if (user.role === 'ADMIN') {
-    redirect('/admin/workout-library');
-  }
-
-  // Must have ATHLETE role
   if (user.role !== 'ATHLETE') {
-    console.log(`[Athlete Layout] User with role ${user.role} blocked from athlete routes`);
-    redirect('/coach/dashboard');
+    redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/coach/dashboard');
   }
 
   // Authorized - render athlete pages
