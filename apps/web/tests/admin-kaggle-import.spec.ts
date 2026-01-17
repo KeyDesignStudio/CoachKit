@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
 import * as path from 'path';
 
 type Role = 'COACH' | 'ATHLETE' | 'ADMIN';
@@ -20,9 +19,7 @@ async function setRoleCookie(page: import('@playwright/test').Page, role: Role) 
 }
 
 function loadFixtureItems(): unknown[] {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const fixturePath = path.join(__dirname, 'fixtures', 'kaggle-sample.json');
+  const fixturePath = path.join(process.cwd(), 'tests', 'fixtures', 'kaggle-sample.json');
   const raw = readFileSync(fixturePath, 'utf8');
   const parsed = JSON.parse(raw) as { items: unknown[] };
   return parsed.items;
