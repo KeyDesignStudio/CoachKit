@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import path from 'path';
+import * as path from 'path';
 
 type Role = 'COACH' | 'ATHLETE' | 'ADMIN';
 
