@@ -100,15 +100,12 @@ export async function POST(request: NextRequest) {
 
     const candidates = normalized.items.map((item) => {
       const fingerprint = computeWorkoutLibraryFingerprint({
-        title: item.title,
         discipline: item.discipline,
-        description: item.description,
-        intensityTarget: item.intensityTarget,
-        durationSec: item.durationSec,
+        title: item.title,
+        durationSec: item.durationSec ?? 0,
         distanceMeters: item.distanceMeters ?? null,
-        elevationGainMeters: item.elevationGainMeters ?? null,
-        tags: item.tags,
-        equipment: item.equipment,
+        intensityTarget: item.intensityTarget,
+        workoutStructure: item.workoutStructure ?? null,
       });
 
       return { item, fingerprint };
