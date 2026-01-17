@@ -74,6 +74,25 @@ type FreeExerciseDbImportSummary = {
   message?: string;
 };
 
+type KaggleImportSummary = {
+  source: 'KAGGLE';
+  dryRun: boolean;
+  scanned: number;
+  valid: number;
+  wouldCreate: number;
+  createdCount: number;
+  createdIds: string[];
+  skippedExistingCount: number;
+  skippedDuplicateInBatchCount: number;
+  errorCount: number;
+  errors: Array<{ index: number; message: string }>;
+  sample: {
+    creates: Array<{ title: string; fingerprint: string }>;
+    skips: Array<{ title: string; fingerprint: string; reason: string }>;
+  };
+  message?: string;
+};
+
 const DISCIPLINES: Discipline[] = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'];
 
 function splitCommaList(text: string): string[] {
@@ -211,6 +230,13 @@ export function AdminWorkoutLibrary() {
   const [freeExerciseDbError, setFreeExerciseDbError] = useState<string | null>(null);
   const [freeExerciseDbResult, setFreeExerciseDbResult] = useState<FreeExerciseDbImportSummary | null>(null);
 
+  const [kaggleDryRun, setKaggleDryRun] = useState(true);
+  const [kaggleConfirmApply, setKaggleConfirmApply] = useState(false);
+  const [kaggleMaxRowsText, setKaggleMaxRowsText] = useState('200');
+  const [kaggleRunning, setKaggleRunning] = useState(false);
+  const [kaggleError, setKaggleError] = useState<string | null>(null);
+  const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
+
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
   const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
   const [maintenancePurgeConfirm, setMaintenancePurgeConfirm] = useState('');
@@ -278,6 +304,10 @@ export function AdminWorkoutLibrary() {
   useEffect(() => {
     if (freeExerciseDbDryRun) setFreeExerciseDbConfirmApply(false);
   }, [freeExerciseDbDryRun]);
+
+  useEffect(() => {
+    if (kaggleDryRun) setKaggleConfirmApply(false);
+  }, [kaggleDryRun]);
 
   const startCreate = useCallback(() => {
     setSelectedId(null);
@@ -525,10 +555,44 @@ export function AdminWorkoutLibrary() {
     [fetchList, freeExerciseDbConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request]
   );
 
+  const onKaggleImport = useCallback(
+    async (dryRun: boolean) => {
+      setKaggleRunning(true);
+      setKaggleError(null);
+      setKaggleResult(null);
+
+      try {
+        const maxRows = parseOptionalNumber(kaggleMaxRowsText) ?? 200;
+
+        const data = await request<KaggleImportSummary>(`/api/admin/workout-library/import/kaggle`, {
+          method: 'POST',
+          data: {
+            dryRun,
+            confirmApply: dryRun ? false : kaggleConfirmApply,
+            maxRows,
+            items: importItems,
+          },
+        });
+
+        setKaggleResult(data);
+        if (!dryRun && data.createdCount > 0) {
+          await fetchList();
+        }
+      } catch (error) {
+        setKaggleError(error instanceof Error ? error.message : 'Kaggle import failed.');
+      } finally {
+        setKaggleRunning(false);
+      }
+    },
+    [fetchList, importItems, kaggleConfirmApply, kaggleMaxRowsText, request]
+  );
+
   const onFileSelected = useCallback(async (file: File) => {
     setImportParseError(null);
     setImportResult(null);
     setImportItems([]);
+    setKaggleError(null);
+    setKaggleResult(null);
 
     const raw = await file.text();
 
@@ -819,8 +883,9 @@ export function AdminWorkoutLibrary() {
             <div className="mt-4 flex flex-col gap-3">
             <div className="text-sm font-semibold text-[var(--text)]">Import (CSV or JSON)</div>
             <div className="text-xs text-[var(--muted)]">
-              CSV headers should include: title, discipline, description, intensityTarget. Optional: tags, durationSec,
-              distanceMeters, elevationGainMeters, notes, equipment, workoutStructure.
+              Upload a file once, then choose an import path below. CSV headers should include: title, discipline,
+              description, intensityTarget. Optional: tags, durationSec, distanceMeters, elevationGainMeters, notes,
+              equipment, workoutStructure.
             </div>
             <div className="text-xs text-[var(--muted)]">Safety: max 500 rows per import. Imports create DRAFT sessions and skip duplicates.</div>
 
@@ -1029,6 +1094,103 @@ export function AdminWorkoutLibrary() {
                 ) : null}
               </div>
             ) : null}
+
+            <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
+              <div className="text-sm font-semibold text-[var(--text)]">Kaggle ingestion (admin-only)</div>
+              <div className="mt-1 text-xs text-[var(--muted)]">
+                Guardrails: dry-run by default, confirm apply required to write, idempotent via fingerprint.
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <Input
+                  placeholder="Max rows (default 200, max 2000)"
+                  value={kaggleMaxRowsText}
+                  onChange={(e) => setKaggleMaxRowsText(e.target.value)}
+                />
+
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={kaggleDryRun}
+                      onChange={(e) => setKaggleDryRun(e.target.checked)}
+                    />
+                    Dry run
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={kaggleConfirmApply}
+                      onChange={(e) => setKaggleConfirmApply(e.target.checked)}
+                      disabled={kaggleDryRun}
+                    />
+                    Confirm apply
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={kaggleRunning || importItems.length === 0}
+                  onClick={() => void onKaggleImport(true)}
+                >
+                  Kaggle Dry-Run
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={kaggleRunning || importItems.length === 0 || (kaggleDryRun ? false : !kaggleConfirmApply)}
+                  onClick={() => void onKaggleImport(kaggleDryRun)}
+                >
+                  {kaggleRunning ? 'Working…' : kaggleDryRun ? 'Run Kaggle Dry-Run' : 'Import Kaggle Now'}
+                </Button>
+              </div>
+
+              {kaggleError ? <div className="mt-2 text-sm text-red-600">{kaggleError}</div> : null}
+
+              {kaggleResult ? (
+                <div className="mt-3">
+                  <div className="text-sm font-medium text-[var(--text)]">
+                    Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
+                  </div>
+                  {kaggleResult.message ? (
+                    <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
+                  ) : null}
+                  {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
+                    <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
+                  ) : null}
+
+                  {kaggleResult.errorCount > 0 ? (
+                    <div className="mt-3">
+                      <div className="text-sm font-semibold text-[var(--text)]">Row errors</div>
+                      <div className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border-subtle)]">
+                        <div className="divide-y divide-[var(--border-subtle)]">
+                          {kaggleResult.errors.slice(0, 50).map((e) => (
+                            <div key={`${e.index}-${e.message}`} className="px-3 py-2 text-xs text-red-700">
+                              Row {e.index}: {e.message}
+                            </div>
+                          ))}
+                          {kaggleResult.errors.length > 50 ? (
+                            <div className="px-3 py-2 text-xs text-[var(--muted)]">Showing first 50 errors…</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {kaggleResult.sample?.creates?.length ? (
+                    <div className="mt-3">
+                      <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
+                      <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                        {JSON.stringify(kaggleResult.sample, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             </div>
           ) : (
             <div className="mt-4 flex flex-col gap-4">
