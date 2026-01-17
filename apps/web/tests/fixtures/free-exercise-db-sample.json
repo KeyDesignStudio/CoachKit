@@ -1,0 +1,62 @@
+[
+  {
+    "name": "push up",
+    "bodyPart": "chest",
+    "target": "pectorals",
+    "equipment": "body weight",
+    "secondaryMuscles": ["triceps"],
+    "instructions": [
+      "Start in a high plank position with hands under shoulders.",
+      "Lower your body until your chest nearly touches the floor.",
+      "Push back up to the starting position."
+    ],
+    "gifUrl": "https://example.invalid/pushup.gif"
+  },
+  {
+    "name": "goblet squat",
+    "bodyPart": "upper legs",
+    "target": "quadriceps",
+    "equipment": "dumbbell",
+    "secondaryMuscles": ["glutes"],
+    "instructions": [
+      "Hold a dumbbell at chest height.",
+      "Sit hips back and squat down.",
+      "Drive through midfoot to stand tall."
+    ]
+  },
+  {
+    "name": "bent over row",
+    "bodyPart": "back",
+    "target": "lats",
+    "equipment": "dumbbell",
+    "secondaryMuscles": ["biceps"],
+    "instructions": [
+      "Hinge at hips with a flat back.",
+      "Pull the weight toward your hip.",
+      "Lower under control."
+    ]
+  },
+  {
+    "name": "plank",
+    "bodyPart": "waist",
+    "target": "abs",
+    "equipment": "body weight",
+    "secondaryMuscles": [],
+    "instructions": [
+      "Elbows under shoulders, body in a straight line.",
+      "Brace core and hold position."
+    ]
+  },
+  {
+    "name": "single leg deadlift",
+    "bodyPart": "upper legs",
+    "target": "hamstrings",
+    "equipment": "kettlebell",
+    "secondaryMuscles": ["glutes"],
+    "instructions": [
+      "Stand tall, shift weight to one leg.",
+      "Hinge at the hips while extending the free leg back.",
+      "Return to standing with control."
+    ]
+  }
+]

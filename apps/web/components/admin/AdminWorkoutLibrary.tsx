@@ -16,6 +16,8 @@ type LibraryItem = {
   id: string;
   title: string;
   discipline: Discipline;
+  status?: 'DRAFT' | 'PUBLISHED';
+  source?: 'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB';
   tags: string[];
   description: string;
   durationSec: number;
@@ -52,6 +54,23 @@ type ImportResult = {
   errors: Array<{ index: number; message: string }>;
   createdCount: number;
   createdIds: string[];
+  skippedExistingCount?: number;
+  message?: string;
+};
+
+type FreeExerciseDbImportSummary = {
+  source: 'FREE_EXERCISE_DB';
+  dryRun: boolean;
+  scanned: number;
+  wouldCreate: number;
+  wouldUpdate: number;
+  skippedDuplicates: number;
+  errors: number;
+  sample: {
+    creates: Array<{ title: string; fingerprint: string; tags: string[]; equipment: string[] }>;
+    updates: Array<{ id: string; title: string; fingerprint: string; changedFields: string[] }>;
+    skips: Array<{ id: string; title: string; fingerprint: string; reason: string }>;
+  };
   message?: string;
 };
 
@@ -177,12 +196,24 @@ export function AdminWorkoutLibrary() {
   const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import' | 'maintenance'>('edit');
 
   const [importDryRun, setImportDryRun] = useState(true);
+  const [importConfirmApply, setImportConfirmApply] = useState(false);
+  const [importSource, setImportSource] = useState<'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'>('MANUAL');
   const [importItems, setImportItems] = useState<unknown[]>([]);
   const [importParseError, setImportParseError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
+  const [freeExerciseDbDryRun, setFreeExerciseDbDryRun] = useState(true);
+  const [freeExerciseDbConfirmApply, setFreeExerciseDbConfirmApply] = useState(false);
+  const [freeExerciseDbLimitText, setFreeExerciseDbLimitText] = useState('50');
+  const [freeExerciseDbOffsetText, setFreeExerciseDbOffsetText] = useState('0');
+  const [freeExerciseDbRunning, setFreeExerciseDbRunning] = useState(false);
+  const [freeExerciseDbError, setFreeExerciseDbError] = useState<string | null>(null);
+  const [freeExerciseDbResult, setFreeExerciseDbResult] = useState<FreeExerciseDbImportSummary | null>(null);
+
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
+  const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
+  const [maintenancePurgeConfirm, setMaintenancePurgeConfirm] = useState('');
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [maintenanceResult, setMaintenanceResult] = useState<MaintenanceSummary | null>(null);
@@ -239,6 +270,14 @@ export function AdminWorkoutLibrary() {
     setSaveError(null);
     setSaveOk(null);
   }, []);
+
+  useEffect(() => {
+    if (importDryRun) setImportConfirmApply(false);
+  }, [importDryRun]);
+
+  useEffect(() => {
+    if (freeExerciseDbDryRun) setFreeExerciseDbConfirmApply(false);
+  }, [freeExerciseDbDryRun]);
 
   const startCreate = useCallback(() => {
     setSelectedId(null);
@@ -371,14 +410,18 @@ export function AdminWorkoutLibrary() {
   ]);
 
   const runMaintenance = useCallback(
-    async (action: MaintenanceAction, dryRun: boolean) => {
+    async (
+      action: MaintenanceAction | 'purgeDraftImportsBySource',
+      dryRun: boolean,
+      extra?: { source?: string; confirm?: string }
+    ) => {
       setMaintenanceRunning(true);
       setMaintenanceError(null);
       setMaintenanceResult(null);
       try {
         const data = await request<MaintenanceSummary>(`/api/admin/workout-library/maintenance`, {
           method: 'POST',
-          data: { action, dryRun },
+          data: { action, dryRun, ...extra },
         });
         setMaintenanceResult(data);
         // Refresh list after apply.
@@ -423,6 +466,8 @@ export function AdminWorkoutLibrary() {
           method: 'POST',
           data: {
             dryRun,
+            confirmApply: !dryRun && importConfirmApply,
+            source: importSource,
             items: importItems,
           },
         });
@@ -437,7 +482,47 @@ export function AdminWorkoutLibrary() {
         setImporting(false);
       }
     },
-    [fetchList, importItems, request]
+    [fetchList, importConfirmApply, importItems, importSource, request]
+  );
+
+  const onImportFreeExerciseDb = useCallback(
+    async (dryRun: boolean) => {
+      setFreeExerciseDbRunning(true);
+      setFreeExerciseDbError(null);
+      setFreeExerciseDbResult(null);
+
+      const limit = Math.min(
+        500,
+        Math.max(1, Number.parseInt(freeExerciseDbLimitText.trim() || '50', 10) || 50)
+      );
+      const offset = Math.max(0, Number.parseInt(freeExerciseDbOffsetText.trim() || '0', 10) || 0);
+
+      try {
+        const data = await request<FreeExerciseDbImportSummary>(
+          `/api/admin/workout-library/import/free-exercise-db`,
+          {
+            method: 'POST',
+            data: {
+              dryRun,
+              confirmApply: !dryRun && freeExerciseDbConfirmApply,
+              limit,
+              offset,
+            },
+          }
+        );
+
+        setFreeExerciseDbResult(data);
+
+        if (!dryRun && (data.wouldCreate > 0 || data.wouldUpdate > 0)) {
+          await fetchList();
+        }
+      } catch (error) {
+        setFreeExerciseDbError(error instanceof Error ? error.message : 'Import failed.');
+      } finally {
+        setFreeExerciseDbRunning(false);
+      }
+    },
+    [fetchList, freeExerciseDbConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request]
   );
 
   const onFileSelected = useCallback(async (file: File) => {
@@ -539,6 +624,16 @@ export function AdminWorkoutLibrary() {
                         <div className="truncate text-sm font-medium text-[var(--text)]">{it.title}</div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                           <span>{it.discipline}</span>
+                          {it.status ? (
+                            <span className="rounded-full border border-[var(--border-subtle)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
+                              {it.status}
+                            </span>
+                          ) : null}
+                          {it.source ? (
+                            <span className="rounded-full border border-[var(--border-subtle)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
+                              {it.source}
+                            </span>
+                          ) : null}
                           <span>Usage: {it.usageCount ?? 0}</span>
                           {it.durationSec ? <span>{it.durationSec}s</span> : null}
                           {it.distanceMeters != null ? <span>{it.distanceMeters}m</span> : null}
@@ -727,6 +822,7 @@ export function AdminWorkoutLibrary() {
               CSV headers should include: title, discipline, description, intensityTarget. Optional: tags, durationSec,
               distanceMeters, elevationGainMeters, notes, equipment, workoutStructure.
             </div>
+            <div className="text-xs text-[var(--muted)]">Safety: max 500 rows per import. Imports create DRAFT sessions and skip duplicates.</div>
 
             <div className="flex flex-col gap-2">
               <input
@@ -749,6 +845,28 @@ export function AdminWorkoutLibrary() {
                 </label>
 
                 <div className="text-xs text-[var(--muted)]">Loaded rows: {importItems.length}</div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                  <span className="text-xs text-[var(--muted)]">Source</span>
+                  <Select value={importSource} onChange={(e) => setImportSource(e.target.value as typeof importSource)}>
+                    <option value="MANUAL">MANUAL</option>
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                </label>
+
+                {!importDryRun ? (
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={importConfirmApply}
+                      onChange={(e) => setImportConfirmApply(e.target.checked)}
+                    />
+                    Confirm apply (required)
+                  </label>
+                ) : null}
               </div>
             </div>
 
@@ -783,6 +901,9 @@ export function AdminWorkoutLibrary() {
                 {importResult.createdCount > 0 ? (
                   <div className="mt-1 text-sm text-green-700">Created {importResult.createdCount} sessions.</div>
                 ) : null}
+                {typeof importResult.skippedExistingCount === 'number' && importResult.skippedExistingCount > 0 ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">Skipped duplicates: {importResult.skippedExistingCount}</div>
+                ) : null}
 
                 {importResult.errors.length ? (
                   <div className="mt-3">
@@ -809,6 +930,100 @@ export function AdminWorkoutLibrary() {
                     <div className="text-sm font-semibold text-[var(--text)]">Preview (first 20 valid)</div>
                     <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
                       {JSON.stringify(importResult.preview, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-2 border-t border-[var(--border-subtle)] pt-4" />
+
+            <div className="text-sm font-semibold text-[var(--text)]">Import (Free Exercise DB)</div>
+            <div className="text-xs text-[var(--muted)]">
+              Server-side fetch of the Free Exercise DB dataset. Start with a dry-run. Apply requires confirmation.
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                <span className="text-xs text-[var(--muted)]">Limit (max 500)</span>
+                <Input
+                  data-testid="admin-free-exercise-db-limit"
+                  value={freeExerciseDbLimitText}
+                  onChange={(e) => setFreeExerciseDbLimitText(e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                <span className="text-xs text-[var(--muted)]">Offset</span>
+                <Input
+                  data-testid="admin-free-exercise-db-offset"
+                  value={freeExerciseDbOffsetText}
+                  onChange={(e) => setFreeExerciseDbOffsetText(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={freeExerciseDbDryRun}
+                  onChange={(e) => setFreeExerciseDbDryRun(e.target.checked)}
+                />
+                Dry run
+              </label>
+
+              {!freeExerciseDbDryRun ? (
+                <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                  <input
+                    type="checkbox"
+                    checked={freeExerciseDbConfirmApply}
+                    onChange={(e) => setFreeExerciseDbConfirmApply(e.target.checked)}
+                  />
+                  Confirm apply (required)
+                </label>
+              ) : null}
+            </div>
+
+            {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={freeExerciseDbRunning}
+                onClick={() => void onImportFreeExerciseDb(true)}
+              >
+                Dry-run
+              </Button>
+              <Button
+                data-testid="admin-free-exercise-db-run"
+                size="sm"
+                disabled={freeExerciseDbRunning}
+                onClick={() => void onImportFreeExerciseDb(freeExerciseDbDryRun)}
+              >
+                {freeExerciseDbRunning ? 'Working…' : freeExerciseDbDryRun ? 'Run Dry-Run' : 'Apply Import'}
+              </Button>
+            </div>
+
+            {freeExerciseDbResult ? (
+              <div
+                data-testid="admin-free-exercise-db-result"
+                className="rounded-2xl border border-[var(--border-subtle)] p-4"
+              >
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Scanned {freeExerciseDbResult.scanned} • Create {freeExerciseDbResult.wouldCreate} • Update{' '}
+                  {freeExerciseDbResult.wouldUpdate} • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors{' '}
+                  {freeExerciseDbResult.errors}
+                </div>
+                {freeExerciseDbResult.message ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
+                ) : null}
+
+                {freeExerciseDbResult.sample?.creates?.length ? (
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
+                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      {JSON.stringify(freeExerciseDbResult.sample.creates, null, 2)}
                     </pre>
                   </div>
                 ) : null}
@@ -860,6 +1075,41 @@ export function AdminWorkoutLibrary() {
                 </Button>
               </div>
 
+              <div className="mt-2 rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-semibold text-[var(--text)]">Purge draft imports by source</div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  Deletes all DRAFT sessions for a source. Run a dry-run first. Apply requires confirmation text.
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <Select
+                    value={maintenancePurgeSource}
+                    onChange={(e) => setMaintenancePurgeSource(e.target.value as typeof maintenancePurgeSource)}
+                  >
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                  <Input
+                    placeholder="Type PURGE_KAGGLE to confirm"
+                    value={maintenancePurgeConfirm}
+                    onChange={(e) => setMaintenancePurgeConfirm(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={maintenanceRunning}
+                    onClick={() =>
+                      void runMaintenance('purgeDraftImportsBySource', maintenanceDryRun, {
+                        source: maintenancePurgeSource,
+                        confirm: maintenancePurgeConfirm,
+                      })
+                    }
+                  >
+                    Purge drafts
+                  </Button>
+                </div>
+              </div>
+
               {maintenanceRunning ? (
                 <div className="text-sm text-[var(--muted)]">Working…</div>
               ) : null}
@@ -870,7 +1120,11 @@ export function AdminWorkoutLibrary() {
                   <div className="text-sm font-medium text-[var(--text)]">
                     Result: scanned {maintenanceResult.scanned} • updated {maintenanceResult.updated} • unchanged{' '}
                     {maintenanceResult.unchanged} • errors {maintenanceResult.errors}
+                    {typeof (maintenanceResult as any).deleted === 'number' ? ` • deleted ${(maintenanceResult as any).deleted}` : ''}
                   </div>
+                  {(maintenanceResult as any).message ? (
+                    <div className="mt-1 text-sm text-[var(--muted)]">{(maintenanceResult as any).message}</div>
+                  ) : null}
                   {maintenanceResult.examples.length ? (
                     <pre className="mt-3 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
                       {JSON.stringify(maintenanceResult.examples, null, 2)}
