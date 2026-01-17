@@ -1,7 +1,7 @@
 {
   "scripts": {
     "migrate:prod": "npx prisma migrate deploy --schema apps/web/prisma/schema.prisma",
-    "prisma:generate:web": "prisma generate --schema apps/web/prisma/schema.prisma"
+    "prisma:generate:web": "npx prisma generate --schema apps/web/prisma/schema.prisma"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.1",
