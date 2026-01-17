@@ -55,7 +55,8 @@ test.describe('Admin Kaggle ingestion', () => {
   test('dry-run, apply, idempotency, and rollback purge', async ({ page }, testInfo) => {
     await setRoleCookie(page, 'ADMIN');
 
-    const runTag = `__kaggle_ingest_test_${testInfo.project.name}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const projectSlug = testInfo.project.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    const runTag = `kaggle_ingest_test_${projectSlug}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const items = withTestRunIsolation(loadFixtureItems(), { projectName: testInfo.project.name, runTag });
 
     const dryRunRes = await page.request.post('/api/admin/workout-library/import/kaggle', {
