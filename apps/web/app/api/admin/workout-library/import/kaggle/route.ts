@@ -7,7 +7,7 @@ import { failure, handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 import { deriveIntensityCategory } from '@/lib/workout-library-taxonomy';
 import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerprint';
-import { normalizeKaggleRows } from '@/lib/ingestion/kaggle';
+import { fetchKaggleRows, normalizeKaggleRows } from '@/lib/ingestion/kaggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ const bodySchema = z.object({
   dryRun: z.boolean().default(true),
   confirmApply: z.boolean().default(false),
   maxRows: z.number().int().positive().max(HARD_MAX_ROWS).default(DEFAULT_MAX_ROWS),
-  items: z.array(z.unknown()).default([]),
+  items: z.array(z.unknown()).optional(),
 });
 
 type KaggleImportSummary = {
@@ -58,32 +58,15 @@ export async function POST(request: NextRequest) {
       return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400);
     }
 
-    if (body.items.length === 0) {
-      const empty: KaggleImportSummary = {
-        source: 'KAGGLE',
-        dryRun: body.dryRun,
-        scanned: 0,
-        valid: 0,
-        wouldCreate: 0,
-        createdCount: 0,
-        createdIds: [],
-        skippedExistingCount: 0,
-        skippedDuplicateInBatchCount: 0,
-        errorCount: 0,
-        errors: [],
-        sample: { creates: [], skips: [] },
-        message: 'No items provided.',
-      };
-      return success(empty);
-    }
+    const rows = body.items && body.items.length > 0 ? body.items : await fetchKaggleRows();
 
-    const normalized = normalizeKaggleRows(body.items, body.maxRows);
+    const normalized = normalizeKaggleRows(rows, body.maxRows);
 
     if (!body.dryRun && normalized.errors.length > 0) {
       const blocked: KaggleImportSummary = {
         source: 'KAGGLE',
         dryRun: body.dryRun,
-        scanned: Math.min(body.items.length, body.maxRows),
+        scanned: Math.min(rows.length, body.maxRows),
         valid: normalized.items.length,
         wouldCreate: 0,
         createdCount: 0,
@@ -149,7 +132,7 @@ export async function POST(request: NextRequest) {
       const summary: KaggleImportSummary = {
         source: 'KAGGLE',
         dryRun: true,
-        scanned: Math.min(body.items.length, body.maxRows),
+        scanned: Math.min(rows.length, body.maxRows),
         valid: normalized.items.length,
         wouldCreate: toCreate.length,
         createdCount: 0,
@@ -204,7 +187,7 @@ export async function POST(request: NextRequest) {
     const summary: KaggleImportSummary = {
       source: 'KAGGLE',
       dryRun: false,
-      scanned: Math.min(body.items.length, body.maxRows),
+      scanned: Math.min(rows.length, body.maxRows),
       valid: normalized.items.length,
       wouldCreate: toCreate.length,
       createdCount: createdIds.length,

@@ -516,7 +516,7 @@ export function AdminWorkoutLibrary() {
   );
 
   const onImportFreeExerciseDb = useCallback(
-    async (dryRun: boolean) => {
+    async (dryRun: boolean, confirmApplyOverride?: boolean) => {
       setFreeExerciseDbRunning(true);
       setFreeExerciseDbError(null);
       setFreeExerciseDbResult(null);
@@ -534,7 +534,7 @@ export function AdminWorkoutLibrary() {
             method: 'POST',
             data: {
               dryRun,
-              confirmApply: !dryRun && freeExerciseDbConfirmApply,
+              confirmApply: dryRun ? false : (confirmApplyOverride ?? freeExerciseDbConfirmApply),
               limit,
               offset,
             },
@@ -556,7 +556,7 @@ export function AdminWorkoutLibrary() {
   );
 
   const onKaggleImport = useCallback(
-    async (dryRun: boolean) => {
+    async (dryRun: boolean, confirmApplyOverride?: boolean) => {
       setKaggleRunning(true);
       setKaggleError(null);
       setKaggleResult(null);
@@ -568,9 +568,9 @@ export function AdminWorkoutLibrary() {
           method: 'POST',
           data: {
             dryRun,
-            confirmApply: dryRun ? false : kaggleConfirmApply,
+            confirmApply: dryRun ? false : (confirmApplyOverride ?? kaggleConfirmApply),
             maxRows,
-            items: importItems,
+            items: importItems.length > 0 ? importItems : undefined,
           },
         });
 
@@ -728,7 +728,7 @@ export function AdminWorkoutLibrary() {
                 );
               })}
 
-              {items.length === 0 ? (
+              {items.length === 0 && !listError ? (
                 <div className="px-4 py-10 text-center text-sm text-[var(--muted)]">No sessions found.</div>
               ) : null}
             </div>
@@ -881,79 +881,144 @@ export function AdminWorkoutLibrary() {
         ) : (
           activeRightTab === 'import' ? (
             <div className="mt-4 flex flex-col gap-3">
-            <div className="text-sm font-semibold text-[var(--text)]">Import (CSV or JSON)</div>
+            <div className="text-sm font-semibold text-[var(--text)]">Import</div>
             <div className="text-xs text-[var(--muted)]">
-              Upload a file once, then choose an import path below. CSV headers should include: title, discipline,
-              description, intensityTarget. Optional: tags, durationSec, distanceMeters, elevationGainMeters, notes,
-              equipment, workoutStructure.
+              Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions and skip duplicates.
             </div>
-            <div className="text-xs text-[var(--muted)]">Safety: max 500 rows per import. Imports create DRAFT sessions and skip duplicates.</div>
 
-            <div className="flex flex-col gap-2">
-              <input
-                type="file"
-                accept=".csv,.json,application/json,text/csv"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void onFileSelected(file);
-                }}
-              />
+            {(() => {
+              const requiresFile = importSource === 'MANUAL';
+              const canRunDryRun = !importing && (!requiresFile || importItems.length > 0);
+              const canRunPrimary = canRunDryRun && (importDryRun || importConfirmApply);
 
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                  <input
-                    type="checkbox"
-                    checked={importDryRun}
-                    onChange={(e) => setImportDryRun(e.target.checked)}
-                  />
-                  Dry run
-                </label>
+              const runDryRun = () => {
+                if (importSource === 'MANUAL') return void onImportCall(true);
+                if (importSource === 'FREE_EXERCISE_DB') return void onImportFreeExerciseDb(true, false);
+                return void onKaggleImport(true, false);
+              };
 
-                <div className="text-xs text-[var(--muted)]">Loaded rows: {importItems.length}</div>
-              </div>
+              const runPrimary = () => {
+                if (importSource === 'MANUAL') return void onImportCall(importDryRun);
+                if (importSource === 'FREE_EXERCISE_DB') return void onImportFreeExerciseDb(importDryRun, importConfirmApply);
+                return void onKaggleImport(importDryRun, importConfirmApply);
+              };
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                  <span className="text-xs text-[var(--muted)]">Source</span>
-                  <Select value={importSource} onChange={(e) => setImportSource(e.target.value as typeof importSource)}>
-                    <option value="MANUAL">MANUAL</option>
-                    <option value="KAGGLE">KAGGLE</option>
-                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
-                  </Select>
-                </label>
+              return (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                        <span className="text-xs text-[var(--muted)]">Source</span>
+                        <Select
+                          value={importSource}
+                          onChange={(e) => {
+                            setImportSource(e.target.value as typeof importSource);
+                            setImportParseError(null);
+                            setImportResult(null);
+                          }}
+                        >
+                          <option value="MANUAL">MANUAL</option>
+                          <option value="KAGGLE">KAGGLE</option>
+                          <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                        </Select>
+                      </label>
 
-                {!importDryRun ? (
-                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                          <input
+                            type="checkbox"
+                            checked={importDryRun}
+                            onChange={(e) => setImportDryRun(e.target.checked)}
+                          />
+                          Dry run
+                        </label>
+
+                        <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                          <input
+                            type="checkbox"
+                            checked={importConfirmApply}
+                            onChange={(e) => setImportConfirmApply(e.target.checked)}
+                            disabled={importDryRun}
+                          />
+                          Confirm apply
+                        </label>
+                      </div>
+                    </div>
+
                     <input
-                      type="checkbox"
-                      checked={importConfirmApply}
-                      onChange={(e) => setImportConfirmApply(e.target.checked)}
+                      data-testid="admin-import-file"
+                      type="file"
+                      accept=".csv,.json,application/json,text/csv"
+                      hidden={!requiresFile}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void onFileSelected(file);
+                      }}
                     />
-                    Confirm apply (required)
-                  </label>
-                ) : null}
-              </div>
-            </div>
 
-            {importParseError ? <div className="text-sm text-red-600">{importParseError}</div> : null}
+                    {!requiresFile ? (
+                      <div data-testid="admin-import-file-helper" className="text-xs text-[var(--muted)]">
+                        No file required for this source (server-side fetch).
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[var(--muted)]">
+                        Upload a CSV/JSON file once, then run a dry-run or import.
+                      </div>
+                    )}
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={importing || importItems.length === 0}
-                onClick={() => void onImportCall(true)}
-              >
-                Validate
-              </Button>
-              <Button
-                size="sm"
-                disabled={importing || importItems.length === 0}
-                onClick={() => void onImportCall(importDryRun)}
-              >
-                {importing ? 'Working…' : importDryRun ? 'Run Dry-Run' : 'Import Now'}
-              </Button>
-            </div>
+                    {importSource === 'FREE_EXERCISE_DB' ? (
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Limit (max 500)</span>
+                          <Input
+                            value={freeExerciseDbLimitText}
+                            onChange={(e) => setFreeExerciseDbLimitText(e.target.value)}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Offset</span>
+                          <Input
+                            value={freeExerciseDbOffsetText}
+                            onChange={(e) => setFreeExerciseDbOffsetText(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {importSource === 'KAGGLE' ? (
+                      <Input
+                        placeholder="Max rows (default 200, max 2000)"
+                        value={kaggleMaxRowsText}
+                        onChange={(e) => setKaggleMaxRowsText(e.target.value)}
+                      />
+                    ) : null}
+
+                    {requiresFile ? (
+                      <div className="text-xs text-[var(--muted)]">Loaded rows: {importItems.length}</div>
+                    ) : null}
+                  </div>
+
+                  {importParseError ? <div className="text-sm text-red-600">{importParseError}</div> : null}
+
+                  {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
+                  {kaggleError ? <div className="text-sm text-red-600">{kaggleError}</div> : null}
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={!canRunDryRun}
+                      onClick={runDryRun}
+                    >
+                      Run Dry-Run
+                    </Button>
+                    <Button size="sm" disabled={!canRunPrimary} onClick={runPrimary}>
+                      {importing ? 'Working…' : importDryRun ? 'Run Dry-Run' : 'Import Now'}
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
 
             {importResult ? (
               <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
@@ -1134,14 +1199,14 @@ export function AdminWorkoutLibrary() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={kaggleRunning || importItems.length === 0}
+                  disabled={kaggleRunning}
                   onClick={() => void onKaggleImport(true)}
                 >
                   Kaggle Dry-Run
                 </Button>
                 <Button
                   size="sm"
-                  disabled={kaggleRunning || importItems.length === 0 || (kaggleDryRun ? false : !kaggleConfirmApply)}
+                  disabled={kaggleRunning || (kaggleDryRun ? false : !kaggleConfirmApply)}
                   onClick={() => void onKaggleImport(kaggleDryRun)}
                 >
                   {kaggleRunning ? 'Working…' : kaggleDryRun ? 'Run Kaggle Dry-Run' : 'Import Kaggle Now'}

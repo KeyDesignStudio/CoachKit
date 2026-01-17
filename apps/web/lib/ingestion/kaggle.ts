@@ -1,3 +1,5 @@
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { z } from 'zod';
 import { WorkoutLibraryDiscipline } from '@prisma/client';
 
@@ -16,6 +18,51 @@ export type KaggleNormalizedItem = {
   equipment: string[];
   workoutStructure?: unknown | null;
 };
+
+function extractRows(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload as unknown[];
+
+  const obj = payload as Record<string, unknown>;
+  const candidate = obj?.items ?? obj?.rows ?? obj?.data;
+  if (Array.isArray(candidate)) return candidate as unknown[];
+
+  throw new Error('Kaggle payload must be an array or { items/rows/data: [...] }.');
+}
+
+export async function fetchKaggleRows(): Promise<unknown[]> {
+  const localPath = process.env.KAGGLE_DATA_PATH;
+  if (localPath) {
+    const resolved = path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
+    const text = await readFile(resolved, 'utf8');
+    const parsed = JSON.parse(text) as unknown;
+    return extractRows(parsed);
+  }
+
+  const url = process.env.KAGGLE_DATA_URL;
+  if (!url) {
+    throw new Error('Kaggle dataset not configured. Set KAGGLE_DATA_PATH (recommended) or KAGGLE_DATA_URL.');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { accept: 'application/json' },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Kaggle dataset: ${res.status} ${res.statusText}`);
+    }
+
+    const parsed = (await res.json()) as unknown;
+    return extractRows(parsed);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 type RowError = { index: number; message: string };
 
