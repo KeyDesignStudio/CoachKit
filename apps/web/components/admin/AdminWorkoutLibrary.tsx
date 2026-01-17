@@ -887,9 +887,21 @@ export function AdminWorkoutLibrary() {
             </div>
 
             {(() => {
-              const requiresFile = importSource === 'MANUAL';
-              const canRunDryRun = !importing && (!requiresFile || importItems.length > 0);
-              const canRunPrimary = canRunDryRun && (importDryRun || importConfirmApply);
+              const isManual = importSource === 'MANUAL';
+              const isKaggle = importSource === 'KAGGLE';
+              const isFreeExerciseDb = importSource === 'FREE_EXERCISE_DB';
+
+              const requiresFile = isManual;
+
+              const busy =
+                importing ||
+                (isKaggle ? kaggleRunning : false) ||
+                (isFreeExerciseDb ? freeExerciseDbRunning : false);
+
+              const canRunDryRun = isManual ? !busy && importItems.length > 0 : !busy;
+              const canRunImport = isManual
+                ? !busy && importItems.length > 0 && importConfirmApply
+                : !busy && importConfirmApply;
 
               const runDryRun = () => {
                 if (importSource === 'MANUAL') return void onImportCall(true);
@@ -910,6 +922,7 @@ export function AdminWorkoutLibrary() {
                       <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
                         <span className="text-xs text-[var(--muted)]">Source</span>
                         <Select
+                          data-testid="admin-import-source"
                           value={importSource}
                           onChange={(e) => {
                             setImportSource(e.target.value as typeof importSource);
@@ -1005,6 +1018,7 @@ export function AdminWorkoutLibrary() {
 
                   <div className="flex items-center gap-2">
                     <Button
+                      data-testid="admin-import-run-dryrun"
                       variant="secondary"
                       size="sm"
                       disabled={!canRunDryRun}
@@ -1012,9 +1026,11 @@ export function AdminWorkoutLibrary() {
                     >
                       Run Dry-Run
                     </Button>
-                    <Button size="sm" disabled={!canRunPrimary} onClick={runPrimary}>
-                      {importing ? 'Working…' : importDryRun ? 'Run Dry-Run' : 'Import Now'}
-                    </Button>
+                    {!importDryRun ? (
+                      <Button data-testid="admin-import-run-apply" size="sm" disabled={!canRunImport} onClick={runPrimary}>
+                        Import Now
+                      </Button>
+                    ) : null}
                   </div>
                 </>
               );
