@@ -221,6 +221,8 @@ export function AdminWorkoutLibrary() {
   const [importParseError, setImportParseError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
+  const [isDryRunBusy, setIsDryRunBusy] = useState(false);
+  const [isApplyBusy, setIsApplyBusy] = useState(false);
 
   const [freeExerciseDbDryRun, setFreeExerciseDbDryRun] = useState(true);
   const [freeExerciseDbConfirmApply, setFreeExerciseDbConfirmApply] = useState(false);
@@ -887,32 +889,56 @@ export function AdminWorkoutLibrary() {
             </div>
 
             {(() => {
-              const isManual = importSource === 'MANUAL';
-              const isKaggle = importSource === 'KAGGLE';
-              const isFreeExerciseDb = importSource === 'FREE_EXERCISE_DB';
+              const isRemote = importSource === 'KAGGLE' || importSource === 'FREE_EXERCISE_DB';
+              const hasManualRows = importItems.length > 0;
+              const busy = isDryRunBusy || isApplyBusy;
 
-              const requiresFile = isManual;
+              const canDryRun = !busy && (isRemote || hasManualRows);
+              const canApply = !busy && importConfirmApply && (isRemote || hasManualRows);
 
-              const busy =
-                importing ||
-                (isKaggle ? kaggleRunning : false) ||
-                (isFreeExerciseDb ? freeExerciseDbRunning : false);
+              const debugEnabled =
+                typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debugImport');
 
-              const canRunDryRun = isManual ? !busy && importItems.length > 0 : !busy;
-              const canRunImport = isManual
-                ? !busy && importItems.length > 0 && importConfirmApply
-                : !busy && importConfirmApply;
+              const runDryRun = async () => {
+                if (!canDryRun) return;
 
-              const runDryRun = () => {
-                if (importSource === 'MANUAL') return void onImportCall(true);
-                if (importSource === 'FREE_EXERCISE_DB') return void onImportFreeExerciseDb(true, false);
-                return void onKaggleImport(true, false);
+                setIsDryRunBusy(true);
+                try {
+                  if (importSource === 'MANUAL') {
+                    await onImportCall(true);
+                    return;
+                  }
+
+                  if (importSource === 'FREE_EXERCISE_DB') {
+                    await onImportFreeExerciseDb(true, false);
+                    return;
+                  }
+
+                  await onKaggleImport(true, false);
+                } finally {
+                  setIsDryRunBusy(false);
+                }
               };
 
-              const runPrimary = () => {
-                if (importSource === 'MANUAL') return void onImportCall(importDryRun);
-                if (importSource === 'FREE_EXERCISE_DB') return void onImportFreeExerciseDb(importDryRun, importConfirmApply);
-                return void onKaggleImport(importDryRun, importConfirmApply);
+              const runApply = async () => {
+                if (!canApply) return;
+
+                setIsApplyBusy(true);
+                try {
+                  if (importSource === 'MANUAL') {
+                    await onImportCall(false);
+                    return;
+                  }
+
+                  if (importSource === 'FREE_EXERCISE_DB') {
+                    await onImportFreeExerciseDb(false, true);
+                    return;
+                  }
+
+                  await onKaggleImport(false, true);
+                } finally {
+                  setIsApplyBusy(false);
+                }
               };
 
               return (
@@ -962,16 +988,16 @@ export function AdminWorkoutLibrary() {
                       data-testid="admin-import-file"
                       type="file"
                       accept=".csv,.json,application/json,text/csv"
-                      hidden={!requiresFile}
+                      hidden={isRemote}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) void onFileSelected(file);
                       }}
                     />
 
-                    {!requiresFile ? (
+                    {isRemote ? (
                       <div data-testid="admin-import-file-helper" className="text-xs text-[var(--muted)]">
-                        No file required for this source (server-side fetch).
+                        This source is loaded server-side. No file required.
                       </div>
                     ) : (
                       <div className="text-xs text-[var(--muted)]">
@@ -1006,7 +1032,7 @@ export function AdminWorkoutLibrary() {
                       />
                     ) : null}
 
-                    {requiresFile ? (
+                    {!isRemote ? (
                       <div className="text-xs text-[var(--muted)]">Loaded rows: {importItems.length}</div>
                     ) : null}
                   </div>
@@ -1016,21 +1042,40 @@ export function AdminWorkoutLibrary() {
                   {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
                   {kaggleError ? <div className="text-sm text-red-600">{kaggleError}</div> : null}
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      data-testid="admin-import-run-dryrun"
-                      variant="secondary"
-                      size="sm"
-                      disabled={!canRunDryRun}
-                      onClick={runDryRun}
+                  {debugEnabled ? (
+                    <div
+                      data-testid="admin-import-debug"
+                      className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]"
                     >
-                      Run Dry-Run
-                    </Button>
-                    {!importDryRun ? (
-                      <Button data-testid="admin-import-run-apply" size="sm" disabled={!canRunImport} onClick={runPrimary}>
+                      source={importSource} isRemote={String(isRemote)} busy={String(busy)} hasManualRows={String(
+                        hasManualRows
+                      )} confirmApply={String(importConfirmApply)} dryRunChecked={String(importDryRun)} canDryRun={String(
+                        canDryRun
+                      )} canApply={String(canApply)}
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-center gap-2">
+                    {importDryRun ? (
+                      <Button
+                        data-testid="admin-import-run-dryrun"
+                        variant="secondary"
+                        size="sm"
+                        disabled={!canDryRun}
+                        onClick={() => void runDryRun()}
+                      >
+                        Run Dry-Run
+                      </Button>
+                    ) : (
+                      <Button
+                        data-testid="admin-import-run-apply"
+                        size="sm"
+                        disabled={!canApply}
+                        onClick={() => void runApply()}
+                      >
                         Import Now
                       </Button>
-                    ) : null}
+                    )}
                   </div>
                 </>
               );

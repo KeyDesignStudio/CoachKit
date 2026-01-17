@@ -25,6 +25,18 @@ test.describe('Admin import UI enablement', () => {
     const sourceSelect = page.getByTestId('admin-import-source');
     const dryRunButton = page.getByTestId('admin-import-run-dryrun');
 
+    const manualJson = Buffer.from(
+      JSON.stringify([
+        {
+          title: 'Test Manual Workout',
+          discipline: 'RUN',
+          description: 'Fixture workout for manual import.',
+          intensityTarget: 'Easy',
+          durationSec: 1800,
+        },
+      ])
+    );
+
     // Default is MANUAL: file input visible, buttons blocked without file.
     await expect(fileInput).toBeVisible();
     await expect(dryRunButton).toBeDisabled();
@@ -43,5 +55,18 @@ test.describe('Admin import UI enablement', () => {
     // Running Kaggle dry-run should succeed (uses local fixture via KAGGLE_DATA_PATH).
     await dryRunButton.click();
     await expect(page.getByText(/Scanned\s+\d+/)).toBeVisible();
+
+    // Switch back to MANUAL: requires file parsed before enabling dry-run.
+    await sourceSelect.selectOption('MANUAL');
+    await expect(fileInput).toBeVisible();
+    await expect(dryRunButton).toBeDisabled();
+
+    await fileInput.setInputFiles({
+      name: 'manual-import.json',
+      mimeType: 'application/json',
+      buffer: manualJson,
+    });
+
+    await expect(dryRunButton).toBeEnabled();
   });
 });
