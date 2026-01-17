@@ -26,7 +26,12 @@ function loadFixtureItems(): unknown[] {
 }
 
 test.describe('Admin Kaggle ingestion', () => {
-  test('dry-run, apply, idempotency, and rollback purge', async ({ page }) => {
+  test('dry-run, apply, idempotency, and rollback purge', async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'iphone16pro',
+      'Mutates shared DB; run once to avoid cross-project conflicts.'
+    );
+
     await setRoleCookie(page, 'ADMIN');
 
     const items = loadFixtureItems();
