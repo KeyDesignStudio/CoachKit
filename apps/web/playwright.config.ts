@@ -20,6 +20,8 @@ export default defineConfig({
       ...process.env,
       NODE_ENV: 'development',
       DISABLE_AUTH: 'true',
+      // Avoid external network dependency in tests.
+      FREE_EXERCISE_DB_DATA_PATH: 'tests/fixtures/free-exercise-db-sample.json',
     },
     port: PORT,
     reuseExistingServer: false,
