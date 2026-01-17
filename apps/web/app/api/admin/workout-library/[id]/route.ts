@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { WorkoutLibraryDiscipline } from '@prisma/client';
+import { WorkoutLibraryDiscipline, WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { ApiError, notFound } from '@/lib/errors';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
+import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,8 @@ const patchSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
     discipline: z.nativeEnum(WorkoutLibraryDiscipline).optional(),
+    status: z.nativeEnum(WorkoutLibrarySessionStatus).optional(),
+    source: z.nativeEnum(WorkoutLibrarySource).optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
     description: z.string().trim().min(1).optional(),
     durationSec: z.number().int().nonnegative().optional(),
@@ -70,6 +73,11 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     const id = context.params.id;
     const payload = patchSchema.parse(await request.json());
 
+    const normalizedTags = payload.tags !== undefined ? normalizeTags(payload.tags) : undefined;
+    const normalizedEquipment = payload.equipment !== undefined ? normalizeEquipment(payload.equipment) : undefined;
+    const intensityCategory =
+      payload.intensityTarget !== undefined ? deriveIntensityCategory(payload.intensityTarget) : undefined;
+
     const existing = await prisma.workoutLibrarySession.findUnique({
       where: { id },
       select: { id: true, durationSec: true, distanceMeters: true },
@@ -93,14 +101,17 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       data: {
         ...(payload.title !== undefined ? { title: payload.title } : {}),
         ...(payload.discipline !== undefined ? { discipline: payload.discipline } : {}),
-        ...(payload.tags !== undefined ? { tags: payload.tags } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.source !== undefined ? { source: payload.source } : {}),
+        ...(normalizedTags !== undefined ? { tags: normalizedTags } : {}),
         ...(payload.description !== undefined ? { description: payload.description } : {}),
         ...(payload.durationSec !== undefined ? { durationSec: payload.durationSec } : {}),
         ...(payload.intensityTarget !== undefined ? { intensityTarget: payload.intensityTarget } : {}),
+        ...(intensityCategory !== undefined ? { intensityCategory } : {}),
         ...(payload.distanceMeters !== undefined ? { distanceMeters: payload.distanceMeters } : {}),
         ...(payload.elevationGainMeters !== undefined ? { elevationGainMeters: payload.elevationGainMeters } : {}),
         ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
-        ...(payload.equipment !== undefined ? { equipment: payload.equipment } : {}),
+        ...(normalizedEquipment !== undefined ? { equipment: normalizedEquipment } : {}),
         ...(payload.workoutStructure !== undefined
           ? {
               workoutStructure:

@@ -60,6 +60,27 @@ enum WorkoutLibraryDiscipline {
   OTHER
 }
 
+enum WorkoutLibraryIntensityCategory {
+  Z1
+  Z2
+  Z3
+  Z4
+  Z5
+  RPE
+  OTHER
+}
+
+enum WorkoutLibrarySessionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum WorkoutLibrarySource {
+  MANUAL
+  KAGGLE
+  FREE_EXERCISE_DB
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -97,10 +118,14 @@ model WorkoutLibrarySession {
   id                 String                  @id @default(cuid())
   title              String
   discipline         WorkoutLibraryDiscipline
+  status             WorkoutLibrarySessionStatus @default(DRAFT)
+  source             WorkoutLibrarySource     @default(MANUAL)
+  fingerprint        String?                 @unique
   tags               String[]
   description        String
   durationSec        Int
   intensityTarget    String
+  intensityCategory  WorkoutLibraryIntensityCategory?
   distanceMeters     Float?
   elevationGainMeters Float?
   notes              String?
@@ -115,7 +140,10 @@ model WorkoutLibrarySession {
   usage              WorkoutLibraryUsage[]
 
   @@index([discipline])
+  @@index([status])
+  @@index([source])
   @@index([title])
+  @@index([intensityCategory])
   @@index([tags], type: Gin)
 }
 
@@ -259,6 +287,12 @@ model GroupSession {
   location        String?
   startTimeLocal  String // "06:00" etc (keep MVP simple)
   durationMinutes Int
+  distanceMeters  Float?
+  intensityTarget String?
+  tags            String[]           @default([])
+  equipment       String[]           @default([])
+  workoutStructure Json?
+  notes           String?
   description     String?
   recurrenceRule  String // iCal RRULE string
   visibilityType  GroupVisibilityType @default(ALL)
@@ -298,6 +332,12 @@ model CalendarItem {
   title                  String
   plannedDurationMinutes Int?
   plannedDistanceKm      Float?
+  distanceMeters         Float?
+  intensityTarget        String?
+  tags                   String[] @default([])
+  equipment              String[] @default([])
+  workoutStructure        Json?
+  notes                  String?
   intensityType          String?
   intensityTargetJson    Json?
   workoutDetail          String?

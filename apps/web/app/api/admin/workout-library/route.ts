@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { WorkoutLibraryDiscipline } from '@prisma/client';
+import { WorkoutLibraryDiscipline, WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
+import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,8 @@ const createSchema = z
   .object({
     title: z.string().trim().min(1),
     discipline: z.nativeEnum(WorkoutLibraryDiscipline),
+    status: z.nativeEnum(WorkoutLibrarySessionStatus).default(WorkoutLibrarySessionStatus.DRAFT),
+    source: z.nativeEnum(WorkoutLibrarySource).default(WorkoutLibrarySource.MANUAL),
     tags: z.array(z.string().trim().min(1)).default([]),
     description: z.string().trim().min(1),
     durationSec: z.number().int().positive().optional(),
@@ -103,18 +106,25 @@ export async function POST(request: NextRequest) {
     const { user } = await requireWorkoutLibraryAdmin();
     const payload = createSchema.parse(await request.json());
 
+    const tags = normalizeTags(payload.tags);
+    const equipment = normalizeEquipment(payload.equipment);
+    const intensityCategory = deriveIntensityCategory(payload.intensityTarget);
+
     const created = await prisma.workoutLibrarySession.create({
       data: {
         title: payload.title,
         discipline: payload.discipline,
-        tags: payload.tags,
+        status: payload.status,
+        source: payload.source,
+        tags,
         description: payload.description,
         durationSec: payload.durationSec ?? 0,
         intensityTarget: payload.intensityTarget,
+        intensityCategory,
         distanceMeters: payload.distanceMeters ?? null,
         elevationGainMeters: payload.elevationGainMeters ?? null,
         notes: payload.notes ?? null,
-        equipment: payload.equipment,
+        equipment,
         workoutStructure: payload.workoutStructure ?? undefined,
         createdByUserId: user.id,
       },

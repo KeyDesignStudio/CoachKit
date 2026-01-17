@@ -58,7 +58,12 @@ Safari iOS checks (required)
 - Month view readable; +N more behavior works
 5) Group Sessions
 - Grid renders; cards are tappable
+- Library tab loads; search/filter/preview usable on mobile
 - Create; edit; apply
+
+Workout Library (Coach + Admin)
+- Coach: Library tab only shows `PUBLISHED` workouts; search/filter/preview works on mobile
+- Admin (desktop OK): can access `/admin/workout-library`, create/edit, import dry-run, confirm apply, and purge drafts
 6) Settings
 - Timezone
 - Logo upload
@@ -72,6 +77,7 @@ Safari iOS checks (required)
 - Week + month views render without horizontal scroll
 - Add workout (if allowed) or view-only interactions
 4) Open workout detail
+ - Verify rich workout detail renders (structure/notes) when scheduled from the Coach library
 5) Strava detected flow
 - Draft -> add notes/pain/RPE -> Confirm
 - Verify persistence on refresh
@@ -113,6 +119,8 @@ Run before every push that affects UI:
 2) Automated mobile smoke:
 - Preferred (Neon DB): `cd apps/web && npm run test:mobile:neon`
 - Covers `/coach/athletes` and `/athlete/dashboard` (iPhone + iPad)
+
+To run: `export DATABASE_URL=<non-prod neon branch>` then `npm run test:mobile:neon`
 3) Manual 5-minute sanity in Chrome DevTools:
 - iPhone SE -> Coach Dashboard + Coach Calendar week
 - iPhone 14 -> Athlete Dashboard + Athlete Calendar week + workout detail
@@ -125,7 +133,7 @@ Run before every push that affects UI:
 Use a TEST Neon project/branch for Playwright runs. These tests can write data.
 
 - Never point `DATABASE_URL` at production.
-- If you *must* run against production (strongly discouraged), you must explicitly opt in with `ALLOW_PROD_TEST_DB=YES`.
+- `npm run test:mobile:neon` will refuse localhost and will refuse production.
 
 These tests spin up a local `next dev` server (with auth disabled) and require a working Postgres connection via `DATABASE_URL`.
 
@@ -135,9 +143,10 @@ macOS/Linux:
 2) Run:
 	- `cd apps/web && npm run test:mobile:neon`
 
-If you must run against production (discouraged):
-- `export DATABASE_URL='postgresql://user:***@ep-soft-tooth-a767udjk-pooler.ap-southeast-2.aws.neon.tech/<db>?sslmode=require'`
-- `cd apps/web && npm run test:mobile:neon:allowprod`
+Notes:
+- `test:mobile:neon` requires a non-production Neon branch host (ep-*.neon.tech).
+- It will fail fast if `DATABASE_URL` points to `localhost` / `127.0.0.1` / `0.0.0.0`.
+	- Use `npm run test:mobile:local` when `DATABASE_URL` points to localhost/docker.
 
 PowerShell (optional):
 - `$env:DATABASE_URL = 'postgresql://...'; cd apps/web; npm run test:mobile:neon`
@@ -146,7 +155,15 @@ If `DATABASE_URL` is missing, the command fails fast with a clear message.
 
 ### Optional alternative (local DB)
 
-If you prefer a local Postgres instead of Neon, start the repo's docker Postgres and set `DATABASE_URL` to point at it, then run `npm run test:mobile`.
+If you prefer a local Postgres instead of Neon, start the repo's docker Postgres and run local-only tests:
+- Set local DB URL (example):
+	- `export DATABASE_URL='postgresql://user:***@localhost:5432/<db>?schema=public'`
+- Then run:
+	- `cd apps/web && npm run test:mobile:local`
+
+Local vs Neon:
+- `npm run test:mobile:local`: local-only (guard-free). You are responsible for pointing `DATABASE_URL` at localhost/docker.
+- `npm run test:mobile:neon`: Neon-only (guarded). Refuses localhost and refuses prod by default.
 
 If regressions are found:
 - Add an entry to "Known Issues" below (date + device + steps + expected vs actual)

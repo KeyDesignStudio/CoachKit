@@ -8,10 +8,12 @@
     "vercel-build": "node scripts/build.mjs",
     "start": "next start",
     "test:mobile": "playwright test",
+    "test:mobile:local": "playwright test",
     "test:mobile:neon": "node scripts/assert-env.mjs && playwright test",
     "test:mobile:neon:allowprod": "cross-env ALLOW_PROD_TEST_DB=YES node scripts/assert-env.mjs && playwright test",
-    "postinstall": "prisma generate --schema prisma/schema.prisma",
-    "prisma:generate": "prisma generate",
+    "postinstall": "npx prisma generate --schema prisma/schema.prisma",
+    "prisma:generate": "npx prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
     "prisma:migrate:init": "prisma migrate dev --name init --create-only",
     "seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts"
   },
@@ -41,8 +43,5 @@
     "tailwindcss": "^3.4.13",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
-  },
-  "prisma": {
-    "seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts"
   }
 }

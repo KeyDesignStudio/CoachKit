@@ -34,6 +34,12 @@ type SessionFormState = {
   location: string;
   startTimeLocal: string;
   durationMinutes: string;
+  distanceMeters: number | null;
+  intensityTarget: string;
+  tags: string[];
+  equipment: string[];
+  workoutStructure: unknown | null;
+  notes: string;
   description: string;
   optionalFlag: boolean;
   selectedDays: string[];
@@ -70,6 +76,12 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       location: '',
       startTimeLocal: '05:30',
       durationMinutes: '60',
+      distanceMeters: null,
+      intensityTarget: '',
+      tags: [],
+      equipment: [],
+      workoutStructure: null,
+      notes: '',
       description: '',
       optionalFlag: false,
       selectedDays: ['MO'],
@@ -130,6 +142,12 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       discipline: form.discipline,
       startTimeLocal: form.startTimeLocal,
       durationMinutes,
+      distanceMeters: form.distanceMeters ?? undefined,
+      intensityTarget: form.intensityTarget.trim() ? form.intensityTarget.trim() : undefined,
+      tags: form.tags ?? [],
+      equipment: form.equipment ?? [],
+      workoutStructure: form.workoutStructure ?? undefined,
+      notes: form.notes.trim() ? form.notes.trim() : undefined,
       recurrenceRule: buildWeeklyRule(form.selectedDays),
       visibilityType: form.visibilityType,
       optionalFlag: form.optionalFlag,
@@ -170,6 +188,12 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
         location: '',
         startTimeLocal: '05:30',
         durationMinutes: '60',
+        distanceMeters: null,
+        intensityTarget: '',
+        tags: [],
+        equipment: [],
+        workoutStructure: null,
+        notes: '',
         description: '',
         optionalFlag: false,
         selectedDays: ['MO'],

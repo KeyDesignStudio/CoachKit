@@ -1,5 +1,10 @@
 {
-  "dependencies": {
-    "lucide-react": "^0.562.0"
+  "scripts": {
+    "migrate:prod": "npx prisma migrate deploy --schema apps/web/prisma/schema.prisma",
+    "prisma:generate:web": "npx prisma generate --schema apps/web/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.19.1",
+    "prisma": "^6.19.1"
   }
 }

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { CANONICAL_EQUIPMENT, type CanonicalEquipment } from '@/lib/workout-library-taxonomy';
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
 
@@ -15,6 +16,8 @@ type LibraryItem = {
   id: string;
   title: string;
   discipline: Discipline;
+  status?: 'DRAFT' | 'PUBLISHED';
+  source?: 'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB';
   tags: string[];
   description: string;
   durationSec: number;
@@ -30,6 +33,18 @@ type LibraryItem = {
   usageCount?: number;
 };
 
+type MaintenanceAction = 'normalizeTags' | 'normalizeEquipment' | 'recomputeIntensityCategory';
+
+type MaintenanceSummary = {
+  dryRun: boolean;
+  action: MaintenanceAction;
+  scanned: number;
+  updated: number;
+  unchanged: number;
+  errors: number;
+  examples: Array<{ id: string; title: string; before: unknown; after: unknown }>;
+};
+
 type ImportResult = {
   dryRun: boolean;
   totalCount: number;
@@ -39,6 +54,7 @@ type ImportResult = {
   errors: Array<{ index: number; message: string }>;
   createdCount: number;
   createdIds: string[];
+  skippedExistingCount?: number;
   message?: string;
 };
 
@@ -157,17 +173,26 @@ export function AdminWorkoutLibrary() {
   const [distanceMetersText, setDistanceMetersText] = useState('');
   const [elevationGainMetersText, setElevationGainMetersText] = useState('');
   const [intensityTarget, setIntensityTarget] = useState('');
-  const [equipmentText, setEquipmentText] = useState('');
+  const [equipment, setEquipment] = useState<CanonicalEquipment[]>([]);
   const [notes, setNotes] = useState('');
   const [workoutStructureText, setWorkoutStructureText] = useState('');
 
-  const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import'>('edit');
+  const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import' | 'maintenance'>('edit');
 
   const [importDryRun, setImportDryRun] = useState(true);
+  const [importConfirmApply, setImportConfirmApply] = useState(false);
+  const [importSource, setImportSource] = useState<'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'>('MANUAL');
   const [importItems, setImportItems] = useState<unknown[]>([]);
   const [importParseError, setImportParseError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
+
+  const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
+  const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
+  const [maintenancePurgeConfirm, setMaintenancePurgeConfirm] = useState('');
+  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
+  const [maintenanceResult, setMaintenanceResult] = useState<MaintenanceSummary | null>(null);
 
   const selected = useMemo(
     () => (selectedId ? items.find((it) => it.id === selectedId) ?? null : null),
@@ -215,12 +240,16 @@ export function AdminWorkoutLibrary() {
     setDistanceMetersText('');
     setElevationGainMetersText('');
     setIntensityTarget('');
-    setEquipmentText('');
+    setEquipment([]);
     setNotes('');
     setWorkoutStructureText('');
     setSaveError(null);
     setSaveOk(null);
   }, []);
+
+  useEffect(() => {
+    if (importDryRun) setImportConfirmApply(false);
+  }, [importDryRun]);
 
   const startCreate = useCallback(() => {
     setSelectedId(null);
@@ -243,7 +272,15 @@ export function AdminWorkoutLibrary() {
       setDistanceMetersText(item.distanceMeters != null ? String(item.distanceMeters) : '');
       setElevationGainMetersText(item.elevationGainMeters != null ? String(item.elevationGainMeters) : '');
       setIntensityTarget(item.intensityTarget ?? '');
-      setEquipmentText((item.equipment ?? []).join(', '));
+      setEquipment(() => {
+        const raw = item.equipment ?? [];
+        const canonical = raw.filter((e): e is CanonicalEquipment =>
+          (CANONICAL_EQUIPMENT as readonly string[]).includes(e)
+        ) as CanonicalEquipment[];
+        const hasUnknown = raw.some((e) => !(CANONICAL_EQUIPMENT as readonly string[]).includes(e));
+        if (hasUnknown && !canonical.includes('Other')) return [...canonical, 'Other'];
+        return canonical;
+      });
       setNotes(item.notes ?? '');
       setWorkoutStructureText(
         item.workoutStructure != null ? JSON.stringify(item.workoutStructure, null, 2) : ''
@@ -268,7 +305,7 @@ export function AdminWorkoutLibrary() {
 
     try {
       const tags = splitCommaList(tagsText);
-      const equipment = splitCommaList(equipmentText);
+      const equipmentPayload = equipment;
       const durationSec = parseOptionalNumber(durationSecText);
       const distanceMeters = parseOptionalNumber(distanceMetersText);
       const elevationGainMeters = parseOptionalNumber(elevationGainMetersText);
@@ -299,7 +336,7 @@ export function AdminWorkoutLibrary() {
         distanceMeters: hasDistance ? distanceMeters : null,
         elevationGainMeters: elevationGainMeters ?? null,
         notes: notes.trim() ? notes.trim() : null,
-        equipment,
+        equipment: equipmentPayload,
         workoutStructure: workoutStructure ?? null,
       };
 
@@ -330,7 +367,7 @@ export function AdminWorkoutLibrary() {
     description,
     distanceMetersText,
     elevationGainMetersText,
-    equipmentText,
+    equipment,
     fetchList,
     formDiscipline,
     intensityTarget,
@@ -343,6 +380,34 @@ export function AdminWorkoutLibrary() {
     workoutStructureText,
     durationSecText,
   ]);
+
+  const runMaintenance = useCallback(
+    async (
+      action: MaintenanceAction | 'purgeDraftImportsBySource',
+      dryRun: boolean,
+      extra?: { source?: string; confirm?: string }
+    ) => {
+      setMaintenanceRunning(true);
+      setMaintenanceError(null);
+      setMaintenanceResult(null);
+      try {
+        const data = await request<MaintenanceSummary>(`/api/admin/workout-library/maintenance`, {
+          method: 'POST',
+          data: { action, dryRun, ...extra },
+        });
+        setMaintenanceResult(data);
+        // Refresh list after apply.
+        if (!dryRun) {
+          await fetchList();
+        }
+      } catch (error) {
+        setMaintenanceError(error instanceof Error ? error.message : 'Maintenance failed.');
+      } finally {
+        setMaintenanceRunning(false);
+      }
+    },
+    [fetchList, request]
+  );
 
   const onDelete = useCallback(
     async (id: string) => {
@@ -373,6 +438,8 @@ export function AdminWorkoutLibrary() {
           method: 'POST',
           data: {
             dryRun,
+            confirmApply: !dryRun && importConfirmApply,
+            source: importSource,
             items: importItems,
           },
         });
@@ -387,7 +454,7 @@ export function AdminWorkoutLibrary() {
         setImporting(false);
       }
     },
-    [fetchList, importItems, request]
+    [fetchList, importConfirmApply, importItems, importSource, request]
   );
 
   const onFileSelected = useCallback(async (file: File) => {
@@ -544,6 +611,13 @@ export function AdminWorkoutLibrary() {
           >
             Import
           </Button>
+          <Button
+            variant={activeRightTab === 'maintenance' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveRightTab('maintenance')}
+          >
+            Maintenance
+          </Button>
         </div>
 
         {activeRightTab === 'edit' ? (
@@ -599,11 +673,38 @@ export function AdminWorkoutLibrary() {
               onChange={(e) => setIntensityTarget(e.target.value)}
             />
 
-            <Input
-              placeholder="Equipment (comma-separated)"
-              value={equipmentText}
-              onChange={(e) => setEquipmentText(e.target.value)}
-            />
+            <div className="rounded-2xl border border-[var(--border-subtle)] p-3">
+              <div className="text-xs font-semibold text-[var(--text)]">Equipment</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {CANONICAL_EQUIPMENT.map((value) => {
+                  const active = equipment.includes(value);
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'primary' : 'secondary'}
+                      onClick={() =>
+                        setEquipment((prev) =>
+                          prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]
+                        )
+                      }
+                    >
+                      {value}
+                    </Button>
+                  );
+                })}
+
+                {equipment.length > 0 ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEquipment([])}>
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-2 text-xs text-[var(--muted)]">
+                Admin save will normalize equipment to this canonical list (unknown values map to “Other”).
+              </div>
+            </div>
 
             <Textarea
               placeholder="Notes (optional)"
@@ -636,12 +737,14 @@ export function AdminWorkoutLibrary() {
             </div>
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-3">
+          activeRightTab === 'import' ? (
+            <div className="mt-4 flex flex-col gap-3">
             <div className="text-sm font-semibold text-[var(--text)]">Import (CSV or JSON)</div>
             <div className="text-xs text-[var(--muted)]">
               CSV headers should include: title, discipline, description, intensityTarget. Optional: tags, durationSec,
               distanceMeters, elevationGainMeters, notes, equipment, workoutStructure.
             </div>
+            <div className="text-xs text-[var(--muted)]">Safety: max 500 rows per import. Imports create DRAFT sessions and skip duplicates.</div>
 
             <div className="flex flex-col gap-2">
               <input
@@ -664,6 +767,28 @@ export function AdminWorkoutLibrary() {
                 </label>
 
                 <div className="text-xs text-[var(--muted)]">Loaded rows: {importItems.length}</div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                  <span className="text-xs text-[var(--muted)]">Source</span>
+                  <Select value={importSource} onChange={(e) => setImportSource(e.target.value as typeof importSource)}>
+                    <option value="MANUAL">MANUAL</option>
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                </label>
+
+                {!importDryRun ? (
+                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <input
+                      type="checkbox"
+                      checked={importConfirmApply}
+                      onChange={(e) => setImportConfirmApply(e.target.checked)}
+                    />
+                    Confirm apply (required)
+                  </label>
+                ) : null}
               </div>
             </div>
 
@@ -698,6 +823,9 @@ export function AdminWorkoutLibrary() {
                 {importResult.createdCount > 0 ? (
                   <div className="mt-1 text-sm text-green-700">Created {importResult.createdCount} sessions.</div>
                 ) : null}
+                {typeof importResult.skippedExistingCount === 'number' && importResult.skippedExistingCount > 0 ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">Skipped duplicates: {importResult.skippedExistingCount}</div>
+                ) : null}
 
                 {importResult.errors.length ? (
                   <div className="mt-3">
@@ -729,7 +857,113 @@ export function AdminWorkoutLibrary() {
                 ) : null}
               </div>
             ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-col gap-4">
+              <div>
+                <div className="text-sm font-semibold text-[var(--text)]">Library Maintenance</div>
+                <div className="text-xs text-[var(--muted)]">
+                  Runs server-side normalization across existing library sessions. Start with a dry-run.
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={maintenanceDryRun}
+                  onChange={(e) => setMaintenanceDryRun(e.target.checked)}
+                />
+                Dry run
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={maintenanceRunning}
+                  onClick={() => void runMaintenance('normalizeTags', maintenanceDryRun)}
+                >
+                  Normalize all tags
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={maintenanceRunning}
+                  onClick={() => void runMaintenance('normalizeEquipment', maintenanceDryRun)}
+                >
+                  Normalize all equipment
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={maintenanceRunning}
+                  onClick={() => void runMaintenance('recomputeIntensityCategory', maintenanceDryRun)}
+                >
+                  Recompute intensityCategory
+                </Button>
+              </div>
+
+              <div className="mt-2 rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-semibold text-[var(--text)]">Purge draft imports by source</div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  Deletes all DRAFT sessions for a source. Run a dry-run first. Apply requires confirmation text.
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <Select
+                    value={maintenancePurgeSource}
+                    onChange={(e) => setMaintenancePurgeSource(e.target.value as typeof maintenancePurgeSource)}
+                  >
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                  <Input
+                    placeholder="Type PURGE_KAGGLE to confirm"
+                    value={maintenancePurgeConfirm}
+                    onChange={(e) => setMaintenancePurgeConfirm(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={maintenanceRunning}
+                    onClick={() =>
+                      void runMaintenance('purgeDraftImportsBySource', maintenanceDryRun, {
+                        source: maintenancePurgeSource,
+                        confirm: maintenancePurgeConfirm,
+                      })
+                    }
+                  >
+                    Purge drafts
+                  </Button>
+                </div>
+              </div>
+
+              {maintenanceRunning ? (
+                <div className="text-sm text-[var(--muted)]">Working…</div>
+              ) : null}
+              {maintenanceError ? <div className="text-sm text-red-600">{maintenanceError}</div> : null}
+
+              {maintenanceResult ? (
+                <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium text-[var(--text)]">
+                    Result: scanned {maintenanceResult.scanned} • updated {maintenanceResult.updated} • unchanged{' '}
+                    {maintenanceResult.unchanged} • errors {maintenanceResult.errors}
+                    {typeof (maintenanceResult as any).deleted === 'number' ? ` • deleted ${(maintenanceResult as any).deleted}` : ''}
+                  </div>
+                  {(maintenanceResult as any).message ? (
+                    <div className="mt-1 text-sm text-[var(--muted)]">{(maintenanceResult as any).message}</div>
+                  ) : null}
+                  {maintenanceResult.examples.length ? (
+                    <pre className="mt-3 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      {JSON.stringify(maintenanceResult.examples, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="mt-2 text-xs text-[var(--muted)]">No changes needed.</div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )
         )}
       </Card>
     </div>

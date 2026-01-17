@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { WorkoutLibraryDiscipline } from '@prisma/client';
+import { Prisma, WorkoutLibraryDiscipline, WorkoutLibraryIntensityCategory, WorkoutLibrarySessionStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
@@ -7,6 +7,33 @@ import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
+
+type SortKey = 'relevance' | 'newest' | 'popular' | 'durationAsc' | 'durationDesc' | 'intensityAsc' | 'intensityDesc' | 'titleAsc';
+
+function parseSortKey(value: string | null): SortKey {
+  const v = (value ?? '').trim();
+  switch (v) {
+    case 'newest':
+    case 'popular':
+    case 'durationAsc':
+    case 'durationDesc':
+    case 'intensityAsc':
+    case 'intensityDesc':
+    case 'titleAsc':
+    case 'relevance':
+      return v;
+    default:
+      return 'relevance';
+  }
+}
+
+function parseIntensityCategory(value: string | null): WorkoutLibraryIntensityCategory | null {
+  const v = (value ?? '').trim().toUpperCase();
+  if (!v) return null;
+  return Object.values(WorkoutLibraryIntensityCategory).includes(v as WorkoutLibraryIntensityCategory)
+    ? (v as WorkoutLibraryIntensityCategory)
+    : null;
+}
 
 function parseMulti(query: URLSearchParams, key: string): string[] {
   const values = query.getAll(key).flatMap((v) => (v.includes(',') ? v.split(',') : [v]));
@@ -33,6 +60,10 @@ export async function GET(request: NextRequest) {
     const disciplineRaw = parseMulti(searchParams, 'discipline');
     const tags = parseMulti(searchParams, 'tags');
     const intensityTarget = (searchParams.get('intensityTarget') ?? '').trim();
+    const intensityCategory = parseIntensityCategory(searchParams.get('intensityCategory'));
+    const sort = parseSortKey(searchParams.get('sort'));
+    const favoritesOnlyRaw = (searchParams.get('favoritesOnly') ?? '').trim().toLowerCase();
+    const favoritesOnly = favoritesOnlyRaw === '1' || favoritesOnlyRaw === 'true' || favoritesOnlyRaw === 'yes';
 
     const page = clamp(parseIntOrNull(searchParams.get('page')) ?? 1, 1, 10_000);
     const pageSize = clamp(parseIntOrNull(searchParams.get('pageSize')) ?? 20, 1, 100);
@@ -44,7 +75,8 @@ export async function GET(request: NextRequest) {
       Object.values(WorkoutLibraryDiscipline).includes(d as WorkoutLibraryDiscipline)
     );
 
-    const where = {
+    const where: Prisma.WorkoutLibrarySessionWhereInput = {
+      status: WorkoutLibrarySessionStatus.PUBLISHED,
       ...(q
         ? {
             title: {
@@ -83,13 +115,49 @@ export async function GET(request: NextRequest) {
             },
           }
         : {}),
+      ...(intensityCategory
+        ? {
+            intensityCategory,
+          }
+        : {}),
+      ...(favoritesOnly
+        ? {
+            favorites: {
+              some: {
+                coachId: user.id,
+              },
+            },
+          }
+        : {}),
     };
+
+    const orderBy: Prisma.WorkoutLibrarySessionOrderByWithRelationInput[] = (() => {
+      switch (sort) {
+        case 'newest':
+          return [{ createdAt: 'desc' }];
+        case 'popular':
+          return [{ usage: { _count: 'desc' } }, { updatedAt: 'desc' }];
+        case 'durationAsc':
+          return [{ durationSec: 'asc' }, { updatedAt: 'desc' }];
+        case 'durationDesc':
+          return [{ durationSec: 'desc' }, { updatedAt: 'desc' }];
+        case 'intensityAsc':
+          return [{ intensityCategory: 'asc' }, { updatedAt: 'desc' }];
+        case 'intensityDesc':
+          return [{ intensityCategory: 'desc' }, { updatedAt: 'desc' }];
+        case 'titleAsc':
+          return [{ title: 'asc' }, { updatedAt: 'desc' }];
+        case 'relevance':
+        default:
+          return [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
+      }
+    })();
 
     const [total, sessions] = await prisma.$transaction([
       prisma.workoutLibrarySession.count({ where }),
       prisma.workoutLibrarySession.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
@@ -100,10 +168,17 @@ export async function GET(request: NextRequest) {
           description: true,
           durationSec: true,
           intensityTarget: true,
+          intensityCategory: true,
           distanceMeters: true,
           elevationGainMeters: true,
           equipment: true,
+          createdAt: true,
           updatedAt: true,
+          _count: {
+            select: {
+              usage: true,
+            },
+          },
         },
       }),
     ]);
@@ -124,10 +199,14 @@ export async function GET(request: NextRequest) {
 
     return success(
       {
-        items: sessions.map((s) => ({
-          ...s,
-          favorite: favoriteSet.has(s.id),
-        })),
+        items: sessions.map((s) => {
+          const { _count, ...rest } = s;
+          return {
+            ...rest,
+            usageCount: _count.usage,
+            favorite: favoriteSet.has(s.id),
+          };
+        }),
         total,
         page,
         pageSize,

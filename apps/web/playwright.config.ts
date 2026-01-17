@@ -18,7 +18,7 @@ export default defineConfig({
     command: `next dev -p ${PORT}`,
     env: {
       ...process.env,
-      NODE_ENV: process.env.NODE_ENV ?? 'test',
+      NODE_ENV: 'development',
       DISABLE_AUTH: 'true',
     },
     port: PORT,

@@ -26,9 +26,15 @@ const updateSchema = z.object({
   title: z.string().trim().min(1).optional(),
   plannedDurationMinutes: z.union([z.number().int().positive().max(1000), z.null()]).optional(),
   plannedDistanceKm: z.union([z.number().nonnegative().max(1000), z.null()]).optional(),
+  distanceMeters: z.union([z.number().positive(), z.null()]).optional(),
+  intensityTarget: z.union([z.string().trim().min(1), z.null()]).optional(),
+  tags: z.array(z.string().trim().min(1)).optional(),
+  equipment: z.array(z.string().trim().min(1)).optional(),
+  workoutStructure: z.unknown().optional().nullable(),
+  notes: z.union([z.string().trim().max(20000), z.null()]).optional(),
   intensityType: z.union([z.string().trim().min(1), z.null()]).optional(),
   intensityTargetJson: z.unknown().optional(),
-  workoutDetail: z.union([z.string().trim().max(4000), z.null()]).optional(),
+  workoutDetail: z.union([z.string().trim().max(20000), z.null()]).optional(),
   attachmentsJson: z.unknown().optional(),
   status: z.nativeEnum(CalendarItemStatus).optional(),
   templateId: z.union([cuid, z.null()]).optional(),
@@ -110,6 +116,32 @@ export async function PATCH(
       data.plannedDistanceKm = payload.plannedDistanceKm;
     }
 
+    if (payload.distanceMeters !== undefined) {
+      data.distanceMeters = payload.distanceMeters;
+      // Keep legacy km field in sync when distanceMeters is explicitly updated.
+      data.plannedDistanceKm = payload.distanceMeters != null ? payload.distanceMeters / 1000 : null;
+    }
+
+    if (payload.intensityTarget !== undefined) {
+      data.intensityTarget = payload.intensityTarget;
+    }
+
+    if (payload.tags !== undefined) {
+      data.tags = payload.tags;
+    }
+
+    if (payload.equipment !== undefined) {
+      data.equipment = payload.equipment;
+    }
+
+    if (payload.workoutStructure !== undefined) {
+      data.workoutStructure = payload.workoutStructure as Prisma.InputJsonValue;
+    }
+
+    if (payload.notes !== undefined) {
+      data.notes = payload.notes;
+    }
+
     if (payload.intensityType !== undefined) {
       data.intensityType = payload.intensityType;
     }
@@ -149,6 +181,19 @@ export async function PATCH(
     });
 
     return success({ item: updated });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+export async function GET(
+  _request: NextRequest,
+  context: { params: { itemId: string } }
+) {
+  try {
+    const { user } = await requireCoach();
+    const item = await ensureCalendarItem(context.params.itemId, user.id);
+    return success({ item });
   } catch (error) {
     return handleError(error);
   }
