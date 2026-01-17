@@ -33,7 +33,7 @@ function withTestRunIsolation(items: unknown[], opts: { projectName: string; run
     const next: Record<string, unknown> = { ...row };
 
     const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : 'Workout';
-    next.title = `${title} ${suffix}`;
+    next.title = `${title} ${suffix} ${opts.runTag}`;
 
     const tags = Array.isArray(row.tags)
       ? row.tags
@@ -49,6 +49,18 @@ function withTestRunIsolation(items: unknown[], opts: { projectName: string; run
 
     return next;
   });
+}
+
+async function expectOk(res: import('@playwright/test').APIResponse, label: string) {
+  if (res.ok()) return;
+  const status = res.status();
+  let body = '';
+  try {
+    body = await res.text();
+  } catch {
+    body = '<unable to read body>';
+  }
+  throw new Error(`${label} failed: HTTP ${status}\n${body.slice(0, 2000)}`);
 }
 
 test.describe('Admin Kaggle ingestion', () => {
@@ -69,7 +81,7 @@ test.describe('Admin Kaggle ingestion', () => {
       },
     });
 
-    expect(dryRunRes.ok()).toBeTruthy();
+    await expectOk(dryRunRes, 'kaggle import dry-run');
     const dryRunJson = (await dryRunRes.json()) as { data: any; error: any };
     expect(dryRunJson.error).toBeNull();
     expect(dryRunJson.data.source).toBe('KAGGLE');
@@ -87,7 +99,7 @@ test.describe('Admin Kaggle ingestion', () => {
       },
     });
 
-    expect(applyRes.ok()).toBeTruthy();
+    await expectOk(applyRes, 'kaggle import apply');
     const applyJson = (await applyRes.json()) as { data: any; error: any };
     expect(applyJson.error).toBeNull();
     expect(applyJson.data.dryRun).toBe(false);
@@ -104,7 +116,7 @@ test.describe('Admin Kaggle ingestion', () => {
       },
     });
 
-    expect(secondApplyRes.ok()).toBeTruthy();
+    await expectOk(secondApplyRes, 'kaggle import second apply');
     const secondApplyJson = (await secondApplyRes.json()) as { data: any; error: any };
     expect(secondApplyJson.error).toBeNull();
     expect(secondApplyJson.data.createdCount).toBe(0);
@@ -120,7 +132,7 @@ test.describe('Admin Kaggle ingestion', () => {
       },
     });
 
-    expect(purgeDryRunRes.ok()).toBeTruthy();
+    await expectOk(purgeDryRunRes, 'kaggle purge dry-run');
     const purgeDryRunJson = (await purgeDryRunRes.json()) as { data: any; error: any };
     expect(purgeDryRunJson.error).toBeNull();
     expect(purgeDryRunJson.data.action).toBe('purgeDraftImportsBySource');
@@ -138,7 +150,7 @@ test.describe('Admin Kaggle ingestion', () => {
       },
     });
 
-    expect(purgeApplyRes.ok()).toBeTruthy();
+    await expectOk(purgeApplyRes, 'kaggle purge apply');
     const purgeApplyJson = (await purgeApplyRes.json()) as { data: any; error: any };
     expect(purgeApplyJson.error).toBeNull();
     expect(purgeApplyJson.data.action).toBe('purgeDraftImportsBySource');

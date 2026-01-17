@@ -5,7 +5,12 @@ import { WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/clien
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
-import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
+import {
+  deriveIntensityCategory,
+  normalizeEquipment,
+  normalizeTag,
+  normalizeTags,
+} from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
         } satisfies MaintenanceSummary);
       }
 
-      const tag = body.tag?.trim() || undefined;
+      const tag = body.tag ? (normalizeTag(body.tag) ?? undefined) : undefined;
       const where = {
         status: WorkoutLibrarySessionStatus.DRAFT,
         source,
