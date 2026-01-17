@@ -178,6 +178,22 @@ These rules are enforced server-side to prevent accidental large or unsafe inges
 
 Coach endpoints only return `PUBLISHED` sessions; drafts are hidden from all coach views.
 
+### Free Exercise DB (Phase 1)
+
+This ingestion runs server-side (no dataset committed to the repo) and is Admin-only.
+
+- Dataset source (default): `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json`
+- Admin endpoint: `POST /api/admin/workout-library/import/free-exercise-db`
+  - Request: `{ dryRun: boolean, confirmApply?: boolean, limit?: number (<=500), offset?: number }`
+  - Dry-run is supported and should be the default.
+  - Apply requires `confirmApply=true`.
+  - Creates `DRAFT` sessions with `source=FREE_EXERCISE_DB`.
+  - Uses deterministic `fingerprint` idempotency.
+- Admin UI: `/admin/workout-library` → Import tab → “Import (Free Exercise DB)”
+
+Testing note:
+- Playwright uses a local fixture via `FREE_EXERCISE_DB_DATA_PATH=tests/fixtures/free-exercise-db-sample.json` to avoid network dependency.
+
 ---
 
 ## Semantic Mapping Contract (Pre-Ingestion)

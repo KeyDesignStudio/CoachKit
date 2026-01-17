@@ -5,7 +5,12 @@ import { WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/clien
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
-import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
+import {
+  deriveIntensityCategory,
+  normalizeEquipment,
+  normalizeTag,
+  normalizeTags,
+} from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +19,7 @@ const bodySchema = z.object({
   action: z.enum(['normalizeTags', 'normalizeEquipment', 'recomputeIntensityCategory', 'purgeDraftImportsBySource']),
   source: z.nativeEnum(WorkoutLibrarySource).optional(),
   confirm: z.string().optional(),
+  tag: z.string().optional(),
 });
 
 type MaintenanceSummary = {
@@ -50,11 +56,15 @@ export async function POST(request: NextRequest) {
         } satisfies MaintenanceSummary);
       }
 
+      const tag = body.tag ? (normalizeTag(body.tag) ?? undefined) : undefined;
+      const where = {
+        status: WorkoutLibrarySessionStatus.DRAFT,
+        source,
+        ...(tag ? { tags: { has: tag } } : {}),
+      };
+
       const matches = await prisma.workoutLibrarySession.findMany({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
+        where,
         select: {
           id: true,
           title: true,
@@ -64,12 +74,7 @@ export async function POST(request: NextRequest) {
         take: 50,
       });
 
-      const count = await prisma.workoutLibrarySession.count({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
-      });
+      const count = await prisma.workoutLibrarySession.count({ where });
 
       if (body.dryRun) {
         return success({
@@ -86,7 +91,7 @@ export async function POST(request: NextRequest) {
             before: { status: m.status, source: m.source },
             after: { delete: true },
           })),
-          message: `Dry run: would delete ${count} DRAFT sessions for ${source}.`,
+          message: `Dry run: would delete ${count} DRAFT sessions for ${source}.${tag ? ` (tag=${tag})` : ''}`,
         } satisfies MaintenanceSummary);
       }
 
@@ -105,12 +110,7 @@ export async function POST(request: NextRequest) {
         } satisfies MaintenanceSummary);
       }
 
-      const result = await prisma.workoutLibrarySession.deleteMany({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
-      });
+      const result = await prisma.workoutLibrarySession.deleteMany({ where });
 
       return success({
         dryRun: false,
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
         deleted: result.count,
         errors: 0,
         examples: [],
-        message: `Deleted ${result.count} DRAFT sessions for ${source}.`,
+        message: `Deleted ${result.count} DRAFT sessions for ${source}.${tag ? ` (tag=${tag})` : ''}`,
       } satisfies MaintenanceSummary);
     }
 
