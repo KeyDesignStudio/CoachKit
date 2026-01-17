@@ -14,6 +14,7 @@ const bodySchema = z.object({
   action: z.enum(['normalizeTags', 'normalizeEquipment', 'recomputeIntensityCategory', 'purgeDraftImportsBySource']),
   source: z.nativeEnum(WorkoutLibrarySource).optional(),
   confirm: z.string().optional(),
+  tag: z.string().optional(),
 });
 
 type MaintenanceSummary = {
@@ -50,11 +51,15 @@ export async function POST(request: NextRequest) {
         } satisfies MaintenanceSummary);
       }
 
+      const tag = body.tag?.trim() || undefined;
+      const where = {
+        status: WorkoutLibrarySessionStatus.DRAFT,
+        source,
+        ...(tag ? { tags: { has: tag } } : {}),
+      };
+
       const matches = await prisma.workoutLibrarySession.findMany({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
+        where,
         select: {
           id: true,
           title: true,
@@ -64,12 +69,7 @@ export async function POST(request: NextRequest) {
         take: 50,
       });
 
-      const count = await prisma.workoutLibrarySession.count({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
-      });
+      const count = await prisma.workoutLibrarySession.count({ where });
 
       if (body.dryRun) {
         return success({
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
             before: { status: m.status, source: m.source },
             after: { delete: true },
           })),
-          message: `Dry run: would delete ${count} DRAFT sessions for ${source}.`,
+          message: `Dry run: would delete ${count} DRAFT sessions for ${source}.${tag ? ` (tag=${tag})` : ''}`,
         } satisfies MaintenanceSummary);
       }
 
@@ -105,12 +105,7 @@ export async function POST(request: NextRequest) {
         } satisfies MaintenanceSummary);
       }
 
-      const result = await prisma.workoutLibrarySession.deleteMany({
-        where: {
-          status: WorkoutLibrarySessionStatus.DRAFT,
-          source,
-        },
-      });
+      const result = await prisma.workoutLibrarySession.deleteMany({ where });
 
       return success({
         dryRun: false,
@@ -121,7 +116,7 @@ export async function POST(request: NextRequest) {
         deleted: result.count,
         errors: 0,
         examples: [],
-        message: `Deleted ${result.count} DRAFT sessions for ${source}.`,
+        message: `Deleted ${result.count} DRAFT sessions for ${source}.${tag ? ` (tag=${tag})` : ''}`,
       } satisfies MaintenanceSummary);
     }
 

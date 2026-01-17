@@ -25,16 +25,38 @@ function loadFixtureItems(): unknown[] {
   return parsed.items;
 }
 
+function withTestRunIsolation(items: unknown[], opts: { projectName: string; runTag: string }): unknown[] {
+  const suffix = `[${opts.projectName}]`;
+
+  return items.map((raw) => {
+    const row = (raw ?? {}) as Record<string, unknown>;
+    const next: Record<string, unknown> = { ...row };
+
+    const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : 'Workout';
+    next.title = `${title} ${suffix}`;
+
+    const tags = Array.isArray(row.tags)
+      ? row.tags
+      : typeof row.tags === 'string'
+        ? row.tags
+        : typeof row.tag === 'string'
+          ? row.tag
+          : '';
+    next.tags = Array.isArray(tags) ? [...tags, opts.runTag] : `${tags}${tags ? ', ' : ''}${opts.runTag}`;
+
+    const description = typeof row.description === 'string' ? row.description : '';
+    next.description = `${description}${description ? '\n\n' : ''}testRun=${opts.runTag}`;
+
+    return next;
+  });
+}
+
 test.describe('Admin Kaggle ingestion', () => {
   test('dry-run, apply, idempotency, and rollback purge', async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== 'iphone16pro',
-      'Mutates shared DB; run once to avoid cross-project conflicts.'
-    );
-
     await setRoleCookie(page, 'ADMIN');
 
-    const items = loadFixtureItems();
+    const runTag = `__kaggle_ingest_test_${testInfo.project.name}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const items = withTestRunIsolation(loadFixtureItems(), { projectName: testInfo.project.name, runTag });
 
     const dryRunRes = await page.request.post('/api/admin/workout-library/import/kaggle', {
       headers: { Cookie: 'coachkit-role=ADMIN' },
@@ -93,6 +115,7 @@ test.describe('Admin Kaggle ingestion', () => {
         action: 'purgeDraftImportsBySource',
         dryRun: true,
         source: 'KAGGLE',
+        tag: runTag,
       },
     });
 
@@ -110,6 +133,7 @@ test.describe('Admin Kaggle ingestion', () => {
         dryRun: false,
         source: 'KAGGLE',
         confirm: 'PURGE_KAGGLE',
+        tag: runTag,
       },
     });
 
