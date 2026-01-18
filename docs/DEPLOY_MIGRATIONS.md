@@ -2,6 +2,8 @@
 
 We do **not** run Prisma migrations automatically during Vercel builds.
 
+This is intentional: production schema changes are applied manually against Neon.
+
 ## When to run
 
 Run migrations **whenever a PR includes changes under**:
@@ -55,3 +57,15 @@ No pending migrations to apply.
 
 - If `npm run migrate:prod` fails with “prisma: command not found”, run `npm install` once at repo root (the Prisma CLI is a dev dependency of the root package).
 - Never paste Neon PROD credentials into PRs, Slack, or logs.
+
+### Vercel build behavior
+
+- Vercel production builds do **not** run `prisma migrate deploy`.
+- Migrations are applied manually (see commands above).
+
+### Local/dev escape hatch
+
+`apps/web/scripts/build.mjs` supports an explicit override for troubleshooting/local workflows:
+
+- `RUN_PRISMA_MIGRATIONS_ON_BUILD=1` allows `prisma migrate deploy` to run during build **only when not in production**.
+- The build script blocks migrations when `NODE_ENV=production` or `VERCEL_ENV=production`.

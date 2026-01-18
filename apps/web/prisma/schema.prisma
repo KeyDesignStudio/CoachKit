@@ -70,6 +70,17 @@ enum WorkoutLibraryIntensityCategory {
   OTHER
 }
 
+enum WorkoutLibrarySessionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum WorkoutLibrarySource {
+  MANUAL
+  KAGGLE
+  FREE_EXERCISE_DB
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -107,6 +118,9 @@ model WorkoutLibrarySession {
   id                 String                  @id @default(cuid())
   title              String
   discipline         WorkoutLibraryDiscipline
+  status             WorkoutLibrarySessionStatus @default(DRAFT)
+  source             WorkoutLibrarySource     @default(MANUAL)
+  fingerprint        String?                 @unique
   tags               String[]
   description        String
   durationSec        Int
@@ -126,6 +140,8 @@ model WorkoutLibrarySession {
   usage              WorkoutLibraryUsage[]
 
   @@index([discipline])
+  @@index([status])
+  @@index([source])
   @@index([title])
   @@index([intensityCategory])
   @@index([tags], type: Gin)

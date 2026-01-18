@@ -1,6 +1,23 @@
 # Workout Library (Triathlon / Multisport)
 
 
+## RC1 Checklist (Freeze)
+
+RC1 is approved only when all items below are complete and verified on a non-prod Neon branch.
+
+- [ ] Schema complete (migrations applied; no runtime Prisma errors)
+- [ ] Admin UI functional (`/admin/workout-library`: CRUD, import dry-run, import apply confirm, purge drafts)
+- [ ] Coach Library usable (`/coach/group-sessions` → Library tab: search/filter, favorites, inject)
+- [ ] Injection into Session Builder verified (library → group session prefill)
+- [ ] Athlete workout detail renders correctly (`/athlete/workouts/[id]` shows rich detail)
+- [ ] Mobile tests green (Neon): `cd apps/web && npm run test:mobile:neon`
+- [ ] Dev server stays stable during tests (no crashes). Console warnings are acceptable if the suite is green.
+
+## Known Deferred Items
+
+- (empty)
+
+
 ## Rollout Notes
 
 - No feature flags required.
@@ -146,10 +163,119 @@ Dev note (auth disabled):
 
 Important: DO NOT commit Kaggle/raw datasets into the repo.
 
+### Import safety rules (guardrails)
+
+These rules are enforced server-side to prevent accidental large or unsafe ingestions:
+
+- Max rows per import request: 500
+- Dry-run is supported and should be the default workflow.
+- Non-dry-run requires an explicit confirmation flag (`confirmApply`) from the UI.
+- All imported sessions are created as `DRAFT` (not visible to coaches).
+- Sessions are tagged with a `source` (e.g. `KAGGLE`, `FREE_EXERCISE_DB`, `MANUAL`).
+- Imported sessions compute a deterministic `fingerprint` from the workout structure and are deduped:
+  - Default behavior is to skip rows whose fingerprint already exists.
+  - Import responses include `skippedExistingCount`.
+
+Coach endpoints only return `PUBLISHED` sessions; drafts are hidden from all coach views.
+
+### Free Exercise DB (Phase 1)
+
+This ingestion runs server-side (no dataset committed to the repo) and is Admin-only.
+
+- Dataset source (default): `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json`
+- Admin endpoint: `POST /api/admin/workout-library/import/free-exercise-db`
+  - Request: `{ dryRun: boolean, confirmApply?: boolean, limit?: number (<=500), offset?: number }`
+  - Dry-run is supported and should be the default.
+  - Apply requires `confirmApply=true`.
+  - Creates `DRAFT` sessions with `source=FREE_EXERCISE_DB`.
+  - Uses deterministic `fingerprint` idempotency.
+- Admin UI: `/admin/workout-library` → Import tab → “Import (Free Exercise DB)”
+
+Testing note:
+- Playwright uses a local fixture via `FREE_EXERCISE_DB_DATA_PATH=tests/fixtures/free-exercise-db-sample.json` to avoid network dependency.
+
+---
+
+## Semantic Mapping Contract (Pre-Ingestion)
+
+These mappings define the canonical values CoachKit expects. Any ingestion pipeline must map source values into these canonical forms before writing sessions.
+
+### Canonical discipline
+
+Canonical enum: `RUN`, `BIKE`, `SWIM`, `BRICK`, `STRENGTH`, `OTHER`.
+
+| Source value examples | Canonical CoachKit value |
+|---|---|
+| `run`, `running`, `jog`, `treadmill run` | `RUN` |
+| `bike`, `cycling`, `ride`, `trainer ride`, `indoor bike` | `BIKE` |
+| `swim`, `swimming`, `pool swim`, `open water swim` | `SWIM` |
+| `brick`, `bike+run`, `run off bike`, `transition run` | `BRICK` |
+| `strength`, `weights`, `gym`, `lift`, `resistance training` | `STRENGTH` |
+| anything else / unknown | `OTHER` |
+
+### Canonical intensity
+
+CoachKit stores `intensityTarget` as a free-text string and derives `intensityCategory`.
+
+Canonical categories (for ingestion): `Z1`–`Z5`, `Recovery`, `Tempo`, `Threshold`, `VO2`.
+
+Mapping into stored `intensityCategory`:
+
+| Source value examples | Canonical category | Stored `intensityCategory` |
+|---|---|---|
+| `Z1`, `Zone 1`, `Easy`, `Recovery` | `Recovery` | `Z1` |
+| `Z2`, `Zone 2`, `Endurance` | `Z2` | `Z2` |
+| `Z3`, `Zone 3`, `Tempo`, `Sweet Spot` | `Tempo` | `Z3` |
+| `Z4`, `Zone 4`, `Threshold`, `FTP` | `Threshold` | `Z4` |
+| `Z5`, `Zone 5`, `VO2`, `VO2max` | `VO2` | `Z5` |
+
+If an import source only provides an RPE (e.g. `RPE 7/10`), preserve the full text in `intensityTarget` and leave `intensityCategory` unset (`null`).
+
+### Canonical equipment vocabulary
+
+Canonical equipment values:
+
+- `Bike`
+- `Indoor Trainer`
+- `Treadmill`
+- `Track`
+- `Pool`
+- `Open Water`
+- `Dumbbells`
+- `Bands`
+- `Kettlebell`
+- `RowErg`
+- `Other`
+
+| Source value examples | Canonical CoachKit equipment |
+|---|---|
+| `road bike`, `tt bike`, `tri bike`, `bike` | `Bike` |
+| `trainer`, `smart trainer`, `indoor` | `Indoor Trainer` |
+| `treadmill`, `TM` | `Treadmill` |
+| `track` | `Track` |
+| `pool` | `Pool` |
+| `open water`, `OWS` | `Open Water` |
+| `weights`, `dumbbells` | `Dumbbells` |
+| `bands`, `resistance band` | `Bands` |
+| `kettlebell`, `KB` | `Kettlebell` |
+| `rower`, `erg`, `concept2` | `RowErg` |
+| unknown | `Other` |
+
+### Purging draft imports
+
+Admin Maintenance supports purging all draft imports for a source (useful for rollback if a dataset is wrong):
+
+- Location: `/admin/workout-library` → Maintenance
+- Action: “Purge draft imports by source”
+- Dry-run supported.
+- Apply requires confirmation text: `PURGE_<SOURCE>` (e.g. `PURGE_KAGGLE`).
+
 Admin UI import:
 - Location: `/admin/workout-library` → Import tab
 - Upload `.csv` or `.json`
 - Default is **dry-run** validation with per-row errors; import is blocked until errors are fixed.
+- You must select a `source`; imports create `DRAFT` sessions.
+- To apply (non-dry-run), you must explicitly confirm apply.
 
 CSV format:
 - Header columns:
@@ -164,6 +290,14 @@ JSON format:
 
 Where to place datasets locally:
 - Anywhere outside the repo (recommended): `~/Downloads/coachkit-datasets/`.
+
+### Rollback checklist (imports)
+
+If an import was applied and needs to be reverted:
+
+1) Run a dry-run purge for the relevant source to see how many drafts would be deleted.
+2) Run the purge apply with the required confirmation text.
+3) Re-run coach UI smoke checks and confirm the library contents look correct.
 
 ---
 

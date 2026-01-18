@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { WorkoutLibraryDiscipline } from '@prisma/client';
+import { WorkoutLibraryDiscipline, WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
@@ -15,6 +15,8 @@ const patchSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
     discipline: z.nativeEnum(WorkoutLibraryDiscipline).optional(),
+    status: z.nativeEnum(WorkoutLibrarySessionStatus).optional(),
+    source: z.nativeEnum(WorkoutLibrarySource).optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
     description: z.string().trim().min(1).optional(),
     durationSec: z.number().int().nonnegative().optional(),
@@ -99,6 +101,8 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       data: {
         ...(payload.title !== undefined ? { title: payload.title } : {}),
         ...(payload.discipline !== undefined ? { discipline: payload.discipline } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.source !== undefined ? { source: payload.source } : {}),
         ...(normalizedTags !== undefined ? { tags: normalizedTags } : {}),
         ...(payload.description !== undefined ? { description: payload.description } : {}),
         ...(payload.durationSec !== undefined ? { durationSec: payload.durationSec } : {}),
