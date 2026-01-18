@@ -65,6 +65,8 @@ type FreeExerciseDbImportSummary = {
   scanned: number;
   wouldCreate: number;
   wouldUpdate: number;
+  createdCount?: number;
+  updatedCount?: number;
   skippedDuplicates: number;
   errors: number;
   sample: {
@@ -270,8 +272,6 @@ export function AdminWorkoutLibrary() {
   const [isDryRunBusy, setIsDryRunBusy] = useState(false);
   const [isApplyBusy, setIsApplyBusy] = useState(false);
 
-  const [freeExerciseDbDryRun, setFreeExerciseDbDryRun] = useState(true);
-  const [freeExerciseDbConfirmApply, setFreeExerciseDbConfirmApply] = useState(false);
   const [freeExerciseDbLimitText, setFreeExerciseDbLimitText] = useState('50');
   const [freeExerciseDbOffsetText, setFreeExerciseDbOffsetText] = useState('0');
   const [freeExerciseDbRunning, setFreeExerciseDbRunning] = useState(false);
@@ -279,6 +279,13 @@ export function AdminWorkoutLibrary() {
     { code: string; message: string; requestId?: string } | null
   >(null);
   const [freeExerciseDbResult, setFreeExerciseDbResult] = useState<FreeExerciseDbImportSummary | null>(null);
+  const [freeExerciseDbOk, setFreeExerciseDbOk] = useState<string | null>(null);
+  const [freeExerciseDbIdempotencyHint, setFreeExerciseDbIdempotencyHint] = useState<
+    { kind: 'ok' | 'warn'; message: string } | null
+  >(null);
+  const [freeExerciseDbLastApply, setFreeExerciseDbLastApply] = useState<
+    { limit: number; offset: number; scanned: number } | null
+  >(null);
 
   const [kaggleDryRun, setKaggleDryRun] = useState(true);
   const [kaggleConfirmApply, setKaggleConfirmApply] = useState(false);
@@ -350,10 +357,6 @@ export function AdminWorkoutLibrary() {
   useEffect(() => {
     if (importDryRun) setImportConfirmApply(false);
   }, [importDryRun]);
-
-  useEffect(() => {
-    if (freeExerciseDbDryRun) setFreeExerciseDbConfirmApply(false);
-  }, [freeExerciseDbDryRun]);
 
   useEffect(() => {
     if (kaggleDryRun) setKaggleConfirmApply(false);
@@ -570,6 +573,8 @@ export function AdminWorkoutLibrary() {
       setFreeExerciseDbRunning(true);
       setFreeExerciseDbError(null);
       setFreeExerciseDbResult(null);
+      setFreeExerciseDbOk(null);
+      setFreeExerciseDbIdempotencyHint(null);
 
       const limit = Math.min(
         500,
@@ -584,7 +589,7 @@ export function AdminWorkoutLibrary() {
             method: 'POST',
             data: {
               dryRun,
-              confirmApply: dryRun ? false : (confirmApplyOverride ?? freeExerciseDbConfirmApply),
+              confirmApply: dryRun ? false : (confirmApplyOverride ?? importConfirmApply),
               limit,
               offset,
             },
@@ -593,20 +598,44 @@ export function AdminWorkoutLibrary() {
 
         setFreeExerciseDbResult(data);
 
-        if (!dryRun && (data.wouldCreate > 0 || data.wouldUpdate > 0)) {
-          await fetchList();
+        if (!dryRun) {
+          const created = data.createdCount ?? data.wouldCreate;
+          const updated = data.updatedCount ?? data.wouldUpdate;
+          setFreeExerciseDbOk(
+            `Imported ${created} workouts from Free Exercise DB.${updated > 0 ? ` Updated ${updated}.` : ''}`
+          );
+
+          // Make it easy to see newly created rows.
+          setQ('');
+          setTag('');
+          setDiscipline('');
+
+          // Refresh immediately (don’t wait for the useEffect that depends on filters).
+          const refreshed = await request<{ items: LibraryItem[] }>(`/api/admin/workout-library`, {
+            cache: 'no-store',
+          });
+          setItems(refreshed.items);
+          if (selectedId && !refreshed.items.some((it) => it.id === selectedId)) {
+            setSelectedId(null);
+            setMode('create');
+          }
+
+          setFreeExerciseDbLastApply({ limit, offset, scanned: data.scanned });
         }
+
+        return data;
       } catch (error) {
         if (error instanceof ApiClientError) {
           setFreeExerciseDbError({ code: error.code, message: error.message, requestId: error.requestId });
         } else {
           setFreeExerciseDbError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Import failed.' });
         }
+        return null;
       } finally {
         setFreeExerciseDbRunning(false);
       }
     },
-    [fetchList, freeExerciseDbConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request]
+    [importConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request, selectedId]
   );
 
   const onKaggleImport = useCallback(
@@ -1035,6 +1064,11 @@ export function AdminWorkoutLibrary() {
                             setImportSource(e.target.value as typeof importSource);
                             setImportParseError(null);
                             setImportResult(null);
+                            setFreeExerciseDbError(null);
+                            setFreeExerciseDbResult(null);
+                            setFreeExerciseDbOk(null);
+                            setFreeExerciseDbIdempotencyHint(null);
+                            setFreeExerciseDbLastApply(null);
                           }}
                         >
                           <option value="MANUAL">MANUAL</option>
@@ -1046,6 +1080,7 @@ export function AdminWorkoutLibrary() {
                       <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                           <input
+                            data-testid="admin-import-dryrun-toggle"
                             type="checkbox"
                             checked={importDryRun}
                             onChange={(e) => setImportDryRun(e.target.checked)}
@@ -1053,17 +1088,24 @@ export function AdminWorkoutLibrary() {
                           Dry run
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                          <input
-                            type="checkbox"
-                            checked={importConfirmApply}
-                            onChange={(e) => setImportConfirmApply(e.target.checked)}
-                            disabled={importDryRun}
-                          />
-                          Confirm apply
-                        </label>
+                        {!importDryRun ? (
+                          <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                            <input
+                              type="checkbox"
+                              checked={importConfirmApply}
+                              onChange={(e) => setImportConfirmApply(e.target.checked)}
+                            />
+                            Confirm apply
+                          </label>
+                        ) : null}
                       </div>
                     </div>
+
+                    {!importDryRun ? (
+                      <div className="text-xs text-amber-700">
+                        This will create workouts in the library.
+                      </div>
+                    ) : null}
 
                     <input
                       data-testid="admin-import-file"
@@ -1186,7 +1228,7 @@ export function AdminWorkoutLibrary() {
                         disabled={!canDryRun}
                         onClick={() => void runDryRun()}
                       >
-                        Run Dry-Run
+                        Run dry-run
                       </Button>
                     ) : (
                       <Button
@@ -1195,13 +1237,77 @@ export function AdminWorkoutLibrary() {
                         disabled={!canApply}
                         onClick={() => void runApply()}
                       >
-                        Import Now
+                        Import now
                       </Button>
                     )}
                   </div>
                 </>
               );
             })()}
+
+            {freeExerciseDbOk ? <div className="text-sm text-green-700">{freeExerciseDbOk}</div> : null}
+
+            {freeExerciseDbIdempotencyHint ? (
+              <div className={freeExerciseDbIdempotencyHint.kind === 'ok' ? 'text-sm text-green-700' : 'text-sm text-amber-700'}>
+                {freeExerciseDbIdempotencyHint.message}
+              </div>
+            ) : null}
+
+            {freeExerciseDbResult ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Scanned {freeExerciseDbResult.scanned} •{' '}
+                  {freeExerciseDbResult.dryRun ? 'Would create' : 'Created'}{' '}
+                  {(freeExerciseDbResult.dryRun ? freeExerciseDbResult.wouldCreate : (freeExerciseDbResult.createdCount ?? freeExerciseDbResult.wouldCreate))}{' '}
+                  • {freeExerciseDbResult.dryRun ? 'Would update' : 'Updated'}{' '}
+                  {(freeExerciseDbResult.dryRun ? freeExerciseDbResult.wouldUpdate : (freeExerciseDbResult.updatedCount ?? freeExerciseDbResult.wouldUpdate))}{' '}
+                  • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors {freeExerciseDbResult.errors}
+                </div>
+
+                {freeExerciseDbResult.message ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
+                ) : null}
+
+                {!freeExerciseDbResult.dryRun && freeExerciseDbLastApply ? (
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        // Idempotency check: same params, dry-run.
+                        const result = await onImportFreeExerciseDb(true, false);
+                        if (!result) return;
+
+                        if (result.wouldCreate === 0) {
+                          setFreeExerciseDbIdempotencyHint({
+                            kind: 'ok',
+                            message: `Idempotency check: would create 0 (skipped ${result.skippedDuplicates}).`,
+                          });
+                        } else {
+                          setFreeExerciseDbIdempotencyHint({
+                            kind: 'warn',
+                            message: `Possible fingerprint mismatch: dry-run would create ${result.wouldCreate}.`,
+                          });
+                        }
+                      }}
+                      disabled={freeExerciseDbRunning}
+                    >
+                      Run again (dry-run)
+                    </Button>
+                  </div>
+                ) : null}
+
+                {freeExerciseDbResult.sample?.creates?.length ? (
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
+                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      {JSON.stringify(freeExerciseDbResult.sample.creates, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {importResult ? (
               <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
@@ -1243,108 +1349,6 @@ export function AdminWorkoutLibrary() {
                     <div className="text-sm font-semibold text-[var(--text)]">Preview (first 20 valid)</div>
                     <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
                       {JSON.stringify(importResult.preview, null, 2)}
-                    </pre>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="mt-2 border-t border-[var(--border-subtle)] pt-4" />
-
-            <div className="text-sm font-semibold text-[var(--text)]">Import (Free Exercise DB)</div>
-            <div className="text-xs text-[var(--muted)]">
-              Server-side fetch of the Free Exercise DB dataset. Start with a dry-run. Apply requires confirmation.
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                <span className="text-xs text-[var(--muted)]">Limit (max 500)</span>
-                <Input
-                  data-testid="admin-free-exercise-db-limit"
-                  value={freeExerciseDbLimitText}
-                  onChange={(e) => setFreeExerciseDbLimitText(e.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                <span className="text-xs text-[var(--muted)]">Offset</span>
-                <Input
-                  data-testid="admin-free-exercise-db-offset"
-                  value={freeExerciseDbOffsetText}
-                  onChange={(e) => setFreeExerciseDbOffsetText(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={freeExerciseDbDryRun}
-                  onChange={(e) => setFreeExerciseDbDryRun(e.target.checked)}
-                />
-                Dry run
-              </label>
-
-              {!freeExerciseDbDryRun ? (
-                <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                  <input
-                    type="checkbox"
-                    checked={freeExerciseDbConfirmApply}
-                    onChange={(e) => setFreeExerciseDbConfirmApply(e.target.checked)}
-                  />
-                  Confirm apply (required)
-                </label>
-              ) : null}
-            </div>
-
-            {freeExerciseDbError ? (
-              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                <div className="font-semibold">Import failed: {freeExerciseDbError.code}</div>
-                <div className="mt-1 whitespace-pre-wrap">{freeExerciseDbError.message}</div>
-                {freeExerciseDbError.requestId ? (
-                  <div className="mt-2 text-xs text-red-800">Request ID: {freeExerciseDbError.requestId}</div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={freeExerciseDbRunning}
-                onClick={() => void onImportFreeExerciseDb(true)}
-              >
-                Dry-run
-              </Button>
-              <Button
-                data-testid="admin-free-exercise-db-run"
-                size="sm"
-                disabled={freeExerciseDbRunning}
-                onClick={() => void onImportFreeExerciseDb(freeExerciseDbDryRun)}
-              >
-                {freeExerciseDbRunning ? 'Working…' : freeExerciseDbDryRun ? 'Run Dry-Run' : 'Apply Import'}
-              </Button>
-            </div>
-
-            {freeExerciseDbResult ? (
-              <div
-                data-testid="admin-free-exercise-db-result"
-                className="rounded-2xl border border-[var(--border-subtle)] p-4"
-              >
-                <div className="text-sm font-medium text-[var(--text)]">
-                  Scanned {freeExerciseDbResult.scanned} • Create {freeExerciseDbResult.wouldCreate} • Update{' '}
-                  {freeExerciseDbResult.wouldUpdate} • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors{' '}
-                  {freeExerciseDbResult.errors}
-                </div>
-                {freeExerciseDbResult.message ? (
-                  <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
-                ) : null}
-
-                {freeExerciseDbResult.sample?.creates?.length ? (
-                  <div className="mt-3">
-                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
-                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
-                      {JSON.stringify(freeExerciseDbResult.sample.creates, null, 2)}
                     </pre>
                   </div>
                 ) : null}

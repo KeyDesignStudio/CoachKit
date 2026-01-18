@@ -31,6 +31,8 @@ type ImportSummary = {
   scanned: number;
   wouldCreate: number;
   wouldUpdate: number;
+  createdCount?: number;
+  updatedCount?: number;
   skippedDuplicates: number;
   errors: number;
   sample: {
@@ -189,8 +191,11 @@ export async function POST(request: NextRequest) {
       } satisfies ImportSummary);
     }
 
+    let createdCount = 0;
+    let updatedCount = 0;
+
     if (toCreate.length > 0) {
-      await prisma.workoutLibrarySession.createMany({
+      const created = await prisma.workoutLibrarySession.createMany({
         data: toCreate.map((c) => ({
           title: c.title,
           discipline: WorkoutLibraryDiscipline.STRENGTH,
@@ -209,6 +214,7 @@ export async function POST(request: NextRequest) {
         })),
         skipDuplicates: true,
       });
+      createdCount = created.count;
     }
 
     if (toUpdate.length > 0) {
@@ -229,6 +235,7 @@ export async function POST(request: NextRequest) {
           })
         )
       );
+      updatedCount = toUpdate.length;
     }
 
     return success({
@@ -237,6 +244,8 @@ export async function POST(request: NextRequest) {
       scanned: candidates.length,
       wouldCreate: toCreate.length,
       wouldUpdate: toUpdate.length,
+      createdCount,
+      updatedCount,
       skippedDuplicates: skips.length,
       errors: 0,
       sample: {
