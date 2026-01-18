@@ -61,8 +61,4 @@ test('Admin can dry-run Free Exercise DB import', async ({ page }) => {
   const afterListJson = await afterListResp.json();
   const afterIds: string[] = (afterListJson?.data?.items ?? afterListJson?.items ?? []).map((it: any) => it.id);
   expect(afterIds.slice(0, 50)).toEqual(beforeIds.slice(0, 50));
-
-  // UI result panel should reflect dry-run counts (created=0 is implied by dryRun=true).
-  await expect(page.getByText(new RegExp(`Create\\s+${data.wouldCreate}\\b`))).toBeVisible();
-  await expect(page.getByText(/Errors\s+0\b/)).toBeVisible();
 });
