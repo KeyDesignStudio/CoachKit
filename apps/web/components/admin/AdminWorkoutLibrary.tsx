@@ -1297,7 +1297,15 @@ export function AdminWorkoutLibrary() {
               ) : null}
             </div>
 
-            {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
+            {freeExerciseDbError ? (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="font-semibold">Import failed: {freeExerciseDbError.code}</div>
+                <div className="mt-1 whitespace-pre-wrap">{freeExerciseDbError.message}</div>
+                {freeExerciseDbError.requestId ? (
+                  <div className="mt-2 text-xs text-red-800">Request ID: {freeExerciseDbError.requestId}</div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="flex items-center gap-2">
               <Button
