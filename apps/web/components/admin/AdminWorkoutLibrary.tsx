@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-import { useApi } from '@/components/api-client';
+import { ApiClientError, useApi } from '@/components/api-client';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -184,6 +185,18 @@ function parseCsv(text: string): { items: Record<string, unknown>[]; errors: str
 
 export function AdminWorkoutLibrary() {
   const { request } = useApi();
+  const searchParams = useSearchParams();
+
+  const showDbBanner =
+    process.env.NODE_ENV !== 'production' || (searchParams?.get('debugDb') ?? '') === '1';
+
+  const [dbHealth, setDbHealth] = useState<
+    | { ok: true; host: string; timestamp: string }
+    | { ok: false; error: string; host: string; requestId: string }
+    | null
+  >(null);
+  const [dbHealthLoading, setDbHealthLoading] = useState(false);
+  const [dbHealthFetchError, setDbHealthFetchError] = useState<string | null>(null);
 
   const [q, setQ] = useState('');
   const [discipline, setDiscipline] = useState<string>('');
@@ -214,6 +227,39 @@ export function AdminWorkoutLibrary() {
 
   const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import' | 'maintenance'>('edit');
 
+  useEffect(() => {
+    if (!showDbBanner) return;
+    if (activeRightTab !== 'import') return;
+
+    let cancelled = false;
+    setDbHealthLoading(true);
+    setDbHealthFetchError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/health/db', {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
+        const payload = (await response.json()) as any;
+        if (cancelled) return;
+        setDbHealth(payload);
+      } catch (err) {
+        if (cancelled) return;
+        setDbHealth(null);
+        setDbHealthFetchError(err instanceof Error ? err.message : 'Failed to fetch /api/health/db');
+      } finally {
+        if (!cancelled) setDbHealthLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRightTab, showDbBanner]);
+
   const [importDryRun, setImportDryRun] = useState(true);
   const [importConfirmApply, setImportConfirmApply] = useState(false);
   const [importSource, setImportSource] = useState<'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'>('MANUAL');
@@ -229,7 +275,9 @@ export function AdminWorkoutLibrary() {
   const [freeExerciseDbLimitText, setFreeExerciseDbLimitText] = useState('50');
   const [freeExerciseDbOffsetText, setFreeExerciseDbOffsetText] = useState('0');
   const [freeExerciseDbRunning, setFreeExerciseDbRunning] = useState(false);
-  const [freeExerciseDbError, setFreeExerciseDbError] = useState<string | null>(null);
+  const [freeExerciseDbError, setFreeExerciseDbError] = useState<
+    { code: string; message: string; requestId?: string } | null
+  >(null);
   const [freeExerciseDbResult, setFreeExerciseDbResult] = useState<FreeExerciseDbImportSummary | null>(null);
 
   const [kaggleDryRun, setKaggleDryRun] = useState(true);
@@ -549,7 +597,11 @@ export function AdminWorkoutLibrary() {
           await fetchList();
         }
       } catch (error) {
-        setFreeExerciseDbError(error instanceof Error ? error.message : 'Import failed.');
+        if (error instanceof ApiClientError) {
+          setFreeExerciseDbError({ code: error.code, message: error.message, requestId: error.requestId });
+        } else {
+          setFreeExerciseDbError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Import failed.' });
+        }
       } finally {
         setFreeExerciseDbRunning(false);
       }
@@ -888,6 +940,35 @@ export function AdminWorkoutLibrary() {
               Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions and skip duplicates.
             </div>
 
+            {showDbBanner ? (
+              <div className="rounded border border-[var(--border)] bg-white p-3 text-xs text-[var(--text)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">DB Host</div>
+                    <div className="text-[var(--muted)]">
+                      {dbHealthLoading
+                        ? 'Checking…'
+                        : dbHealthFetchError
+                          ? `Health check fetch failed: ${dbHealthFetchError}`
+                          : dbHealth
+                            ? dbHealth.host
+                            : 'unknown'}
+                    </div>
+                  </div>
+
+                  <div className="text-right text-[var(--muted)]">
+                    {dbHealthLoading ? null : dbHealth ? (
+                      dbHealth.ok ? (
+                        <div>status: ok</div>
+                      ) : (
+                        <div>status: unreachable (requestId: {dbHealth.requestId})</div>
+                      )
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {(() => {
               const isRemote = importSource === 'KAGGLE' || importSource === 'FREE_EXERCISE_DB';
               const hasManualRows = importItems.length > 0;
@@ -1039,7 +1120,48 @@ export function AdminWorkoutLibrary() {
 
                   {importParseError ? <div className="text-sm text-red-600">{importParseError}</div> : null}
 
-                  {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
+                  {freeExerciseDbError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <div className="font-semibold">Import failed: {freeExerciseDbError.code}</div>
+                      <div className="mt-1 whitespace-pre-wrap">{freeExerciseDbError.message}</div>
+                      {freeExerciseDbError.requestId ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-red-800">Request ID: {freeExerciseDbError.requestId}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const rid = freeExerciseDbError.requestId;
+                              if (!rid) return;
+                              void navigator.clipboard?.writeText(rid);
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                      ) : null}
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            if (importDryRun) {
+                              void onImportFreeExerciseDb(true, false);
+                              return;
+                            }
+                            if (importConfirmApply) {
+                              void onImportFreeExerciseDb(false, true);
+                            }
+                          }}
+                          disabled={freeExerciseDbRunning || (!importDryRun && !importConfirmApply)}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   {kaggleError ? <div className="text-sm text-red-600">{kaggleError}</div> : null}
 
                   {debugEnabled ? (

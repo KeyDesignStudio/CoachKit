@@ -1,9 +1,13 @@
 import { NextRequest } from 'next/server';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { WorkoutLibraryDiscipline, WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { failure, handleError, success } from '@/lib/http';
+import { ApiError } from '@/lib/errors';
+import { getDatabaseHost, getRuntimeEnvInfo } from '@/lib/db-connection';
+import { isPrismaInitError, logPrismaInitError } from '@/lib/prisma-diagnostics';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerprint';
 import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
@@ -136,34 +140,39 @@ const importBodySchema = z.object({
 const MAX_IMPORT_ROWS = 500;
 
 export async function POST(request: NextRequest) {
+  const requestId = randomUUID();
+  let ctx: { dryRun?: boolean; itemCount?: number; source?: string } = {};
   try {
     const { user } = await requireWorkoutLibraryAdmin();
 
     const parsedBody = importBodySchema.parse(await request.json());
+    ctx = { source: parsedBody.source, dryRun: parsedBody.dryRun, itemCount: parsedBody.items.length };
     const dryRun = parsedBody.dryRun;
 
     if (parsedBody.source !== WorkoutLibrarySource.MANUAL) {
       return failure(
         'INVALID_SOURCE',
         'Only MANUAL imports are supported on this endpoint. Use the source-specific import routes for KAGGLE and FREE_EXERCISE_DB.',
-        400
+        400,
+        requestId
       );
     }
 
     if (!dryRun && !parsedBody.confirmApply) {
-      return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400);
+      return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400, requestId);
     }
 
     if (parsedBody.items.length > MAX_IMPORT_ROWS) {
       return failure(
         'MAX_ROWS_EXCEEDED',
         `Import blocked: maxRows=${MAX_IMPORT_ROWS}. Split the file into smaller batches.`,
-        400
+        400,
+        requestId
       );
     }
 
     if (parsedBody.items.length === 0) {
-      return failure('NO_ITEMS', 'No items provided.', 400);
+      return failure('NO_ITEMS', 'No items provided.', 400, requestId);
     }
 
     const normalized: Array<z.infer<typeof importItemSchema>> = [];
@@ -293,6 +302,43 @@ export async function POST(request: NextRequest) {
           : undefined,
     });
   } catch (error) {
-    return handleError(error);
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({
+        requestId,
+        where: 'POST /api/admin/workout-library/import',
+        error,
+        extra: {
+          ...ctx,
+          url: request.url,
+          method: request.method,
+        },
+      });
+      return failure('DB_UNREACHABLE', 'Database is unreachable.', 500, requestId);
+    }
+
+    console.error('WORKOUT_LIBRARY_MANUAL_IMPORT_FAILED', {
+      requestId,
+      ...ctx,
+      dbHost: getDatabaseHost(),
+      ...getRuntimeEnvInfo(),
+      url: request.url,
+      method: request.method,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : { value: error },
+    });
+
+    if (error instanceof ApiError) {
+      return failure(error.code, error.message, error.status, requestId);
+    }
+
+    if (error instanceof z.ZodError) {
+      const message = error.issues.map((issue) => issue.message).filter(Boolean).join(' ');
+      return failure('VALIDATION_ERROR', message || 'Invalid request.', 400, requestId);
+    }
+
+    // Preserve existing behavior for unknown errors, but include requestId.
+    return failure('INTERNAL_SERVER_ERROR', 'Something went wrong.', 500, requestId);
   }
 }
