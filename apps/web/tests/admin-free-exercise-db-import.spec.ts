@@ -18,10 +18,12 @@ test('Admin can dry-run Free Exercise DB import', async ({ page }) => {
 
   await page.getByTestId('admin-workout-library-import').click();
 
+  await page.getByTestId('admin-import-source').selectOption('FREE_EXERCISE_DB');
+
   await page.getByTestId('admin-free-exercise-db-limit').fill('5');
   await page.getByTestId('admin-free-exercise-db-offset').fill('0');
 
-  await page.getByTestId('admin-free-exercise-db-run').click();
+  await page.getByTestId('admin-import-run-dryrun').click();
 
   const result = page.getByTestId('admin-free-exercise-db-result');
   await expect(result).toBeVisible();

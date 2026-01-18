@@ -45,12 +45,21 @@ export async function GET(request: NextRequest) {
     const q = (searchParams.get('q') ?? '').trim();
     const discipline = (searchParams.get('discipline') ?? '').trim();
     const tagContains = (searchParams.get('tag') ?? '').trim();
+    const status = (searchParams.get('status') ?? '').trim().toUpperCase();
 
     const disciplineFilter = discipline
       ? z.nativeEnum(WorkoutLibraryDiscipline).safeParse(discipline)
       : null;
 
+    const statusFilter = status
+      ? z.nativeEnum(WorkoutLibrarySessionStatus).safeParse(status)
+      : null;
+
     if (disciplineFilter && !disciplineFilter.success) {
+      return success({ items: [] });
+    }
+
+    if (statusFilter && !statusFilter.success) {
       return success({ items: [] });
     }
 
@@ -67,6 +76,11 @@ export async function GET(request: NextRequest) {
         ...(disciplineFilter?.success
           ? {
               discipline: disciplineFilter.data,
+            }
+          : {}),
+        ...(statusFilter?.success
+          ? {
+              status: statusFilter.data,
             }
           : {}),
       },

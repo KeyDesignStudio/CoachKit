@@ -108,6 +108,7 @@ model User {
   coachJournalEntries CoachJournalEntry[]
   oauthStates         OAuthState[]
   workoutLibrarySessionsCreated WorkoutLibrarySession[]
+  workoutLibrarySessionsPublished WorkoutLibrarySession[] @relation("WorkoutLibrarySessionPublishedBy")
   workoutLibraryFavorites       WorkoutLibraryFavorite[]
   workoutLibraryUsage           WorkoutLibraryUsage[]
 
@@ -131,17 +132,21 @@ model WorkoutLibrarySession {
   notes              String?
   equipment          String[]
   workoutStructure   Json?
+  publishedAt        DateTime?
+  publishedByUserId  String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   createdByUserId    String?
 
   createdByUser      User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  publishedByUser    User?                   @relation("WorkoutLibrarySessionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
   favorites          WorkoutLibraryFavorite[]
   usage              WorkoutLibraryUsage[]
 
   @@index([discipline])
   @@index([status])
   @@index([source])
+  @@index([publishedAt])
   @@index([title])
   @@index([intensityCategory])
   @@index([tags], type: Gin)
