@@ -54,7 +54,7 @@ test.describe('Admin import UI enablement', () => {
 
     // Running Kaggle dry-run should succeed (uses local fixture via KAGGLE_DATA_PATH).
     await dryRunButton.click();
-    await expect(page.getByText(/Scanned\s+\d+/)).toBeVisible();
+    await expect(page.getByText(/Scanned groups\s+\d+/)).toBeVisible();
 
     // Apply gating: when dry-run unchecked, apply button requires confirm apply.
     await page.getByTestId('admin-import-dryrun-toggle').uncheck();

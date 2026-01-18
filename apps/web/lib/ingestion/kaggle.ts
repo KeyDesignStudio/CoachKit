@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
 import { WorkoutLibraryDiscipline } from '@prisma/client';
+import Papa from 'papaparse';
 
 import { normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 import { ApiError } from '@/lib/errors';
@@ -29,6 +30,58 @@ function extractRows(payload: unknown): unknown[] {
 
   throw new Error('Kaggle payload must be an array or { items/rows/data: [...] }.');
 }
+
+type KaggleDatasetFormat = 'csv' | 'json';
+
+function detectFormatFromPathOrUrl(value: string): KaggleDatasetFormat | null {
+  const lower = value.trim().toLowerCase();
+  if (lower.endsWith('.csv')) return 'csv';
+  if (lower.endsWith('.json')) return 'json';
+  return null;
+}
+
+function detectFormatFromContentType(contentType: string | null | undefined): KaggleDatasetFormat | null {
+  const ct = (contentType ?? '').toLowerCase();
+  if (ct.includes('text/csv') || ct.includes('application/csv') || ct.includes('text/plain')) return 'csv';
+  if (ct.includes('application/json')) return 'json';
+  return null;
+}
+
+function parseCsvRows(text: string): Array<Record<string, string>> {
+  const parsed = Papa.parse<Record<string, string>>(text, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+  });
+
+  if (parsed.errors && parsed.errors.length > 0) {
+    const first = parsed.errors[0];
+    throw new ApiError(
+      400,
+      'KAGGLE_PARSE_FAILED',
+      `Failed to parse Kaggle dataset CSV (format=csv). ${first.message || 'CSV parse error.'}`
+    );
+  }
+
+  const rows = (parsed.data ?? []).filter((row) => row && typeof row === 'object') as Array<Record<string, string>>;
+  return rows;
+}
+
+function coerceCsvRowObject(row: unknown): Record<string, string> {
+  if (!row || typeof row !== 'object') return {};
+  const obj = row as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    out[key] = value === null || value === undefined ? '' : String(value);
+  }
+  return out;
+}
+
+export type KaggleFetchedTable = {
+  format: KaggleDatasetFormat;
+  rows: Array<Record<string, string>>;
+};
 
 function isVercelRuntime(): boolean {
   return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
@@ -86,29 +139,50 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
           throw new ApiError(502, 'KAGGLE_FETCH_FAILED', `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}).`);
         }
 
+        const formatFromUrl = detectFormatFromPathOrUrl(url);
+        const formatFromContentType = detectFormatFromContentType(res.headers.get('content-type'));
+        const format = formatFromUrl ?? formatFromContentType;
+
+        if (!format) {
+          console.error('[workout-library][kaggle] Unsupported content-type', {
+            requestId,
+            host,
+            pathBase,
+            contentType: res.headers.get('content-type'),
+          });
+          throw new ApiError(400, 'KAGGLE_UNSUPPORTED_FORMAT', 'Unsupported Kaggle dataset format. Expected CSV or JSON.');
+        }
+
+        if (format === 'csv') {
+          const text = await res.text();
+          const rows = parseCsvRows(text).map(coerceCsvRowObject);
+          return rows;
+        }
+
+        // JSON
         let parsed: unknown;
         try {
           parsed = (await res.json()) as unknown;
         } catch (error) {
-          console.error('[workout-library][kaggle] Parse failed (URL)', {
+          console.error('[workout-library][kaggle] Parse failed (URL JSON)', {
             requestId,
             host,
             pathBase,
             error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
           });
-          throw new ApiError(500, 'KAGGLE_PARSE_FAILED', 'Failed to parse Kaggle dataset JSON.');
+          throw new ApiError(400, 'KAGGLE_PARSE_FAILED', 'Failed to parse Kaggle dataset JSON (format=json).');
         }
 
         try {
           return extractRows(parsed);
         } catch (error) {
-          console.error('[workout-library][kaggle] Invalid payload shape (URL)', {
+          console.error('[workout-library][kaggle] Invalid payload shape (URL JSON)', {
             requestId,
             host,
             pathBase,
             error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
           });
-          throw new ApiError(500, 'KAGGLE_PARSE_FAILED', 'Kaggle dataset JSON has an unexpected shape.');
+          throw new ApiError(400, 'KAGGLE_PARSE_FAILED', 'Kaggle dataset JSON has an unexpected shape (format=json).');
         }
       } catch (error) {
         if (error instanceof TypeError || (error && typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
@@ -144,27 +218,37 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
         throw new ApiError(400, 'KAGGLE_READ_FAILED', `Failed to read Kaggle dataset file (${fileBase}).`);
       }
 
+      const format = detectFormatFromPathOrUrl(resolved);
+      if (!format) {
+        throw new ApiError(400, 'KAGGLE_UNSUPPORTED_FORMAT', `Unsupported Kaggle dataset format (${fileBase}). Expected .csv or .json.`);
+      }
+
+      if (format === 'csv') {
+        return parseCsvRows(text).map(coerceCsvRowObject);
+      }
+
+      // JSON
       let parsed: unknown;
       try {
         parsed = JSON.parse(text) as unknown;
       } catch (error) {
-        console.error('[workout-library][kaggle] Parse failed (PATH)', {
+        console.error('[workout-library][kaggle] Parse failed (PATH JSON)', {
           requestId,
           fileBase,
           error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
         });
-        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Failed to parse Kaggle dataset JSON (${fileBase}).`);
+        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Failed to parse Kaggle dataset JSON (format=json, file=${fileBase}).`);
       }
 
       try {
         return extractRows(parsed);
       } catch (error) {
-        console.error('[workout-library][kaggle] Invalid payload shape (PATH)', {
+        console.error('[workout-library][kaggle] Invalid payload shape (PATH JSON)', {
           requestId,
           fileBase,
           error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
         });
-        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Kaggle dataset JSON has an unexpected shape (${fileBase}).`);
+        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Kaggle dataset JSON has an unexpected shape (format=json, file=${fileBase}).`);
       }
     }
   }
@@ -179,7 +263,31 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
   );
 }
 
+export async function fetchKaggleTable(options?: { requestId?: string }): Promise<KaggleFetchedTable> {
+  const rawRows = await fetchKaggleRows(options);
+
+  // If fetchKaggleRows returned a CSV-parsed array, it's already [{header: value}].
+  if (Array.isArray(rawRows) && rawRows.length > 0 && typeof rawRows[0] === 'object' && rawRows[0] !== null) {
+    const first = rawRows[0] as Record<string, unknown>;
+    const likelyCsv = Object.keys(first).some((k) => typeof k === 'string' && k.length > 0);
+    if (likelyCsv) {
+      return { format: 'csv', rows: rawRows.map(coerceCsvRowObject) };
+    }
+  }
+
+  // Fallback: JSON rows that are objects.
+  return { format: 'json', rows: (rawRows ?? []).map(coerceCsvRowObject) };
+}
+
 type RowError = { index: number; message: string };
+
+export type KaggleProgramImportSummary = {
+  scannedGroups: number;
+  createdGroups: number;
+  skippedDuplicateGroups: number;
+  skippedInvalidTitleGroups: number;
+  errors: RowError[];
+};
 
 function asString(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -197,6 +305,258 @@ function asNumber(value: unknown): number | undefined {
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
+}
+
+function collapseWhitespace(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+function splitEquipmentList(value: unknown): string[] {
+  const text = asString(value).trim();
+  if (!text) return [];
+  return text
+    .split(/[;,]/)
+    .map((v) => collapseWhitespace(v))
+    .filter(Boolean);
+}
+
+function normalizeIntensityTarget(value: unknown): string {
+  const raw = collapseWhitespace(asString(value));
+  if (!raw) return 'Controlled';
+  const maybeNum = Number(raw);
+  if (Number.isFinite(maybeNum) && raw.match(/^\d+(\.\d+)?$/)) {
+    // Keep the original integer-ish string if possible.
+    const asInt = Number.isInteger(maybeNum) ? String(Math.trunc(maybeNum)) : String(maybeNum);
+    return `RPE ${asInt}`;
+  }
+  return raw;
+}
+
+function normalizeReps(value: unknown): number | string | null {
+  const raw = collapseWhitespace(asString(value));
+  if (!raw) return null;
+
+  const maybeNum = Number(raw);
+  if (Number.isFinite(maybeNum) && raw.match(/^-?\d+(\.\d+)?$/)) {
+    const asInt = Math.trunc(maybeNum);
+    if (asInt <= 0) return null;
+    return asInt;
+  }
+
+  return raw;
+}
+
+function normalizeSets(value: unknown): number | null {
+  const raw = collapseWhitespace(asString(value));
+  if (!raw) return null;
+  const maybeNum = Number(raw);
+  if (!Number.isFinite(maybeNum)) return null;
+  const asInt = Math.trunc(maybeNum);
+  if (asInt <= 0) return null;
+  return asInt;
+}
+
+function buildProgramDayDescription(params: {
+  description: string;
+  goal: string;
+  level: string;
+  equipment: string;
+  programLength: string;
+  timePerWorkout: string;
+}): string {
+  const lines: string[] = [];
+
+  if (params.description) lines.push(params.description);
+
+  const metaBits = [
+    params.goal ? `Goal: ${params.goal}` : '',
+    params.level ? `Level: ${params.level}` : '',
+    params.equipment ? `Equipment: ${params.equipment}` : '',
+  ].filter(Boolean);
+
+  if (metaBits.length) {
+    if (lines.length) lines.push('');
+    lines.push(metaBits.join(' | '));
+  }
+
+  const programBits = [
+    params.programLength ? `Program length: ${params.programLength} weeks` : '',
+    params.timePerWorkout ? `Time per workout: ${params.timePerWorkout} min` : '',
+  ].filter(Boolean);
+
+  if (programBits.length) {
+    if (lines.length) lines.push('');
+    lines.push(programBits.join(' | '));
+  }
+
+  return lines.join('\n');
+}
+
+export function buildKaggleProgramTemplates(rows: Array<Record<string, string>>, options: { maxGroups: number; offsetGroups: number }): {
+  items: Array<{
+    title: string;
+    titleKey: string;
+    discipline: WorkoutLibraryDiscipline;
+    tags: string[];
+    description: string;
+    durationSec: number;
+    intensityTarget: string;
+    equipment: string[];
+    workoutStructure: unknown;
+  }>;
+  summary: KaggleProgramImportSummary;
+} {
+  const errors: RowError[] = [];
+
+  // Group rows: each row represents a single exercise in a program day.
+  const grouped = new Map<string, Array<{ row: Record<string, string>; orderKey: string }>>();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] ?? {};
+    const baseTitle = collapseWhitespace(asString(r.title));
+    const week = collapseWhitespace(asString(r.week));
+    const day = collapseWhitespace(asString(r.day));
+    const groupKey = `${baseTitle}::week${week || '?'}::day${day || '?'}`;
+
+    const exerciseName = collapseWhitespace(asString(r.exercise_name));
+    const sets = collapseWhitespace(asString(r.sets));
+    const reps = collapseWhitespace(asString(r.reps));
+    const intensity = collapseWhitespace(asString(r.intensity));
+    const orderKey = [exerciseName.toLowerCase(), sets, reps, intensity, String(i).padStart(8, '0')].join('|');
+
+    const arr = grouped.get(groupKey) ?? [];
+    arr.push({ row: r, orderKey });
+    grouped.set(groupKey, arr);
+  }
+
+  const allGroupKeys = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+  const slicedKeys = allGroupKeys.slice(options.offsetGroups, options.offsetGroups + options.maxGroups);
+
+  let skippedInvalidTitleGroups = 0;
+  const items: Array<{
+    title: string;
+    titleKey: string;
+    discipline: WorkoutLibraryDiscipline;
+    tags: string[];
+    description: string;
+    durationSec: number;
+    intensityTarget: string;
+    equipment: string[];
+    workoutStructure: unknown;
+  }> = [];
+
+  for (let g = 0; g < slicedKeys.length; g++) {
+    const key = slicedKeys[g];
+    const rowsInGroup = grouped.get(key) ?? [];
+    if (rowsInGroup.length === 0) continue;
+
+    const first = rowsInGroup[0].row;
+    const baseTitle = collapseWhitespace(asString(first.title));
+    if (!baseTitle) {
+      skippedInvalidTitleGroups++;
+      continue;
+    }
+
+    const week = collapseWhitespace(asString(first.week)) || '?';
+    const day = collapseWhitespace(asString(first.day)) || '?';
+
+    const goal = collapseWhitespace(asString(first.goal));
+    const level = collapseWhitespace(asString(first.level));
+    const equipmentRaw = collapseWhitespace(asString(first.equipment));
+    const programLength = collapseWhitespace(asString(first.program_length));
+    const timePerWorkout = collapseWhitespace(asString(first.time_per_workout));
+
+    const durationMinutes = asNumber(timePerWorkout);
+    const durationSec = durationMinutes && durationMinutes > 0 ? Math.round(durationMinutes * 60) : 0;
+
+    const intensityTarget = normalizeIntensityTarget(first.intensity);
+
+    const tags = normalizeTags(
+      [
+        goal,
+        level,
+        ...splitEquipmentList(equipmentRaw),
+        `Week ${week}`,
+        `Day ${day}`,
+      ].filter(Boolean)
+    );
+
+    const equipment = normalizeEquipment(splitEquipmentList(equipmentRaw));
+
+    const description = buildProgramDayDescription({
+      description: collapseWhitespace(asString(first.description)),
+      goal,
+      level,
+      equipment: equipmentRaw,
+      programLength,
+      timePerWorkout,
+    });
+
+    // Stable ordering: deterministic sort.
+    const sorted = [...rowsInGroup].sort((a, b) => a.orderKey.localeCompare(b.orderKey));
+    const segments = sorted
+      .map(({ row }) => {
+        const name = collapseWhitespace(asString(row.exercise_name));
+        if (!name) return null;
+
+        const sets = normalizeSets(row.sets);
+        const reps = normalizeReps(row.reps);
+        const intensity = normalizeIntensityTarget(row.intensity);
+
+        return {
+          type: 'exercise',
+          name,
+          ...(sets != null ? { sets } : {}),
+          ...(reps != null ? { reps } : {}),
+          ...(intensity ? { intensity } : {}),
+        };
+      })
+      .filter(Boolean);
+
+    if (segments.length === 0) {
+      errors.push({ index: g + 1, message: 'No valid exercises found for group.' });
+      continue;
+    }
+
+    const titleKey = `${baseTitle}::week${week}::day${day}`;
+
+    const workoutStructure = {
+      type: 'kaggle_program_day',
+      source: 'KAGGLE',
+      titleKey,
+      meta: {
+        goal: goal || null,
+        level: level || null,
+        equipment: equipmentRaw || null,
+        program_length: programLength || null,
+        time_per_workout: timePerWorkout || null,
+      },
+      segments,
+    };
+
+    items.push({
+      title: `${baseTitle} (Week ${week} Day ${day})`,
+      titleKey,
+      discipline: WorkoutLibraryDiscipline.STRENGTH,
+      tags,
+      description,
+      durationSec,
+      intensityTarget,
+      equipment,
+      workoutStructure,
+    });
+  }
+
+  return {
+    items,
+    summary: {
+      scannedGroups: allGroupKeys.length,
+      createdGroups: 0,
+      skippedDuplicateGroups: 0,
+      skippedInvalidTitleGroups,
+      errors,
+    },
+  };
 }
 
 function parseCommaList(value: unknown): string[] {

@@ -8,7 +8,7 @@ import { failure, handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 import { deriveIntensityCategory } from '@/lib/workout-library-taxonomy';
 import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerprint';
-import { fetchKaggleRows, normalizeKaggleRows } from '@/lib/ingestion/kaggle';
+import { buildKaggleProgramTemplates, fetchKaggleTable } from '@/lib/ingestion/kaggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,13 +26,14 @@ const bodySchema = z.object({
 type KaggleImportSummary = {
   source: 'KAGGLE';
   dryRun: boolean;
-  scanned: number;
-  valid: number;
+  scannedGroups: number;
   wouldCreate: number;
+  wouldUpdate: number;
   createdCount: number;
+  updatedCount: number;
   createdIds: string[];
-  skippedExistingCount: number;
-  skippedDuplicateInBatchCount: number;
+  skippedDuplicates: number;
+  skippedInvalidTitle: number;
   errorCount: number;
   errors: Array<{ index: number; message: string }>;
   sample: {
@@ -58,38 +59,45 @@ export async function POST(request: NextRequest) {
     const body = bodySchema.parse(await request.json());
 
     if (!body.dryRun && !body.confirmApply) {
-      return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400);
+      return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400, requestId);
     }
 
-    const rows = body.items && body.items.length > 0 ? body.items : await fetchKaggleRows({ requestId });
+    const table = body.items && body.items.length > 0
+      ? { format: 'json' as const, rows: body.items.map((raw) => (raw && typeof raw === 'object' ? (raw as any) : {})) }
+      : await fetchKaggleTable({ requestId });
 
-    const normalized = normalizeKaggleRows(rows, body.maxRows, body.offset);
+    const program = buildKaggleProgramTemplates(table.rows, {
+      maxGroups: body.maxRows,
+      offsetGroups: body.offset,
+    });
 
-    if (!body.dryRun && normalized.errors.length > 0) {
+    if (!body.dryRun && program.summary.errors.length > 0) {
       const blocked: KaggleImportSummary = {
         source: 'KAGGLE',
-        dryRun: body.dryRun,
-        scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
-        valid: normalized.items.length,
+        dryRun: false,
+        scannedGroups: program.summary.scannedGroups,
         wouldCreate: 0,
+        wouldUpdate: 0,
         createdCount: 0,
+        updatedCount: 0,
         createdIds: [],
-        skippedExistingCount: 0,
-        skippedDuplicateInBatchCount: 0,
-        errorCount: normalized.errors.length,
-        errors: normalized.errors,
+        skippedDuplicates: 0,
+        skippedInvalidTitle: program.summary.skippedInvalidTitleGroups,
+        errorCount: program.summary.errors.length,
+        errors: program.summary.errors,
         sample: { creates: [], skips: [] },
-        message: 'Import blocked: fix row errors, then retry.',
+        message: 'Import blocked: fix group errors, then retry.',
       };
       return success(blocked);
     }
 
-    const candidates = normalized.items.map((item) => {
+    const candidates = program.items.map((item) => {
+      // Fingerprint is computed on the stable template identity, not the display title.
       const fingerprint = computeWorkoutLibraryFingerprint({
         discipline: item.discipline,
-        title: item.title,
+        title: item.titleKey,
         durationSec: item.durationSec ?? 0,
-        distanceMeters: item.distanceMeters ?? null,
+        distanceMeters: null,
         intensityTarget: item.intensityTarget,
         workoutStructure: item.workoutStructure ?? null,
       });
@@ -97,21 +105,8 @@ export async function POST(request: NextRequest) {
       return { item, fingerprint };
     });
 
-    // De-dupe within the batch by fingerprint.
-    const seen = new Set<string>();
-    const unique: typeof candidates = [];
-    let skippedDuplicateInBatchCount = 0;
-    for (const c of candidates) {
-      if (seen.has(c.fingerprint)) {
-        skippedDuplicateInBatchCount++;
-        continue;
-      }
-      seen.add(c.fingerprint);
-      unique.push(c);
-    }
-
     // Find existing fingerprints.
-    const fingerprints = unique.map((c) => c.fingerprint);
+    const fingerprints = candidates.map((c) => c.fingerprint);
     const existing = new Set<string>();
     for (const batch of chunk(fingerprints, 500)) {
       const rows = await prisma.workoutLibrarySession.findMany({
@@ -123,10 +118,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const toCreate = unique.filter((c) => !existing.has(c.fingerprint));
+    const toCreate = candidates.filter((c) => !existing.has(c.fingerprint));
+    const skippedDuplicates = candidates.length - toCreate.length;
 
     const sampleCreates = toCreate.slice(0, 10).map((c) => ({ title: c.item.title, fingerprint: c.fingerprint }));
-    const sampleSkips = unique
+    const sampleSkips = candidates
       .filter((c) => existing.has(c.fingerprint))
       .slice(0, 10)
       .map((c) => ({ title: c.item.title, fingerprint: c.fingerprint, reason: 'existing fingerprint' }));
@@ -135,15 +131,16 @@ export async function POST(request: NextRequest) {
       const summary: KaggleImportSummary = {
         source: 'KAGGLE',
         dryRun: true,
-        scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
-        valid: normalized.items.length,
+        scannedGroups: program.summary.scannedGroups,
         wouldCreate: toCreate.length,
+        wouldUpdate: 0,
         createdCount: 0,
+        updatedCount: 0,
         createdIds: [],
-        skippedExistingCount: unique.length - toCreate.length,
-        skippedDuplicateInBatchCount,
-        errorCount: normalized.errors.length,
-        errors: normalized.errors,
+        skippedDuplicates,
+        skippedInvalidTitle: program.summary.skippedInvalidTitleGroups,
+        errorCount: program.summary.errors.length,
+        errors: program.summary.errors,
         sample: {
           creates: sampleCreates,
           skips: sampleSkips,
@@ -172,9 +169,9 @@ export async function POST(request: NextRequest) {
               durationSec: c.item.durationSec ?? 0,
               intensityTarget: c.item.intensityTarget,
               intensityCategory: deriveIntensityCategory(c.item.intensityTarget),
-              distanceMeters: c.item.distanceMeters ?? null,
-              elevationGainMeters: c.item.elevationGainMeters ?? null,
-              notes: c.item.notes ?? null,
+              distanceMeters: null,
+              elevationGainMeters: null,
+              notes: null,
               equipment: c.item.equipment,
               workoutStructure: c.item.workoutStructure ?? undefined,
               createdByUserId: user.id,
@@ -190,15 +187,16 @@ export async function POST(request: NextRequest) {
     const summary: KaggleImportSummary = {
       source: 'KAGGLE',
       dryRun: false,
-      scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
-      valid: normalized.items.length,
+      scannedGroups: program.summary.scannedGroups,
       wouldCreate: toCreate.length,
+      wouldUpdate: 0,
       createdCount: createdIds.length,
+      updatedCount: 0,
       createdIds,
-      skippedExistingCount: unique.length - toCreate.length,
-      skippedDuplicateInBatchCount,
-      errorCount: normalized.errors.length,
-      errors: normalized.errors,
+      skippedDuplicates,
+      skippedInvalidTitle: program.summary.skippedInvalidTitleGroups,
+      errorCount: program.summary.errors.length,
+      errors: program.summary.errors,
       sample: {
         creates: sampleCreates,
         skips: sampleSkips,

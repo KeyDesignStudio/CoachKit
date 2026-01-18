@@ -80,13 +80,14 @@ type FreeExerciseDbImportSummary = {
 type KaggleImportSummary = {
   source: 'KAGGLE';
   dryRun: boolean;
-  scanned: number;
-  valid: number;
+  scannedGroups: number;
   wouldCreate: number;
+  wouldUpdate: number;
   createdCount: number;
+  updatedCount: number;
   createdIds: string[];
-  skippedExistingCount: number;
-  skippedDuplicateInBatchCount: number;
+  skippedDuplicates: number;
+  skippedInvalidTitle: number;
   errorCount: number;
   errors: Array<{ index: number; message: string }>;
   sample: {
@@ -293,7 +294,7 @@ export function AdminWorkoutLibrary() {
   const [kaggleMaxRowsText, setKaggleMaxRowsText] = useState('200');
   const [kaggleOffsetText, setKaggleOffsetText] = useState('0');
   const [kaggleRunning, setKaggleRunning] = useState(false);
-  const [kaggleError, setKaggleError] = useState<string | null>(null);
+  const [kaggleError, setKaggleError] = useState<{ code: string; message: string; requestId?: string } | null>(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
 
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
@@ -759,10 +760,19 @@ export function AdminWorkoutLibrary() {
 
         setKaggleResult(data);
         if (!dryRun && data.createdCount > 0) {
+          // Clear filters so newly created items are visible.
+          setQ('');
+          setDiscipline('');
+          setStatus('');
+          setTag('');
           await fetchList();
         }
       } catch (error) {
-        setKaggleError(error instanceof Error ? error.message : 'Kaggle import failed.');
+        if (error instanceof ApiClientError) {
+          setKaggleError({ code: error.code, message: error.message, requestId: error.requestId });
+        } else {
+          setKaggleError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Kaggle import failed.' });
+        }
       } finally {
         setKaggleRunning(false);
       }
@@ -1376,7 +1386,48 @@ export function AdminWorkoutLibrary() {
                       </div>
                     </div>
                   ) : null}
-                  {kaggleError ? <div className="text-sm text-red-600">{kaggleError}</div> : null}
+                  {kaggleError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <div className="font-semibold">Import failed: {kaggleError.code}</div>
+                      <div className="mt-1 whitespace-pre-wrap">{kaggleError.message}</div>
+                      {kaggleError.requestId ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-red-800">Request ID: {kaggleError.requestId}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const rid = kaggleError.requestId;
+                              if (!rid) return;
+                              void navigator.clipboard?.writeText(rid);
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                      ) : null}
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            if (importDryRun) {
+                              void onKaggleImport(true, false);
+                              return;
+                            }
+                            if (importConfirmApply) {
+                              void onKaggleImport(false, true);
+                            }
+                          }}
+                          disabled={kaggleRunning || (!importDryRun && !importConfirmApply)}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {debugEnabled ? (
                     <div
@@ -1468,13 +1519,14 @@ export function AdminWorkoutLibrary() {
             {importSource === 'KAGGLE' && kaggleResult ? (
               <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
                 <div className="text-sm font-medium text-[var(--text)]">
-                  Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
+                  Scanned groups {kaggleResult.scannedGroups} • Would create {kaggleResult.wouldCreate} • Skipped{' '}
+                  {kaggleResult.skippedDuplicates} • Errors {kaggleResult.errorCount}
                 </div>
                 {kaggleResult.message ? (
                   <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
                 ) : null}
                 {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
-                  <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
+                  <div className="mt-1 text-sm text-green-700">Imported {kaggleResult.createdCount} workouts from Kaggle.</div>
                 ) : null}
 
                 {kaggleResult.errorCount > 0 ? (
