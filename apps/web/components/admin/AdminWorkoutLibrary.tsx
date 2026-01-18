@@ -1492,48 +1492,48 @@ export function AdminWorkoutLibrary() {
                         ) : null}
                       </div>
                     </div>
-                  ) : null}
+                  </div>
+                ) : null}
 
-                  {kaggleResult.sample?.creates?.length ? (
-                    <div className="mt-3">
-                      <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
-                      <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
-                        {JSON.stringify(kaggleResult.sample, null, 2)}
-                      </pre>
-                    </div>
-                  ) : null}
+                {kaggleResult.sample?.creates?.length ? (
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
+                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      {JSON.stringify(kaggleResult.sample, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
 
-                  {!kaggleResult.dryRun && kaggleResult.createdIds?.length ? (
-                    <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
-                      <div className="text-sm font-medium text-[var(--text)]">Publish to coaches</div>
-                      <div className="mt-1 text-xs text-[var(--muted)]">
-                        Imported workouts are DRAFT by default and will not appear in the Coach Library until published.
-                        This publishes only the workouts created by this import.
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Input
-                          placeholder="Type PUBLISH to confirm"
-                          value={publishImportConfirmText}
-                          onChange={(e) => setPublishImportConfirmText(e.target.value)}
-                          disabled={publishRunning}
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled={publishRunning || publishImportConfirmText.trim().toUpperCase() !== 'PUBLISH'}
-                          onClick={() => void publishDrafts({ ids: kaggleResult.createdIds })}
-                        >
-                          {publishRunning ? 'Publishing…' : 'Publish created workouts'}
-                        </Button>
-                      </div>
+                {!kaggleResult.dryRun && kaggleResult.createdIds?.length ? (
+                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
+                    <div className="text-sm font-medium text-[var(--text)]">Publish to coaches</div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">
+                      Imported workouts are DRAFT by default and will not appear in the Coach Library until published.
+                      This publishes only the workouts created by this import.
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-            </div>
-          ) : (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Type PUBLISH to confirm"
+                        value={publishImportConfirmText}
+                        onChange={(e) => setPublishImportConfirmText(e.target.value)}
+                        disabled={publishRunning}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={publishRunning || publishImportConfirmText.trim().toUpperCase() !== 'PUBLISH'}
+                        onClick={() => void publishDrafts({ ids: kaggleResult.createdIds })}
+                      >
+                        {publishRunning ? 'Publishing…' : 'Publish created workouts'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : (
             <div className="mt-4 flex flex-col gap-4">
               <div>
                 <div className="text-sm font-semibold text-[var(--text)]">Library Maintenance</div>
