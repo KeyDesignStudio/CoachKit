@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-import { useApi } from '@/components/api-client';
+import { ApiClientError, useApi } from '@/components/api-client';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -64,6 +65,8 @@ type FreeExerciseDbImportSummary = {
   scanned: number;
   wouldCreate: number;
   wouldUpdate: number;
+  createdCount?: number;
+  updatedCount?: number;
   skippedDuplicates: number;
   errors: number;
   sample: {
@@ -184,10 +187,23 @@ function parseCsv(text: string): { items: Record<string, unknown>[]; errors: str
 
 export function AdminWorkoutLibrary() {
   const { request } = useApi();
+  const searchParams = useSearchParams();
+
+  const showDbBanner =
+    process.env.NODE_ENV !== 'production' || (searchParams?.get('debugDb') ?? '') === '1';
+
+  const [dbHealth, setDbHealth] = useState<
+    | { ok: true; host: string; timestamp: string }
+    | { ok: false; error: string; host: string; requestId: string }
+    | null
+  >(null);
+  const [dbHealthLoading, setDbHealthLoading] = useState(false);
+  const [dbHealthFetchError, setDbHealthFetchError] = useState<string | null>(null);
 
   const [q, setQ] = useState('');
   const [discipline, setDiscipline] = useState<string>('');
   const [tag, setTag] = useState('');
+  const [status, setStatus] = useState<string>('');
 
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -214,6 +230,39 @@ export function AdminWorkoutLibrary() {
 
   const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import' | 'maintenance'>('edit');
 
+  useEffect(() => {
+    if (!showDbBanner) return;
+    if (activeRightTab !== 'import') return;
+
+    let cancelled = false;
+    setDbHealthLoading(true);
+    setDbHealthFetchError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/health/db', {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
+        const payload = (await response.json()) as any;
+        if (cancelled) return;
+        setDbHealth(payload);
+      } catch (err) {
+        if (cancelled) return;
+        setDbHealth(null);
+        setDbHealthFetchError(err instanceof Error ? err.message : 'Failed to fetch /api/health/db');
+      } finally {
+        if (!cancelled) setDbHealthLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRightTab, showDbBanner]);
+
   const [importDryRun, setImportDryRun] = useState(true);
   const [importConfirmApply, setImportConfirmApply] = useState(false);
   const [importSource, setImportSource] = useState<'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'>('MANUAL');
@@ -224,13 +273,20 @@ export function AdminWorkoutLibrary() {
   const [isDryRunBusy, setIsDryRunBusy] = useState(false);
   const [isApplyBusy, setIsApplyBusy] = useState(false);
 
-  const [freeExerciseDbDryRun, setFreeExerciseDbDryRun] = useState(true);
-  const [freeExerciseDbConfirmApply, setFreeExerciseDbConfirmApply] = useState(false);
   const [freeExerciseDbLimitText, setFreeExerciseDbLimitText] = useState('50');
   const [freeExerciseDbOffsetText, setFreeExerciseDbOffsetText] = useState('0');
   const [freeExerciseDbRunning, setFreeExerciseDbRunning] = useState(false);
-  const [freeExerciseDbError, setFreeExerciseDbError] = useState<string | null>(null);
+  const [freeExerciseDbError, setFreeExerciseDbError] = useState<
+    { code: string; message: string; requestId?: string } | null
+  >(null);
   const [freeExerciseDbResult, setFreeExerciseDbResult] = useState<FreeExerciseDbImportSummary | null>(null);
+  const [freeExerciseDbOk, setFreeExerciseDbOk] = useState<string | null>(null);
+  const [freeExerciseDbIdempotencyHint, setFreeExerciseDbIdempotencyHint] = useState<
+    { kind: 'ok' | 'warn'; message: string } | null
+  >(null);
+  const [freeExerciseDbLastApply, setFreeExerciseDbLastApply] = useState<
+    { limit: number; offset: number; scanned: number } | null
+  >(null);
 
   const [kaggleDryRun, setKaggleDryRun] = useState(true);
   const [kaggleConfirmApply, setKaggleConfirmApply] = useState(false);
@@ -243,9 +299,27 @@ export function AdminWorkoutLibrary() {
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
   const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
   const [maintenancePurgeConfirm, setMaintenancePurgeConfirm] = useState('');
+  const [maintenancePublishSource, setMaintenancePublishSource] = useState<'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'>(
+    'FREE_EXERCISE_DB'
+  );
+  const [maintenancePublishConfirm, setMaintenancePublishConfirm] = useState('');
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [maintenanceResult, setMaintenanceResult] = useState<MaintenanceSummary | null>(null);
+
+  const [publishRunning, setPublishRunning] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishOk, setPublishOk] = useState<string | null>(null);
+  const [publishSelectedConfirm, setPublishSelectedConfirm] = useState(false);
+  const [publishImportConfirmText, setPublishImportConfirmText] = useState('');
+
+  const [unpublishRunning, setUnpublishRunning] = useState(false);
+  const [unpublishError, setUnpublishError] = useState<string | null>(null);
+  const [unpublishOk, setUnpublishOk] = useState<string | null>(null);
+  const [maintenanceUnpublishSource, setMaintenanceUnpublishSource] = useState<
+    'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'
+  >('FREE_EXERCISE_DB');
+  const [maintenanceUnpublishConfirm, setMaintenanceUnpublishConfirm] = useState('');
 
   const selected = useMemo(
     () => (selectedId ? items.find((it) => it.id === selectedId) ?? null : null),
@@ -261,6 +335,7 @@ export function AdminWorkoutLibrary() {
       if (q.trim()) params.set('q', q.trim());
       if (discipline.trim()) params.set('discipline', discipline.trim());
       if (tag.trim()) params.set('tag', tag.trim());
+      if (status.trim()) params.set('status', status.trim());
 
       const data = await request<{ items: LibraryItem[] }>(
         `/api/admin/workout-library${params.size ? `?${params.toString()}` : ''}`,
@@ -278,7 +353,7 @@ export function AdminWorkoutLibrary() {
     } finally {
       setLoadingList(false);
     }
-  }, [discipline, q, request, selectedId, tag]);
+  }, [discipline, q, request, selectedId, status, tag]);
 
   useEffect(() => {
     void fetchList();
@@ -303,10 +378,6 @@ export function AdminWorkoutLibrary() {
   useEffect(() => {
     if (importDryRun) setImportConfirmApply(false);
   }, [importDryRun]);
-
-  useEffect(() => {
-    if (freeExerciseDbDryRun) setFreeExerciseDbConfirmApply(false);
-  }, [freeExerciseDbDryRun]);
 
   useEffect(() => {
     if (kaggleDryRun) setKaggleConfirmApply(false);
@@ -349,8 +420,86 @@ export function AdminWorkoutLibrary() {
 
       setSaveError(null);
       setSaveOk(null);
+
+      setPublishError(null);
+      setPublishOk(null);
+      setPublishSelectedConfirm(false);
     },
     []
+  );
+
+  const publishDrafts = useCallback(
+    async (payload: { source?: 'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'; ids?: string[] }) => {
+      setPublishRunning(true);
+      setPublishError(null);
+      setPublishOk(null);
+      try {
+        const result = await request<{
+          matchedCount: number;
+          publishedCount: number;
+          alreadyPublishedCount: number;
+          errors: string[];
+        }>('/api/admin/workout-library/publish', {
+          method: 'POST',
+          data: {
+            ...payload,
+            confirmApply: true,
+          },
+        });
+
+        setPublishOk(
+          `Published ${result.publishedCount} draft workout(s) (matched ${result.matchedCount}, already published ${result.alreadyPublishedCount}).`
+        );
+        await fetchList();
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setPublishError(`${error.code}: ${error.message}${error.requestId ? ` (requestId: ${error.requestId})` : ''}`);
+        } else {
+          setPublishError(error instanceof Error ? error.message : 'Publish failed.');
+        }
+      } finally {
+        setPublishRunning(false);
+      }
+    },
+    [fetchList, request]
+  );
+
+  const unpublishWorkouts = useCallback(
+    async (payload: { source?: 'MANUAL' | 'KAGGLE' | 'FREE_EXERCISE_DB'; ids?: string[] }) => {
+      setUnpublishRunning(true);
+      setUnpublishError(null);
+      setUnpublishOk(null);
+      try {
+        const result = await request<{
+          matchedCount: number;
+          unpublishedCount: number;
+          alreadyDraftCount: number;
+          errors: string[];
+        }>('/api/admin/workout-library/unpublish', {
+          method: 'POST',
+          data: {
+            ...payload,
+            confirmApply: true,
+          },
+        });
+
+        setUnpublishOk(
+          `Unpublished ${result.unpublishedCount} workout(s) (matched ${result.matchedCount}, already draft ${result.alreadyDraftCount}).`
+        );
+        await fetchList();
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setUnpublishError(
+            `${error.code}: ${error.message}${error.requestId ? ` (requestId: ${error.requestId})` : ''}`
+          );
+        } else {
+          setUnpublishError(error instanceof Error ? error.message : 'Unpublish failed.');
+        }
+      } finally {
+        setUnpublishRunning(false);
+      }
+    },
+    [fetchList, request]
   );
 
   useEffect(() => {
@@ -523,6 +672,8 @@ export function AdminWorkoutLibrary() {
       setFreeExerciseDbRunning(true);
       setFreeExerciseDbError(null);
       setFreeExerciseDbResult(null);
+      setFreeExerciseDbOk(null);
+      setFreeExerciseDbIdempotencyHint(null);
 
       const limit = Math.min(
         500,
@@ -537,7 +688,7 @@ export function AdminWorkoutLibrary() {
             method: 'POST',
             data: {
               dryRun,
-              confirmApply: dryRun ? false : (confirmApplyOverride ?? freeExerciseDbConfirmApply),
+              confirmApply: dryRun ? false : (confirmApplyOverride ?? importConfirmApply),
               limit,
               offset,
             },
@@ -546,16 +697,44 @@ export function AdminWorkoutLibrary() {
 
         setFreeExerciseDbResult(data);
 
-        if (!dryRun && (data.wouldCreate > 0 || data.wouldUpdate > 0)) {
-          await fetchList();
+        if (!dryRun) {
+          const created = data.createdCount ?? data.wouldCreate;
+          const updated = data.updatedCount ?? data.wouldUpdate;
+          setFreeExerciseDbOk(
+            `Imported ${created} workouts from Free Exercise DB.${updated > 0 ? ` Updated ${updated}.` : ''}`
+          );
+
+          // Make it easy to see newly created rows.
+          setQ('');
+          setTag('');
+          setDiscipline('');
+
+          // Refresh immediately (don’t wait for the useEffect that depends on filters).
+          const refreshed = await request<{ items: LibraryItem[] }>(`/api/admin/workout-library`, {
+            cache: 'no-store',
+          });
+          setItems(refreshed.items);
+          if (selectedId && !refreshed.items.some((it) => it.id === selectedId)) {
+            setSelectedId(null);
+            setMode('create');
+          }
+
+          setFreeExerciseDbLastApply({ limit, offset, scanned: data.scanned });
         }
+
+        return data;
       } catch (error) {
-        setFreeExerciseDbError(error instanceof Error ? error.message : 'Import failed.');
+        if (error instanceof ApiClientError) {
+          setFreeExerciseDbError({ code: error.code, message: error.message, requestId: error.requestId });
+        } else {
+          setFreeExerciseDbError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Import failed.' });
+        }
+        return null;
       } finally {
         setFreeExerciseDbRunning(false);
       }
     },
-    [fetchList, freeExerciseDbConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request]
+    [importConfirmApply, freeExerciseDbLimitText, freeExerciseDbOffsetText, request, selectedId]
   );
 
   const onKaggleImport = useCallback(
@@ -639,7 +818,7 @@ export function AdminWorkoutLibrary() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
             <Input
               data-testid="admin-workout-library-search"
               placeholder="Search title…"
@@ -657,6 +836,11 @@ export function AdminWorkoutLibrary() {
                 </option>
               ))}
             </Select>
+            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="DRAFT">DRAFT</option>
+              <option value="PUBLISHED">PUBLISHED</option>
+            </Select>
             <Input
               placeholder="Tag contains…"
               value={tag}
@@ -672,6 +856,7 @@ export function AdminWorkoutLibrary() {
               {loadingList ? 'Loading…' : 'Refresh'}
             </Button>
             <div className="text-xs text-[var(--muted)]">Showing {items.length} (max 200)</div>
+            <div className="text-xs text-[var(--muted)]">Coaches only see PUBLISHED workouts.</div>
           </div>
 
           {listError ? <div className="text-sm text-red-600">{listError}</div> : null}
@@ -871,10 +1056,58 @@ export function AdminWorkoutLibrary() {
             {saveError ? <div className="text-sm text-red-600">{saveError}</div> : null}
             {saveOk ? <div className="text-sm text-green-700">{saveOk}</div> : null}
 
+            {publishError ? <div className="text-sm text-red-600">{publishError}</div> : null}
+            {publishOk ? <div className="text-sm text-green-700">{publishOk}</div> : null}
+              {unpublishError ? <div className="text-sm text-red-600">{unpublishError}</div> : null}
+              {unpublishOk ? <div className="text-sm text-green-700">{unpublishOk}</div> : null}
+
             <div className="flex items-center gap-2">
               <Button onClick={() => void onSave()} disabled={saving}>
                 {saving ? 'Saving…' : mode === 'create' ? 'Create' : 'Save'}
               </Button>
+
+              {mode === 'edit' && selected?.status ? (
+                <span className="rounded-full border border-[var(--border-subtle)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
+                  {selected.status}
+                </span>
+              ) : null}
+
+              {mode === 'edit' && selected?.status === 'DRAFT' ? (
+                <label className="ml-2 flex items-center gap-2 text-xs text-[var(--text)]">
+                  <input
+                    type="checkbox"
+                    checked={publishSelectedConfirm}
+                    onChange={(e) => setPublishSelectedConfirm(e.target.checked)}
+                    disabled={publishRunning || unpublishRunning}
+                  />
+                  Confirm publish
+                </label>
+              ) : null}
+
+              {mode === 'edit' && selected?.status === 'DRAFT' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={publishRunning || unpublishRunning || !publishSelectedConfirm}
+                  onClick={() => void publishDrafts({ ids: [selected.id] })}
+                >
+                  {publishRunning ? 'Publishing…' : 'Publish'}
+                </Button>
+              ) : null}
+
+              {mode === 'edit' && selected?.status === 'PUBLISHED' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={publishRunning || unpublishRunning}
+                  onClick={() => void unpublishWorkouts({ ids: [selected.id] })}
+                >
+                  {unpublishRunning ? 'Unpublishing…' : 'Unpublish'}
+                </Button>
+              ) : null}
+
               {mode === 'edit' && selected ? (
                 <div className="text-xs text-[var(--muted)]">
                   Usage: {selected.usageCount ?? 0} • Updated {new Date(selected.updatedAt).toLocaleString()}
@@ -889,8 +1122,37 @@ export function AdminWorkoutLibrary() {
             <div className="mt-4 flex flex-col gap-3">
             <div className="text-sm font-semibold text-[var(--text)]">Import</div>
             <div className="text-xs text-[var(--muted)]">
-              Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions and skip duplicates.
+              Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions (not visible to coaches until published).
             </div>
+
+            {showDbBanner ? (
+              <div className="rounded border border-[var(--border)] bg-white p-3 text-xs text-[var(--text)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">DB Host</div>
+                    <div className="text-[var(--muted)]">
+                      {dbHealthLoading
+                        ? 'Checking…'
+                        : dbHealthFetchError
+                          ? `Health check fetch failed: ${dbHealthFetchError}`
+                          : dbHealth
+                            ? dbHealth.host
+                            : 'unknown'}
+                    </div>
+                  </div>
+
+                  <div className="text-right text-[var(--muted)]">
+                    {dbHealthLoading ? null : dbHealth ? (
+                      dbHealth.ok ? (
+                        <div>status: ok</div>
+                      ) : (
+                        <div>status: unreachable (requestId: {dbHealth.requestId})</div>
+                      )
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {(() => {
               const isRemote = importSource === 'KAGGLE' || importSource === 'FREE_EXERCISE_DB';
@@ -960,11 +1222,14 @@ export function AdminWorkoutLibrary() {
                             setImportSource(e.target.value as typeof importSource);
                             setImportParseError(null);
                             setImportResult(null);
-                            setImportConfirmApply(false);
                             setFreeExerciseDbError(null);
                             setFreeExerciseDbResult(null);
-                            setKaggleError(null);
-                            setKaggleResult(null);
+                            setFreeExerciseDbOk(null);
+                            setFreeExerciseDbIdempotencyHint(null);
+                            setFreeExerciseDbLastApply(null);
+                            setPublishError(null);
+                            setPublishOk(null);
+                            setPublishImportConfirmText('');
                           }}
                         >
                           <option value="MANUAL">MANUAL</option>
@@ -997,6 +1262,16 @@ export function AdminWorkoutLibrary() {
                       </div>
                     </div>
 
+                    {!importDryRun ? (
+                      <div className="text-xs text-amber-700">
+                        This will create workouts in the library.
+                      </div>
+                    ) : null}
+
+                    <div className="text-xs text-[var(--muted)]">
+                      Reminder: coaches only see PUBLISHED workouts. Use the Publish controls after importing.
+                    </div>
+
                     <input
                       data-testid="admin-import-file"
                       type="file"
@@ -1023,6 +1298,7 @@ export function AdminWorkoutLibrary() {
                         <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
                           <span className="text-xs text-[var(--muted)]">Limit (max 500)</span>
                           <Input
+                            data-testid="admin-free-exercise-db-limit"
                             value={freeExerciseDbLimitText}
                             onChange={(e) => setFreeExerciseDbLimitText(e.target.value)}
                           />
@@ -1030,6 +1306,7 @@ export function AdminWorkoutLibrary() {
                         <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
                           <span className="text-xs text-[var(--muted)]">Offset</span>
                           <Input
+                            data-testid="admin-free-exercise-db-offset"
                             value={freeExerciseDbOffsetText}
                             onChange={(e) => setFreeExerciseDbOffsetText(e.target.value)}
                           />
@@ -1057,7 +1334,48 @@ export function AdminWorkoutLibrary() {
 
                   {importParseError ? <div className="text-sm text-red-600">{importParseError}</div> : null}
 
-                  {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
+                  {freeExerciseDbError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <div className="font-semibold">Import failed: {freeExerciseDbError.code}</div>
+                      <div className="mt-1 whitespace-pre-wrap">{freeExerciseDbError.message}</div>
+                      {freeExerciseDbError.requestId ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-red-800">Request ID: {freeExerciseDbError.requestId}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const rid = freeExerciseDbError.requestId;
+                              if (!rid) return;
+                              void navigator.clipboard?.writeText(rid);
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                      ) : null}
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            if (importDryRun) {
+                              void onImportFreeExerciseDb(true, false);
+                              return;
+                            }
+                            if (importConfirmApply) {
+                              void onImportFreeExerciseDb(false, true);
+                            }
+                          }}
+                          disabled={freeExerciseDbRunning || (!importDryRun && !importConfirmApply)}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   {kaggleError ? <div className="text-sm text-red-600">{kaggleError}</div> : null}
 
                   {debugEnabled ? (
@@ -1176,10 +1494,46 @@ export function AdminWorkoutLibrary() {
                     </div>
                   </div>
                 ) : null}
+
+                {kaggleResult.sample?.creates?.length ? (
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
+                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      {JSON.stringify(kaggleResult.sample, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+
+                {!kaggleResult.dryRun && kaggleResult.createdIds?.length ? (
+                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
+                    <div className="text-sm font-medium text-[var(--text)]">Publish to coaches</div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">
+                      Imported workouts are DRAFT by default and will not appear in the Coach Library until published.
+                      This publishes only the workouts created by this import.
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Input
+                        placeholder="Type PUBLISH to confirm"
+                        value={publishImportConfirmText}
+                        onChange={(e) => setPublishImportConfirmText(e.target.value)}
+                        disabled={publishRunning}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={publishRunning || publishImportConfirmText.trim().toUpperCase() !== 'PUBLISH'}
+                        onClick={() => void publishDrafts({ ids: kaggleResult.createdIds })}
+                      >
+                        {publishRunning ? 'Publishing…' : 'Publish created workouts'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
-            </div>
-          ) : (
+          </div>
+        ) : (
             <div className="mt-4 flex flex-col gap-4">
               <div>
                 <div className="text-sm font-semibold text-[var(--text)]">Library Maintenance</div>
@@ -1255,6 +1609,72 @@ export function AdminWorkoutLibrary() {
                     }
                   >
                     Purge drafts
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-semibold text-[var(--text)]">Publish drafts by source</div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  Promotes all DRAFT sessions for a source to PUBLISHED so coaches can see them. Requires confirmation text.
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <Select
+                    value={maintenancePublishSource}
+                    onChange={(e) => setMaintenancePublishSource(e.target.value as typeof maintenancePublishSource)}
+                  >
+                    <option value="MANUAL">MANUAL</option>
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                  <Input
+                    placeholder="Type PUBLISH to confirm"
+                    value={maintenancePublishConfirm}
+                    onChange={(e) => setMaintenancePublishConfirm(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={publishRunning || maintenancePublishConfirm.trim().toUpperCase() !== 'PUBLISH'}
+                    onClick={() => void publishDrafts({ source: maintenancePublishSource })}
+                  >
+                    {publishRunning ? 'Publishing…' : 'Publish drafts'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-semibold text-[var(--text)]">Unpublish workouts by source</div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  Reverts PUBLISHED sessions for a source back to DRAFT (hidden from coaches). Requires confirmation text.
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <Select
+                    value={maintenanceUnpublishSource}
+                    onChange={(e) =>
+                      setMaintenanceUnpublishSource(e.target.value as typeof maintenanceUnpublishSource)
+                    }
+                  >
+                    <option value="MANUAL">MANUAL</option>
+                    <option value="KAGGLE">KAGGLE</option>
+                    <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
+                  </Select>
+                  <Input
+                    placeholder="Type UNPUBLISH to confirm"
+                    value={maintenanceUnpublishConfirm}
+                    onChange={(e) => setMaintenanceUnpublishConfirm(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      unpublishRunning || maintenanceUnpublishConfirm.trim().toUpperCase() !== 'UNPUBLISH'
+                    }
+                    onClick={() => void unpublishWorkouts({ source: maintenanceUnpublishSource })}
+                  >
+                    {unpublishRunning ? 'Unpublishing…' : 'Unpublish'}
                   </Button>
                 </div>
               </div>

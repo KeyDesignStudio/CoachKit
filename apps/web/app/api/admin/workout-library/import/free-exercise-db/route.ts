@@ -3,13 +3,18 @@ import { z } from 'zod';
 import { WorkoutLibraryDiscipline, WorkoutLibrarySource, WorkoutLibrarySessionStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
-import { handleError, success } from '@/lib/http';
+import { failure, success } from '@/lib/http';
+import { ApiError } from '@/lib/errors';
+import { getDatabaseHost, getRuntimeEnvInfo } from '@/lib/db-connection';
+import { isPrismaInitError, logPrismaInitError } from '@/lib/prisma-diagnostics';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 import {
   buildFreeExerciseDbCandidate,
   fetchFreeExerciseDb,
   type FreeExerciseDbCandidate,
 } from '@/lib/ingestion/free-exercise-db';
+
+import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +31,8 @@ type ImportSummary = {
   scanned: number;
   wouldCreate: number;
   wouldUpdate: number;
+  createdCount?: number;
+  updatedCount?: number;
   skippedDuplicates: number;
   errors: number;
   sample: {
@@ -59,24 +66,22 @@ function diffCandidate(existing: {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = randomUUID();
+  let ctx: { dryRun?: boolean; limit?: number; offset?: number; confirmApply?: boolean } = {};
   try {
     await requireWorkoutLibraryAdmin();
 
     const body = bodySchema.parse(await request.json());
     const dryRun = body.dryRun;
+    ctx = { dryRun, limit: body.limit, offset: body.offset, confirmApply: body.confirmApply };
 
     if (!dryRun && !body.confirmApply) {
-      return success({
-        source: 'FREE_EXERCISE_DB',
-        dryRun,
-        scanned: 0,
-        wouldCreate: 0,
-        wouldUpdate: 0,
-        skippedDuplicates: 0,
-        errors: 0,
-        sample: { creates: [], updates: [], skips: [] },
-        message: 'Import blocked: confirmApply=true is required when dryRun=false.',
-      } satisfies ImportSummary);
+      return failure(
+        'CONFIRM_APPLY_REQUIRED',
+        'confirmApply is required when dryRun=false.',
+        400,
+        requestId
+      );
     }
 
     const all = await fetchFreeExerciseDb();
@@ -186,8 +191,11 @@ export async function POST(request: NextRequest) {
       } satisfies ImportSummary);
     }
 
+    let createdCount = 0;
+    let updatedCount = 0;
+
     if (toCreate.length > 0) {
-      await prisma.workoutLibrarySession.createMany({
+      const created = await prisma.workoutLibrarySession.createMany({
         data: toCreate.map((c) => ({
           title: c.title,
           discipline: WorkoutLibraryDiscipline.STRENGTH,
@@ -206,6 +214,7 @@ export async function POST(request: NextRequest) {
         })),
         skipDuplicates: true,
       });
+      createdCount = created.count;
     }
 
     if (toUpdate.length > 0) {
@@ -226,6 +235,7 @@ export async function POST(request: NextRequest) {
           })
         )
       );
+      updatedCount = toUpdate.length;
     }
 
     return success({
@@ -234,6 +244,8 @@ export async function POST(request: NextRequest) {
       scanned: candidates.length,
       wouldCreate: toCreate.length,
       wouldUpdate: toUpdate.length,
+      createdCount,
+      updatedCount,
       skippedDuplicates: skips.length,
       errors: 0,
       sample: {
@@ -249,6 +261,44 @@ export async function POST(request: NextRequest) {
       message: `Applied: created ${toCreate.length}, updated ${toUpdate.length}, skipped ${skips.length}.`,
     } satisfies ImportSummary);
   } catch (error) {
-    return handleError(error);
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({
+        requestId,
+        where: 'POST /api/admin/workout-library/import/free-exercise-db',
+        error,
+        extra: {
+          source: 'FREE_EXERCISE_DB',
+          ...ctx,
+          url: request.url,
+          method: request.method,
+        },
+      });
+      return failure('DB_UNREACHABLE', 'Database is unreachable.', 500, requestId);
+    }
+
+    console.error('FREE_EXERCISE_DB_IMPORT_FAILED', {
+      requestId,
+      source: 'FREE_EXERCISE_DB',
+      ...ctx,
+      dbHost: getDatabaseHost(),
+      ...getRuntimeEnvInfo(),
+      url: request.url,
+      method: request.method,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : { value: error },
+    });
+
+    if (error instanceof ApiError) {
+      return failure(error.code, error.message, error.status, requestId);
+    }
+
+    if (error instanceof z.ZodError) {
+      const message = error.issues.map((issue) => issue.message).filter(Boolean).join(' ');
+      return failure('VALIDATION_ERROR', message || 'Invalid request.', 400, requestId);
+    }
+
+    return failure('INTERNAL_SERVER_ERROR', 'Free Exercise DB import failed.', 500, requestId);
   }
 }

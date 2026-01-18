@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { readFile } from 'fs/promises';
 import path from 'path';
 
+import { ApiError } from '@/lib/errors';
 import { normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 
 const DEFAULT_FREE_EXERCISE_DB_URL =
@@ -65,10 +66,21 @@ export async function fetchFreeExerciseDb(): Promise<FreeExerciseDbRawExercise[]
   const localPath = process.env.FREE_EXERCISE_DB_DATA_PATH;
   if (localPath) {
     const resolved = path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
-    const text = await readFile(resolved, 'utf8');
-    const parsed = JSON.parse(text) as unknown;
-    const items = extractExercises(parsed);
-    return items;
+    try {
+      const text = await readFile(resolved, 'utf8');
+      const parsed = JSON.parse(text) as unknown;
+      const items = extractExercises(parsed);
+      return items;
+    } catch (error) {
+      const hint = process.env.NODE_ENV === 'production'
+        ? 'Local fixture paths do not exist in production. Set FREE_EXERCISE_DB_URL instead.'
+        : 'Check FREE_EXERCISE_DB_DATA_PATH points at a readable JSON fixture.';
+      throw new ApiError(
+        500,
+        'FREE_EXERCISE_DB_CONFIG_MISSING',
+        `Failed to load Free Exercise DB dataset from FREE_EXERCISE_DB_DATA_PATH. ${hint}`
+      );
+    }
   }
 
   const url = process.env.FREE_EXERCISE_DB_URL || DEFAULT_FREE_EXERCISE_DB_URL;
@@ -76,21 +88,42 @@ export async function fetchFreeExerciseDb(): Promise<FreeExerciseDbRawExercise[]
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: {
-        accept: 'application/json',
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch Free Exercise DB: ${res.status} ${res.statusText}`);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          accept: 'application/json',
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Network error.';
+      throw new ApiError(502, 'FREE_EXERCISE_DB_FETCH_FAILED', `Failed to fetch Free Exercise DB: ${message}`);
     }
 
-    const parsed = (await res.json()) as unknown;
-    return extractExercises(parsed);
+    if (!res.ok) {
+      throw new ApiError(
+        502,
+        'FREE_EXERCISE_DB_FETCH_FAILED',
+        `Failed to fetch Free Exercise DB: ${res.status} ${res.statusText}`
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = (await res.json()) as unknown;
+    } catch {
+      throw new ApiError(400, 'FREE_EXERCISE_DB_PARSE_FAILED', 'Free Exercise DB returned invalid JSON.');
+    }
+
+    try {
+      return extractExercises(parsed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid payload.';
+      throw new ApiError(400, 'FREE_EXERCISE_DB_PARSE_FAILED', message);
+    }
   } finally {
     clearTimeout(timeout);
   }
@@ -209,7 +242,11 @@ export function fingerprintCandidate(candidate: Omit<FreeExerciseDbCandidate, 'f
 }
 
 export function buildFreeExerciseDbCandidate(exercise: FreeExerciseDbRawExercise): FreeExerciseDbCandidate {
-  const base = mapExerciseToLibrarySession(exercise);
-  const fingerprint = fingerprintCandidate(base);
-  return { ...base, fingerprint };
+  try {
+    const base = mapExerciseToLibrarySession(exercise);
+    const fingerprint = fingerprintCandidate(base);
+    return { ...base, fingerprint };
+  } catch {
+    throw new ApiError(400, 'FREE_EXERCISE_DB_NORMALIZE_FAILED', 'Failed to normalize exercise row.');
+  }
 }

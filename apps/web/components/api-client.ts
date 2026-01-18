@@ -11,6 +11,28 @@ type ApiResponse<T> = {
   error: null;
 };
 
+type ApiFailure = {
+  data: null;
+  error: {
+    code: string;
+    message: string;
+    requestId?: string;
+  };
+};
+
+export class ApiClientError extends Error {
+  status: number;
+  code: string;
+  requestId?: string;
+
+  constructor(status: number, code: string, message: string, requestId?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+  }
+}
+
 /**
  * API Client Hook (Clerk-based)
  * 
@@ -49,10 +71,20 @@ export function useApi() {
         credentials: 'same-origin', // Include Clerk session cookie
       });
 
-      const payload = (await response.json()) as ApiResponse<T> | { error?: { message?: string } };
+      let payload: unknown = null;
+      try {
+        payload = await response.json();
+      } catch {
+        // Non-JSON response.
+        payload = null;
+      }
 
       if (!response.ok) {
-        throw new Error(payload.error?.message ?? 'Request failed');
+        const failurePayload = payload as Partial<ApiFailure> | null;
+        const code = failurePayload?.error?.code ?? 'REQUEST_FAILED';
+        const message = failurePayload?.error?.message ?? 'Request failed';
+        const requestId = failurePayload?.error?.requestId;
+        throw new ApiClientError(response.status, code, message, requestId);
       }
 
       return (payload as ApiResponse<T>).data;

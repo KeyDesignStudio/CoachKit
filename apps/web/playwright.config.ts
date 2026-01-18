@@ -15,7 +15,7 @@ export default defineConfig({
   webServer: {
     // IMPORTANT: keep this cross-platform. Do not use `FOO=bar cmd` shell prefixes.
     // The server must inherit DATABASE_URL from the parent environment (e.g. Neon).
-    command: `next dev -p ${PORT}`,
+    command: `node scripts/playwright-webserver.mjs ${PORT}`,
     env: {
       ...process.env,
       NODE_ENV: 'development',

@@ -1,5 +1,7 @@
 # Deploy migrations (Vercel + Neon)
 
+For runtime database connectivity and Vercel env var setup, see [docs/DEPLOY_ENV.md](docs/DEPLOY_ENV.md).
+
 We do **not** run Prisma migrations automatically during Vercel builds.
 
 This is intentional: production schema changes are applied manually against Neon.

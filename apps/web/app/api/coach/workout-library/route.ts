@@ -76,6 +76,8 @@ export async function GET(request: NextRequest) {
     );
 
     const where: Prisma.WorkoutLibrarySessionWhereInput = {
+      // Coaches only see PUBLISHED library workouts. Admin imports create DRAFT by default and
+      // must be explicitly published in the admin UI.
       status: WorkoutLibrarySessionStatus.PUBLISHED,
       ...(q
         ? {
