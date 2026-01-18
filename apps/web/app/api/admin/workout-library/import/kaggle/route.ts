@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { WorkoutLibrarySource } from '@prisma/client';
@@ -50,6 +51,7 @@ function chunk<T>(values: T[], chunkSize: number): T[][] {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = randomUUID();
   try {
     const { user } = await requireWorkoutLibraryAdmin();
 
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
       return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400);
     }
 
-    const rows = body.items && body.items.length > 0 ? body.items : await fetchKaggleRows();
+    const rows = body.items && body.items.length > 0 ? body.items : await fetchKaggleRows({ requestId });
 
     const normalized = normalizeKaggleRows(rows, body.maxRows, body.offset);
 
@@ -205,6 +207,6 @@ export async function POST(request: NextRequest) {
 
     return success(summary);
   } catch (error) {
-    return handleError(error);
+    return handleError(error, { requestId, where: 'POST /api/admin/workout-library/import/kaggle' });
   }
 }

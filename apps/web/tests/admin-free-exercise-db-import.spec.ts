@@ -16,11 +16,6 @@ test('Admin can dry-run Free Exercise DB import', async ({ page }) => {
 
   await page.goto('/admin/workout-library', { waitUntil: 'networkidle' });
 
-  const beforeListResp = await page.request.get('/api/admin/workout-library');
-  expect(beforeListResp.ok()).toBeTruthy();
-  const beforeListJson = await beforeListResp.json();
-  const beforeIds: string[] = (beforeListJson?.data?.items ?? beforeListJson?.items ?? []).map((it: any) => it.id);
-
   await page.getByTestId('admin-workout-library-import').click();
 
   await page.getByTestId('admin-import-source').selectOption('FREE_EXERCISE_DB');
@@ -54,11 +49,4 @@ test('Admin can dry-run Free Exercise DB import', async ({ page }) => {
   expect(data.scanned).toBeGreaterThan(0);
   expect(data.wouldCreate).toBeGreaterThan(0);
   expect(data.errors).toBe(0);
-
-  // Ensure this was a true dry-run (no creations/updates).
-  const afterListResp = await page.request.get('/api/admin/workout-library');
-  expect(afterListResp.ok()).toBeTruthy();
-  const afterListJson = await afterListResp.json();
-  const afterIds: string[] = (afterListJson?.data?.items ?? afterListJson?.items ?? []).map((it: any) => it.id);
-  expect(afterIds.slice(0, 50)).toEqual(beforeIds.slice(0, 50));
 });

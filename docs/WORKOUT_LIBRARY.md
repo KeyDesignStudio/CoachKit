@@ -196,6 +196,28 @@ Testing note:
 
 ---
 
+### Kaggle (Phase 2)
+
+This ingestion is Admin-only.
+
+- Admin endpoint: `POST /api/admin/workout-library/import/kaggle`
+  - Request: `{ dryRun: boolean, confirmApply?: boolean, maxRows?: number (<=2000), offset?: number }`
+  - Dry-run is supported and should be the default.
+  - Apply requires `confirmApply=true`.
+  - Creates `DRAFT` sessions with `source=KAGGLE`.
+
+Dataset configuration (no datasets committed to the repo):
+
+- Vercel Preview/Production: set `KAGGLE_DATA_URL` (see [docs/DEPLOY_ENV.md](docs/DEPLOY_ENV.md)).
+- Local/dev/tests: set `KAGGLE_DATA_PATH` to a JSON fixture file.
+
+Observability:
+
+- The runtime logs a single line indicating `Kaggle source = URL` (hostname/path basename only) or `Kaggle source = PATH` (file basename only).
+- On failures, the API returns structured errors like `KAGGLE_NOT_CONFIGURED`, `KAGGLE_FETCH_FAILED`, `KAGGLE_PARSE_FAILED` with a `requestId` you can correlate in Vercel logs.
+
+---
+
 ## Semantic Mapping Contract (Pre-Ingestion)
 
 These mappings define the canonical values CoachKit expects. Any ingestion pipeline must map source values into these canonical forms before writing sessions.

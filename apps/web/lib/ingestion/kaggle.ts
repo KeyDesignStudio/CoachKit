@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { WorkoutLibraryDiscipline } from '@prisma/client';
 
 import { normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
+import { ApiError } from '@/lib/errors';
 
 export type KaggleNormalizedItem = {
   title: string;
@@ -29,39 +30,153 @@ function extractRows(payload: unknown): unknown[] {
   throw new Error('Kaggle payload must be an array or { items/rows/data: [...] }.');
 }
 
-export async function fetchKaggleRows(): Promise<unknown[]> {
-  const localPath = process.env.KAGGLE_DATA_PATH;
-  if (localPath) {
-    const resolved = path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
-    const text = await readFile(resolved, 'utf8');
-    const parsed = JSON.parse(text) as unknown;
-    return extractRows(parsed);
-  }
+function isVercelRuntime(): boolean {
+  return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+}
 
-  const url = process.env.KAGGLE_DATA_URL;
-  if (!url) {
-    throw new Error('Kaggle dataset not configured. Set KAGGLE_DATA_PATH (recommended) or KAGGLE_DATA_URL.');
-  }
+function safeBasename(filePath: string): string {
+  const normalized = filePath.replaceAll('\\', '/');
+  const base = path.posix.basename(normalized);
+  return base || 'unknown';
+}
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+function safeUrlInfo(url: string): { host: string; pathBase: string } {
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { accept: 'application/json' },
-    });
+    const parsed = new URL(url);
+    const host = parsed.hostname || 'unknown';
+    const pathBase = path.posix.basename(parsed.pathname || '') || 'unknown';
+    return { host, pathBase };
+  } catch {
+    throw new ApiError(400, 'KAGGLE_URL_INVALID', 'KAGGLE_DATA_URL is not a valid URL.');
+  }
+}
 
-    if (!res.ok) {
-      throw new Error(`Failed to fetch Kaggle dataset: ${res.status} ${res.statusText}`);
+export async function fetchKaggleRows(options?: { requestId?: string }): Promise<unknown[]> {
+  const requestId = options?.requestId;
+
+  const localPath = process.env.KAGGLE_DATA_PATH || '';
+  const url = process.env.KAGGLE_DATA_URL || '';
+
+  const preferUrl = isVercelRuntime();
+  const pickOrder: Array<'URL' | 'PATH'> = preferUrl ? ['URL', 'PATH'] : ['PATH', 'URL'];
+
+  for (const source of pickOrder) {
+    if (source === 'URL' && url) {
+      const { host, pathBase } = safeUrlInfo(url);
+      console.info('[workout-library][kaggle] Kaggle source = URL', { requestId, host, pathBase });
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: { accept: 'application/json' },
+        });
+
+        if (!res.ok) {
+          console.error('[workout-library][kaggle] Fetch failed', {
+            requestId,
+            host,
+            pathBase,
+            status: res.status,
+            statusText: res.statusText,
+          });
+          throw new ApiError(502, 'KAGGLE_FETCH_FAILED', `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}).`);
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = (await res.json()) as unknown;
+        } catch (error) {
+          console.error('[workout-library][kaggle] Parse failed (URL)', {
+            requestId,
+            host,
+            pathBase,
+            error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+          });
+          throw new ApiError(500, 'KAGGLE_PARSE_FAILED', 'Failed to parse Kaggle dataset JSON.');
+        }
+
+        try {
+          return extractRows(parsed);
+        } catch (error) {
+          console.error('[workout-library][kaggle] Invalid payload shape (URL)', {
+            requestId,
+            host,
+            pathBase,
+            error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+          });
+          throw new ApiError(500, 'KAGGLE_PARSE_FAILED', 'Kaggle dataset JSON has an unexpected shape.');
+        }
+      } catch (error) {
+        if (error instanceof TypeError || (error && typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
+          const err = error as any;
+          console.error('[workout-library][kaggle] Network error', {
+            requestId,
+            host,
+            pathBase,
+            error: { name: err?.name, message: err?.message },
+          });
+          throw new ApiError(502, 'KAGGLE_FETCH_FAILED', `Failed to fetch Kaggle dataset (host=${host}).`);
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
-    const parsed = (await res.json()) as unknown;
-    return extractRows(parsed);
-  } finally {
-    clearTimeout(timeout);
+    if (source === 'PATH' && localPath) {
+      const resolved = path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
+      const fileBase = safeBasename(resolved);
+      console.info('[workout-library][kaggle] Kaggle source = PATH', { requestId, fileBase });
+
+      let text: string;
+      try {
+        text = await readFile(resolved, 'utf8');
+      } catch (error) {
+        console.error('[workout-library][kaggle] Read failed (PATH)', {
+          requestId,
+          fileBase,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+        });
+        throw new ApiError(400, 'KAGGLE_READ_FAILED', `Failed to read Kaggle dataset file (${fileBase}).`);
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch (error) {
+        console.error('[workout-library][kaggle] Parse failed (PATH)', {
+          requestId,
+          fileBase,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+        });
+        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Failed to parse Kaggle dataset JSON (${fileBase}).`);
+      }
+
+      try {
+        return extractRows(parsed);
+      } catch (error) {
+        console.error('[workout-library][kaggle] Invalid payload shape (PATH)', {
+          requestId,
+          fileBase,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+        });
+        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Kaggle dataset JSON has an unexpected shape (${fileBase}).`);
+      }
+    }
   }
+
+  // Not configured.
+  throw new ApiError(
+    400,
+    'KAGGLE_NOT_CONFIGURED',
+    preferUrl
+      ? 'Kaggle dataset not configured. Set KAGGLE_DATA_URL (Vercel) or KAGGLE_DATA_PATH (local/dev/tests).'
+      : 'Kaggle dataset not configured. Set KAGGLE_DATA_PATH (local/dev/tests) or KAGGLE_DATA_URL.'
+  );
 }
 
 type RowError = { index: number; message: string };

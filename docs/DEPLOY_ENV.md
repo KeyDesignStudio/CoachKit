@@ -17,6 +17,16 @@ Set these in **Vercel → Project → Settings → Environment Variables**.
 
 Important: never log or paste full connection strings.
 
+## Optional environment variables (admin tooling)
+
+These are only needed if you plan to use specific admin-only features in Preview/Production.
+
+- `KAGGLE_DATA_URL` (optional)
+  - Used by `POST /api/admin/workout-library/import/kaggle` to fetch Kaggle rows in Vercel runtimes.
+  - The app logs only hostname/path basename (no secrets), but you should still treat the URL as sensitive if it includes signed query params.
+
+Note: `KAGGLE_DATA_PATH` is intended for local/dev/tests (file fixture) and should not be used in Vercel.
+
 ## Preview vs Production
 
 Vercel keeps separate values per environment:
