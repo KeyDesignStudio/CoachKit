@@ -235,6 +235,7 @@ export function AdminWorkoutLibrary() {
   const [kaggleDryRun, setKaggleDryRun] = useState(true);
   const [kaggleConfirmApply, setKaggleConfirmApply] = useState(false);
   const [kaggleMaxRowsText, setKaggleMaxRowsText] = useState('200');
+  const [kaggleOffsetText, setKaggleOffsetText] = useState('0');
   const [kaggleRunning, setKaggleRunning] = useState(false);
   const [kaggleError, setKaggleError] = useState<string | null>(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
@@ -565,6 +566,7 @@ export function AdminWorkoutLibrary() {
 
       try {
         const maxRows = parseOptionalNumber(kaggleMaxRowsText) ?? 200;
+        const offset = Math.max(0, Number.parseInt(kaggleOffsetText.trim() || '0', 10) || 0);
 
         const data = await request<KaggleImportSummary>(`/api/admin/workout-library/import/kaggle`, {
           method: 'POST',
@@ -572,7 +574,7 @@ export function AdminWorkoutLibrary() {
             dryRun,
             confirmApply: dryRun ? false : (confirmApplyOverride ?? kaggleConfirmApply),
             maxRows,
-            items: importItems.length > 0 ? importItems : undefined,
+            offset,
           },
         });
 
@@ -586,13 +588,15 @@ export function AdminWorkoutLibrary() {
         setKaggleRunning(false);
       }
     },
-    [fetchList, importItems, kaggleConfirmApply, kaggleMaxRowsText, request]
+    [fetchList, kaggleConfirmApply, kaggleMaxRowsText, kaggleOffsetText, request]
   );
 
   const onFileSelected = useCallback(async (file: File) => {
     setImportParseError(null);
     setImportResult(null);
     setImportItems([]);
+    setFreeExerciseDbError(null);
+    setFreeExerciseDbResult(null);
     setKaggleError(null);
     setKaggleResult(null);
 
@@ -897,7 +901,9 @@ export function AdminWorkoutLibrary() {
               const canApply = !busy && importConfirmApply && (isRemote || hasManualRows);
 
               const debugEnabled =
-                typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debugImport');
+                process.env.NODE_ENV !== 'production' &&
+                typeof window !== 'undefined' &&
+                new URLSearchParams(window.location.search).has('debugImport');
 
               const runDryRun = async () => {
                 if (!canDryRun) return;
@@ -954,6 +960,11 @@ export function AdminWorkoutLibrary() {
                             setImportSource(e.target.value as typeof importSource);
                             setImportParseError(null);
                             setImportResult(null);
+                            setImportConfirmApply(false);
+                            setFreeExerciseDbError(null);
+                            setFreeExerciseDbResult(null);
+                            setKaggleError(null);
+                            setKaggleResult(null);
                           }}
                         >
                           <option value="MANUAL">MANUAL</option>
@@ -972,15 +983,16 @@ export function AdminWorkoutLibrary() {
                           Dry run
                         </label>
 
-                        <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                          <input
-                            type="checkbox"
-                            checked={importConfirmApply}
-                            onChange={(e) => setImportConfirmApply(e.target.checked)}
-                            disabled={importDryRun}
-                          />
-                          Confirm apply
-                        </label>
+                        {!importDryRun ? (
+                          <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                            <input
+                              type="checkbox"
+                              checked={importConfirmApply}
+                              onChange={(e) => setImportConfirmApply(e.target.checked)}
+                            />
+                            Confirm apply
+                          </label>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1025,11 +1037,16 @@ export function AdminWorkoutLibrary() {
                     ) : null}
 
                     {importSource === 'KAGGLE' ? (
-                      <Input
-                        placeholder="Max rows (default 200, max 2000)"
-                        value={kaggleMaxRowsText}
-                        onChange={(e) => setKaggleMaxRowsText(e.target.value)}
-                      />
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
+                          <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Offset</span>
+                          <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
+                        </label>
+                      </div>
                     ) : null}
 
                     {!isRemote ? (
@@ -1056,32 +1073,21 @@ export function AdminWorkoutLibrary() {
                   ) : null}
 
                   <div className="flex items-center gap-2">
-                    {importDryRun ? (
-                      <Button
-                        data-testid="admin-import-run-dryrun"
-                        variant="secondary"
-                        size="sm"
-                        disabled={!canDryRun}
-                        onClick={() => void runDryRun()}
-                      >
-                        Run Dry-Run
-                      </Button>
-                    ) : (
-                      <Button
-                        data-testid="admin-import-run-apply"
-                        size="sm"
-                        disabled={!canApply}
-                        onClick={() => void runApply()}
-                      >
-                        Import Now
-                      </Button>
-                    )}
+                    <Button
+                      data-testid="admin-import-primary"
+                      variant={importDryRun ? 'secondary' : 'primary'}
+                      size="sm"
+                      disabled={importDryRun ? !canDryRun : !canApply}
+                      onClick={() => void (importDryRun ? runDryRun() : runApply())}
+                    >
+                      {importDryRun ? 'Run Dry-Run' : 'Import Now'}
+                    </Button>
                   </div>
                 </>
               );
             })()}
 
-            {importResult ? (
+            {importSource === 'MANUAL' && importResult ? (
               <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
                 <div className="text-sm font-medium text-[var(--text)]">
                   Result: {importResult.validCount}/{importResult.totalCount} valid • {importResult.errorCount} errors
@@ -1127,80 +1133,8 @@ export function AdminWorkoutLibrary() {
               </div>
             ) : null}
 
-            <div className="mt-2 border-t border-[var(--border-subtle)] pt-4" />
-
-            <div className="text-sm font-semibold text-[var(--text)]">Import (Free Exercise DB)</div>
-            <div className="text-xs text-[var(--muted)]">
-              Server-side fetch of the Free Exercise DB dataset. Start with a dry-run. Apply requires confirmation.
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                <span className="text-xs text-[var(--muted)]">Limit (max 500)</span>
-                <Input
-                  data-testid="admin-free-exercise-db-limit"
-                  value={freeExerciseDbLimitText}
-                  onChange={(e) => setFreeExerciseDbLimitText(e.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                <span className="text-xs text-[var(--muted)]">Offset</span>
-                <Input
-                  data-testid="admin-free-exercise-db-offset"
-                  value={freeExerciseDbOffsetText}
-                  onChange={(e) => setFreeExerciseDbOffsetText(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={freeExerciseDbDryRun}
-                  onChange={(e) => setFreeExerciseDbDryRun(e.target.checked)}
-                />
-                Dry run
-              </label>
-
-              {!freeExerciseDbDryRun ? (
-                <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                  <input
-                    type="checkbox"
-                    checked={freeExerciseDbConfirmApply}
-                    onChange={(e) => setFreeExerciseDbConfirmApply(e.target.checked)}
-                  />
-                  Confirm apply (required)
-                </label>
-              ) : null}
-            </div>
-
-            {freeExerciseDbError ? <div className="text-sm text-red-600">{freeExerciseDbError}</div> : null}
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={freeExerciseDbRunning}
-                onClick={() => void onImportFreeExerciseDb(true)}
-              >
-                Dry-run
-              </Button>
-              <Button
-                data-testid="admin-free-exercise-db-run"
-                size="sm"
-                disabled={freeExerciseDbRunning}
-                onClick={() => void onImportFreeExerciseDb(freeExerciseDbDryRun)}
-              >
-                {freeExerciseDbRunning ? 'Working…' : freeExerciseDbDryRun ? 'Run Dry-Run' : 'Apply Import'}
-              </Button>
-            </div>
-
-            {freeExerciseDbResult ? (
-              <div
-                data-testid="admin-free-exercise-db-result"
-                className="rounded-2xl border border-[var(--border-subtle)] p-4"
-              >
+            {importSource === 'FREE_EXERCISE_DB' && freeExerciseDbResult ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
                 <div className="text-sm font-medium text-[var(--text)]">
                   Scanned {freeExerciseDbResult.scanned} • Create {freeExerciseDbResult.wouldCreate} • Update{' '}
                   {freeExerciseDbResult.wouldUpdate} • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors{' '}
@@ -1209,114 +1143,40 @@ export function AdminWorkoutLibrary() {
                 {freeExerciseDbResult.message ? (
                   <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
                 ) : null}
+              </div>
+            ) : null}
 
-                {freeExerciseDbResult.sample?.creates?.length ? (
+            {importSource === 'KAGGLE' && kaggleResult ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
+                </div>
+                {kaggleResult.message ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
+                ) : null}
+                {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
+                  <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
+                ) : null}
+
+                {kaggleResult.errorCount > 0 ? (
                   <div className="mt-3">
-                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
-                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
-                      {JSON.stringify(freeExerciseDbResult.sample.creates, null, 2)}
-                    </pre>
+                    <div className="text-sm font-semibold text-[var(--text)]">Row errors</div>
+                    <div className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border-subtle)]">
+                      <div className="divide-y divide-[var(--border-subtle)]">
+                        {kaggleResult.errors.slice(0, 50).map((e) => (
+                          <div key={`${e.index}-${e.message}`} className="px-3 py-2 text-xs text-red-700">
+                            Row {e.index}: {e.message}
+                          </div>
+                        ))}
+                        {kaggleResult.errors.length > 50 ? (
+                          <div className="px-3 py-2 text-xs text-[var(--muted)]">Showing first 50 errors…</div>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
             ) : null}
-
-            <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
-              <div className="text-sm font-semibold text-[var(--text)]">Kaggle ingestion (admin-only)</div>
-              <div className="mt-1 text-xs text-[var(--muted)]">
-                Guardrails: dry-run by default, confirm apply required to write, idempotent via fingerprint.
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                <Input
-                  placeholder="Max rows (default 200, max 2000)"
-                  value={kaggleMaxRowsText}
-                  onChange={(e) => setKaggleMaxRowsText(e.target.value)}
-                />
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                    <input
-                      type="checkbox"
-                      checked={kaggleDryRun}
-                      onChange={(e) => setKaggleDryRun(e.target.checked)}
-                    />
-                    Dry run
-                  </label>
-
-                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                    <input
-                      type="checkbox"
-                      checked={kaggleConfirmApply}
-                      onChange={(e) => setKaggleConfirmApply(e.target.checked)}
-                      disabled={kaggleDryRun}
-                    />
-                    Confirm apply
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={kaggleRunning}
-                  onClick={() => void onKaggleImport(true)}
-                >
-                  Kaggle Dry-Run
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={kaggleRunning || (kaggleDryRun ? false : !kaggleConfirmApply)}
-                  onClick={() => void onKaggleImport(kaggleDryRun)}
-                >
-                  {kaggleRunning ? 'Working…' : kaggleDryRun ? 'Run Kaggle Dry-Run' : 'Import Kaggle Now'}
-                </Button>
-              </div>
-
-              {kaggleError ? <div className="mt-2 text-sm text-red-600">{kaggleError}</div> : null}
-
-              {kaggleResult ? (
-                <div className="mt-3">
-                  <div className="text-sm font-medium text-[var(--text)]">
-                    Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
-                  </div>
-                  {kaggleResult.message ? (
-                    <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
-                  ) : null}
-                  {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
-                    <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
-                  ) : null}
-
-                  {kaggleResult.errorCount > 0 ? (
-                    <div className="mt-3">
-                      <div className="text-sm font-semibold text-[var(--text)]">Row errors</div>
-                      <div className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border-subtle)]">
-                        <div className="divide-y divide-[var(--border-subtle)]">
-                          {kaggleResult.errors.slice(0, 50).map((e) => (
-                            <div key={`${e.index}-${e.message}`} className="px-3 py-2 text-xs text-red-700">
-                              Row {e.index}: {e.message}
-                            </div>
-                          ))}
-                          {kaggleResult.errors.length > 50 ? (
-                            <div className="px-3 py-2 text-xs text-[var(--muted)]">Showing first 50 errors…</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {kaggleResult.sample?.creates?.length ? (
-                    <div className="mt-3">
-                      <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
-                      <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
-                        {JSON.stringify(kaggleResult.sample, null, 2)}
-                      </pre>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
             </div>
           ) : (
             <div className="mt-4 flex flex-col gap-4">
