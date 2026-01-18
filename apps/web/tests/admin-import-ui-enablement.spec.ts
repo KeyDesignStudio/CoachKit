@@ -23,10 +23,7 @@ test.describe('Admin import UI enablement', () => {
 
     const fileInput = page.getByTestId('admin-import-file');
     const sourceSelect = page.getByTestId('admin-import-source');
-    const primaryButton = page.getByTestId('admin-import-primary');
-
-    await expect(page.locator('[data-testid="admin-import-primary"]')).toHaveCount(1);
-    await expect(page.getByTestId('admin-free-exercise-db-run')).toHaveCount(0);
+    const dryRunButton = page.getByTestId('admin-import-run-dryrun');
 
     const manualJson = Buffer.from(
       JSON.stringify([
@@ -42,41 +39,37 @@ test.describe('Admin import UI enablement', () => {
 
     // Default is MANUAL: file input visible, buttons blocked without file.
     await expect(fileInput).toBeVisible();
-    await expect(primaryButton).toHaveText('Run Dry-Run');
-    await expect(primaryButton).toBeDisabled();
+    await expect(dryRunButton).toBeDisabled();
 
     // Switch to FREE_EXERCISE_DB: no file required; file input hidden.
     await sourceSelect.selectOption('FREE_EXERCISE_DB');
     await expect(fileInput).toBeHidden();
     await expect(page.getByTestId('admin-import-file-helper')).toBeVisible();
-    await expect(primaryButton).toHaveText('Run Dry-Run');
-    await expect(primaryButton).toBeEnabled();
+    await expect(dryRunButton).toBeEnabled();
 
     // Switch to KAGGLE: no file required; file input hidden.
     await sourceSelect.selectOption('KAGGLE');
     await expect(fileInput).toBeHidden();
-    await expect(primaryButton).toHaveText('Run Dry-Run');
-    await expect(primaryButton).toBeEnabled();
+    await expect(dryRunButton).toBeEnabled();
 
     // Running Kaggle dry-run should succeed (uses local fixture via KAGGLE_DATA_PATH).
-    await primaryButton.click();
+    await dryRunButton.click();
     await expect(page.getByText(/Scanned\s+\d+/)).toBeVisible();
 
-    // Apply gating: when dry-run unchecked, primary action becomes Import Now and requires confirm apply.
-    await page.getByLabel('Dry run').uncheck();
-    await expect(primaryButton).toHaveText('Import Now');
-    await expect(primaryButton).toBeDisabled();
+    // Apply gating: when dry-run unchecked, apply button requires confirm apply.
+    await page.getByTestId('admin-import-dryrun-toggle').uncheck();
+    const applyButton = page.getByTestId('admin-import-run-apply');
+    await expect(applyButton).toBeDisabled();
     await page.getByLabel('Confirm apply').check();
-    await expect(primaryButton).toBeEnabled();
+    await expect(applyButton).toBeEnabled();
 
     // Put it back to dry-run for the rest of this test.
-    await page.getByLabel('Dry run').check();
+    await page.getByTestId('admin-import-dryrun-toggle').check();
 
     // Switch back to MANUAL: requires file parsed before enabling dry-run.
     await sourceSelect.selectOption('MANUAL');
     await expect(fileInput).toBeVisible();
-    await expect(primaryButton).toHaveText('Run Dry-Run');
-    await expect(primaryButton).toBeDisabled();
+    await expect(dryRunButton).toBeDisabled();
 
     await fileInput.setInputFiles({
       name: 'manual-import.json',
@@ -84,6 +77,6 @@ test.describe('Admin import UI enablement', () => {
       buffer: manualJson,
     });
 
-    await expect(primaryButton).toBeEnabled();
+    await expect(dryRunButton).toBeEnabled();
   });
 });

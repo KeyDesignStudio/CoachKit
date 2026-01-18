@@ -976,6 +976,7 @@ export function AdminWorkoutLibrary() {
                       <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                           <input
+                            data-testid="admin-import-dryrun-toggle"
                             type="checkbox"
                             checked={importDryRun}
                             onChange={(e) => setImportDryRun(e.target.checked)}
@@ -1074,7 +1075,7 @@ export function AdminWorkoutLibrary() {
 
                   <div className="flex items-center gap-2">
                     <Button
-                      data-testid="admin-import-primary"
+                      data-testid={importDryRun ? 'admin-import-run-dryrun' : 'admin-import-run-apply'}
                       variant={importDryRun ? 'secondary' : 'primary'}
                       size="sm"
                       disabled={importDryRun ? !canDryRun : !canApply}
