@@ -18,6 +18,7 @@ const bodySchema = z.object({
   dryRun: z.boolean().default(true),
   confirmApply: z.boolean().default(false),
   maxRows: z.number().int().positive().max(HARD_MAX_ROWS).default(DEFAULT_MAX_ROWS),
+  offset: z.number().int().min(0).default(0),
   items: z.array(z.unknown()).optional(),
 });
 
@@ -60,13 +61,13 @@ export async function POST(request: NextRequest) {
 
     const rows = body.items && body.items.length > 0 ? body.items : await fetchKaggleRows();
 
-    const normalized = normalizeKaggleRows(rows, body.maxRows);
+    const normalized = normalizeKaggleRows(rows, body.maxRows, body.offset);
 
     if (!body.dryRun && normalized.errors.length > 0) {
       const blocked: KaggleImportSummary = {
         source: 'KAGGLE',
         dryRun: body.dryRun,
-        scanned: Math.min(rows.length, body.maxRows),
+        scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
         valid: normalized.items.length,
         wouldCreate: 0,
         createdCount: 0,
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
       const summary: KaggleImportSummary = {
         source: 'KAGGLE',
         dryRun: true,
-        scanned: Math.min(rows.length, body.maxRows),
+        scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
         valid: normalized.items.length,
         wouldCreate: toCreate.length,
         createdCount: 0,
@@ -187,7 +188,7 @@ export async function POST(request: NextRequest) {
     const summary: KaggleImportSummary = {
       source: 'KAGGLE',
       dryRun: false,
-      scanned: Math.min(rows.length, body.maxRows),
+      scanned: Math.min(Math.max(0, rows.length - body.offset), body.maxRows),
       valid: normalized.items.length,
       wouldCreate: toCreate.length,
       createdCount: createdIds.length,

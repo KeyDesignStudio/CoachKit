@@ -161,14 +161,15 @@ const kaggleRowSchema = z
     };
   });
 
-export function normalizeKaggleRows(rows: unknown[], maxRows: number): {
+export function normalizeKaggleRows(rows: unknown[], maxRows: number, offset = 0): {
   items: KaggleNormalizedItem[];
   errors: RowError[];
 } {
   const errors: RowError[] = [];
   const items: KaggleNormalizedItem[] = [];
 
-  const slice = rows.slice(0, maxRows);
+  const start = Math.max(0, offset);
+  const slice = rows.slice(start, start + maxRows);
 
   for (let i = 0; i < slice.length; i++) {
     const parsed = kaggleRowSchema.safeParse(slice[i]);

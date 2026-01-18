@@ -56,6 +56,16 @@ test.describe('Admin import UI enablement', () => {
     await dryRunButton.click();
     await expect(page.getByText(/Scanned\s+\d+/)).toBeVisible();
 
+    // Apply gating: when dry-run unchecked, apply button requires confirm apply.
+    await page.getByTestId('admin-import-dryrun-toggle').uncheck();
+    const applyButton = page.getByTestId('admin-import-run-apply');
+    await expect(applyButton).toBeDisabled();
+    await page.getByLabel('Confirm apply').check();
+    await expect(applyButton).toBeEnabled();
+
+    // Put it back to dry-run for the rest of this test.
+    await page.getByTestId('admin-import-dryrun-toggle').check();
+
     // Switch back to MANUAL: requires file parsed before enabling dry-run.
     await sourceSelect.selectOption('MANUAL');
     await expect(fileInput).toBeVisible();

@@ -291,6 +291,7 @@ export function AdminWorkoutLibrary() {
   const [kaggleDryRun, setKaggleDryRun] = useState(true);
   const [kaggleConfirmApply, setKaggleConfirmApply] = useState(false);
   const [kaggleMaxRowsText, setKaggleMaxRowsText] = useState('200');
+  const [kaggleOffsetText, setKaggleOffsetText] = useState('0');
   const [kaggleRunning, setKaggleRunning] = useState(false);
   const [kaggleError, setKaggleError] = useState<string | null>(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
@@ -744,6 +745,7 @@ export function AdminWorkoutLibrary() {
 
       try {
         const maxRows = parseOptionalNumber(kaggleMaxRowsText) ?? 200;
+        const offset = Math.max(0, Number.parseInt(kaggleOffsetText.trim() || '0', 10) || 0);
 
         const data = await request<KaggleImportSummary>(`/api/admin/workout-library/import/kaggle`, {
           method: 'POST',
@@ -751,7 +753,7 @@ export function AdminWorkoutLibrary() {
             dryRun,
             confirmApply: dryRun ? false : (confirmApplyOverride ?? kaggleConfirmApply),
             maxRows,
-            items: importItems.length > 0 ? importItems : undefined,
+            offset,
           },
         });
 
@@ -765,13 +767,15 @@ export function AdminWorkoutLibrary() {
         setKaggleRunning(false);
       }
     },
-    [fetchList, importItems, kaggleConfirmApply, kaggleMaxRowsText, request]
+    [fetchList, kaggleConfirmApply, kaggleMaxRowsText, kaggleOffsetText, request]
   );
 
   const onFileSelected = useCallback(async (file: File) => {
     setImportParseError(null);
     setImportResult(null);
     setImportItems([]);
+    setFreeExerciseDbError(null);
+    setFreeExerciseDbResult(null);
     setKaggleError(null);
     setKaggleResult(null);
 
@@ -1159,7 +1163,9 @@ export function AdminWorkoutLibrary() {
               const canApply = !busy && importConfirmApply && (isRemote || hasManualRows);
 
               const debugEnabled =
-                typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debugImport');
+                process.env.NODE_ENV !== 'production' &&
+                typeof window !== 'undefined' &&
+                new URLSearchParams(window.location.search).has('debugImport');
 
               const runDryRun = async () => {
                 if (!canDryRun) return;
@@ -1309,11 +1315,16 @@ export function AdminWorkoutLibrary() {
                     ) : null}
 
                     {importSource === 'KAGGLE' ? (
-                      <Input
-                        placeholder="Max rows (default 200, max 2000)"
-                        value={kaggleMaxRowsText}
-                        onChange={(e) => setKaggleMaxRowsText(e.target.value)}
-                      />
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
+                          <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Offset</span>
+                          <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
+                        </label>
+                      </div>
                     ) : null}
 
                     {!isRemote ? (
@@ -1381,126 +1392,21 @@ export function AdminWorkoutLibrary() {
                   ) : null}
 
                   <div className="flex items-center gap-2">
-                    {importDryRun ? (
-                      <Button
-                        data-testid="admin-import-run-dryrun"
-                        variant="secondary"
-                        size="sm"
-                        disabled={!canDryRun}
-                        onClick={() => void runDryRun()}
-                      >
-                        Run dry-run
-                      </Button>
-                    ) : (
-                      <Button
-                        data-testid="admin-import-run-apply"
-                        size="sm"
-                        disabled={!canApply}
-                        onClick={() => void runApply()}
-                      >
-                        Import now
-                      </Button>
-                    )}
+                    <Button
+                      data-testid={importDryRun ? 'admin-import-run-dryrun' : 'admin-import-run-apply'}
+                      variant={importDryRun ? 'secondary' : 'primary'}
+                      size="sm"
+                      disabled={importDryRun ? !canDryRun : !canApply}
+                      onClick={() => void (importDryRun ? runDryRun() : runApply())}
+                    >
+                      {importDryRun ? 'Run Dry-Run' : 'Import Now'}
+                    </Button>
                   </div>
                 </>
               );
             })()}
 
-            {freeExerciseDbOk ? <div className="text-sm text-green-700">{freeExerciseDbOk}</div> : null}
-
-            {publishError ? <div className="text-sm text-red-600">{publishError}</div> : null}
-            {publishOk ? <div className="text-sm text-green-700">{publishOk}</div> : null}
-
-            {freeExerciseDbIdempotencyHint ? (
-              <div className={freeExerciseDbIdempotencyHint.kind === 'ok' ? 'text-sm text-green-700' : 'text-sm text-amber-700'}>
-                {freeExerciseDbIdempotencyHint.message}
-              </div>
-            ) : null}
-
-            {freeExerciseDbResult ? (
-              <div data-testid="admin-free-exercise-db-result" className="rounded-2xl border border-[var(--border-subtle)] p-4">
-                <div className="text-sm font-medium text-[var(--text)]">
-                  Scanned {freeExerciseDbResult.scanned} •{' '}
-                  {freeExerciseDbResult.dryRun ? 'Would create' : 'Created'}{' '}
-                  {(freeExerciseDbResult.dryRun ? freeExerciseDbResult.wouldCreate : (freeExerciseDbResult.createdCount ?? freeExerciseDbResult.wouldCreate))}{' '}
-                  • {freeExerciseDbResult.dryRun ? 'Would update' : 'Updated'}{' '}
-                  {(freeExerciseDbResult.dryRun ? freeExerciseDbResult.wouldUpdate : (freeExerciseDbResult.updatedCount ?? freeExerciseDbResult.wouldUpdate))}{' '}
-                  • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors {freeExerciseDbResult.errors}
-                </div>
-
-                {freeExerciseDbResult.message ? (
-                  <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
-                ) : null}
-
-                {!freeExerciseDbResult.dryRun && freeExerciseDbLastApply ? (
-                  <div className="mt-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={async () => {
-                        // Idempotency check: same params, dry-run.
-                        const result = await onImportFreeExerciseDb(true, false);
-                        if (!result) return;
-
-                        if (result.wouldCreate === 0) {
-                          setFreeExerciseDbIdempotencyHint({
-                            kind: 'ok',
-                            message: `Idempotency check: would create 0 (skipped ${result.skippedDuplicates}).`,
-                          });
-                        } else {
-                          setFreeExerciseDbIdempotencyHint({
-                            kind: 'warn',
-                            message: `Possible fingerprint mismatch: dry-run would create ${result.wouldCreate}.`,
-                          });
-                        }
-                      }}
-                      disabled={freeExerciseDbRunning}
-                    >
-                      Run again (dry-run)
-                    </Button>
-                  </div>
-                ) : null}
-
-                {!freeExerciseDbResult.dryRun ? (
-                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
-                    <div className="text-sm font-medium text-[var(--text)]">Publish to coaches</div>
-                    <div className="mt-1 text-xs text-[var(--muted)]">
-                      Imported workouts are DRAFT by default and will not appear in the Coach Library until published.
-                      This publishes all DRAFT workouts for FREE_EXERCISE_DB.
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Input
-                        placeholder="Type PUBLISH to confirm"
-                        value={publishImportConfirmText}
-                        onChange={(e) => setPublishImportConfirmText(e.target.value)}
-                        disabled={publishRunning}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={publishRunning || publishImportConfirmText.trim().toUpperCase() !== 'PUBLISH'}
-                        onClick={() => void publishDrafts({ source: 'FREE_EXERCISE_DB' })}
-                      >
-                        {publishRunning ? 'Publishing…' : 'Publish drafts'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {freeExerciseDbResult.sample?.creates?.length ? (
-                  <div className="mt-3">
-                    <div className="text-sm font-semibold text-[var(--text)]">Sample creates</div>
-                    <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
-                      {JSON.stringify(freeExerciseDbResult.sample.creates, null, 2)}
-                    </pre>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {importResult ? (
+            {importSource === 'MANUAL' && importResult ? (
               <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
                 <div className="text-sm font-medium text-[var(--text)]">
                   Result: {importResult.validCount}/{importResult.totalCount} valid • {importResult.errorCount} errors
@@ -1543,117 +1449,47 @@ export function AdminWorkoutLibrary() {
                     </pre>
                   </div>
                 ) : null}
+              </div>
+            ) : null}
 
-                {!importResult.dryRun && importResult.createdIds?.length ? (
-                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
-                    <div className="text-sm font-medium text-[var(--text)]">Publish to coaches</div>
-                    <div className="mt-1 text-xs text-[var(--muted)]">
-                      Imported workouts are DRAFT by default and will not appear in the Coach Library until published.
-                      This publishes only the workouts created by this import.
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Input
-                        placeholder="Type PUBLISH to confirm"
-                        value={publishImportConfirmText}
-                        onChange={(e) => setPublishImportConfirmText(e.target.value)}
-                        disabled={publishRunning}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={publishRunning || publishImportConfirmText.trim().toUpperCase() !== 'PUBLISH'}
-                        onClick={() => void publishDrafts({ ids: importResult.createdIds })}
-                      >
-                        {publishRunning ? 'Publishing…' : 'Publish created workouts'}
-                      </Button>
-                    </div>
-                  </div>
+            {importSource === 'FREE_EXERCISE_DB' && freeExerciseDbResult ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Scanned {freeExerciseDbResult.scanned} • Create {freeExerciseDbResult.wouldCreate} • Update{' '}
+                  {freeExerciseDbResult.wouldUpdate} • Skipped {freeExerciseDbResult.skippedDuplicates} • Errors{' '}
+                  {freeExerciseDbResult.errors}
+                </div>
+                {freeExerciseDbResult.message ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">{freeExerciseDbResult.message}</div>
                 ) : null}
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
-              <div className="text-sm font-semibold text-[var(--text)]">Kaggle ingestion (admin-only)</div>
-              <div className="mt-1 text-xs text-[var(--muted)]">
-                Guardrails: dry-run by default, confirm apply required to write, idempotent via fingerprint.
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                <Input
-                  placeholder="Max rows (default 200, max 2000)"
-                  value={kaggleMaxRowsText}
-                  onChange={(e) => setKaggleMaxRowsText(e.target.value)}
-                />
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                    <input
-                      type="checkbox"
-                      checked={kaggleDryRun}
-                      onChange={(e) => setKaggleDryRun(e.target.checked)}
-                    />
-                    Dry run
-                  </label>
-
-                  <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                    <input
-                      type="checkbox"
-                      checked={kaggleConfirmApply}
-                      onChange={(e) => setKaggleConfirmApply(e.target.checked)}
-                      disabled={kaggleDryRun}
-                    />
-                    Confirm apply
-                  </label>
+            {importSource === 'KAGGLE' && kaggleResult ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-medium text-[var(--text)]">
+                  Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
                 </div>
-              </div>
+                {kaggleResult.message ? (
+                  <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
+                ) : null}
+                {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
+                  <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
+                ) : null}
 
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={kaggleRunning}
-                  onClick={() => void onKaggleImport(true)}
-                >
-                  Kaggle Dry-Run
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={kaggleRunning || (kaggleDryRun ? false : !kaggleConfirmApply)}
-                  onClick={() => void onKaggleImport(kaggleDryRun)}
-                >
-                  {kaggleRunning ? 'Working…' : kaggleDryRun ? 'Run Kaggle Dry-Run' : 'Import Kaggle Now'}
-                </Button>
-              </div>
-
-              {kaggleError ? <div className="mt-2 text-sm text-red-600">{kaggleError}</div> : null}
-
-              {kaggleResult ? (
-                <div className="mt-3">
-                  <div className="text-sm font-medium text-[var(--text)]">
-                    Scanned {kaggleResult.scanned} • Valid {kaggleResult.valid} • Would create {kaggleResult.wouldCreate}
-                  </div>
-                  {kaggleResult.message ? (
-                    <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
-                  ) : null}
-                  {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
-                    <div className="mt-1 text-sm text-green-700">Created {kaggleResult.createdCount} sessions.</div>
-                  ) : null}
-
-                  {kaggleResult.errorCount > 0 ? (
-                    <div className="mt-3">
-                      <div className="text-sm font-semibold text-[var(--text)]">Row errors</div>
-                      <div className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border-subtle)]">
-                        <div className="divide-y divide-[var(--border-subtle)]">
-                          {kaggleResult.errors.slice(0, 50).map((e) => (
-                            <div key={`${e.index}-${e.message}`} className="px-3 py-2 text-xs text-red-700">
-                              Row {e.index}: {e.message}
-                            </div>
-                          ))}
-                          {kaggleResult.errors.length > 50 ? (
-                            <div className="px-3 py-2 text-xs text-[var(--muted)]">Showing first 50 errors…</div>
-                          ) : null}
-                        </div>
+                {kaggleResult.errorCount > 0 ? (
+                  <div className="mt-3">
+                    <div className="text-sm font-semibold text-[var(--text)]">Row errors</div>
+                    <div className="mt-2 max-h-48 overflow-auto rounded-xl border border-[var(--border-subtle)]">
+                      <div className="divide-y divide-[var(--border-subtle)]">
+                        {kaggleResult.errors.slice(0, 50).map((e) => (
+                          <div key={`${e.index}-${e.message}`} className="px-3 py-2 text-xs text-red-700">
+                            Row {e.index}: {e.message}
+                          </div>
+                        ))}
+                        {kaggleResult.errors.length > 50 ? (
+                          <div className="px-3 py-2 text-xs text-[var(--muted)]">Showing first 50 errors…</div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
