@@ -330,6 +330,10 @@ model CalendarItem {
   coachId                String
   date                   DateTime // use date-only at midnight; interpret in timezone in UI
   plannedStartTimeLocal  String?
+  // For non-planned sessions (e.g. recorded-from-provider).
+  origin                 String?
+  planningStatus         String?
+  sourceActivityId       String?
   discipline             String
   subtype                String?
   title                  String
@@ -368,6 +372,7 @@ model CalendarItem {
   @@index([coachId, reviewedAt, actionAt])
   @@index([status])
   @@index([coachId, reviewedAt, status])
+  @@unique([athleteId, origin, sourceActivityId])
 }
 
 model CompletedActivity {
@@ -393,7 +398,7 @@ model CompletedActivity {
 
   @@index([athleteId, startTime])
   @@index([calendarItemId])
-  @@unique([source, externalActivityId])
+  @@unique([athleteId, source, externalActivityId])
 }
 
 model Comment {

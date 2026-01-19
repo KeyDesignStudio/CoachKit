@@ -14,6 +14,7 @@ type PollSummary = {
   created: number;
   updated: number;
   matched: number;
+  createdCalendarItems: number;
   skippedExisting: number;
   errors: Array<{ athleteId?: string; message: string }>;
 };
@@ -55,6 +56,13 @@ function mapStravaDiscipline(activity: StravaActivity) {
 
 function secondsToMinutesRounded(seconds: number) {
   return Math.max(1, Math.round(seconds / 60));
+}
+
+function minutesToTimeString(totalMinutes: number): string {
+  const safe = Math.max(0, Math.min(23 * 60 + 59, Math.floor(totalMinutes)));
+  const hh = Math.floor(safe / 60);
+  const mm = safe % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 function metersToKm(meters: number) {
@@ -353,6 +361,7 @@ export async function POST(request: NextRequest) {
       created: 0,
       updated: 0,
       matched: 0,
+      createdCalendarItems: 0,
       skippedExisting: 0,
       errors: [],
     };
@@ -369,19 +378,25 @@ export async function POST(request: NextRequest) {
     let connections: Array<{
       athleteId: string;
       athleteTimezone: string;
+      coachId: string;
       connection: any;
     }> = [];
 
     if (user.role === UserRole.ATHLETE) {
-      const connection = await prisma.stravaConnection.findUnique({
-        where: { athleteId: user.id },
-      });
+      const [connection, athleteProfile] = await Promise.all([
+        prisma.stravaConnection.findUnique({ where: { athleteId: user.id } }),
+        prisma.athleteProfile.findUnique({ where: { userId: user.id }, select: { coachId: true } }),
+      ]);
 
       if (!connection) {
         return success({ ...summary, polledAthletes: 0 });
       }
 
-      connections = [{ athleteId: user.id, athleteTimezone: user.timezone, connection }];
+      if (!athleteProfile) {
+        throw new ApiError(500, 'ATHLETE_PROFILE_MISSING', 'Athlete profile missing for Strava poll.');
+      }
+
+      connections = [{ athleteId: user.id, athleteTimezone: user.timezone, coachId: athleteProfile.coachId, connection }];
     } else if (user.role === UserRole.COACH) {
       if (requestedAthleteId) {
         const athlete = await assertCoachOwnsAthlete(requestedAthleteId, user.id);
@@ -393,7 +408,7 @@ export async function POST(request: NextRequest) {
           return success({ ...summary, polledAthletes: 0 });
         }
 
-        connections = [{ athleteId: athlete.userId, athleteTimezone: athlete.user.timezone, connection }];
+        connections = [{ athleteId: athlete.userId, athleteTimezone: athlete.user.timezone, coachId: user.id, connection }];
       } else {
         const athletes = await prisma.athleteProfile.findMany({
           where: {
@@ -402,6 +417,7 @@ export async function POST(request: NextRequest) {
           },
           select: {
             userId: true,
+            coachId: true,
             user: { select: { timezone: true } },
             stravaConnection: true,
           },
@@ -409,7 +425,7 @@ export async function POST(request: NextRequest) {
 
         connections = athletes
           .filter((a) => Boolean(a.stravaConnection))
-          .map((a) => ({ athleteId: a.userId, athleteTimezone: a.user.timezone, connection: a.stravaConnection }));
+          .map((a) => ({ athleteId: a.userId, athleteTimezone: a.user.timezone, coachId: a.coachId, connection: a.stravaConnection }));
       }
     } else {
       throw new ApiError(403, 'FORBIDDEN', 'Access denied.');
@@ -552,7 +568,8 @@ export async function POST(request: NextRequest) {
 
             const existing = await prisma.completedActivity.findUnique({
               where: {
-                source_externalActivityId: {
+                athleteId_source_externalActivityId: {
+                  athleteId: entry.athleteId,
                   source: CompletionSource.STRAVA,
                   externalActivityId,
                 },
@@ -587,7 +604,8 @@ export async function POST(request: NextRequest) {
 
               completed = await prisma.completedActivity.update({
                 where: {
-                  source_externalActivityId: {
+                  athleteId_source_externalActivityId: {
+                    athleteId: entry.athleteId,
                     source: CompletionSource.STRAVA,
                     externalActivityId,
                   },
@@ -640,6 +658,68 @@ export async function POST(request: NextRequest) {
               calendarItemId,
               confirmedAt: completed.confirmedAt ?? null,
             });
+          }
+
+          // Ensure every Strava activity has a visible CalendarItem (even if unplanned/unmatched).
+          if (!calendarItemId) {
+            const nextStatus = completed.confirmedAt
+              ? CalendarItemStatus.COMPLETED_SYNCED
+              : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
+
+            const plannedStartTimeLocal = minutesToTimeString(activityMinutes);
+            const title = (activity.name ?? '').trim() || 'Recorded activity';
+
+            const item = await prisma.calendarItem.upsert({
+              where: {
+                athleteId_origin_sourceActivityId: {
+                  athleteId: entry.athleteId,
+                  origin: 'STRAVA',
+                  sourceActivityId: externalActivityId,
+                },
+              },
+              create: {
+                athleteId: entry.athleteId,
+                coachId: entry.coachId,
+                date: activityDateOnly,
+                plannedStartTimeLocal,
+                origin: 'STRAVA',
+                planningStatus: 'UNPLANNED',
+                sourceActivityId: externalActivityId,
+                discipline,
+                subtype: stravaType ?? null,
+                title,
+                plannedDurationMinutes: durationMinutes,
+                plannedDistanceKm: distanceKm,
+                distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
+                status: nextStatus,
+              },
+              update: {
+                // Keep athlete-entered notes safe; only update provider-derived facts.
+                coachId: entry.coachId,
+                date: activityDateOnly,
+                plannedStartTimeLocal,
+                origin: 'STRAVA',
+                planningStatus: 'UNPLANNED',
+                sourceActivityId: externalActivityId,
+                discipline,
+                subtype: stravaType ?? null,
+                title,
+                plannedDurationMinutes: durationMinutes,
+                plannedDistanceKm: distanceKm,
+                distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
+                status: nextStatus,
+              },
+              select: { id: true },
+            });
+
+            // Link completion to the upserted CalendarItem.
+            await prisma.completedActivity.update({
+              where: { id: completed.id },
+              data: { calendarItemId: item.id },
+            });
+
+            summary.createdCalendarItems += 1;
+            calendarItemId = item.id;
           }
 
         }
