@@ -15,13 +15,25 @@ jobs:
       - name: Trigger CoachKit Strava cron
         env:
           CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
+          BASE_URL: ${{ vars.COACHKIT_BASE_URL || 'https://coach-kit.vercel.app' }}
+          CRON_PATH: ${{ vars.COACHKIT_CRON_PATH || '/api/integrations/strava/cron' }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "Missing secrets.COACHKIT_CRON_SECRET" >&2
             exit 1
           fi
 
+          if [ -z "$BASE_URL" ]; then
+            echo "Missing vars.COACHKIT_BASE_URL" >&2
+            exit 1
+          fi
+
+          if [ -z "$CRON_PATH" ]; then
+            echo "Missing vars.COACHKIT_CRON_PATH" >&2
+            exit 1
+          fi
+
           curl -sS -X POST \
             -H "authorization: Bearer $CRON_SECRET" \
-            "https://coach-kit.vercel.app/api/integrations/strava/cron" \
+            "$BASE_URL$CRON_PATH" \
             | head -c 4000
