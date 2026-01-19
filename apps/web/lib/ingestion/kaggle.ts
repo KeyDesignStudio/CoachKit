@@ -601,7 +601,7 @@ function safeUrlInfo(url: string): { host: string; pathBase: string } {
 
 export async function fetchKaggleTableFromUrl(
   url: string,
-  options?: { requestId?: string; offsetRows?: number; maxRows?: number; sampleBytes?: number | null }
+  options?: { requestId?: string; offsetRows?: number; maxRows?: number }
 ): Promise<KaggleFetchedTable> {
   const requestId = options?.requestId;
   const { host, pathBase } = safeUrlInfo(url);
@@ -609,19 +609,108 @@ export async function fetchKaggleTableFromUrl(
 
   const formatFromUrl = detectFormatFromPathOrUrl(url);
 
-  // If URL suffix indicates CSV, use single-range sampling.
+  // Simple full fetch for CSV (no Range requests)
   if (formatFromUrl === 'csv') {
     const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
     const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
-    const sampled = await loadKaggleRowsCsvSampleSingleRange({ url, requestId, sampleBytes: options?.sampleBytes ?? undefined });
-    const sliced = sampled.rows.slice(offsetRows, offsetRows + maxRows).map(coerceCsvRowObject);
+    
+    const MAX_SIZE_BYTES = 350 * 1024 * 1024; // 350MB
+    const TIMEOUT_MS = 120_000; // 120 seconds
+
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8' },
+        },
+        TIMEOUT_MS
+      );
+    } catch (error) {
+      if (isAbortLikeError(error)) {
+        throw new ApiError(
+          504,
+          'KAGGLE_TIMEOUT',
+          `Kaggle dataset fetch timed out (host=${host}, timeout=${TIMEOUT_MS}ms).` +
+            (requestId ? ` (requestId=${requestId})` : ''),
+          { urlHost: host, urlPath }
+        );
+      }
+      const err = error as any;
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset (host=${host}, error=${err?.message || 'network error'}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    if (!res.ok) {
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath, upstreamStatus: res.status }
+      );
+    }
+
+    const contentLength = parseContentLength(res.headers.get('content-length'));
+    if (contentLength && contentLength > MAX_SIZE_BYTES) {
+      throw new ApiError(
+        413,
+        'KAGGLE_TOO_LARGE',
+        `Kaggle dataset is too large (size=${Math.round(contentLength / (1024 * 1024))}MB, max=${Math.round(MAX_SIZE_BYTES / (1024 * 1024))}MB).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (error) {
+      console.error('[workout-library][kaggle] Failed to read response body (URL CSV)', {
+        requestId,
+        host,
+        pathBase,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+      });
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to read Kaggle dataset response body (host=${host}).` + (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    const bodySize = Buffer.byteLength(text, 'utf8');
+    if (bodySize > MAX_SIZE_BYTES) {
+      throw new ApiError(
+        413,
+        'KAGGLE_TOO_LARGE',
+        `Kaggle dataset response is too large (size=${Math.round(bodySize / (1024 * 1024))}MB, max=${Math.round(MAX_SIZE_BYTES / (1024 * 1024))}MB).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    const all = parseCsvRows(text, { requestId }).map(coerceCsvRowObject);
+    const sliced = all.slice(offsetRows, offsetRows + maxRows);
     return {
       format: 'csv',
       rows: sliced,
       diagnostics: {
-        ...sampled.diagnostics,
-        scannedRows: sampled.rows.length,
+        scannedRows: all.length,
         returnedRows: sliced.length,
+        bytesFetchedTotal: bodySize,
+        rangeRequests: 0,
+        contentType: res.headers.get('content-type'),
+        contentLength: bodySize,
+        usedRange: false,
       },
     };
   }
@@ -654,15 +743,104 @@ export async function fetchKaggleTableFromUrl(
   if (format === 'csv') {
     const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
     const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
-    const sampled = await loadKaggleRowsCsvSampleSingleRange({ url, requestId, sampleBytes: options?.sampleBytes ?? undefined });
-    const sliced = sampled.rows.slice(offsetRows, offsetRows + maxRows).map(coerceCsvRowObject);
+    
+    const MAX_SIZE_BYTES = 350 * 1024 * 1024; // 350MB
+    const TIMEOUT_MS = 120_000; // 120 seconds
+
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8' },
+        },
+        TIMEOUT_MS
+      );
+    } catch (error) {
+      if (isAbortLikeError(error)) {
+        throw new ApiError(
+          504,
+          'KAGGLE_TIMEOUT',
+          `Kaggle dataset fetch timed out (host=${host}, timeout=${TIMEOUT_MS}ms).` +
+            (requestId ? ` (requestId=${requestId})` : ''),
+          { urlHost: host, urlPath }
+        );
+      }
+      const err = error as any;
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset (host=${host}, error=${err?.message || 'network error'}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    if (!res.ok) {
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath, upstreamStatus: res.status }
+      );
+    }
+
+    const contentLength = parseContentLength(res.headers.get('content-length'));
+    if (contentLength && contentLength > MAX_SIZE_BYTES) {
+      throw new ApiError(
+        413,
+        'KAGGLE_TOO_LARGE',
+        `Kaggle dataset is too large (size=${Math.round(contentLength / (1024 * 1024))}MB, max=${Math.round(MAX_SIZE_BYTES / (1024 * 1024))}MB).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (error) {
+      console.error('[workout-library][kaggle] Failed to read response body (URL CSV)', {
+        requestId,
+        host,
+        pathBase,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+      });
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to read Kaggle dataset response body (host=${host}).` + (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    const bodySize = Buffer.byteLength(text, 'utf8');
+    if (bodySize > MAX_SIZE_BYTES) {
+      throw new ApiError(
+        413,
+        'KAGGLE_TOO_LARGE',
+        `Kaggle dataset response is too large (size=${Math.round(bodySize / (1024 * 1024))}MB, max=${Math.round(MAX_SIZE_BYTES / (1024 * 1024))}MB).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost: host, urlPath }
+      );
+    }
+
+    const all = parseCsvRows(text, { requestId }).map(coerceCsvRowObject);
+    const sliced = all.slice(offsetRows, offsetRows + maxRows);
     return {
       format: 'csv',
       rows: sliced,
       diagnostics: {
-        ...sampled.diagnostics,
-        scannedRows: sampled.rows.length,
+        scannedRows: all.length,
         returnedRows: sliced.length,
+        bytesFetchedTotal: bodySize,
+        rangeRequests: 0,
+        contentType: res.headers.get('content-type'),
+        contentLength: bodySize,
+        usedRange: false,
       },
     };
   }
@@ -831,7 +1009,6 @@ export async function fetchKaggleTable(options?: {
   requestId?: string;
   offsetRows?: number;
   maxRows?: number;
-  sampleBytes?: number | null;
 }): Promise<KaggleFetchedTable> {
   const requestId = options?.requestId;
   const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
@@ -847,7 +1024,7 @@ export async function fetchKaggleTable(options?: {
     if (source === 'URL' && url) {
       const { host, pathBase } = safeUrlInfo(url);
       console.info('[workout-library][kaggle] Kaggle source = URL', { requestId, host, pathBase });
-      return await fetchKaggleTableFromUrl(url, { requestId, offsetRows, maxRows, sampleBytes: options?.sampleBytes ?? null });
+      return await fetchKaggleTableFromUrl(url, { requestId, offsetRows, maxRows });
     }
 
     if (source === 'PATH' && localPath) {

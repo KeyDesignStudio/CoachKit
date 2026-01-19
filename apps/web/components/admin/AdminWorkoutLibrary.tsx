@@ -94,19 +94,6 @@ type KaggleImportSummary = {
     creates: Array<{ title: string; fingerprint: string }>;
     skips: Array<{ title: string; fingerprint: string; reason: string }>;
   };
-  sampleTooSmall?: {
-    code: 'KAGGLE_SAMPLE_TOO_SMALL';
-    message: string;
-    diagnostics: {
-      maxRowsRequested: number;
-      groupsProduced: number;
-      rowsParsed: number | null;
-      sampleBytes: number | null;
-      bytesFetchedTotal: number | null;
-      rangeRequests: number | null;
-      totalBytes: number | null;
-    };
-  };
   loader?: {
     rangeRequests: number;
     bytesFetchedTotal: number;
@@ -114,16 +101,6 @@ type KaggleImportSummary = {
     contentType?: string | null;
   };
   message?: string;
-};
-
-type KaggleImportConfig = {
-  enabled: boolean;
-  enabledSource: 'default' | 'env' | 'cookie';
-  sampleBytes: number;
-  sampleMb: number;
-  sampleSource: 'default' | 'env' | 'cookie';
-  sampleDefaultBytes: number;
-  sampleCapBytes: number;
 };
 
 const DISCIPLINES: Discipline[] = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'];
@@ -337,8 +314,6 @@ export function AdminWorkoutLibrary() {
   >(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
   const [kaggleHealthJson, setKaggleHealthJson] = useState<string | null>(null);
-  const [kaggleConfig, setKaggleConfig] = useState<KaggleImportConfig | null>(null);
-  const [kaggleConfigError, setKaggleConfigError] = useState<string | null>(null);
 
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
   const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
@@ -426,38 +401,6 @@ export function AdminWorkoutLibrary() {
   useEffect(() => {
     if (kaggleDryRun) setKaggleConfirmApply(false);
   }, [kaggleDryRun]);
-
-  useEffect(() => {
-    if (activeRightTab !== 'import') return;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const data = await request<KaggleImportConfig>(
-          '/api/admin/workout-library/import/kaggle/config',
-          { cache: 'no-store' }
-        );
-        if (cancelled) return;
-        setKaggleConfig(data);
-        setKaggleConfigError(null);
-      } catch (error) {
-        if (cancelled) return;
-        setKaggleConfig(null);
-        setKaggleConfigError(error instanceof Error ? error.message : 'Failed to load Kaggle config.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeRightTab, request]);
-
-  useEffect(() => {
-    if (!kaggleConfig) return;
-    if (kaggleConfig.enabled) return;
-    if (importSource !== 'KAGGLE') return;
-    setImportSource('MANUAL');
-  }, [importSource, kaggleConfig]);
 
   const startCreate = useCallback(() => {
     setSelectedId(null);
@@ -1330,7 +1273,7 @@ export function AdminWorkoutLibrary() {
                           }}
                         >
                           <option value="MANUAL">MANUAL</option>
-                          {kaggleConfig?.enabled === false ? null : <option value="KAGGLE">KAGGLE</option>}
+                          <option value="KAGGLE">KAGGLE</option>
                           <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
                         </Select>
                       </label>
@@ -1412,26 +1355,15 @@ export function AdminWorkoutLibrary() {
                     ) : null}
 
                     {importSource === 'KAGGLE' ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                          <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                            <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
-                            <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
-                          </label>
-                          <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                            <span className="text-xs text-[var(--muted)]">Offset</span>
-                            <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
-                          </label>
-                        </div>
-
-                        <div data-testid="kaggle-sampling-microcopy" className="text-xs text-[var(--muted)]">
-                          Sampling window:{' '}
-                          {kaggleConfig
-                            ? `${kaggleConfig.sampleMb}MB${kaggleConfig.sampleSource === 'default' ? ' (default)' : ' (configured)'}`
-                            : '…'}
-                          . Kaggle dry-run only reads the first N MB via a single HTTP Range request. If you see “Sample window too small”, increase KAGGLE_SAMPLE_BYTES (cap 20MB).
-                          {kaggleConfigError ? ` (config error: ${kaggleConfigError})` : ''}
-                        </div>
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
+                          <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                          <span className="text-xs text-[var(--muted)]">Offset</span>
+                          <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
+                        </label>
                       </div>
                     ) : null}
 
@@ -1504,33 +1436,7 @@ export function AdminWorkoutLibrary() {
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.urlPath ? (
                         <div className="mt-1 text-xs">Path: {kaggleError.urlPath}</div>
                       ) : null}
-                      {kaggleError.code.startsWith('KAGGLE_') && kaggleError.step ? (
-                        <div className="mt-1 text-xs">Step: {kaggleError.step}</div>
-                      ) : null}
                       <div className="mt-1 whitespace-pre-wrap">{kaggleError.message}</div>
-
-                      {kaggleError.code === 'KAGGLE_FETCH_FAILED' && kaggleError.step === 'RANGE_GET' ? (
-                        <div className="mt-2 text-xs text-red-800">
-                          Next action: retry. If this is a Preview abort/502, consider increasing KAGGLE_SAMPLE_BYTES
-                          (reduces repeated fetches) and check the Kaggle Health panel for Range support.
-                        </div>
-                      ) : null}
-
-                      {kaggleError.diagnostics ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                          <span>Diagnostics available</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              void navigator.clipboard?.writeText(JSON.stringify(kaggleError.diagnostics, null, 2));
-                            }}
-                          >
-                            Copy diagnostics
-                          </Button>
-                        </div>
-                      ) : null}
 
                       {kaggleError.requestId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -1732,25 +1638,6 @@ export function AdminWorkoutLibrary() {
                   <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
                 ) : null}
 
-                {kaggleResult.sampleTooSmall ? (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    <div className="font-semibold">Sample window too small</div>
-                    <div className="mt-1 whitespace-pre-wrap">{kaggleResult.sampleTooSmall.message}</div>
-                    <div className="mt-2 text-xs text-amber-800">Next action: increase KAGGLE_SAMPLE_BYTES (default 5MB, cap 20MB) and retry dry-run.</div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(JSON.stringify(kaggleResult.sampleTooSmall, null, 2));
-                        }}
-                      >
-                        Copy diagnostics
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
                 {process.env.NODE_ENV !== 'production' &&
                 typeof window !== 'undefined' &&
                 new URLSearchParams(window.location.search).has('debugImport') &&

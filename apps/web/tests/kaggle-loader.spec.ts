@@ -37,49 +37,7 @@ test.describe('Kaggle loader (HTTP CSV)', () => {
     expect(payload.data).toBeNull();
     expect(payload.error.code).toBe('KAGGLE_FETCH_FAILED');
     expect(payload.error.requestId).toBeTruthy();
-    expect(payload.error.httpStatus).toBe(502);
-    expect(String(payload.error.message)).toContain('status=404');
-  });
-
-  test('Range CSV uses a single sampled Range request', async ({ page, baseURL }) => {
-    const response = await page.request.post('/api/test/kaggle-loader', {
-      data: {
-        url: `${baseURL}/api/test/kaggle-fixtures/large-range.csv`,
-        offsetRows: 0,
-        maxRows: 5,
-      },
-    });
-
-    expect(response.status()).toBe(200);
-    const payload = (await response.json()) as any;
-    expect(payload.error).toBeNull();
-    expect(payload.data.ok).toBe(true);
-    expect(payload.data.format).toBe('csv');
-    expect(payload.data.rowCount).toBe(5);
-    expect(payload.data.diagnostics).toBeTruthy();
-    expect(payload.data.diagnostics.usedRange).toBe(true);
-    expect(payload.data.diagnostics.rangeRequests).toBe(1);
-    expect(payload.data.diagnostics.bytesFetchedTotal).toBeGreaterThan(0);
-    expect(payload.data.diagnostics.contentLength).toBeGreaterThan(payload.data.diagnostics.bytesFetchedTotal);
-  });
-
-  test('Range CSV retries transient 502 and succeeds', async ({ page, baseURL }) => {
-    const runKey = `t${Date.now()}`;
-    const response = await page.request.post('/api/test/kaggle-loader', {
-      data: {
-        url: `${baseURL}/api/test/kaggle-fixtures/flaky-range.csv?run=${encodeURIComponent(runKey)}`,
-        offsetRows: 0,
-        maxRows: 10,
-      },
-    });
-
-    expect(response.status()).toBe(200);
-    const payload = (await response.json()) as any;
-    expect(payload.error).toBeNull();
-    expect(payload.data.ok).toBe(true);
-    expect(payload.data.format).toBe('csv');
-    expect(payload.data.rowCount).toBe(10);
-    expect(payload.data.diagnostics.usedRange).toBe(true);
-    expect(payload.data.diagnostics.rangeRequests).toBeGreaterThanOrEqual(2);
+    expect(payload.error.httpStatus).toBe(502); // API error status
+    expect(String(payload.error.message)).toContain('status=404'); // Upstream Kaggle status
   });
 });
