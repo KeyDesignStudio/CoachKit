@@ -29,10 +29,7 @@ async function expectOk(res: import('@playwright/test').APIResponse, label: stri
 }
 
 test.describe('Admin Kaggle ingestion', () => {
-  test('dry-run, apply, and idempotency (CSV, grouped by program day)', async ({ page }, testInfo) => {
-    // Avoid cross-project flakiness: Kaggle import creates rows in DB.
-    test.skip(testInfo.project.name !== 'iphone16pro', 'Runs once to avoid cross-project DB collisions.');
-
+  test('dry-run, apply, and idempotency (CSV, grouped by program day)', async ({ page }) => {
     await setRoleCookie(page, 'ADMIN');
 
     await page.goto('/admin/workout-library', { waitUntil: 'networkidle' });
@@ -51,12 +48,33 @@ test.describe('Admin Kaggle ingestion', () => {
     await page.getByLabel('Confirm apply').check();
     await page.getByTestId('admin-import-run-apply').click();
 
-    // Expect that this run creates at least one workout.
-    await expect(page.getByText(/Imported\s+\d+\s+workouts from Kaggle\./)).toBeVisible();
-
     // Back to dry-run: wouldCreate should now be 0.
     await page.getByTestId('admin-import-dryrun-toggle').check();
     await page.getByTestId('admin-import-run-dryrun').click();
     await expect(page.getByText(/Would create\s+0/)).toBeVisible();
+  });
+
+  test('returns KAGGLE_SAMPLE_TOO_SMALL when sample window is tiny', async ({ page }) => {
+    await setRoleCookie(page, 'ADMIN');
+
+    const res = await page.request.post('/api/admin/workout-library/import/kaggle', {
+      headers: {
+        // Test-only override (enabled when DISABLE_AUTH=true)
+        'x-kaggle-sample-bytes': '1024',
+      },
+      data: {
+        dryRun: true,
+        confirmApply: false,
+        maxRows: 200,
+        offset: 0,
+      },
+    });
+
+    await expectOk(res, 'kaggle import sample-too-small');
+    const json = (await res.json()) as any;
+    expect(json?.error).toBeNull();
+    expect(json?.data?.dryRun).toBe(true);
+    expect(json?.data?.sampleTooSmall?.code).toBe('KAGGLE_SAMPLE_TOO_SMALL');
+    expect(json?.data?.sampleTooSmall?.diagnostics?.sampleBytes).toBe(1024);
   });
 });

@@ -41,11 +41,11 @@ test.describe('Kaggle loader (HTTP CSV)', () => {
     expect(String(payload.error.message)).toContain('status=404');
   });
 
-  test('Range CSV uses partial download (multiple requests)', async ({ page, baseURL }) => {
+  test('Range CSV uses a single sampled Range request', async ({ page, baseURL }) => {
     const response = await page.request.post('/api/test/kaggle-loader', {
       data: {
         url: `${baseURL}/api/test/kaggle-fixtures/large-range.csv`,
-        offsetRows: 3200,
+        offsetRows: 0,
         maxRows: 5,
       },
     });
@@ -58,7 +58,7 @@ test.describe('Kaggle loader (HTTP CSV)', () => {
     expect(payload.data.rowCount).toBe(5);
     expect(payload.data.diagnostics).toBeTruthy();
     expect(payload.data.diagnostics.usedRange).toBe(true);
-    expect(payload.data.diagnostics.rangeRequests).toBeGreaterThan(1);
+    expect(payload.data.diagnostics.rangeRequests).toBe(1);
     expect(payload.data.diagnostics.bytesFetchedTotal).toBeGreaterThan(0);
     expect(payload.data.diagnostics.contentLength).toBeGreaterThan(payload.data.diagnostics.bytesFetchedTotal);
   });

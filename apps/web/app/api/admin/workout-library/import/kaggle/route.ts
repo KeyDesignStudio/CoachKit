@@ -11,6 +11,7 @@ import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerpr
 import { buildKaggleProgramTemplates, fetchKaggleTable, type KaggleFetchedTable } from '@/lib/ingestion/kaggle';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const DEFAULT_MAX_ROWS = 200;
 const HARD_MAX_ROWS = 2000;
@@ -40,6 +41,19 @@ type KaggleImportSummary = {
     creates: Array<{ title: string; fingerprint: string }>;
     skips: Array<{ title: string; fingerprint: string; reason: string }>;
   };
+  sampleTooSmall?: {
+    code: 'KAGGLE_SAMPLE_TOO_SMALL';
+    message: string;
+    diagnostics: {
+      maxRowsRequested: number;
+      groupsProduced: number;
+      rowsParsed: number | null;
+      sampleBytes: number | null;
+      bytesFetchedTotal: number | null;
+      rangeRequests: number | null;
+      totalBytes: number | null;
+    };
+  };
   loader?: {
     rangeRequests: number;
     bytesFetchedTotal: number;
@@ -48,6 +62,20 @@ type KaggleImportSummary = {
   };
   message?: string;
 };
+
+function parseSampleBytesOverride(request: NextRequest): number | null {
+  // Test-only override: lets Playwright force tiny sample windows.
+  // Avoid enabling this in production/Vercel.
+  if (process.env.DISABLE_AUTH !== 'true') return null;
+
+  const raw = request.headers.get('x-kaggle-sample-bytes');
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  const cap = 20 * 1024 * 1024;
+  return Math.min(Math.max(1024, Math.trunc(parsed)), cap);
+}
 
 function chunk<T>(values: T[], chunkSize: number): T[][] {
   const result: T[][] = [];
@@ -79,15 +107,21 @@ export async function POST(request: NextRequest) {
       return out;
     };
 
+    const sampleBytesOverride = parseSampleBytesOverride(request);
+
     const table: KaggleFetchedTable =
       body.items && body.items.length > 0
         ? { format: 'json', rows: body.items.map(coerceRow) }
-        : await fetchKaggleTable({ requestId, offsetRows: body.offset, maxRows: body.maxRows });
+        : await fetchKaggleTable({ requestId, offsetRows: body.offset, maxRows: body.maxRows, sampleBytes: sampleBytesOverride });
 
     const program = buildKaggleProgramTemplates(table.rows, {
       maxGroups: body.maxRows,
       offsetGroups: 0,
     });
+
+    // In single-range sampling mode, it is expected that we may not be able to produce enough groups
+    // from the initial sample window. Return a structured 200 success response instructing to increase sample.
+    const sampleTooSmall = body.dryRun && program.summary.scannedGroups < body.maxRows;
 
     if (!body.dryRun && program.summary.errors.length > 0) {
       const blocked: KaggleImportSummary = {
@@ -171,6 +205,27 @@ export async function POST(request: NextRequest) {
               contentType: table.diagnostics.contentType,
             }
           : undefined,
+        ...(sampleTooSmall
+          ? {
+              sampleTooSmall: {
+                code: 'KAGGLE_SAMPLE_TOO_SMALL',
+                message: `Fetched only the initial sample window; produced ${program.summary.scannedGroups} group(s) but maxRows=${body.maxRows}. Increase KAGGLE_SAMPLE_BYTES to widen the sampling window.`,
+                diagnostics: {
+                  maxRowsRequested: body.maxRows,
+                  groupsProduced: program.summary.scannedGroups,
+                  rowsParsed: table.diagnostics?.scannedRows ?? null,
+                  sampleBytes: table.diagnostics?.sampleBytes ?? null,
+                  bytesFetchedTotal: table.diagnostics?.bytesFetchedTotal ?? null,
+                  rangeRequests: table.diagnostics?.rangeRequests ?? null,
+                  totalBytes: table.diagnostics?.totalBytes ?? null,
+                },
+              },
+              message:
+                table.diagnostics?.sampleBytes !== undefined
+                  ? `Sample too small: increase KAGGLE_SAMPLE_BYTES (currently ~${Math.round(table.diagnostics.sampleBytes / (1024 * 1024))}MB).`
+                  : 'Sample too small: increase KAGGLE_SAMPLE_BYTES.',
+            }
+          : {}),
       };
 
       return success(summary);

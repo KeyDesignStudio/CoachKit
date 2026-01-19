@@ -41,6 +41,8 @@ type KaggleCsvRangeDiagnostics = {
   contentType: string | null;
   contentLength: number | null;
   usedRange: boolean;
+  sampleBytes?: number;
+  totalBytes?: number | null;
   warning?: string;
 };
 
@@ -419,6 +421,146 @@ export async function loadKaggleRowsCsvRange(options: {
   return { rows: rowsOut, diagnostics, urlHost, urlPath };
 }
 
+function getKaggleSampleBytes(): number {
+  const def = 5 * 1024 * 1024;
+  const cap = 20 * 1024 * 1024;
+
+  const raw = (process.env.KAGGLE_SAMPLE_BYTES ?? '').trim();
+  if (!raw) return def;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return def;
+  return Math.min(Math.max(1024, Math.trunc(parsed)), cap);
+}
+
+function parseTotalBytesFromContentRange(value: string | null): number | null {
+  if (!value) return null;
+  // Example: "bytes 0-1023/309276123"
+  const m = /\/\s*(\d+)\s*$/.exec(value);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+export async function loadKaggleRowsCsvSampleSingleRange(options: {
+  url: string;
+  requestId?: string;
+  sampleBytes?: number;
+}): Promise<{ rows: Array<Record<string, string>>; diagnostics: KaggleCsvRangeDiagnostics; urlHost: string; urlPath: string }> {
+  const { host: urlHost } = safeUrlInfo(options.url);
+  const urlPath = new URL(options.url).pathname || '/';
+  const requestId = options.requestId;
+
+  const sampleBytes = Math.min(
+    Math.max(1024, Math.trunc(options.sampleBytes ?? getKaggleSampleBytes())),
+    20 * 1024 * 1024
+  );
+
+  const diagnostics: KaggleCsvRangeDiagnostics = {
+    scannedRows: 0,
+    returnedRows: 0,
+    bytesFetchedTotal: 0,
+    rangeRequests: 0,
+    contentType: null,
+    contentLength: null,
+    usedRange: true,
+    sampleBytes,
+    totalBytes: null,
+  };
+
+  // HEAD mirrors prod behavior and helps debug. Best-effort (15s).
+  try {
+    const head = await fetchWithTimeout(
+      options.url,
+      {
+        method: 'HEAD',
+        cache: 'no-store',
+        headers: { accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8' },
+      },
+      15_000
+    );
+    diagnostics.contentType = head.headers.get('content-type');
+    diagnostics.contentLength = parseContentLength(head.headers.get('content-length'));
+  } catch {
+    // ignore
+  }
+
+  const start = 0;
+  const end = Math.max(0, sampleBytes - 1);
+  const range = `bytes=${start}-${end}`;
+  const backoffs = [300, 900, 2000];
+
+  for (let attempt = 0; attempt < 1 + backoffs.length; attempt++) {
+    try {
+      diagnostics.rangeRequests += 1;
+      const res = await fetchWithTimeout(
+        options.url,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8',
+            range,
+          },
+        },
+        60_000
+      );
+
+      diagnostics.contentType = res.headers.get('content-type') ?? diagnostics.contentType;
+      diagnostics.totalBytes = parseTotalBytesFromContentRange(res.headers.get('content-range'));
+
+      if (!res.ok) {
+        if (isTransientStatus(res.status) && attempt < backoffs.length) {
+          await sleep(backoffs[attempt]);
+          continue;
+        }
+        throw new ApiError(
+          502,
+          'KAGGLE_FETCH_FAILED',
+          `Failed to fetch Kaggle dataset sample (host=${urlHost}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
+            (requestId ? ` (requestId=${requestId})` : ''),
+          { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+        );
+      }
+
+      if (res.status === 200) {
+        // Server ignored Range: do not allow full-file reads in this mode.
+        throw new ApiError(
+          502,
+          'KAGGLE_RANGE_UNSUPPORTED',
+          `Server did not honor Range request for Kaggle CSV (host=${urlHost}, status=200).` +
+            (requestId ? ` (requestId=${requestId})` : ''),
+          { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+        );
+      }
+
+      const text = await res.text();
+      diagnostics.bytesFetchedTotal += Buffer.byteLength(text, 'utf8');
+
+      const safeCut = findLastNewlineOutsideQuotes(text);
+      const parseable = safeCut >= 0 ? text.slice(0, safeCut + 1) : text;
+
+      const state: { header: string[] | null } = { header: null };
+      const rows = parseCsvChunkWithHeader(parseable, state, { requestId, urlHost, urlPath });
+      diagnostics.scannedRows = rows.length;
+      diagnostics.returnedRows = rows.length;
+      return { rows, diagnostics, urlHost, urlPath };
+    } catch (error) {
+      if ((isAbortLikeError(error) || isTransientStatus((error as any)?.status)) && attempt < backoffs.length) {
+        await sleep(backoffs[attempt]);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new ApiError(
+    502,
+    'KAGGLE_FETCH_FAILED',
+    `Failed to fetch Kaggle dataset sample (host=${urlHost}).` + (requestId ? ` (requestId=${requestId})` : ''),
+    { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+  );
+}
+
 function coerceCsvRowObject(row: unknown): Record<string, string> {
   if (!row || typeof row !== 'object') return {};
   const obj = row as Record<string, unknown>;
@@ -459,7 +601,7 @@ function safeUrlInfo(url: string): { host: string; pathBase: string } {
 
 export async function fetchKaggleTableFromUrl(
   url: string,
-  options?: { requestId?: string; offsetRows?: number; maxRows?: number }
+  options?: { requestId?: string; offsetRows?: number; maxRows?: number; sampleBytes?: number | null }
 ): Promise<KaggleFetchedTable> {
   const requestId = options?.requestId;
   const { host, pathBase } = safeUrlInfo(url);
@@ -467,12 +609,21 @@ export async function fetchKaggleTableFromUrl(
 
   const formatFromUrl = detectFormatFromPathOrUrl(url);
 
-  // If URL suffix indicates CSV, go straight to Range loading.
+  // If URL suffix indicates CSV, use single-range sampling.
   if (formatFromUrl === 'csv') {
     const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
     const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
-    const ranged = await loadKaggleRowsCsvRange({ url, offset: offsetRows, maxRows, requestId });
-    return { format: 'csv', rows: ranged.rows.map(coerceCsvRowObject), diagnostics: ranged.diagnostics };
+    const sampled = await loadKaggleRowsCsvSampleSingleRange({ url, requestId, sampleBytes: options?.sampleBytes ?? undefined });
+    const sliced = sampled.rows.slice(offsetRows, offsetRows + maxRows).map(coerceCsvRowObject);
+    return {
+      format: 'csv',
+      rows: sliced,
+      diagnostics: {
+        ...sampled.diagnostics,
+        scannedRows: sampled.rows.length,
+        returnedRows: sliced.length,
+      },
+    };
   }
 
   // If URL suffix indicates JSON, use a normal GET.
@@ -503,8 +654,17 @@ export async function fetchKaggleTableFromUrl(
   if (format === 'csv') {
     const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
     const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
-    const ranged = await loadKaggleRowsCsvRange({ url, offset: offsetRows, maxRows, requestId });
-    return { format: 'csv', rows: ranged.rows.map(coerceCsvRowObject), diagnostics: ranged.diagnostics };
+    const sampled = await loadKaggleRowsCsvSampleSingleRange({ url, requestId, sampleBytes: options?.sampleBytes ?? undefined });
+    const sliced = sampled.rows.slice(offsetRows, offsetRows + maxRows).map(coerceCsvRowObject);
+    return {
+      format: 'csv',
+      rows: sliced,
+      diagnostics: {
+        ...sampled.diagnostics,
+        scannedRows: sampled.rows.length,
+        returnedRows: sliced.length,
+      },
+    };
   }
 
   if (format !== 'json') {
@@ -671,6 +831,7 @@ export async function fetchKaggleTable(options?: {
   requestId?: string;
   offsetRows?: number;
   maxRows?: number;
+  sampleBytes?: number | null;
 }): Promise<KaggleFetchedTable> {
   const requestId = options?.requestId;
   const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
@@ -686,7 +847,7 @@ export async function fetchKaggleTable(options?: {
     if (source === 'URL' && url) {
       const { host, pathBase } = safeUrlInfo(url);
       console.info('[workout-library][kaggle] Kaggle source = URL', { requestId, host, pathBase });
-      return await fetchKaggleTableFromUrl(url, { requestId, offsetRows, maxRows });
+      return await fetchKaggleTableFromUrl(url, { requestId, offsetRows, maxRows, sampleBytes: options?.sampleBytes ?? null });
     }
 
     if (source === 'PATH' && localPath) {

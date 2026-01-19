@@ -20,8 +20,12 @@ type ApiFailure = {
     httpStatus?: number;
     urlHost?: string;
     urlPath?: string;
+    diagnostics?: Record<string, unknown>;
     step?: string;
     resolvedSource?: string;
+    headStatus?: number | null;
+    contentType?: string | null;
+    contentLength?: number | null;
   };
 };
 
@@ -34,6 +38,7 @@ export class ApiClientError extends Error {
   urlPath?: string;
   step?: string;
   resolvedSource?: string;
+  diagnostics?: Record<string, unknown>;
 
   constructor(
     status: number,
@@ -41,7 +46,7 @@ export class ApiClientError extends Error {
     message: string,
     requestId?: string,
     httpStatus?: number,
-    meta?: Pick<ApiFailure['error'], 'urlHost' | 'urlPath' | 'step' | 'resolvedSource'>
+    meta?: Pick<ApiFailure['error'], 'urlHost' | 'urlPath' | 'step' | 'resolvedSource' | 'diagnostics'>
   ) {
     super(message);
     this.status = status;
@@ -52,6 +57,7 @@ export class ApiClientError extends Error {
     this.urlPath = meta?.urlPath;
     this.step = meta?.step;
     this.resolvedSource = meta?.resolvedSource;
+    this.diagnostics = meta?.diagnostics;
   }
 }
 
@@ -112,6 +118,7 @@ export function useApi() {
           urlPath: failurePayload?.error?.urlPath,
           step: failurePayload?.error?.step,
           resolvedSource: failurePayload?.error?.resolvedSource,
+          diagnostics: failurePayload?.error?.diagnostics,
         });
       }
 

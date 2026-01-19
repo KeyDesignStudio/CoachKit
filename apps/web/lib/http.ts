@@ -22,6 +22,7 @@ type ApiFailure = {
     headStatus?: number | null;
     contentType?: string | null;
     contentLength?: number | null;
+    diagnostics?: Record<string, unknown>;
   };
 };
 
