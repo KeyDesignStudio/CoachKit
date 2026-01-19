@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { assertCoachOwnsAthlete, requireAuth } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
+import { syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -355,17 +356,6 @@ export async function POST(request: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    const summary: PollSummary = {
-      polledAthletes: 0,
-      fetched: 0,
-      created: 0,
-      updated: 0,
-      matched: 0,
-      createdCalendarItems: 0,
-      skippedExisting: 0,
-      errors: [],
-    };
-
     const url = new URL(request.url);
     const requestedAthleteId = url.searchParams.get('athleteId');
     const forceDaysParam = url.searchParams.get('forceDays');
@@ -375,12 +365,7 @@ export async function POST(request: NextRequest) {
         ? Math.min(30, Math.max(1, Math.floor(requestedForceDays)))
         : null;
 
-    let connections: Array<{
-      athleteId: string;
-      athleteTimezone: string;
-      coachId: string;
-      connection: any;
-    }> = [];
+    let connections: StravaConnectionEntry[] = [];
 
     if (user.role === UserRole.ATHLETE) {
       const [connection, athleteProfile] = await Promise.all([
@@ -389,7 +374,16 @@ export async function POST(request: NextRequest) {
       ]);
 
       if (!connection) {
-        return success({ ...summary, polledAthletes: 0 });
+        return success({
+          polledAthletes: 0,
+          fetched: 0,
+          created: 0,
+          updated: 0,
+          matched: 0,
+          createdCalendarItems: 0,
+          skippedExisting: 0,
+          errors: [],
+        });
       }
 
       if (!athleteProfile) {
@@ -405,7 +399,16 @@ export async function POST(request: NextRequest) {
         });
 
         if (!connection) {
-          return success({ ...summary, polledAthletes: 0 });
+          return success({
+            polledAthletes: 0,
+            fetched: 0,
+            created: 0,
+            updated: 0,
+            matched: 0,
+            createdCalendarItems: 0,
+            skippedExisting: 0,
+            errors: [],
+          });
         }
 
         connections = [{ athleteId: athlete.userId, athleteTimezone: athlete.user.timezone, coachId: user.id, connection }];
@@ -585,164 +588,6 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            if (
-              existing &&
-              existing.durationMinutes === durationMinutes &&
-              (existing.distanceKm ?? null) === (distanceKm ?? null) &&
-              new Date(existing.startTime).getTime() === startTime.getTime() &&
+            const summary = await syncStravaForConnections(connections, { forceDays });
+            return success(summary);
               !shouldUpdateStravaMetrics((existing.metricsJson as any)?.strava, stravaMetrics as any)
-            ) {
-              completed = existing;
-              summary.skippedExisting += 1;
-            } else {
-              const mergedStrava = {
-                ...(((existing?.metricsJson as any)?.strava && typeof (existing?.metricsJson as any)?.strava === 'object'
-                  ? ((existing?.metricsJson as any)?.strava as any)
-                  : {}) as Record<string, unknown>),
-                ...(stravaMetrics as any),
-              };
-
-              completed = await prisma.completedActivity.update({
-                where: {
-                  athleteId_source_externalActivityId: {
-                    athleteId: entry.athleteId,
-                    source: CompletionSource.STRAVA,
-                    externalActivityId,
-                  },
-                },
-                data: {
-                  startTime,
-                  durationMinutes,
-                  distanceKm,
-                  // Preserve any existing athlete notes; Strava fields belong in metricsJson.
-                  metricsJson: {
-                    ...(typeof existing?.metricsJson === 'object' && existing?.metricsJson ? (existing.metricsJson as any) : {}),
-                    strava: mergedStrava,
-                  },
-                },
-                select: {
-                  id: true,
-                  calendarItemId: true,
-                  durationMinutes: true,
-                  distanceKm: true,
-                  startTime: true,
-                  confirmedAt: true,
-                },
-              });
-              summary.updated += 1;
-            }
-          }
-
-          // Attempt to match to planned CalendarItem.
-          let calendarItemId: string | null = completed?.calendarItemId ?? null;
-
-          if (!calendarItemId) {
-            const match = await matchAndLinkCalendarItem({
-              athleteId: entry.athleteId,
-              activityDateOnly,
-              activityMinutes,
-              discipline,
-              completedActivityId: completed.id,
-              confirmedAt: completed.confirmedAt ?? null,
-            });
-
-            if (match.matched) {
-              summary.matched += 1;
-              calendarItemId = match.calendarItemId;
-            }
-          }
-
-          // Self-heal status in case older runs set it incorrectly (e.g. backfill over existing links).
-          if (calendarItemId) {
-            await ensureCalendarItemStatusForSyncedCompletion({
-              calendarItemId,
-              confirmedAt: completed.confirmedAt ?? null,
-            });
-          }
-
-          // Ensure every Strava activity has a visible CalendarItem (even if unplanned/unmatched).
-          if (!calendarItemId) {
-            const nextStatus = completed.confirmedAt
-              ? CalendarItemStatus.COMPLETED_SYNCED
-              : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
-
-            const plannedStartTimeLocal = minutesToTimeString(activityMinutes);
-            const title = (activity.name ?? '').trim() || 'Recorded activity';
-
-            const item = await prisma.calendarItem.upsert({
-              where: {
-                athleteId_origin_sourceActivityId: {
-                  athleteId: entry.athleteId,
-                  origin: 'STRAVA',
-                  sourceActivityId: externalActivityId,
-                },
-              },
-              create: {
-                athleteId: entry.athleteId,
-                coachId: entry.coachId,
-                date: activityDateOnly,
-                plannedStartTimeLocal,
-                origin: 'STRAVA',
-                planningStatus: 'UNPLANNED',
-                sourceActivityId: externalActivityId,
-                discipline,
-                subtype: stravaType ?? null,
-                title,
-                plannedDurationMinutes: durationMinutes,
-                plannedDistanceKm: distanceKm,
-                distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
-                status: nextStatus,
-              },
-              update: {
-                // Keep athlete-entered notes safe; only update provider-derived facts.
-                coachId: entry.coachId,
-                date: activityDateOnly,
-                plannedStartTimeLocal,
-                origin: 'STRAVA',
-                planningStatus: 'UNPLANNED',
-                sourceActivityId: externalActivityId,
-                discipline,
-                subtype: stravaType ?? null,
-                title,
-                plannedDurationMinutes: durationMinutes,
-                plannedDistanceKm: distanceKm,
-                distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
-                status: nextStatus,
-              },
-              select: { id: true },
-            });
-
-            // Link completion to the upserted CalendarItem.
-            await prisma.completedActivity.update({
-              where: { id: completed.id },
-              data: { calendarItemId: item.id },
-            });
-
-            summary.createdCalendarItems += 1;
-            calendarItemId = item.id;
-          }
-
-        }
-
-        await prisma.stravaConnection.update({
-          where: { id: refreshed.id },
-          data: { lastSyncAt: new Date() },
-        });
-      } catch (error: any) {
-        summary.errors.push({
-          athleteId: entry.athleteId,
-          message: error instanceof Error ? error.message : 'Strava poll failed.',
-        });
-
-        // If we hit Strava rate limiting, stop to be safe.
-        if (error?.status === 429 || error?.code === 'STRAVA_RATE_LIMITED') {
-          break;
-        }
-      }
-    }
-
-    return success(summary);
-  } catch (error) {
-    return handleError(error);
-  }
-}
