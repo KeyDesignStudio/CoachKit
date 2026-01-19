@@ -8,7 +8,7 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WorkoutLibrarySource') THEN
-    CREATE TYPE "WorkoutLibrarySource" AS ENUM ('MANUAL', 'KAGGLE', 'FREE_EXERCISE_DB');
+    CREATE TYPE "WorkoutLibrarySource" AS ENUM ('MANUAL');
   END IF;
 END $$;
 

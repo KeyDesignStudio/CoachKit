@@ -77,8 +77,6 @@ enum WorkoutLibrarySessionStatus {
 
 enum WorkoutLibrarySource {
   MANUAL
-  KAGGLE
-  FREE_EXERCISE_DB
 }
 
 model User {

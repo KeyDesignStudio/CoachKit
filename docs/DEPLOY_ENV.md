@@ -21,11 +21,7 @@ Important: never log or paste full connection strings.
 
 These are only needed if you plan to use specific admin-only features in Preview/Production.
 
-- `KAGGLE_DATA_URL` (optional)
-  - Used by `POST /api/admin/workout-library/import/kaggle` to fetch Kaggle rows in Vercel runtimes.
-  - The app logs only hostname/path basename (no secrets), but you should still treat the URL as sensitive if it includes signed query params.
-
-Note: `KAGGLE_DATA_PATH` is intended for local/dev/tests (file fixture) and should not be used in Vercel.
+External dataset ingestion sources will be reintroduced once a validated CSV dataset is selected.
 
 ## Preview vs Production
 

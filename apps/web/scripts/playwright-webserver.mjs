@@ -9,14 +9,6 @@ const port = process.argv[2] ? Number(process.argv[2]) : 3100;
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd(), true);
 
-// Ensure each Playwright run has a stable unique tag so Kaggle imports create rows
-// even when the local DB isn't wiped between runs.
-if (!process.env.KAGGLE_TEST_TAG) {
-  const now = Date.now();
-  const rand = Math.random().toString(16).slice(2, 8);
-  process.env.KAGGLE_TEST_TAG = `pw_${now}_${rand}`;
-}
-
 function run(cmd, args, { allowFailure = false } = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: false });
   if (result.status !== 0 && !allowFailure) {

@@ -171,67 +171,14 @@ These rules are enforced server-side to prevent accidental large or unsafe inges
 - Dry-run is supported and should be the default workflow.
 - Non-dry-run requires an explicit confirmation flag (`confirmApply`) from the UI.
 - All imported sessions are created as `DRAFT` (not visible to coaches).
-- Sessions are tagged with a `source` (e.g. `KAGGLE`, `FREE_EXERCISE_DB`, `MANUAL`).
+- Sessions are tagged with a `source` (`MANUAL`).
 - Imported sessions compute a deterministic `fingerprint` from the workout structure and are deduped:
   - Default behavior is to skip rows whose fingerprint already exists.
   - Import responses include `skippedExistingCount`.
 
 Coach endpoints only return `PUBLISHED` sessions; drafts are hidden from all coach views.
 
-### Free Exercise DB (Phase 1)
-
-This ingestion runs server-side (no dataset committed to the repo) and is Admin-only.
-
-- Dataset source (default): `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json`
-- Admin endpoint: `POST /api/admin/workout-library/import/free-exercise-db`
-  - Request: `{ dryRun: boolean, confirmApply?: boolean, limit?: number (<=500), offset?: number }`
-  - Dry-run is supported and should be the default.
-  - Apply requires `confirmApply=true`.
-  - Creates `DRAFT` sessions with `source=FREE_EXERCISE_DB`.
-  - Uses deterministic `fingerprint` idempotency.
-- Admin UI: `/admin/workout-library` → Import tab → “Import (Free Exercise DB)”
-
-Testing note:
-- Playwright uses a local fixture via `FREE_EXERCISE_DB_DATA_PATH=tests/fixtures/free-exercise-db-sample.json` to avoid network dependency.
-
----
-
-### Kaggle (Phase 2)
-
-This ingestion is Admin-only.
-
-- Admin endpoint: `POST /api/admin/workout-library/import/kaggle`
-  - Request: `{ dryRun: boolean, confirmApply?: boolean, maxRows?: number (<=2000), offset?: number }`
-  - Dry-run is supported and should be the default.
-  - Apply requires `confirmApply=true`.
-  - Creates `DRAFT` sessions with `source=KAGGLE`.
-
-Dataset configuration (no datasets committed to the repo):
-
-- Vercel Preview/Production: set `KAGGLE_DATA_URL` (see [docs/DEPLOY_ENV.md](docs/DEPLOY_ENV.md)).
-- Local/dev/tests: set `KAGGLE_DATA_PATH` to a local `.csv` path.
-
-Sampling + reliability (Vercel-safe):
-
-- The Kaggle CSV loader does a single HTTP Range GET of the first `KAGGLE_SAMPLE_BYTES` bytes (default 5MB, cap 20MB).
-- If a dry-run returns “Sample window too small”, increase `KAGGLE_SAMPLE_BYTES` and retry.
-- This avoids downloading the full dataset during Preview/Production imports.
-
-Kill switch:
-
-- Set `ENABLE_KAGGLE_IMPORT=false` to hide Kaggle from the Admin UI and make the import endpoint return `403 KAGGLE_DISABLED`.
-
-Health / troubleshooting:
-
-- `GET /api/admin/workout-library/import/kaggle/health` performs a Range probe (`bytes=0-0`) and a sample Range GET.
-- Use the returned `requestId` to correlate with server logs in Vercel.
-
-Observability:
-
-- The runtime logs a single line indicating `Kaggle source = URL` (hostname/path basename only) or `Kaggle source = PATH` (file basename only).
-- On failures, the API returns structured errors like `KAGGLE_NOT_CONFIGURED`, `KAGGLE_FETCH_FAILED`, `KAGGLE_PARSE_FAILED` with a `requestId` you can correlate in Vercel logs.
-
----
+External dataset ingestion sources will be reintroduced once a validated CSV dataset is selected.
 
 ## Semantic Mapping Contract (Pre-Ingestion)
 
@@ -298,20 +245,11 @@ Canonical equipment values:
 | `rower`, `erg`, `concept2` | `RowErg` |
 | unknown | `Other` |
 
-### Purging draft imports
-
-Admin Maintenance supports purging all draft imports for a source (useful for rollback if a dataset is wrong):
-
-- Location: `/admin/workout-library` → Maintenance
-- Action: “Purge draft imports by source”
-- Dry-run supported.
-- Apply requires confirmation text: `PURGE_<SOURCE>` (e.g. `PURGE_KAGGLE`).
-
 Admin UI import:
 - Location: `/admin/workout-library` → Import tab
 - Upload `.csv` or `.json`
 - Default is **dry-run** validation with per-row errors; import is blocked until errors are fixed.
-- You must select a `source`; imports create `DRAFT` sessions.
+- Imports create `DRAFT` sessions.
 - To apply (non-dry-run), you must explicitly confirm apply.
 
 CSV format:
