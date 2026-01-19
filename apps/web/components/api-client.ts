@@ -17,6 +17,15 @@ type ApiFailure = {
     code: string;
     message: string;
     requestId?: string;
+    httpStatus?: number;
+    urlHost?: string;
+    urlPath?: string;
+    diagnostics?: Record<string, unknown>;
+    step?: string;
+    resolvedSource?: string;
+    headStatus?: number | null;
+    contentType?: string | null;
+    contentLength?: number | null;
   };
 };
 
@@ -24,12 +33,31 @@ export class ApiClientError extends Error {
   status: number;
   code: string;
   requestId?: string;
+  httpStatus?: number;
+  urlHost?: string;
+  urlPath?: string;
+  step?: string;
+  resolvedSource?: string;
+  diagnostics?: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string, requestId?: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    requestId?: string,
+    httpStatus?: number,
+    meta?: Pick<ApiFailure['error'], 'urlHost' | 'urlPath' | 'step' | 'resolvedSource' | 'diagnostics'>
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    this.httpStatus = httpStatus;
+    this.urlHost = meta?.urlHost;
+    this.urlPath = meta?.urlPath;
+    this.step = meta?.step;
+    this.resolvedSource = meta?.resolvedSource;
+    this.diagnostics = meta?.diagnostics;
   }
 }
 
@@ -84,7 +112,14 @@ export function useApi() {
         const code = failurePayload?.error?.code ?? 'REQUEST_FAILED';
         const message = failurePayload?.error?.message ?? 'Request failed';
         const requestId = failurePayload?.error?.requestId;
-        throw new ApiClientError(response.status, code, message, requestId);
+        const httpStatus = failurePayload?.error?.httpStatus ?? response.status;
+        throw new ApiClientError(response.status, code, message, requestId, httpStatus, {
+          urlHost: failurePayload?.error?.urlHost,
+          urlPath: failurePayload?.error?.urlPath,
+          step: failurePayload?.error?.step,
+          resolvedSource: failurePayload?.error?.resolvedSource,
+          diagnostics: failurePayload?.error?.diagnostics,
+        });
       }
 
       return (payload as ApiResponse<T>).data;

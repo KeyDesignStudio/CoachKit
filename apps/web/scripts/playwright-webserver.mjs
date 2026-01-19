@@ -1,6 +1,13 @@
 import { spawnSync } from 'node:child_process';
+import nextEnv from '@next/env';
 
 const port = process.argv[2] ? Number(process.argv[2]) : 3100;
+
+// Ensure `.env`, `.env.local`, etc are loaded for this script.
+// Playwright's webServer env inherits from the parent process and may not include values that
+// Next would load automatically (e.g. DATABASE_URL in .env.local).
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd(), true);
 
 function run(cmd, args, { allowFailure = false } = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: false });

@@ -17,6 +17,12 @@ Set these in **Vercel → Project → Settings → Environment Variables**.
 
 Important: never log or paste full connection strings.
 
+## Optional environment variables (admin tooling)
+
+These are only needed if you plan to use specific admin-only features in Preview/Production.
+
+External dataset ingestion sources will be reintroduced once a validated CSV dataset is selected.
+
 ## Preview vs Production
 
 Vercel keeps separate values per environment:
