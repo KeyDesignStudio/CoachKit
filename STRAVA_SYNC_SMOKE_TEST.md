@@ -16,7 +16,7 @@ Goal: validate Strava **From Strava** fields + **draft until athlete confirms** 
 4) Unplanned activity visibility (trust fix):
    - In Strava, record an ad-hoc activity that has no matching planned session in CoachKit (e.g., create it on a day/time with no planned workout).
    - Run **Sync now** again.
-   - Expect: the activity appears as its own calendar entry with a "Recorded:" label (internally a CalendarItem with `origin=STRAVA`, `planningStatus=UNPLANNED`).
+   - Expect: the activity appears as its own calendar entry with an "(unscheduled)" suffix (internally a CalendarItem with `origin=STRAVA`, `planningStatus=UNPLANNED`).
    - Expect: no Strava activity is silently dropped even when matching fails.
 4) Draft workflow validation:
    - After sync, the matched planned item should show as “Strava detected / pending” (internally `COMPLETED_SYNCED_DRAFT`).

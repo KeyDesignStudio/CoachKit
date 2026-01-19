@@ -103,9 +103,7 @@ export function AthleteWeekSessionRow({
 
   const isRecordedFromStrava = item.origin === 'STRAVA' && item.planningStatus === 'UNPLANNED';
   const titleLabel = isRecordedFromStrava
-    ? item.title
-      ? `Recorded: ${item.title}`
-      : 'Recorded activity'
+    ? `${(item.title || 'Recorded activity').trim()} (unscheduled)`
     : item.title || disciplineLabel;
 
   const pain = item.latestCompletedActivity?.painFlag ?? false;
