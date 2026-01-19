@@ -94,6 +94,12 @@ type KaggleImportSummary = {
     creates: Array<{ title: string; fingerprint: string }>;
     skips: Array<{ title: string; fingerprint: string; reason: string }>;
   };
+  loader?: {
+    rangeRequests: number;
+    bytesFetchedTotal: number;
+    scannedRows: number;
+    contentType?: string | null;
+  };
   message?: string;
 };
 
@@ -295,9 +301,10 @@ export function AdminWorkoutLibrary() {
   const [kaggleOffsetText, setKaggleOffsetText] = useState('0');
   const [kaggleRunning, setKaggleRunning] = useState(false);
   const [kaggleError, setKaggleError] = useState<
-    { code: string; message: string; requestId?: string; httpStatus?: number } | null
+    { code: string; message: string; requestId?: string; httpStatus?: number; urlHost?: string; urlPath?: string; step?: string } | null
   >(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
+  const [kaggleHealthJson, setKaggleHealthJson] = useState<string | null>(null);
 
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
   const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
@@ -776,6 +783,9 @@ export function AdminWorkoutLibrary() {
             message: error.message,
             requestId: error.requestId,
             httpStatus: error.httpStatus ?? error.status,
+            urlHost: error.urlHost,
+            urlPath: error.urlPath,
+            step: error.step,
           });
         } else {
           setKaggleError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Kaggle import failed.' });
@@ -1399,6 +1409,15 @@ export function AdminWorkoutLibrary() {
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.httpStatus ? (
                         <div className="mt-1 text-xs text-red-800">HTTP: {kaggleError.httpStatus}</div>
                       ) : null}
+                      {kaggleError.code.startsWith('KAGGLE_') && kaggleError.urlHost ? (
+                        <div className="mt-1 text-xs text-red-800">Host: {kaggleError.urlHost}</div>
+                      ) : null}
+                      {kaggleError.code.startsWith('KAGGLE_') && kaggleError.urlPath ? (
+                        <div className="mt-1 text-xs text-red-800">Path: {kaggleError.urlPath}</div>
+                      ) : null}
+                      {kaggleError.code.startsWith('KAGGLE_') && kaggleError.step ? (
+                        <div className="mt-1 text-xs text-red-800">Step: {kaggleError.step}</div>
+                      ) : null}
                       <div className="mt-1 whitespace-pre-wrap">{kaggleError.message}</div>
                       {kaggleError.requestId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -1436,6 +1455,68 @@ export function AdminWorkoutLibrary() {
                           Retry
                         </Button>
                       </div>
+                    </div>
+                  ) : null}
+
+                  {debugEnabled && importSource === 'KAGGLE' ? (
+                    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-semibold">Debug Kaggle</div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={async () => {
+                            setKaggleHealthJson(null);
+                            try {
+                              const data = await request<any>(
+                                '/api/admin/workout-library/import/kaggle/health',
+                                { method: 'GET' }
+                              );
+                              setKaggleHealthJson(JSON.stringify(data, null, 2));
+                            } catch (error) {
+                              if (error instanceof ApiClientError) {
+                                setKaggleHealthJson(
+                                  JSON.stringify(
+                                    {
+                                      ok: false,
+                                      error: {
+                                        code: error.code,
+                                        message: error.message,
+                                        httpStatus: error.httpStatus ?? error.status,
+                                        requestId: error.requestId,
+                                        urlHost: error.urlHost,
+                                        urlPath: error.urlPath,
+                                        step: error.step,
+                                      },
+                                    },
+                                    null,
+                                    2
+                                  )
+                                );
+                              } else {
+                                setKaggleHealthJson(
+                                  JSON.stringify(
+                                    { ok: false, error: error instanceof Error ? error.message : String(error) },
+                                    null,
+                                    2
+                                  )
+                                );
+                              }
+                            }
+                          }}
+                        >
+                          Debug Kaggle
+                        </Button>
+                      </div>
+
+                      {kaggleHealthJson ? (
+                        <pre className="mt-2 max-h-56 overflow-auto rounded-xl border border-[var(--border-subtle)] bg-white p-2 text-[10px] text-[var(--text)]">
+                          {kaggleHealthJson}
+                        </pre>
+                      ) : (
+                        <div className="mt-2 text-[10px] text-[var(--muted)]">Click “Debug Kaggle” to fetch health JSON.</div>
+                      )}
                     </div>
                   ) : null}
 
@@ -1534,6 +1615,16 @@ export function AdminWorkoutLibrary() {
                 </div>
                 {kaggleResult.message ? (
                   <div className="mt-1 text-sm text-[var(--muted)]">{kaggleResult.message}</div>
+                ) : null}
+                {process.env.NODE_ENV !== 'production' &&
+                typeof window !== 'undefined' &&
+                new URLSearchParams(window.location.search).has('debugImport') &&
+                kaggleResult.loader ? (
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    Loader: {kaggleResult.loader.bytesFetchedTotal.toLocaleString()} bytes in{' '}
+                    {kaggleResult.loader.rangeRequests} request(s) • scannedRows {kaggleResult.loader.scannedRows}
+                    {kaggleResult.loader.contentType ? ` • ${kaggleResult.loader.contentType}` : ''}
+                  </div>
                 ) : null}
                 {!kaggleResult.dryRun && kaggleResult.createdCount > 0 ? (
                   <div className="mt-1 text-sm text-green-700">Imported {kaggleResult.createdCount} workouts from Kaggle.</div>

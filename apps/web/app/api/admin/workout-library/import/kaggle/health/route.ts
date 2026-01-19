@@ -6,12 +6,37 @@ import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 
 export const dynamic = 'force-dynamic';
 
-function safeUrlInfo(url: string): { urlHost: string; urlPathBasename: string } {
+function safeUrlInfo(url: string): { urlHost: string; urlPath: string } {
   const parsed = new URL(url);
   return {
     urlHost: parsed.hostname || 'unknown',
-    urlPathBasename: path.posix.basename(parsed.pathname || '') || 'unknown',
+    // Path only; do not include querystring.
+    urlPath: parsed.pathname || '/',
   };
+}
+
+type ResolvedSource = 'URL' | 'PATH' | 'NONE';
+
+function isVercelRuntime(): boolean {
+  return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+}
+
+function resolveSource():
+  | { resolvedSource: 'URL'; url: string }
+  | { resolvedSource: 'PATH'; filePath: string }
+  | { resolvedSource: 'NONE' } {
+  const localPath = (process.env.KAGGLE_DATA_PATH || '').trim();
+  const url = (process.env.KAGGLE_DATA_URL || '').trim();
+
+  const preferUrl = isVercelRuntime();
+  const pickOrder: Array<ResolvedSource> = preferUrl ? ['URL', 'PATH'] : ['PATH', 'URL'];
+
+  for (const source of pickOrder) {
+    if (source === 'URL' && url) return { resolvedSource: 'URL', url };
+    if (source === 'PATH' && localPath) return { resolvedSource: 'PATH', filePath: localPath };
+  }
+
+  return { resolvedSource: 'NONE' };
 }
 
 function parseContentLength(value: string | null): number | null {
@@ -36,37 +61,45 @@ export async function GET() {
 
   await requireWorkoutLibraryAdmin();
 
-  const url = process.env.KAGGLE_DATA_URL || '';
-  if (!url) {
+  const resolved = resolveSource();
+  if (resolved.resolvedSource !== 'URL') {
     return NextResponse.json(
       {
         ok: false,
+        resolvedSource: resolved.resolvedSource,
         httpStatus: null,
+        headStatus: null,
+        getStatus: null,
         contentType: null,
         contentLength: null,
         urlHost: null,
-        urlPathBasename: null,
+        urlPath: null,
         requestId,
       },
       { status: 200 }
     );
   }
 
+  const url = resolved.url;
+
   let urlHost = 'unknown';
-  let urlPathBasename = 'unknown';
+  let urlPath = '/';
   try {
     const info = safeUrlInfo(url);
     urlHost = info.urlHost;
-    urlPathBasename = info.urlPathBasename;
+    urlPath = info.urlPath;
   } catch {
     return NextResponse.json(
       {
         ok: false,
+        resolvedSource: 'URL',
         httpStatus: null,
+        headStatus: null,
+        getStatus: null,
         contentType: null,
         contentLength: null,
         urlHost: 'invalid-url',
-        urlPathBasename: 'invalid-url',
+        urlPath: 'invalid-url',
         requestId,
       },
       { status: 200 }
@@ -126,11 +159,14 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: Boolean(httpStatus && httpStatus >= 200 && httpStatus < 300),
+      resolvedSource: 'URL',
       httpStatus,
+      headStatus,
+      getStatus,
       contentType,
       contentLength,
       urlHost,
-      urlPathBasename,
+      urlPath,
       requestId,
     },
     { status: 200 }

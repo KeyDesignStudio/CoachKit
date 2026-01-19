@@ -18,6 +18,10 @@ type ApiFailure = {
     message: string;
     requestId?: string;
     httpStatus?: number;
+    urlHost?: string;
+    urlPath?: string;
+    step?: string;
+    resolvedSource?: string;
   };
 };
 
@@ -26,13 +30,28 @@ export class ApiClientError extends Error {
   code: string;
   requestId?: string;
   httpStatus?: number;
+  urlHost?: string;
+  urlPath?: string;
+  step?: string;
+  resolvedSource?: string;
 
-  constructor(status: number, code: string, message: string, requestId?: string, httpStatus?: number) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    requestId?: string,
+    httpStatus?: number,
+    meta?: Pick<ApiFailure['error'], 'urlHost' | 'urlPath' | 'step' | 'resolvedSource'>
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.requestId = requestId;
     this.httpStatus = httpStatus;
+    this.urlHost = meta?.urlHost;
+    this.urlPath = meta?.urlPath;
+    this.step = meta?.step;
+    this.resolvedSource = meta?.resolvedSource;
   }
 }
 
@@ -88,7 +107,12 @@ export function useApi() {
         const message = failurePayload?.error?.message ?? 'Request failed';
         const requestId = failurePayload?.error?.requestId;
         const httpStatus = failurePayload?.error?.httpStatus ?? response.status;
-        throw new ApiClientError(response.status, code, message, requestId, httpStatus);
+        throw new ApiClientError(response.status, code, message, requestId, httpStatus, {
+          urlHost: failurePayload?.error?.urlHost,
+          urlPath: failurePayload?.error?.urlPath,
+          step: failurePayload?.error?.step,
+          resolvedSource: failurePayload?.error?.resolvedSource,
+        });
       }
 
       return (payload as ApiResponse<T>).data;

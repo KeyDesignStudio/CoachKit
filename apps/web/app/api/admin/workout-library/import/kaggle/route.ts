@@ -8,7 +8,7 @@ import { failure, handleError, success } from '@/lib/http';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 import { deriveIntensityCategory } from '@/lib/workout-library-taxonomy';
 import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerprint';
-import { buildKaggleProgramTemplates, fetchKaggleTable } from '@/lib/ingestion/kaggle';
+import { buildKaggleProgramTemplates, fetchKaggleTable, type KaggleFetchedTable } from '@/lib/ingestion/kaggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +40,12 @@ type KaggleImportSummary = {
     creates: Array<{ title: string; fingerprint: string }>;
     skips: Array<{ title: string; fingerprint: string; reason: string }>;
   };
+  loader?: {
+    rangeRequests: number;
+    bytesFetchedTotal: number;
+    scannedRows: number;
+    contentType: string | null;
+  };
   message?: string;
 };
 
@@ -62,13 +68,25 @@ export async function POST(request: NextRequest) {
       return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400, requestId);
     }
 
-    const table = body.items && body.items.length > 0
-      ? { format: 'json' as const, rows: body.items.map((raw) => (raw && typeof raw === 'object' ? (raw as any) : {})) }
-      : await fetchKaggleTable({ requestId });
+    const coerceRow = (raw: unknown): Record<string, string> => {
+      if (!raw || typeof raw !== 'object') return {};
+      const obj = raw as Record<string, unknown>;
+      const out: Record<string, string> = {};
+      for (const key of Object.keys(obj)) {
+        const value = obj[key];
+        out[key] = value === null || value === undefined ? '' : String(value);
+      }
+      return out;
+    };
+
+    const table: KaggleFetchedTable =
+      body.items && body.items.length > 0
+        ? { format: 'json', rows: body.items.map(coerceRow) }
+        : await fetchKaggleTable({ requestId, offsetRows: body.offset, maxRows: body.maxRows });
 
     const program = buildKaggleProgramTemplates(table.rows, {
       maxGroups: body.maxRows,
-      offsetGroups: body.offset,
+      offsetGroups: 0,
     });
 
     if (!body.dryRun && program.summary.errors.length > 0) {
@@ -145,6 +163,14 @@ export async function POST(request: NextRequest) {
           creates: sampleCreates,
           skips: sampleSkips,
         },
+        loader: table.diagnostics
+          ? {
+              rangeRequests: table.diagnostics.rangeRequests,
+              bytesFetchedTotal: table.diagnostics.bytesFetchedTotal,
+              scannedRows: table.diagnostics.scannedRows,
+              contentType: table.diagnostics.contentType,
+            }
+          : undefined,
       };
 
       return success(summary);

@@ -9,9 +9,10 @@ function ensureTestOnly() {
   return null;
 }
 
-// Unclosed quote should generate a PapaParse error.
-const BAD_CSV = `title,description,level,goal,equipment,program_length,time_per_workout,week,day,number_of_exercises,exercise_name,sets,reps,intensity,created,last_edit
-"Bad Program,Day 1,Beginner,Strength,Dumbbells,4,45,1,1,1,Goblet Squat,3,10,RPE 7,2024-01-01,2024-01-02
+// Invalid quotes should generate a PapaParse error.
+// Put the invalid quoting in the header row so the loader fails immediately.
+const BAD_CSV = `title,"description
+Bad Program,ok
 `;
 
 export async function GET() {

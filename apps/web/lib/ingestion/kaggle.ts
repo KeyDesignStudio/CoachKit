@@ -33,6 +33,19 @@ function extractRows(payload: unknown): unknown[] {
 
 type KaggleDatasetFormat = 'csv' | 'json';
 
+type KaggleCsvRangeDiagnostics = {
+  scannedRows: number;
+  returnedRows: number;
+  bytesFetchedTotal: number;
+  rangeRequests: number;
+  contentType: string | null;
+  contentLength: number | null;
+  usedRange: boolean;
+  warning?: string;
+};
+
+type KaggleFetchStep = 'HEAD' | 'RANGE_GET' | 'PARSE' | 'VALIDATE';
+
 function detectFormatFromPathOrUrl(value: string): KaggleDatasetFormat | null {
   const lower = value.trim().toLowerCase();
   if (lower.endsWith('.csv')) return 'csv';
@@ -45,6 +58,23 @@ function detectFormatFromContentType(contentType: string | null | undefined): Ka
   if (ct.includes('text/csv') || ct.includes('application/csv') || ct.includes('text/plain')) return 'csv';
   if (ct.includes('application/json')) return 'json';
   return null;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const anyErr = error as any;
+  const name = String(anyErr.name || '');
+  if (name === 'AbortError') return true;
+  const msg = String(anyErr.message || '');
+  return msg.toLowerCase().includes('aborted') || msg.toLowerCase().includes('operation was aborted');
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
 }
 
 function parseCsvRows(text: string, options?: { requestId?: string }): Array<Record<string, string>> {
@@ -95,6 +125,300 @@ function parseContentLength(value: string | null): number | null {
   return parsed;
 }
 
+function findLastNewlineOutsideQuotes(text: string): number {
+  let inQuotes = false;
+  let lastSafe = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      // CSV escape: doubled quote inside quoted field.
+      if (inQuotes && text[i + 1] === '"') {
+        i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && ch === '\n') {
+      lastSafe = i;
+    }
+  }
+
+  return lastSafe;
+}
+
+function parseCsvChunkWithHeader(
+  chunk: string,
+  state: { header: string[] | null },
+  options?: { requestId?: string; urlHost?: string; urlPath?: string }
+): Array<Record<string, string>> {
+  const text = chunk.replace(/^\uFEFF/, '');
+
+  if (!state.header) {
+    const parsed = Papa.parse<string[]>(text, {
+      header: false,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+    });
+
+    if (parsed.errors && parsed.errors.length > 0) {
+      const top = parsed.errors.slice(0, 3).map((e) => ({
+        row: typeof e.row === 'number' ? e.row : undefined,
+        code: e.code ? String(e.code) : undefined,
+        message: e.message ? String(e.message) : 'CSV parse error.',
+      }));
+      throw new ApiError(
+        400,
+        'KAGGLE_PARSE_FAILED',
+        `Failed to parse Kaggle dataset CSV header (errors=${JSON.stringify(top)}).` +
+          (options?.requestId ? ` (requestId=${options.requestId})` : ''),
+        {
+          step: 'PARSE' satisfies KaggleFetchStep,
+          ...(options?.urlHost ? { urlHost: options.urlHost } : {}),
+          ...(options?.urlPath ? { urlPath: options.urlPath } : {}),
+        }
+      );
+    }
+
+    const rows = (parsed.data ?? []).filter((r) => Array.isArray(r) && r.some((v) => String(v ?? '').trim().length > 0)) as string[][];
+    if (rows.length === 0) return [];
+    state.header = rows[0].map((h) => String(h ?? '').trim());
+    const dataRows = rows.slice(1);
+    return dataRows.map((row) => {
+      const obj: Record<string, string> = {};
+      for (let i = 0; i < state.header!.length; i++) {
+        const key = state.header![i] || `col_${i}`;
+        obj[key] = row[i] === null || row[i] === undefined ? '' : String(row[i]);
+      }
+      return obj;
+    });
+  }
+
+  const parsed = Papa.parse<string[]>(text, {
+    header: false,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+  });
+
+  if (parsed.errors && parsed.errors.length > 0) {
+    const top = parsed.errors.slice(0, 3).map((e) => ({
+      row: typeof e.row === 'number' ? e.row : undefined,
+      code: e.code ? String(e.code) : undefined,
+      message: e.message ? String(e.message) : 'CSV parse error.',
+    }));
+    throw new ApiError(
+      400,
+      'KAGGLE_PARSE_FAILED',
+      `Failed to parse Kaggle dataset CSV chunk (errors=${JSON.stringify(top)}).` +
+        (options?.requestId ? ` (requestId=${options.requestId})` : ''),
+      {
+        step: 'PARSE' satisfies KaggleFetchStep,
+        ...(options?.urlHost ? { urlHost: options.urlHost } : {}),
+        ...(options?.urlPath ? { urlPath: options.urlPath } : {}),
+      }
+    );
+  }
+
+  const out: Array<Record<string, string>> = [];
+  const rows = (parsed.data ?? []).filter((r) => Array.isArray(r) && r.some((v) => String(v ?? '').trim().length > 0)) as string[][];
+  for (const row of rows) {
+    const obj: Record<string, string> = {};
+    for (let i = 0; i < state.header.length; i++) {
+      const key = state.header[i] || `col_${i}`;
+      obj[key] = row[i] === null || row[i] === undefined ? '' : String(row[i]);
+    }
+    out.push(obj);
+  }
+  return out;
+}
+
+export async function loadKaggleRowsCsvRange(options: {
+  url: string;
+  offset: number;
+  maxRows: number;
+  maxBytesPerRequest?: number;
+  requestId?: string;
+}): Promise<{ rows: Array<Record<string, string>>; diagnostics: KaggleCsvRangeDiagnostics; urlHost: string; urlPath: string }> {
+  const { host: urlHost } = safeUrlInfo(options.url);
+  const parsedUrl = new URL(options.url);
+  const urlPath = parsedUrl.pathname || '/';
+
+  const requestId = options.requestId;
+  const maxBytesPerRequest = Math.max(64 * 1024, Math.min(options.maxBytesPerRequest ?? 2 * 1024 * 1024, 8 * 1024 * 1024));
+
+  // HEAD: gather content-type/length for guards.
+  let headStatus: number | null = null;
+  let contentType: string | null = null;
+  let contentLength: number | null = null;
+  try {
+    const head = await fetchWithTimeout(
+      options.url,
+      {
+        method: 'HEAD',
+        cache: 'no-store',
+        headers: { accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8' },
+      },
+      10_000
+    );
+    headStatus = head.status;
+    contentType = head.headers.get('content-type');
+    contentLength = parseContentLength(head.headers.get('content-length'));
+  } catch (error) {
+    // Continue; HEAD is best-effort.
+    if (isAbortLikeError(error)) {
+      // Make abort visible, but don't block if GET works.
+      headStatus = null;
+    }
+  }
+
+  const diagnostics: KaggleCsvRangeDiagnostics = {
+    scannedRows: 0,
+    returnedRows: 0,
+    bytesFetchedTotal: 0,
+    rangeRequests: 0,
+    contentType,
+    contentLength,
+    usedRange: true,
+    ...(contentLength !== null && contentLength > 100 * 1024 * 1024
+      ? { warning: `contentLength=${contentLength} (>100MB). Range mode enabled; dry-run will stop early.` }
+      : {}),
+  };
+
+  const offset = Math.max(0, Math.trunc(options.offset));
+  const maxRows = Math.max(1, Math.trunc(options.maxRows));
+  const targetScanned = offset + maxRows;
+
+  let byteStart = 0;
+  let carry = '';
+  const state: { header: string[] | null } = { header: null };
+  const rowsOut: Array<Record<string, string>> = [];
+
+  // Loop over range GETs until we have enough rows (offset+maxRows) or EOF.
+  while (diagnostics.scannedRows < targetScanned) {
+    const byteEnd = byteStart + maxBytesPerRequest - 1;
+
+    let res: Response | null = null;
+    let attempt = 0;
+    const backoffs = [250, 750];
+    while (attempt < 3) {
+      attempt++;
+      try {
+        diagnostics.rangeRequests++;
+        const candidate = await fetchWithTimeout(
+          options.url,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+              accept: 'text/csv,application/csv,text/plain;q=0.9,*/*;q=0.8',
+              range: `bytes=${byteStart}-${byteEnd}`,
+            },
+          },
+          15_000
+        );
+
+        // Retry transient gateway errors.
+        if (isTransientStatus(candidate.status) && attempt < 3) {
+          await sleep(backoffs[Math.min(attempt - 1, backoffs.length - 1)]);
+          continue;
+        }
+
+        res = candidate;
+        break;
+      } catch (error) {
+        const transient = isAbortLikeError(error);
+        if (transient && attempt < 3) {
+          await sleep(backoffs[Math.min(attempt - 1, backoffs.length - 1)]);
+          continue;
+        }
+        throw new ApiError(
+          502,
+          'KAGGLE_FETCH_FAILED',
+          `Failed to fetch Kaggle dataset range (host=${urlHost}, error=${(error as any)?.message || 'network error'}).` +
+            (requestId ? ` (requestId=${requestId})` : ''),
+          { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+        );
+      }
+    }
+
+    if (!res) {
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset range (host=${urlHost}).` + (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+      );
+    }
+
+    // EOF.
+    if (res.status === 416) break;
+
+    // If the server ignored Range and returned 200, only allow small fallback.
+    if (res.status === 200) {
+      diagnostics.usedRange = false;
+      if (contentLength !== null && contentLength <= 5 * 1024 * 1024) {
+        const text = await res.text();
+        diagnostics.bytesFetchedTotal += Buffer.byteLength(text, 'utf8');
+        const safeCut = findLastNewlineOutsideQuotes(text);
+        const parseable = safeCut >= 0 ? text.slice(0, safeCut + 1) : text;
+        const parsedRows = parseCsvChunkWithHeader(parseable, state, { requestId, urlHost, urlPath });
+        for (const r of parsedRows) {
+          diagnostics.scannedRows++;
+          if (diagnostics.scannedRows > offset && rowsOut.length < maxRows) rowsOut.push(r);
+        }
+        break;
+      }
+
+      throw new ApiError(
+        400,
+        'KAGGLE_RANGE_UNSUPPORTED',
+        `Server does not support Range requests for Kaggle CSV (host=${urlHost}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+      );
+    }
+
+    if (!res.ok && res.status !== 206) {
+      throw new ApiError(
+        502,
+        'KAGGLE_FETCH_FAILED',
+        `Failed to fetch Kaggle dataset range (host=${urlHost}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
+          (requestId ? ` (requestId=${requestId})` : ''),
+        { urlHost, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
+      );
+    }
+
+    const chunkText = await res.text();
+    diagnostics.bytesFetchedTotal += Buffer.byteLength(chunkText, 'utf8');
+    carry += chunkText;
+
+    const safeCut = findLastNewlineOutsideQuotes(carry);
+    if (safeCut >= 0) {
+      const parseable = carry.slice(0, safeCut + 1);
+      carry = carry.slice(safeCut + 1);
+
+      const parsedRows = parseCsvChunkWithHeader(parseable, state, { requestId, urlHost, urlPath });
+      for (const r of parsedRows) {
+        diagnostics.scannedRows++;
+        if (diagnostics.scannedRows > offset && rowsOut.length < maxRows) {
+          rowsOut.push(r);
+        }
+        if (diagnostics.scannedRows >= targetScanned) break;
+      }
+    }
+
+    // Advance range window.
+    byteStart = byteEnd + 1;
+
+    // If we got an empty body, stop to avoid infinite loop.
+    if (!chunkText) break;
+  }
+
+  diagnostics.returnedRows = rowsOut.length;
+  return { rows: rowsOut, diagnostics, urlHost, urlPath };
+}
+
 function coerceCsvRowObject(row: unknown): Record<string, string> {
   if (!row || typeof row !== 'object') return {};
   const obj = row as Record<string, unknown>;
@@ -109,6 +433,7 @@ function coerceCsvRowObject(row: unknown): Record<string, string> {
 export type KaggleFetchedTable = {
   format: KaggleDatasetFormat;
   rows: Array<Record<string, string>>;
+  diagnostics?: KaggleCsvRangeDiagnostics;
 };
 
 function isVercelRuntime(): boolean {
@@ -134,31 +459,65 @@ function safeUrlInfo(url: string): { host: string; pathBase: string } {
 
 export async function fetchKaggleTableFromUrl(
   url: string,
-  options?: { requestId?: string }
+  options?: { requestId?: string; offsetRows?: number; maxRows?: number }
 ): Promise<KaggleFetchedTable> {
   const requestId = options?.requestId;
   const { host, pathBase } = safeUrlInfo(url);
+  const urlPath = new URL(url).pathname || '/';
 
   const formatFromUrl = detectFormatFromPathOrUrl(url);
 
-  // Best-effort HEAD first (useful for content-length, debugging, and fast failures).
-  // Do not fail the import on HEAD errors; some servers may not support HEAD.
+  // If URL suffix indicates CSV, go straight to Range loading.
+  if (formatFromUrl === 'csv') {
+    const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
+    const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
+    const ranged = await loadKaggleRowsCsvRange({ url, offset: offsetRows, maxRows, requestId });
+    return { format: 'csv', rows: ranged.rows.map(coerceCsvRowObject), diagnostics: ranged.diagnostics };
+  }
+
+  // If URL suffix indicates JSON, use a normal GET.
+  if (formatFromUrl === 'json') {
+    // fall through to JSON loader
+  }
+
+  // Otherwise, determine format using best-effort HEAD.
+  let headContentType: string | null = null;
   try {
-    await fetchWithTimeout(
+    const head = await fetchWithTimeout(
       url,
       {
         method: 'HEAD',
         cache: 'no-store',
-        headers: {
-          accept: 'text/csv,application/csv,application/json;q=0.9,*/*;q=0.8',
-        },
+        headers: { accept: 'text/csv,application/csv,application/json;q=0.9,*/*;q=0.8' },
       },
-      15_000
+      10_000
     );
+    headContentType = head.headers.get('content-type');
   } catch {
-    // Ignore.
+    // ignore
   }
 
+  const formatFromContentType = detectFormatFromContentType(headContentType);
+  const format = formatFromUrl ?? formatFromContentType;
+
+  if (format === 'csv') {
+    const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
+    const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
+    const ranged = await loadKaggleRowsCsvRange({ url, offset: offsetRows, maxRows, requestId });
+    return { format: 'csv', rows: ranged.rows.map(coerceCsvRowObject), diagnostics: ranged.diagnostics };
+  }
+
+  if (format !== 'json') {
+    throw new ApiError(
+      400,
+      'KAGGLE_UNSUPPORTED_FORMAT',
+      `Unsupported Kaggle dataset format (host=${host}, file=${pathBase}). Expected CSV or JSON.` +
+        (requestId ? ` (requestId=${requestId})` : ''),
+      { urlHost: host, urlPath, step: 'VALIDATE' satisfies KaggleFetchStep }
+    );
+  }
+
+  // JSON GET.
   let res: Response;
   try {
     res = await fetchWithTimeout(
@@ -166,9 +525,7 @@ export async function fetchKaggleTableFromUrl(
       {
         method: 'GET',
         cache: 'no-store',
-        headers: {
-          accept: 'text/csv,application/csv,application/json;q=0.9,*/*;q=0.8',
-        },
+        headers: { accept: 'application/json,*/*;q=0.8' },
       },
       30_000
     );
@@ -178,7 +535,8 @@ export async function fetchKaggleTableFromUrl(
       502,
       'KAGGLE_FETCH_FAILED',
       `Failed to fetch Kaggle dataset (host=${host}, error=${err?.message || 'network error'}).` +
-        (requestId ? ` (requestId=${requestId})` : '')
+        (requestId ? ` (requestId=${requestId})` : ''),
+      { urlHost: host, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
     );
   }
 
@@ -187,36 +545,9 @@ export async function fetchKaggleTableFromUrl(
       502,
       'KAGGLE_FETCH_FAILED',
       `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
-        (requestId ? ` (requestId=${requestId})` : '')
+        (requestId ? ` (requestId=${requestId})` : ''),
+      { urlHost: host, urlPath, step: 'RANGE_GET' satisfies KaggleFetchStep }
     );
-  }
-
-  const contentLength = parseContentLength(res.headers.get('content-length'));
-  const maxBytes = 50 * 1024 * 1024;
-  if (contentLength !== null && contentLength > maxBytes) {
-    throw new ApiError(
-      413,
-      'KAGGLE_TOO_LARGE',
-      `Kaggle dataset is too large to import (host=${host}, contentLength=${contentLength}, limit=${maxBytes}).` +
-        (requestId ? ` (requestId=${requestId})` : '')
-    );
-  }
-
-  const formatFromContentType = detectFormatFromContentType(res.headers.get('content-type'));
-  const format = formatFromUrl ?? formatFromContentType;
-
-  if (!format) {
-    throw new ApiError(
-      400,
-      'KAGGLE_UNSUPPORTED_FORMAT',
-      `Unsupported Kaggle dataset format (host=${host}, file=${pathBase}). Expected CSV or JSON.` +
-        (requestId ? ` (requestId=${requestId})` : '')
-    );
-  }
-
-  if (format === 'csv') {
-    const text = await res.text();
-    return { format: 'csv', rows: parseCsvRows(text, { requestId }).map(coerceCsvRowObject) };
   }
 
   // JSON
@@ -233,7 +564,8 @@ export async function fetchKaggleTableFromUrl(
     throw new ApiError(
       400,
       'KAGGLE_PARSE_FAILED',
-      `Failed to parse Kaggle dataset JSON (format=json, host=${host}).` + (requestId ? ` (requestId=${requestId})` : '')
+      `Failed to parse Kaggle dataset JSON (format=json, host=${host}).` + (requestId ? ` (requestId=${requestId})` : ''),
+      { urlHost: host, urlPath, step: 'PARSE' satisfies KaggleFetchStep }
     );
   }
 
@@ -250,7 +582,8 @@ export async function fetchKaggleTableFromUrl(
       400,
       'KAGGLE_PARSE_FAILED',
       `Kaggle dataset JSON has an unexpected shape (format=json, host=${host}).` +
-        (requestId ? ` (requestId=${requestId})` : '')
+        (requestId ? ` (requestId=${requestId})` : ''),
+      { urlHost: host, urlPath, step: 'VALIDATE' satisfies KaggleFetchStep }
     );
   }
 }
@@ -334,20 +667,93 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
   );
 }
 
-export async function fetchKaggleTable(options?: { requestId?: string }): Promise<KaggleFetchedTable> {
-  const rawRows = await fetchKaggleRows(options);
+export async function fetchKaggleTable(options?: {
+  requestId?: string;
+  offsetRows?: number;
+  maxRows?: number;
+}): Promise<KaggleFetchedTable> {
+  const requestId = options?.requestId;
+  const offsetRows = Math.max(0, Math.trunc(options?.offsetRows ?? 0));
+  const maxRows = Math.max(1, Math.trunc(options?.maxRows ?? 200));
 
-  // If fetchKaggleRows returned a CSV-parsed array, it's already [{header: value}].
-  if (Array.isArray(rawRows) && rawRows.length > 0 && typeof rawRows[0] === 'object' && rawRows[0] !== null) {
-    const first = rawRows[0] as Record<string, unknown>;
-    const likelyCsv = Object.keys(first).some((k) => typeof k === 'string' && k.length > 0);
-    if (likelyCsv) {
-      return { format: 'csv', rows: rawRows.map(coerceCsvRowObject) };
+  const localPath = process.env.KAGGLE_DATA_PATH || '';
+  const url = process.env.KAGGLE_DATA_URL || '';
+
+  const preferUrl = isVercelRuntime();
+  const pickOrder: Array<'URL' | 'PATH'> = preferUrl ? ['URL', 'PATH'] : ['PATH', 'URL'];
+
+  for (const source of pickOrder) {
+    if (source === 'URL' && url) {
+      const { host, pathBase } = safeUrlInfo(url);
+      console.info('[workout-library][kaggle] Kaggle source = URL', { requestId, host, pathBase });
+      return await fetchKaggleTableFromUrl(url, { requestId, offsetRows, maxRows });
+    }
+
+    if (source === 'PATH' && localPath) {
+      const resolved = path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
+      const fileBase = safeBasename(resolved);
+      console.info('[workout-library][kaggle] Kaggle source = PATH', { requestId, fileBase });
+
+      let text: string;
+      try {
+        text = await readFile(resolved, 'utf8');
+      } catch (error) {
+        console.error('[workout-library][kaggle] Read failed (PATH)', {
+          requestId,
+          fileBase,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+        });
+        throw new ApiError(400, 'KAGGLE_READ_FAILED', `Failed to read Kaggle dataset file (${fileBase}).`);
+      }
+
+      const format = detectFormatFromPathOrUrl(resolved);
+      if (!format) {
+        throw new ApiError(400, 'KAGGLE_UNSUPPORTED_FORMAT', `Unsupported Kaggle dataset format (${fileBase}). Expected .csv or .json.`);
+      }
+
+      if (format === 'csv') {
+        const all = parseCsvRows(text, { requestId }).map(coerceCsvRowObject);
+        const sliced = all.slice(offsetRows, offsetRows + maxRows);
+        return {
+          format: 'csv',
+          rows: sliced,
+          diagnostics: {
+            scannedRows: all.length,
+            returnedRows: sliced.length,
+            bytesFetchedTotal: Buffer.byteLength(text, 'utf8'),
+            rangeRequests: 0,
+            contentType: 'text/csv',
+            contentLength: Buffer.byteLength(text, 'utf8'),
+            usedRange: false,
+          },
+        };
+      }
+
+      // JSON
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch (error) {
+        console.error('[workout-library][kaggle] Parse failed (PATH JSON)', {
+          requestId,
+          fileBase,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+        });
+        throw new ApiError(400, 'KAGGLE_PARSE_FAILED', `Failed to parse Kaggle dataset JSON (format=json, file=${fileBase}).`);
+      }
+
+      const rows = extractRows(parsed).map(coerceCsvRowObject);
+      return { format: 'json', rows: rows.slice(offsetRows, offsetRows + maxRows) };
     }
   }
 
-  // Fallback: JSON rows that are objects.
-  return { format: 'json', rows: (rawRows ?? []).map(coerceCsvRowObject) };
+  throw new ApiError(
+    400,
+    'KAGGLE_NOT_CONFIGURED',
+    preferUrl
+      ? 'Kaggle dataset not configured. Set KAGGLE_DATA_URL (Vercel) or KAGGLE_DATA_PATH (local/dev/tests).'
+      : 'Kaggle dataset not configured. Set KAGGLE_DATA_PATH (local/dev/tests) or KAGGLE_DATA_URL.'
+  );
 }
 
 type RowError = { index: number; message: string };
