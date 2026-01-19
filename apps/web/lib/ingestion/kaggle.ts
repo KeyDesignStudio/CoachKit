@@ -47,7 +47,7 @@ function detectFormatFromContentType(contentType: string | null | undefined): Ka
   return null;
 }
 
-function parseCsvRows(text: string): Array<Record<string, string>> {
+function parseCsvRows(text: string, options?: { requestId?: string }): Array<Record<string, string>> {
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
@@ -55,16 +55,44 @@ function parseCsvRows(text: string): Array<Record<string, string>> {
   });
 
   if (parsed.errors && parsed.errors.length > 0) {
-    const first = parsed.errors[0];
+    const top = parsed.errors.slice(0, 3).map((e) => {
+      const row = typeof e.row === 'number' ? e.row : undefined;
+      const code = e.code ? String(e.code) : undefined;
+      const message = e.message ? String(e.message) : 'CSV parse error.';
+      return { ...(row !== undefined ? { row } : {}), ...(code ? { code } : {}), message };
+    });
+    const rowCount = Array.isArray(parsed.data) ? parsed.data.length : 0;
     throw new ApiError(
       400,
       'KAGGLE_PARSE_FAILED',
-      `Failed to parse Kaggle dataset CSV (format=csv). ${first.message || 'CSV parse error.'}`
+      `Failed to parse Kaggle dataset CSV (format=csv, rows=${rowCount}, errors=${JSON.stringify(top)}).` +
+        (options?.requestId ? ` (requestId=${options.requestId})` : '')
     );
   }
 
   const rows = (parsed.data ?? []).filter((row) => row && typeof row === 'object') as Array<Record<string, string>>;
   return rows;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseContentLength(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
 }
 
 function coerceCsvRowObject(row: unknown): Record<string, string> {
@@ -104,6 +132,129 @@ function safeUrlInfo(url: string): { host: string; pathBase: string } {
   }
 }
 
+export async function fetchKaggleTableFromUrl(
+  url: string,
+  options?: { requestId?: string }
+): Promise<KaggleFetchedTable> {
+  const requestId = options?.requestId;
+  const { host, pathBase } = safeUrlInfo(url);
+
+  const formatFromUrl = detectFormatFromPathOrUrl(url);
+
+  // Best-effort HEAD first (useful for content-length, debugging, and fast failures).
+  // Do not fail the import on HEAD errors; some servers may not support HEAD.
+  try {
+    await fetchWithTimeout(
+      url,
+      {
+        method: 'HEAD',
+        cache: 'no-store',
+        headers: {
+          accept: 'text/csv,application/csv,application/json;q=0.9,*/*;q=0.8',
+        },
+      },
+      15_000
+    );
+  } catch {
+    // Ignore.
+  }
+
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          accept: 'text/csv,application/csv,application/json;q=0.9,*/*;q=0.8',
+        },
+      },
+      30_000
+    );
+  } catch (error) {
+    const err = error as any;
+    throw new ApiError(
+      502,
+      'KAGGLE_FETCH_FAILED',
+      `Failed to fetch Kaggle dataset (host=${host}, error=${err?.message || 'network error'}).` +
+        (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+
+  if (!res.ok) {
+    throw new ApiError(
+      502,
+      'KAGGLE_FETCH_FAILED',
+      `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}${res.statusText ? `, statusText=${res.statusText}` : ''}).` +
+        (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+
+  const contentLength = parseContentLength(res.headers.get('content-length'));
+  const maxBytes = 50 * 1024 * 1024;
+  if (contentLength !== null && contentLength > maxBytes) {
+    throw new ApiError(
+      413,
+      'KAGGLE_TOO_LARGE',
+      `Kaggle dataset is too large to import (host=${host}, contentLength=${contentLength}, limit=${maxBytes}).` +
+        (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+
+  const formatFromContentType = detectFormatFromContentType(res.headers.get('content-type'));
+  const format = formatFromUrl ?? formatFromContentType;
+
+  if (!format) {
+    throw new ApiError(
+      400,
+      'KAGGLE_UNSUPPORTED_FORMAT',
+      `Unsupported Kaggle dataset format (host=${host}, file=${pathBase}). Expected CSV or JSON.` +
+        (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+
+  if (format === 'csv') {
+    const text = await res.text();
+    return { format: 'csv', rows: parseCsvRows(text, { requestId }).map(coerceCsvRowObject) };
+  }
+
+  // JSON
+  let parsed: unknown;
+  try {
+    parsed = (await res.json()) as unknown;
+  } catch (error) {
+    console.error('[workout-library][kaggle] Parse failed (URL JSON)', {
+      requestId,
+      host,
+      pathBase,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+    });
+    throw new ApiError(
+      400,
+      'KAGGLE_PARSE_FAILED',
+      `Failed to parse Kaggle dataset JSON (format=json, host=${host}).` + (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+
+  try {
+    return { format: 'json', rows: extractRows(parsed).map(coerceCsvRowObject) };
+  } catch (error) {
+    console.error('[workout-library][kaggle] Invalid payload shape (URL JSON)', {
+      requestId,
+      host,
+      pathBase,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
+    });
+    throw new ApiError(
+      400,
+      'KAGGLE_PARSE_FAILED',
+      `Kaggle dataset JSON has an unexpected shape (format=json, host=${host}).` +
+        (requestId ? ` (requestId=${requestId})` : '')
+    );
+  }
+}
+
 export async function fetchKaggleRows(options?: { requestId?: string }): Promise<unknown[]> {
   const requestId = options?.requestId;
 
@@ -117,88 +268,8 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
     if (source === 'URL' && url) {
       const { host, pathBase } = safeUrlInfo(url);
       console.info('[workout-library][kaggle] Kaggle source = URL', { requestId, host, pathBase });
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
-      try {
-        const res = await fetch(url, {
-          method: 'GET',
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: { accept: 'application/json' },
-        });
-
-        if (!res.ok) {
-          console.error('[workout-library][kaggle] Fetch failed', {
-            requestId,
-            host,
-            pathBase,
-            status: res.status,
-            statusText: res.statusText,
-          });
-          throw new ApiError(502, 'KAGGLE_FETCH_FAILED', `Failed to fetch Kaggle dataset (host=${host}, status=${res.status}).`);
-        }
-
-        const formatFromUrl = detectFormatFromPathOrUrl(url);
-        const formatFromContentType = detectFormatFromContentType(res.headers.get('content-type'));
-        const format = formatFromUrl ?? formatFromContentType;
-
-        if (!format) {
-          console.error('[workout-library][kaggle] Unsupported content-type', {
-            requestId,
-            host,
-            pathBase,
-            contentType: res.headers.get('content-type'),
-          });
-          throw new ApiError(400, 'KAGGLE_UNSUPPORTED_FORMAT', 'Unsupported Kaggle dataset format. Expected CSV or JSON.');
-        }
-
-        if (format === 'csv') {
-          const text = await res.text();
-          const rows = parseCsvRows(text).map(coerceCsvRowObject);
-          return rows;
-        }
-
-        // JSON
-        let parsed: unknown;
-        try {
-          parsed = (await res.json()) as unknown;
-        } catch (error) {
-          console.error('[workout-library][kaggle] Parse failed (URL JSON)', {
-            requestId,
-            host,
-            pathBase,
-            error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
-          });
-          throw new ApiError(400, 'KAGGLE_PARSE_FAILED', 'Failed to parse Kaggle dataset JSON (format=json).');
-        }
-
-        try {
-          return extractRows(parsed);
-        } catch (error) {
-          console.error('[workout-library][kaggle] Invalid payload shape (URL JSON)', {
-            requestId,
-            host,
-            pathBase,
-            error: error instanceof Error ? { name: error.name, message: error.message } : { value: error },
-          });
-          throw new ApiError(400, 'KAGGLE_PARSE_FAILED', 'Kaggle dataset JSON has an unexpected shape (format=json).');
-        }
-      } catch (error) {
-        if (error instanceof TypeError || (error && typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
-          const err = error as any;
-          console.error('[workout-library][kaggle] Network error', {
-            requestId,
-            host,
-            pathBase,
-            error: { name: err?.name, message: err?.message },
-          });
-          throw new ApiError(502, 'KAGGLE_FETCH_FAILED', `Failed to fetch Kaggle dataset (host=${host}).`);
-        }
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-      }
+      const table = await fetchKaggleTableFromUrl(url, { requestId });
+      return table.rows;
     }
 
     if (source === 'PATH' && localPath) {
@@ -224,7 +295,7 @@ export async function fetchKaggleRows(options?: { requestId?: string }): Promise
       }
 
       if (format === 'csv') {
-        return parseCsvRows(text).map(coerceCsvRowObject);
+        return parseCsvRows(text, { requestId }).map(coerceCsvRowObject);
       }
 
       // JSON

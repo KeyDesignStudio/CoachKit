@@ -294,7 +294,9 @@ export function AdminWorkoutLibrary() {
   const [kaggleMaxRowsText, setKaggleMaxRowsText] = useState('200');
   const [kaggleOffsetText, setKaggleOffsetText] = useState('0');
   const [kaggleRunning, setKaggleRunning] = useState(false);
-  const [kaggleError, setKaggleError] = useState<{ code: string; message: string; requestId?: string } | null>(null);
+  const [kaggleError, setKaggleError] = useState<
+    { code: string; message: string; requestId?: string; httpStatus?: number } | null
+  >(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
 
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
@@ -769,7 +771,12 @@ export function AdminWorkoutLibrary() {
         }
       } catch (error) {
         if (error instanceof ApiClientError) {
-          setKaggleError({ code: error.code, message: error.message, requestId: error.requestId });
+          setKaggleError({
+            code: error.code,
+            message: error.message,
+            requestId: error.requestId,
+            httpStatus: error.httpStatus ?? error.status,
+          });
         } else {
           setKaggleError({ code: 'IMPORT_FAILED', message: error instanceof Error ? error.message : 'Kaggle import failed.' });
         }
@@ -1389,6 +1396,9 @@ export function AdminWorkoutLibrary() {
                   {kaggleError ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <div className="font-semibold">Import failed: {kaggleError.code}</div>
+                      {kaggleError.code.startsWith('KAGGLE_') && kaggleError.httpStatus ? (
+                        <div className="mt-1 text-xs text-red-800">HTTP: {kaggleError.httpStatus}</div>
+                      ) : null}
                       <div className="mt-1 whitespace-pre-wrap">{kaggleError.message}</div>
                       {kaggleError.requestId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">

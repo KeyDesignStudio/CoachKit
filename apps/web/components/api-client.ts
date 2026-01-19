@@ -17,6 +17,7 @@ type ApiFailure = {
     code: string;
     message: string;
     requestId?: string;
+    httpStatus?: number;
   };
 };
 
@@ -24,12 +25,14 @@ export class ApiClientError extends Error {
   status: number;
   code: string;
   requestId?: string;
+  httpStatus?: number;
 
-  constructor(status: number, code: string, message: string, requestId?: string) {
+  constructor(status: number, code: string, message: string, requestId?: string, httpStatus?: number) {
     super(message);
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -84,7 +87,8 @@ export function useApi() {
         const code = failurePayload?.error?.code ?? 'REQUEST_FAILED';
         const message = failurePayload?.error?.message ?? 'Request failed';
         const requestId = failurePayload?.error?.requestId;
-        throw new ApiClientError(response.status, code, message, requestId);
+        const httpStatus = failurePayload?.error?.httpStatus ?? response.status;
+        throw new ApiClientError(response.status, code, message, requestId, httpStatus);
       }
 
       return (payload as ApiResponse<T>).data;

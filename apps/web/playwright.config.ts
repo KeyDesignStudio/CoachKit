@@ -22,7 +22,7 @@ export default defineConfig({
       DISABLE_AUTH: 'true',
       // Avoid external network dependency in tests.
       FREE_EXERCISE_DB_DATA_PATH: 'tests/fixtures/free-exercise-db-sample.json',
-      KAGGLE_DATA_PATH: 'tests/fixtures/kaggle-sample.csv',
+      KAGGLE_DATA_URL: `http://localhost:${PORT}/api/test/kaggle-fixtures/good.csv`,
     },
     port: PORT,
     reuseExistingServer: false,

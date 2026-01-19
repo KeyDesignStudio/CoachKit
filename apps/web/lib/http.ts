@@ -14,6 +14,7 @@ type ApiFailure = {
     code: string;
     message: string;
     requestId?: string;
+    httpStatus?: number;
   };
 };
 
@@ -23,7 +24,7 @@ export function success<T>(data: T, init?: ResponseInit) {
 
 export function failure(code: string, message: string, status = 400, requestId?: string) {
   return NextResponse.json<ApiFailure>(
-    { data: null, error: { code, message, ...(requestId ? { requestId } : {}) } },
+    { data: null, error: { code, message, httpStatus: status, ...(requestId ? { requestId } : {}) } },
     { status }
   );
 }
