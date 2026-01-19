@@ -116,6 +116,16 @@ type KaggleImportSummary = {
   message?: string;
 };
 
+type KaggleImportConfig = {
+  enabled: boolean;
+  enabledSource: 'default' | 'env' | 'cookie';
+  sampleBytes: number;
+  sampleMb: number;
+  sampleSource: 'default' | 'env' | 'cookie';
+  sampleDefaultBytes: number;
+  sampleCapBytes: number;
+};
+
 const DISCIPLINES: Discipline[] = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'];
 
 function splitCommaList(text: string): string[] {
@@ -327,6 +337,8 @@ export function AdminWorkoutLibrary() {
   >(null);
   const [kaggleResult, setKaggleResult] = useState<KaggleImportSummary | null>(null);
   const [kaggleHealthJson, setKaggleHealthJson] = useState<string | null>(null);
+  const [kaggleConfig, setKaggleConfig] = useState<KaggleImportConfig | null>(null);
+  const [kaggleConfigError, setKaggleConfigError] = useState<string | null>(null);
 
   const [maintenanceDryRun, setMaintenanceDryRun] = useState(true);
   const [maintenancePurgeSource, setMaintenancePurgeSource] = useState<'KAGGLE' | 'FREE_EXERCISE_DB'>('KAGGLE');
@@ -414,6 +426,38 @@ export function AdminWorkoutLibrary() {
   useEffect(() => {
     if (kaggleDryRun) setKaggleConfirmApply(false);
   }, [kaggleDryRun]);
+
+  useEffect(() => {
+    if (activeRightTab !== 'import') return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await request<KaggleImportConfig>(
+          '/api/admin/workout-library/import/kaggle/config',
+          { cache: 'no-store' }
+        );
+        if (cancelled) return;
+        setKaggleConfig(data);
+        setKaggleConfigError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setKaggleConfig(null);
+        setKaggleConfigError(error instanceof Error ? error.message : 'Failed to load Kaggle config.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRightTab, request]);
+
+  useEffect(() => {
+    if (!kaggleConfig) return;
+    if (kaggleConfig.enabled) return;
+    if (importSource !== 'KAGGLE') return;
+    setImportSource('MANUAL');
+  }, [importSource, kaggleConfig]);
 
   const startCreate = useCallback(() => {
     setSelectedId(null);
@@ -1277,13 +1321,16 @@ export function AdminWorkoutLibrary() {
                             setFreeExerciseDbOk(null);
                             setFreeExerciseDbIdempotencyHint(null);
                             setFreeExerciseDbLastApply(null);
+                            setKaggleError(null);
+                            setKaggleResult(null);
+                            setKaggleHealthJson(null);
                             setPublishError(null);
                             setPublishOk(null);
                             setPublishImportConfirmText('');
                           }}
                         >
                           <option value="MANUAL">MANUAL</option>
-                          <option value="KAGGLE">KAGGLE</option>
+                          {kaggleConfig?.enabled === false ? null : <option value="KAGGLE">KAGGLE</option>}
                           <option value="FREE_EXERCISE_DB">FREE_EXERCISE_DB</option>
                         </Select>
                       </label>
@@ -1365,15 +1412,26 @@ export function AdminWorkoutLibrary() {
                     ) : null}
 
                     {importSource === 'KAGGLE' ? (
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                          <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
-                          <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
-                        </label>
-                        <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
-                          <span className="text-xs text-[var(--muted)]">Offset</span>
-                          <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
-                        </label>
+                      <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                            <span className="text-xs text-[var(--muted)]">Limit (default 200, max 2000)</span>
+                            <Input value={kaggleMaxRowsText} onChange={(e) => setKaggleMaxRowsText(e.target.value)} />
+                          </label>
+                          <label className="flex flex-col gap-1 text-sm text-[var(--text)]">
+                            <span className="text-xs text-[var(--muted)]">Offset</span>
+                            <Input value={kaggleOffsetText} onChange={(e) => setKaggleOffsetText(e.target.value)} />
+                          </label>
+                        </div>
+
+                        <div data-testid="kaggle-sampling-microcopy" className="text-xs text-[var(--muted)]">
+                          Sampling window:{' '}
+                          {kaggleConfig
+                            ? `${kaggleConfig.sampleMb}MB${kaggleConfig.sampleSource === 'default' ? ' (default)' : ' (configured)'}`
+                            : '…'}
+                          . Kaggle dry-run only reads the first N MB via a single HTTP Range request. If you see “Sample window too small”, increase KAGGLE_SAMPLE_BYTES (cap 20MB).
+                          {kaggleConfigError ? ` (config error: ${kaggleConfigError})` : ''}
+                        </div>
                       </div>
                     ) : null}
 
@@ -1427,19 +1485,27 @@ export function AdminWorkoutLibrary() {
                     </div>
                   ) : null}
                   {kaggleError ? (
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      <div className="font-semibold">Import failed: {kaggleError.code}</div>
+                    <div
+                      className={
+                        kaggleError.code === 'KAGGLE_DISABLED'
+                          ? 'rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800'
+                          : 'rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700'
+                      }
+                    >
+                      <div className="font-semibold">
+                        {kaggleError.code === 'KAGGLE_DISABLED' ? 'Kaggle import disabled' : `Import failed: ${kaggleError.code}`}
+                      </div>
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.httpStatus ? (
-                        <div className="mt-1 text-xs text-red-800">HTTP: {kaggleError.httpStatus}</div>
+                        <div className="mt-1 text-xs">HTTP: {kaggleError.httpStatus}</div>
                       ) : null}
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.urlHost ? (
-                        <div className="mt-1 text-xs text-red-800">Host: {kaggleError.urlHost}</div>
+                        <div className="mt-1 text-xs">Host: {kaggleError.urlHost}</div>
                       ) : null}
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.urlPath ? (
-                        <div className="mt-1 text-xs text-red-800">Path: {kaggleError.urlPath}</div>
+                        <div className="mt-1 text-xs">Path: {kaggleError.urlPath}</div>
                       ) : null}
                       {kaggleError.code.startsWith('KAGGLE_') && kaggleError.step ? (
-                        <div className="mt-1 text-xs text-red-800">Step: {kaggleError.step}</div>
+                        <div className="mt-1 text-xs">Step: {kaggleError.step}</div>
                       ) : null}
                       <div className="mt-1 whitespace-pre-wrap">{kaggleError.message}</div>
 
@@ -1452,7 +1518,7 @@ export function AdminWorkoutLibrary() {
 
                       {kaggleError.diagnostics ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="text-red-800">Diagnostics available</span>
+                          <span>Diagnostics available</span>
                           <Button
                             type="button"
                             size="sm"
@@ -1468,7 +1534,7 @@ export function AdminWorkoutLibrary() {
 
                       {kaggleError.requestId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="text-red-800">Request ID: {kaggleError.requestId}</span>
+                          <span>Request ID: {kaggleError.requestId}</span>
                           <Button
                             type="button"
                             size="sm"
@@ -1483,25 +1549,27 @@ export function AdminWorkoutLibrary() {
                           </Button>
                         </div>
                       ) : null}
-                      <div className="mt-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            if (importDryRun) {
-                              void onKaggleImport(true, false);
-                              return;
-                            }
-                            if (importConfirmApply) {
-                              void onKaggleImport(false, true);
-                            }
-                          }}
-                          disabled={kaggleRunning || (!importDryRun && !importConfirmApply)}
-                        >
-                          Retry
-                        </Button>
-                      </div>
+                      {kaggleError.code === 'KAGGLE_DISABLED' ? null : (
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (importDryRun) {
+                                void onKaggleImport(true, false);
+                                return;
+                              }
+                              if (importConfirmApply) {
+                                void onKaggleImport(false, true);
+                              }
+                            }}
+                            disabled={kaggleRunning || (!importDryRun && !importConfirmApply)}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ) : null}
 

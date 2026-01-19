@@ -24,6 +24,28 @@ const bodySchema = z.object({
   items: z.array(z.unknown()).optional(),
 });
 
+function parseBooleanish(raw: string): boolean | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+  return null;
+}
+
+function isKaggleImportEnabled(request: NextRequest): boolean {
+  const env = parseBooleanish(process.env.ENABLE_KAGGLE_IMPORT ?? '');
+  let enabled = env ?? true;
+
+  // Test-only override: allow Playwright to flip enabled/disabled per-browser-context.
+  if (process.env.DISABLE_AUTH === 'true') {
+    const cookie = request.cookies.get('coachkit-kaggle-import-enabled')?.value;
+    const parsed = cookie ? parseBooleanish(cookie) : null;
+    if (parsed !== null) enabled = parsed;
+  }
+
+  return enabled;
+}
+
 type KaggleImportSummary = {
   source: 'KAGGLE';
   dryRun: boolean;
@@ -89,6 +111,15 @@ export async function POST(request: NextRequest) {
   const requestId = randomUUID();
   try {
     const { user } = await requireWorkoutLibraryAdmin();
+
+    if (!isKaggleImportEnabled(request)) {
+      return failure(
+        'KAGGLE_DISABLED',
+        'Kaggle import is disabled (ENABLE_KAGGLE_IMPORT=false).',
+        403,
+        requestId
+      );
+    }
 
     const body = bodySchema.parse(await request.json());
 

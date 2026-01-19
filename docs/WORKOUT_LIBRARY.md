@@ -209,7 +209,22 @@ This ingestion is Admin-only.
 Dataset configuration (no datasets committed to the repo):
 
 - Vercel Preview/Production: set `KAGGLE_DATA_URL` (see [docs/DEPLOY_ENV.md](docs/DEPLOY_ENV.md)).
-- Local/dev/tests: set `KAGGLE_DATA_PATH` to a JSON fixture file.
+- Local/dev/tests: set `KAGGLE_DATA_PATH` to a local `.csv` path.
+
+Sampling + reliability (Vercel-safe):
+
+- The Kaggle CSV loader does a single HTTP Range GET of the first `KAGGLE_SAMPLE_BYTES` bytes (default 5MB, cap 20MB).
+- If a dry-run returns “Sample window too small”, increase `KAGGLE_SAMPLE_BYTES` and retry.
+- This avoids downloading the full dataset during Preview/Production imports.
+
+Kill switch:
+
+- Set `ENABLE_KAGGLE_IMPORT=false` to hide Kaggle from the Admin UI and make the import endpoint return `403 KAGGLE_DISABLED`.
+
+Health / troubleshooting:
+
+- `GET /api/admin/workout-library/import/kaggle/health` performs a Range probe (`bytes=0-0`) and a sample Range GET.
+- Use the returned `requestId` to correlate with server logs in Vercel.
 
 Observability:
 

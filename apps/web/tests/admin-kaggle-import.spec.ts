@@ -16,6 +16,20 @@ async function setRoleCookie(page: import('@playwright/test').Page, role: Role) 
   ]);
 }
 
+async function setTestCookie(page: import('@playwright/test').Page, name: string, value: string) {
+  await page.context().addCookies([
+    {
+      name,
+      value,
+      domain: 'localhost',
+      path: '/',
+      httpOnly: false,
+      secure: false,
+      sameSite: 'Lax',
+    },
+  ]);
+}
+
 async function expectOk(res: import('@playwright/test').APIResponse, label: string) {
   if (res.ok()) return;
   const status = res.status();
@@ -52,6 +66,50 @@ test.describe('Admin Kaggle ingestion', () => {
     await page.getByTestId('admin-import-dryrun-toggle').check();
     await page.getByTestId('admin-import-run-dryrun').click();
     await expect(page.getByText(/Would create\s+0/)).toBeVisible();
+  });
+
+  test('shows sampling window microcopy (config-driven)', async ({ page }) => {
+    await setRoleCookie(page, 'ADMIN');
+
+    // Test-only override (enabled when DISABLE_AUTH=true): renders a non-default sampling window.
+    await setTestCookie(page, 'coachkit-kaggle-sample-bytes', String(10 * 1024 * 1024));
+
+    await page.goto('/admin/workout-library');
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/admin/workout-library/import/kaggle/config') && r.ok()),
+      page.getByTestId('admin-workout-library-import').click(),
+    ]);
+
+    await page.getByTestId('admin-import-source').selectOption('KAGGLE');
+    await expect(page.getByTestId('kaggle-sampling-microcopy')).toContainText('10MB');
+  });
+
+  test('kill switch hides UI option and API returns KAGGLE_DISABLED', async ({ page }) => {
+    await setRoleCookie(page, 'ADMIN');
+
+    // Test-only override (enabled when DISABLE_AUTH=true): disables Kaggle import.
+    await setTestCookie(page, 'coachkit-kaggle-import-enabled', 'false');
+
+    await page.goto('/admin/workout-library');
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/admin/workout-library/import/kaggle/config') && r.ok()),
+      page.getByTestId('admin-workout-library-import').click(),
+    ]);
+
+    await expect(page.locator('select[data-testid="admin-import-source"] option[value="KAGGLE"]')).toHaveCount(0);
+
+    const res = await page.request.post('/api/admin/workout-library/import/kaggle', {
+      data: {
+        dryRun: true,
+        confirmApply: false,
+        maxRows: 50,
+        offset: 0,
+      },
+    });
+
+    expect(res.status()).toBe(403);
+    const json = (await res.json()) as any;
+    expect(json?.error?.code).toBe('KAGGLE_DISABLED');
   });
 
   test('returns KAGGLE_SAMPLE_TOO_SMALL when sample window is tiny', async ({ page }) => {

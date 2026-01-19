@@ -1,11 +1,33 @@
 import { randomUUID } from 'crypto';
 import path from 'path';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function parseBooleanish(raw: string): boolean | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+  return null;
+}
+
+function isKaggleImportEnabled(request: NextRequest): boolean {
+  const env = parseBooleanish(process.env.ENABLE_KAGGLE_IMPORT ?? '');
+  let enabled = env ?? true;
+
+  // Test-only override: allow Playwright to flip enabled/disabled per-browser-context.
+  if (process.env.DISABLE_AUTH === 'true') {
+    const cookie = request.cookies.get('coachkit-kaggle-import-enabled')?.value;
+    const parsed = cookie ? parseBooleanish(cookie) : null;
+    if (parsed !== null) enabled = parsed;
+  }
+
+  return enabled;
+}
 
 function safeUrlInfo(url: string): { urlHost: string; urlPath: string } {
   const parsed = new URL(url);
@@ -77,10 +99,21 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const requestId = randomUUID();
 
   await requireWorkoutLibraryAdmin();
+
+  if (!isKaggleImportEnabled(request)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: 'KAGGLE_DISABLED', message: 'Kaggle import is disabled (ENABLE_KAGGLE_IMPORT=false).' },
+        requestId,
+      },
+      { status: 403 }
+    );
+  }
 
   const resolved = resolveSource();
   if (resolved.resolvedSource !== 'URL') {
