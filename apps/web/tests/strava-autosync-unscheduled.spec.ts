@@ -39,7 +39,7 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(calBefore.ok()).toBeTruthy();
     const calBeforeJson = await calBefore.json();
-    const titlesBefore = (calBeforeJson.items ?? []).map((i: any) => i.title);
+    const titlesBefore = (calBeforeJson.data?.items ?? []).map((i: any) => i.title);
     expect(titlesBefore.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
 
     // Backfill endpoint should surface it and remain idempotent (safety net).
@@ -59,7 +59,7 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(calAfter.ok()).toBeTruthy();
     const calAfterJson = await calAfter.json();
-    const titlesAfter = (calAfterJson.items ?? []).map((i: any) => i.title);
+    const titlesAfter = (calAfterJson.data?.items ?? []).map((i: any) => i.title);
     expect(titlesAfter.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeTruthy();
 
     // Repeat cron; should not duplicate.
@@ -76,7 +76,7 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(calAfter2.ok()).toBeTruthy();
     const calAfter2Json = await calAfter2.json();
-    const titlesAfter2 = (calAfter2Json.items ?? []).map((i: any) => i.title);
+    const titlesAfter2 = (calAfter2Json.data?.items ?? []).map((i: any) => i.title);
     expect(titlesAfter2.filter((t: string) => t.includes('PW Unscheduled Strength'))).toHaveLength(1);
   });
 });
