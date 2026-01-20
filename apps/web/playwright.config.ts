@@ -10,6 +10,7 @@ export default defineConfig({
   },
   use: {
     baseURL: `http://localhost:${PORT}`,
+    timezoneId: 'UTC',
     trace: 'retain-on-failure',
   },
   webServer: {
@@ -20,6 +21,10 @@ export default defineConfig({
       ...process.env,
       NODE_ENV: 'development',
       DISABLE_AUTH: 'true',
+      STRAVA_AUTOSYNC_ENABLED: process.env.STRAVA_AUTOSYNC_ENABLED ?? '1',
+      CRON_SECRET: process.env.CRON_SECRET ?? 'playwright-cron-secret',
+      STRAVA_WEBHOOK_VERIFY_TOKEN: process.env.STRAVA_WEBHOOK_VERIFY_TOKEN ?? 'playwright-webhook-token',
+      STRAVA_STUB: process.env.STRAVA_STUB ?? 'true',
     },
     port: PORT,
     reuseExistingServer: false,

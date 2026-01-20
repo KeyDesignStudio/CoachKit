@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
-import { handleError, success } from '@/lib/http';
-import { syncStravaActivityById, syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
+import { handleError } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
+
+function isAutosyncEnabled() {
+  return process.env.STRAVA_AUTOSYNC_ENABLED !== '0';
+}
 
 type StravaWebhookEvent = {
   aspect_type?: 'create' | 'update' | 'delete';
@@ -16,6 +20,16 @@ type StravaWebhookEvent = {
   subscription_id?: number;
   updates?: Record<string, unknown>;
 };
+
+const stravaWebhookEventSchema = z.object({
+  aspect_type: z.enum(['create', 'update', 'delete']).optional(),
+  event_time: z.number().int().optional(),
+  object_id: z.number().int().optional(),
+  object_type: z.enum(['activity', 'athlete']).optional(),
+  owner_id: z.number().int().optional(),
+  subscription_id: z.number().int().optional(),
+  updates: z.record(z.unknown()).optional(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,9 +55,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Strava expects a 2xx quickly; do best-effort ingestion.
+  // Strava expects a 2xx quickly; do not run heavy sync inline.
   try {
-    const event = (await request.json()) as StravaWebhookEvent;
+    if (!isAutosyncEnabled()) {
+      return NextResponse.json({ ok: true, disabled: true }, { status: 200 });
+    }
+
+    const event = stravaWebhookEventSchema.parse((await request.json()) as StravaWebhookEvent);
 
     if (event.object_type !== 'activity') {
       return NextResponse.json({ ok: true }, { status: 200 });
@@ -58,51 +76,34 @@ export async function POST(request: NextRequest) {
 
     const connection = await prisma.stravaConnection.findUnique({
       where: { stravaAthleteId: ownerId },
-      select: {
-        id: true,
-        athleteId: true,
-        accessToken: true,
-        refreshToken: true,
-        expiresAt: true,
-        scope: true,
-        lastSyncAt: true,
-        athlete: {
-          select: {
-            coachId: true,
-            user: { select: { timezone: true } },
-          },
-        },
-      },
+      select: { athleteId: true },
     });
 
     if (!connection) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const entry: StravaConnectionEntry = {
-      athleteId: connection.athleteId,
-      athleteTimezone: connection.athlete.user.timezone ?? 'Australia/Brisbane',
-      coachId: connection.athlete.coachId,
-      connection: {
-        id: connection.id,
-        accessToken: connection.accessToken,
-        refreshToken: connection.refreshToken,
-        expiresAt: connection.expiresAt,
-        scope: connection.scope,
-        lastSyncAt: connection.lastSyncAt,
+    const now = new Date();
+    const eventTime = typeof event.event_time === 'number' ? new Date(event.event_time * 1000) : now;
+
+    // Debounced intent per athlete: webhook just marks pending.
+    await prisma.stravaSyncIntent.upsert({
+      where: { athleteId: connection.athleteId },
+      create: {
+        athleteId: connection.athleteId,
+        pending: true,
+        lastEventAt: eventTime,
+        lastActivityId: activityId,
       },
-    };
+      update: {
+        pending: true,
+        lastEventAt: eventTime,
+        lastActivityId: activityId,
+        nextAttemptAt: null,
+      },
+    });
 
-    // If we have an activity id, ingest just that activity (best for rename/update events).
-    if (activityId && (event.aspect_type === 'create' || event.aspect_type === 'update')) {
-      const summary = await syncStravaActivityById(entry, activityId);
-      return success({ ok: true, mode: 'activity', summary });
-    }
-
-    // Fallback: do a small backfill for this athlete.
-    const fallbackForceDays = event.aspect_type === 'update' ? 30 : 2;
-    const summary = await syncStravaForConnections([entry], { forceDays: fallbackForceDays });
-    return success({ ok: true, mode: 'poll', summary });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     // Avoid webhook retry storms; still surface errors in response for debugging.
     console.error('Strava webhook failed', error);

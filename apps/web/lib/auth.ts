@@ -37,8 +37,20 @@ function getRoleCookie(): UserRole {
 }
 
 async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> {
+  const preferredId =
+    role === UserRole.ATHLETE
+      ? 'dev-athlete'
+      : role === UserRole.COACH
+        ? 'dev-coach'
+        : role === UserRole.ADMIN
+          ? 'dev-admin'
+          : null;
+
   const user = await prisma.user.findFirst({
-    where: { role },
+    where: {
+      role,
+      ...(preferredId ? { id: preferredId } : {}),
+    },
     select: {
       id: true,
       role: true,
@@ -49,15 +61,29 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
     },
   });
 
-  if (user) {
+  const fallbackUser =
+    user ??
+    (await prisma.user.findFirst({
+      where: { role },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        name: true,
+        timezone: true,
+        authProviderId: true,
+      },
+    }));
+
+  if (fallbackUser) {
     return {
       user: {
-        id: user.id,
-        role: user.role,
-        email: user.email,
-        name: user.name,
-        timezone: user.timezone,
-        authProviderId: user.authProviderId ?? `dev-${role.toLowerCase()}`,
+        id: fallbackUser.id,
+        role: fallbackUser.role,
+        email: fallbackUser.email,
+        name: fallbackUser.name,
+        timezone: fallbackUser.timezone,
+        authProviderId: fallbackUser.authProviderId ?? `dev-${role.toLowerCase()}`,
       },
     };
   }

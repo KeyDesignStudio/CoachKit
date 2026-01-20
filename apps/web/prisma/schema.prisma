@@ -206,6 +206,7 @@ model AthleteProfile {
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
   stravaConnection    StravaConnection?
+  stravaSyncIntent    StravaSyncIntent?
 
   @@index([coachId])
 }
@@ -542,4 +543,30 @@ model StravaConnection {
   @@index([athleteId])
   @@index([stravaAthleteId])
   @@index([expiresAt])
+}
+
+model StravaSyncIntent {
+  id             String   @id @default(cuid())
+  athleteId      String   @unique // AthleteProfile.userId
+  pending        Boolean  @default(true)
+  lastEventAt    DateTime
+  lastActivityId String?
+
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime?
+  lastAttemptAt  DateTime?
+  lastSuccessAt  DateTime?
+  lastError      String?
+
+  // Lease to reduce duplicate work if cron fires concurrently.
+  lockedUntil    DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([pending, nextAttemptAt])
+  @@index([pending, lockedUntil])
+  @@index([lastEventAt(sort: Desc)])
 }

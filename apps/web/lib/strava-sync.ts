@@ -213,6 +213,28 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
 }
 
 async function fetchRecentActivities(accessToken: string, afterUnixSeconds: number) {
+  if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
+    const startUnix = Math.floor(start.getTime() / 1000);
+    if (afterUnixSeconds > startUnix) return [];
+
+    return [
+      {
+        id: 999,
+        name: 'PW Unscheduled Strength',
+        sport_type: 'Workout',
+        type: 'Workout',
+        start_date: start.toISOString(),
+        start_date_local: start.toISOString(),
+        elapsed_time: 3600,
+        moving_time: 3600,
+        distance: 0,
+        total_elevation_gain: 0,
+      },
+    ];
+  }
+
   const url = new URL('https://www.strava.com/api/v3/athlete/activities');
   url.searchParams.set('per_page', '50');
   url.searchParams.set('after', String(afterUnixSeconds));
@@ -243,6 +265,20 @@ async function fetchRecentActivities(accessToken: string, afterUnixSeconds: numb
 }
 
 async function fetchActivityById(accessToken: string, activityId: string) {
+  if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
+    const activities = await fetchRecentActivities(accessToken, 0);
+    const match = activities.find((a) => String(a.id) === String(activityId));
+    if (match) return match;
+    return {
+      id: Number(activityId) || 999,
+      name: 'PW Unscheduled Strength',
+      sport_type: 'Workout',
+      type: 'Workout',
+      start_date: new Date().toISOString(),
+      elapsed_time: 3600,
+    };
+  }
+
   const url = new URL(`https://www.strava.com/api/v3/activities/${encodeURIComponent(activityId)}`);
 
   const response = await fetch(url.toString(), {
