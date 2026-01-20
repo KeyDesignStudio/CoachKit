@@ -29,7 +29,7 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(webhook.ok()).toBeTruthy();
 
-    // Verify calendar shows the unscheduled item.
+    // Webhook is intent-only; calendar should NOT show the item until cron runs.
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
 
@@ -37,10 +37,10 @@ test.describe('Strava autosync (debounced)', () => {
     const rows = weekView.locator('[data-athlete-week-session-row="v2"]:visible', {
       hasText: 'PW Unscheduled Strength (unscheduled)',
     });
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toBeVisible();
 
-    // Backfill endpoint should be idempotent too (safety net).
+    await expect(rows).toHaveCount(0);
+
+    // Backfill endpoint should surface it and remain idempotent (safety net).
     const cron2 = await request.post('/api/integrations/strava/cron?forceDays=2', {
       headers: {
         authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
@@ -54,5 +54,20 @@ test.describe('Strava autosync (debounced)', () => {
       .locator('[data-athlete-week-view-version="athlete-week-v2"]')
       .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength (unscheduled)' });
     await expect(rowsAfter).toHaveCount(1);
+
+    // Repeat cron; should not duplicate.
+    const cron3 = await request.post('/api/integrations/strava/cron?forceDays=2', {
+      headers: {
+        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+      },
+      data: {},
+    });
+    expect(cron3.ok()).toBeTruthy();
+
+    await page.reload({ waitUntil: 'networkidle' });
+    const rowsAfter2 = page
+      .locator('[data-athlete-week-view-version="athlete-week-v2"]')
+      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength (unscheduled)' });
+    await expect(rowsAfter2).toHaveCount(1);
   });
 });

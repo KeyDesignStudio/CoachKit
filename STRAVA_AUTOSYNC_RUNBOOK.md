@@ -2,7 +2,7 @@
 
 ## What this does
 
-- Strava webhook: triggers a **debounced, best-effort sync** for the athlete (fast response; avoids sync storms).
+- Strava webhook: records a **sync intent** for the athlete and returns `200` quickly (serverless-safe; avoids sync storms).
 - GitHub Actions (daily): runs a **backfill/reconciliation** sync (idempotent) to catch missed webhook events.
 - Guarantee: every Strava activity for a connected athlete becomes calendar-visible:
   - matches planned workout → links completion to planned `CalendarItem`

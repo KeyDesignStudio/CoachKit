@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { handleError } from '@/lib/http';
-import { syncStravaActivityById, syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,127 +103,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Attempt a best-effort sync immediately, but debounce to avoid storms.
-    const now = receivedAt;
-    const debounceMs = 2 * 60_000;
-    const leaseMs = 5 * 60_000;
-    const allowAfter = new Date(now.getTime() - debounceMs);
-
-    const claim = await prisma.stravaSyncIntent.updateMany({
-      where: {
-        athleteId: connection.athleteId,
-        AND: [
-          { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
-          { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
-          { OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lte: allowAfter } }] },
-        ],
-      } as any,
-      data: {
-        lockedUntil: new Date(now.getTime() + leaseMs),
-        lastAttemptAt: now,
-        attempts: { increment: 1 },
-      },
-    });
-
-    if (claim.count !== 1) {
-      return NextResponse.json({ ok: true, debounced: true }, { status: 200 });
-    }
-
-    // Respond 200 immediately; run the sync best-effort in-process.
-    // This avoids Strava webhook retry storms if Strava API calls are slow.
-    void (async () => {
-      try {
-        const athlete = await prisma.athleteProfile.findUnique({
-          where: { userId: connection.athleteId },
-          select: {
-            userId: true,
-            coachId: true,
-            user: { select: { timezone: true } },
-            stravaConnection: {
-              select: {
-                id: true,
-                accessToken: true,
-                refreshToken: true,
-                expiresAt: true,
-                scope: true,
-                lastSyncAt: true,
-              },
-            },
-          },
-        });
-
-        const conn = athlete?.stravaConnection;
-        if (!athlete || !conn) {
-          await prisma.stravaSyncIntent.update({
-            where: { athleteId: connection.athleteId },
-            data: { pending: false, lockedUntil: null, nextAttemptAt: null, lastError: null },
-          });
-          return;
-        }
-
-        const entry: StravaConnectionEntry = {
-          athleteId: athlete.userId,
-          athleteTimezone: athlete.user?.timezone ?? 'UTC',
-          coachId: athlete.coachId,
-          connection: conn as any,
-        };
-
-        try {
-          const summary = activityId
-            ? await syncStravaActivityById(entry, activityId)
-            : await syncStravaForConnections([entry], { forceDays: 2 });
-
-          const rateLimited = summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'));
-          if (rateLimited) {
-            await prisma.stravaSyncIntent.update({
-              where: { athleteId: connection.athleteId },
-              data: {
-                pending: true,
-                lockedUntil: null,
-                nextAttemptAt: new Date(now.getTime() + 15 * 60_000),
-                lastError: 'Rate limited',
-              },
-            });
-          } else {
-            await prisma.stravaSyncIntent.update({
-              where: { athleteId: connection.athleteId },
-              data: {
-                pending: false,
-                attempts: 0,
-                nextAttemptAt: null,
-                lockedUntil: null,
-                lastError: null,
-                lastSuccessAt: new Date(),
-              },
-            });
-          }
-        } catch (error: any) {
-          const message = error instanceof Error ? error.message : 'Strava sync failed.';
-          await prisma.stravaSyncIntent.update({
-            where: { athleteId: connection.athleteId },
-            data: {
-              pending: true,
-              lockedUntil: null,
-              nextAttemptAt: new Date(now.getTime() + 30 * 60_000),
-              lastError: message.slice(0, 500),
-            },
-          });
-        }
-      } catch (error) {
-        console.error('Strava webhook background sync failed', error);
-        await prisma.stravaSyncIntent.update({
-          where: { athleteId: connection.athleteId },
-          data: {
-            pending: true,
-            lockedUntil: null,
-            nextAttemptAt: new Date(now.getTime() + 30 * 60_000),
-            lastError: 'Background sync failed',
-          },
-        });
-      }
-    })();
-
-    return NextResponse.json({ ok: true, queued: true }, { status: 200 });
+    // Serverless-safe: only record intent. Sync happens via the cron backfill endpoint.
+    return NextResponse.json({ ok: true, recorded: true }, { status: 200 });
   } catch (error) {
     // Avoid webhook retry storms; still surface errors in response for debugging.
     console.error('Strava webhook failed', error);
