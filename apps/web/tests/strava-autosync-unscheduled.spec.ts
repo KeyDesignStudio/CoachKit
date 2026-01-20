@@ -34,7 +34,7 @@ test.describe('Strava autosync (debounced)', () => {
     const cookieHeader = { Cookie: 'coachkit-role=ATHLETE' };
 
     // Webhook is intent-only; calendar API should NOT show the item until cron runs.
-    const calBefore = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+    const calBefore = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`, {
       headers: cookieHeader,
     });
     expect(calBefore.ok()).toBeTruthy();
@@ -54,7 +54,7 @@ test.describe('Strava autosync (debounced)', () => {
     expect(cron2Json.ok).toBeTruthy();
     expect(cron2Json.createdCalendarItems).toBeGreaterThanOrEqual(1);
 
-    const calAfter = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+    const calAfter = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`, {
       headers: cookieHeader,
     });
     expect(calAfter.ok()).toBeTruthy();
@@ -71,7 +71,7 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(cron3.ok()).toBeTruthy();
 
-    const calAfter2 = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+    const calAfter2 = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`, {
       headers: cookieHeader,
     });
     expect(calAfter2.ok()).toBeTruthy();
