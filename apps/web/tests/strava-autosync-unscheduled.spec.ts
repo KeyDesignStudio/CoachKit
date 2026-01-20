@@ -38,7 +38,7 @@ test.describe('Strava autosync (debounced)', () => {
 
     const weekView = page.locator('[data-athlete-week-view-version="athlete-week-v2"]');
     const rows = weekView.locator('[data-athlete-week-session-row="v2"]:visible', {
-      hasText: 'PW Unscheduled Strength (unscheduled)',
+      hasText: 'PW Unscheduled Strength',
     });
 
     await expect(rows).toHaveCount(0);
@@ -51,11 +51,14 @@ test.describe('Strava autosync (debounced)', () => {
       data: {},
     });
     expect(cron2.ok()).toBeTruthy();
+    const cron2Json = await cron2.json();
+    expect(cron2Json.ok).toBeTruthy();
+    expect(cron2Json.createdCalendarItems).toBeGreaterThanOrEqual(1);
 
     await page.reload({ waitUntil: 'networkidle' });
     const rowsAfter = page
       .locator('[data-athlete-week-view-version="athlete-week-v2"]')
-      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength (unscheduled)' });
+      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength' });
     await expect(rowsAfter).toHaveCount(1);
 
     // Repeat cron; should not duplicate.
@@ -70,7 +73,7 @@ test.describe('Strava autosync (debounced)', () => {
     await page.reload({ waitUntil: 'networkidle' });
     const rowsAfter2 = page
       .locator('[data-athlete-week-view-version="athlete-week-v2"]')
-      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength (unscheduled)' });
+      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength' });
     await expect(rowsAfter2).toHaveCount(1);
   });
 });
