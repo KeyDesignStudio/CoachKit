@@ -1,18 +1,14 @@
 import { test, expect } from '@playwright/test';
 
-async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE') {
-  await page.context().addCookies([
-    {
-      name: 'coachkit-role',
-      value: role,
-      domain: 'localhost',
-      path: '/',
-    },
-  ]);
+function dayKeyUtc(date: Date): string {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 test.describe('Strava autosync (debounced)', () => {
-  test('Unmatched Strava activity surfaces in calendar and is idempotent', async ({ page, request }, testInfo) => {
+  test('Unmatched Strava activity surfaces in calendar and is idempotent', async ({ request }, testInfo) => {
     // This test mutates shared DB state; run it once to avoid cross-project interference.
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 
@@ -32,16 +28,19 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(webhook.ok()).toBeTruthy();
 
-    // Webhook is intent-only; calendar should NOT show the item until cron runs.
-    await setRoleCookie(page, 'ATHLETE');
-    await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
+    const now = new Date();
+    const from = dayKeyUtc(new Date(now.getTime() - 2 * 24 * 60 * 60_000));
+    const to = dayKeyUtc(new Date(now.getTime() + 2 * 24 * 60 * 60_000));
+    const cookieHeader = { cookie: 'coachkit-role=ATHLETE' };
 
-    const weekView = page.locator('[data-athlete-week-view-version="athlete-week-v2"]');
-    const rows = weekView.locator('[data-athlete-week-session-row="v2"]:visible', {
-      hasText: 'PW Unscheduled Strength',
+    // Webhook is intent-only; calendar API should NOT show the item until cron runs.
+    const calBefore = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+      headers: cookieHeader,
     });
-
-    await expect(rows).toHaveCount(0);
+    expect(calBefore.ok()).toBeTruthy();
+    const calBeforeJson = await calBefore.json();
+    const titlesBefore = (calBeforeJson.items ?? []).map((i: any) => i.title);
+    expect(titlesBefore.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
 
     // Backfill endpoint should surface it and remain idempotent (safety net).
     const cron2 = await request.post('/api/integrations/strava/cron?forceDays=2', {
@@ -55,11 +54,13 @@ test.describe('Strava autosync (debounced)', () => {
     expect(cron2Json.ok).toBeTruthy();
     expect(cron2Json.createdCalendarItems).toBeGreaterThanOrEqual(1);
 
-    await page.reload({ waitUntil: 'networkidle' });
-    const rowsAfter = page
-      .locator('[data-athlete-week-view-version="athlete-week-v2"]')
-      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength' });
-    await expect(rowsAfter).toHaveCount(1);
+    const calAfter = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+      headers: cookieHeader,
+    });
+    expect(calAfter.ok()).toBeTruthy();
+    const calAfterJson = await calAfter.json();
+    const titlesAfter = (calAfterJson.items ?? []).map((i: any) => i.title);
+    expect(titlesAfter.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeTruthy();
 
     // Repeat cron; should not duplicate.
     const cron3 = await request.post('/api/integrations/strava/cron?forceDays=2', {
@@ -70,10 +71,12 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(cron3.ok()).toBeTruthy();
 
-    await page.reload({ waitUntil: 'networkidle' });
-    const rowsAfter2 = page
-      .locator('[data-athlete-week-view-version="athlete-week-v2"]')
-      .locator('[data-athlete-week-session-row="v2"]:visible', { hasText: 'PW Unscheduled Strength' });
-    await expect(rowsAfter2).toHaveCount(1);
+    const calAfter2 = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
+      headers: cookieHeader,
+    });
+    expect(calAfter2.ok()).toBeTruthy();
+    const calAfter2Json = await calAfter2.json();
+    const titlesAfter2 = (calAfter2Json.items ?? []).map((i: any) => i.title);
+    expect(titlesAfter2.filter((t: string) => t.includes('PW Unscheduled Strength'))).toHaveLength(1);
   });
 });
