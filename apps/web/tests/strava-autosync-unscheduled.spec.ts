@@ -12,7 +12,10 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE') {
 }
 
 test.describe('Strava autosync (debounced)', () => {
-  test('Unmatched Strava activity surfaces in calendar and is idempotent', async ({ page, request }) => {
+  test('Unmatched Strava activity surfaces in calendar and is idempotent', async ({ page, request }, testInfo) => {
+    // This test mutates shared DB state; run it once to avoid cross-project interference.
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
     // Ensure dev fixtures exist (coach+athlete+athleteProfile+stravaConnection).
     const fixtures = await request.post('/api/dev/strava/test-fixtures');
     expect(fixtures.ok()).toBeTruthy();
