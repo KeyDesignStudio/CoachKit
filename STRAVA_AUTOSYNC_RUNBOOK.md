@@ -25,12 +25,19 @@ Set these in Vercel → Project → Settings → Environment Variables:
 
 ## GitHub Actions daily backfill (Hobby-safe)
 
-This repo configures a daily workflow:
+This repo configures a scheduled workflow:
 
 - File: `.github/workflows/strava-sync-cron.yml`
-- Schedule: `0 19 * * *` (19:00 UTC)
+- Schedule: `*/5 * * * *` (every 5 minutes, UTC)
 
 Configure your GitHub repo:
+
+### Required GitHub Secrets
+
+- `COACHKIT_CRON_SECRET` (Actions secret)
+  - MUST exist in GitHub Actions secrets.
+  - MUST match Vercel `CRON_SECRET` exactly.
+  - Do not print this value in logs.
 
 - Secrets:
   - `COACHKIT_CRON_SECRET` (must match Vercel `CRON_SECRET`)
@@ -73,7 +80,7 @@ Expected JSON:
 
 ```bash
 curl -sS -H "Authorization: Bearer $CRON_SECRET" \
-  "$APP_BASE_URL/api/integrations/strava/cron?forceDays=2" \
+  "$APP_BASE_URL/api/integrations/strava/cron?mode=intents&forceDays=1" \
   | head -c 4000
 ```
 

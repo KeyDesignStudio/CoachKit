@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Call CoachKit Strava cron endpoint
+      - name: Preflight: required env/secrets
         env:
           COACHKIT_BASE_URL: ${{ vars.COACHKIT_BASE_URL }}
           COACHKIT_CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
@@ -23,13 +23,32 @@ jobs:
             exit 1
           fi
           if [ -z "${COACHKIT_CRON_SECRET:-}" ]; then
-            echo "Missing secrets.COACHKIT_CRON_SECRET" >&2
+            echo "Missing secrets.COACHKIT_CRON_SECRET (must match Vercel CRON_SECRET)" >&2
             exit 1
           fi
 
-          # Drain webhook intents (idempotent) with a small backfill safety net.
-          curl -sS -f -X POST \
-            "${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?mode=intents&forceDays=1" \
+      - name: Call CoachKit Strava cron endpoint
+        env:
+          COACHKIT_BASE_URL: ${{ vars.COACHKIT_BASE_URL }}
+          COACHKIT_CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          url="${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?mode=intents&forceDays=1"
+          host=$(python3 -c 'import os,urllib.parse; print(urllib.parse.urlparse(os.environ["URL"]).netloc)' URL="$url")
+
+          # Capture status without leaking secrets.
+          http_status=$(curl -sS -o /tmp/cron-response.json -w "%{http_code}" -X POST \
+            "$url" \
             -H "Authorization: Bearer ${COACHKIT_CRON_SECRET}" \
             -H "Content-Type: application/json" \
-            --data '{}'
+            --data '{}')
+
+          echo "Strava cron call host=${host} status=${http_status}"
+
+          # Treat non-200 as failure.
+          if [ "${http_status}" != "200" ]; then
+            echo "Strava cron call failed (expected 200)." >&2
+            cat /tmp/cron-response.json >&2 || true
+            exit 1
+          fi
