@@ -79,6 +79,13 @@ enum WorkoutLibrarySource {
   MANUAL
 }
 
+enum StravaSyncIntentStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -206,7 +213,7 @@ model AthleteProfile {
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
   stravaConnection    StravaConnection?
-  stravaSyncIntent    StravaSyncIntent?
+  stravaSyncIntents   StravaSyncIntent[]
 
   @@index([coachId])
 }
@@ -546,27 +553,24 @@ model StravaConnection {
 }
 
 model StravaSyncIntent {
-  id             String   @id @default(cuid())
-  athleteId      String   @unique // AthleteProfile.userId
-  pending        Boolean  @default(true)
-  lastEventAt    DateTime
-  lastActivityId String?
+  id              String               @id @default(cuid())
+  athleteId        String // AthleteProfile.userId
+  stravaAthleteId  String
+  stravaActivityId String
+  eventType        String
 
-  attempts       Int      @default(0)
-  nextAttemptAt  DateTime?
-  lastAttemptAt  DateTime?
-  lastSuccessAt  DateTime?
-  lastError      String?
+  status       StravaSyncIntentStatus @default(PENDING)
+  attempts     Int                   @default(0)
+  nextAttemptAt DateTime?
+  lastError    String?
 
-  // Lease to reduce duplicate work if cron fires concurrently.
-  lockedUntil    DateTime?
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  processedAt  DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
 
-  @@index([pending, nextAttemptAt])
-  @@index([pending, lockedUntil])
-  @@index([lastEventAt(sort: Desc)])
+  @@unique([athleteId, stravaActivityId])
+  @@index([status, createdAt])
+  @@index([athleteId, status])
 }

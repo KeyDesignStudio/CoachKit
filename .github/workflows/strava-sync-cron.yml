@@ -1,13 +1,13 @@
-name: Strava daily backfill
+name: Strava intent drain
 
 on:
   schedule:
     # GitHub cron is UTC.
-    - cron: "0 19 * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
-  strava-backfill:
+  strava-drain:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,9 +27,9 @@ jobs:
             exit 1
           fi
 
-          # Backfill the last 2 days (idempotent).
+          # Drain webhook intents (idempotent) with a small backfill safety net.
           curl -sS -f -X POST \
-            "${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?forceDays=2" \
+            "${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?mode=intents&forceDays=1" \
             -H "Authorization: Bearer ${COACHKIT_CRON_SECRET}" \
             -H "Content-Type: application/json" \
             --data '{}'

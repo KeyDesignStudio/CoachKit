@@ -736,7 +736,7 @@ export async function syncStravaForConnections(
   return summary;
 }
 
-export async function syncStravaActivityById(entry: StravaConnectionEntry, activityId: string): Promise<PollSummary> {
+async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, activityId: string): Promise<PollSummary> {
   const summary: PollSummary = {
     polledAthletes: 1,
     fetched: 0,
@@ -765,4 +765,42 @@ export async function syncStravaActivityById(entry: StravaConnectionEntry, activ
   }
 
   return summary;
+}
+
+export async function syncStravaActivityById(params: {
+  athleteId: string;
+  stravaActivityId: string;
+}): Promise<PollSummary> {
+  const athlete = await prisma.athleteProfile.findUnique({
+    where: { userId: params.athleteId },
+    select: {
+      userId: true,
+      coachId: true,
+      user: { select: { timezone: true } },
+      stravaConnection: {
+        select: {
+          id: true,
+          accessToken: true,
+          refreshToken: true,
+          expiresAt: true,
+          scope: true,
+          lastSyncAt: true,
+        },
+      },
+    },
+  });
+
+  const connection = athlete?.stravaConnection;
+  if (!athlete || !connection) {
+    throw new ApiError(404, 'STRAVA_CONNECTION_NOT_FOUND', 'No Strava connection found for athlete.');
+  }
+
+  const entry: StravaConnectionEntry = {
+    athleteId: athlete.userId,
+    athleteTimezone: athlete.user?.timezone ?? 'UTC',
+    coachId: athlete.coachId,
+    connection: connection as any,
+  };
+
+  return syncStravaActivityByIdForEntry(entry, params.stravaActivityId);
 }

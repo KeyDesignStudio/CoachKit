@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { handleError } from '@/lib/http';
-import { syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
+import { syncStravaActivityById, syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function cronAuthFailure() {
   return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -34,20 +35,6 @@ function requireCronAuth(request: NextRequest): NextResponse | null {
   return null;
 }
 
-function computeAfterUnixSeconds(params: { lastSyncAt: Date | null; now: Date }) {
-  const { lastSyncAt, now } = params;
-  const minWindowMs = 2 * 24 * 60 * 60 * 1000;
-  const maxWindowMs = 14 * 24 * 60 * 60 * 1000;
-  const bufferMs = 2 * 60 * 60 * 1000;
-
-  const minStart = new Date(now.getTime() - minWindowMs);
-  const maxStart = new Date(now.getTime() - maxWindowMs);
-
-  const base = lastSyncAt ? new Date(Math.max(lastSyncAt.getTime(), minStart.getTime())) : minStart;
-  const clamped = new Date(Math.max(base.getTime(), maxStart.getTime()));
-  return Math.max(0, Math.floor((clamped.getTime() - bufferMs) / 1000));
-}
-
 function computeBackoffMs(attempts: number) {
   const base = 60_000; // 1m
   const max = 6 * 60 * 60_000; // 6h
@@ -66,6 +53,11 @@ function parseForceDays(raw: string | null) {
   return Math.max(1, Math.min(14, n));
 }
 
+function parseMode(raw: string | null) {
+  if (!raw) return 'intents' as const;
+  return raw === 'backfill' ? ('backfill' as const) : ('intents' as const);
+}
+
 async function runCron(request: NextRequest) {
   const authResponse = requireCronAuth(request);
   if (authResponse) return authResponse;
@@ -77,110 +69,130 @@ async function runCron(request: NextRequest) {
   const url = new URL(request.url);
   const athleteId = url.searchParams.get('athleteId');
   const forceDays = parseForceDays(url.searchParams.get('forceDays'));
+  const mode = parseMode(url.searchParams.get('mode'));
 
   const now = new Date();
-  const maxAthletesPerRun = 20;
-  const leaseMs = 10 * 60_000;
+  const maxIntentsPerRun = 50;
+  const maxAthletesPerBackfillRun = 20;
 
-  // If this is a scheduled backfill run (e.g. GitHub Actions), queue a batch of all connections.
-  if (!athleteId && forceDays !== null) {
-    const connections = await prisma.stravaConnection.findMany({
-      select: { athleteId: true },
-      orderBy: [{ lastSyncAt: 'asc' }],
-      take: maxAthletesPerRun,
-    });
-
-    for (const row of connections) {
-      await prisma.stravaSyncIntent.upsert({
-        where: { athleteId: row.athleteId },
-        create: {
-          athleteId: row.athleteId,
-          pending: true,
-          lastEventAt: now,
-        },
-        update: {
-          pending: true,
-          lastEventAt: now,
-          nextAttemptAt: null,
-        },
-      });
-    }
-  }
-
-  // If no webhook has marked athletes as pending recently, do a small safety sweep
-  // to avoid missed webhook events leaving athletes permanently unsynced.
-  if (!athleteId && forceDays === null) {
-    const staleCutoff = new Date(now.getTime() - 12 * 60 * 60_000);
-    const stale = await prisma.stravaConnection.findMany({
-      where: {
-        OR: [{ lastSyncAt: null }, { lastSyncAt: { lt: staleCutoff } }],
-      },
-      select: { athleteId: true },
-      take: 10,
-    });
-
-    for (const row of stale) {
-      await prisma.stravaSyncIntent.upsert({
-        where: { athleteId: row.athleteId },
-        create: {
-          athleteId: row.athleteId,
-          pending: true,
-          lastEventAt: now,
-        },
-        update: {
-          pending: true,
-          lastEventAt: now,
-          nextAttemptAt: null,
-        },
-      });
-    }
-  }
-
-  const intents = await prisma.stravaSyncIntent.findMany({
+  // Recover intents stuck in PROCESSING (e.g. worker crash) after 15 minutes.
+  await prisma.stravaSyncIntent.updateMany({
     where: {
-      pending: true,
+      status: 'PROCESSING',
+      updatedAt: { lt: new Date(now.getTime() - 15 * 60_000) },
       ...(athleteId ? { athleteId } : {}),
-      AND: [
-        { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
-        { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
-      ],
     } as any,
-    orderBy: { lastEventAt: 'asc' },
-    take: maxAthletesPerRun,
-    select: {
-      athleteId: true,
-      attempts: true,
-    },
+    data: { status: 'PENDING' },
   });
 
-  let processedAthletes = 0;
+  let drainedCount = 0;
+  let doneCount = 0;
+  let failedCount = 0;
   let createdCalendarItems = 0;
   let matchedCompletions = 0;
   let skippedDuplicates = 0;
-  const errors: Array<{ athleteId: string; message: string }> = [];
   let rateLimited = false;
 
-  for (const intent of intents) {
-    // Claim lease.
-    const claim = await prisma.stravaSyncIntent.updateMany({
+  if (mode === 'intents') {
+    const intents = await prisma.stravaSyncIntent.findMany({
       where: {
-        athleteId: intent.athleteId,
-        pending: true,
-        OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
+        status: 'PENDING',
+        ...(athleteId ? { athleteId } : {}),
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
       } as any,
-      data: {
-        lockedUntil: new Date(now.getTime() + leaseMs),
-        lastAttemptAt: now,
-        attempts: { increment: 1 },
+      orderBy: [{ createdAt: 'asc' }],
+      take: maxIntentsPerRun,
+      select: {
+        id: true,
+        athleteId: true,
+        stravaActivityId: true,
       },
     });
 
-    if (claim.count !== 1) {
-      continue;
-    }
+    for (const intent of intents) {
+      // Claim by transitioning PENDING -> PROCESSING.
+      const claim = await prisma.stravaSyncIntent.updateMany({
+        where: {
+          id: intent.id,
+          status: 'PENDING',
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        } as any,
+        data: {
+          status: 'PROCESSING',
+          attempts: { increment: 1 },
+        },
+      });
 
-    const athlete = await prisma.athleteProfile.findUnique({
-      where: { userId: intent.athleteId },
+      if (claim.count !== 1) continue;
+
+      drainedCount += 1;
+
+      try {
+        const summary = await syncStravaActivityById({
+          athleteId: intent.athleteId,
+          stravaActivityId: intent.stravaActivityId,
+        });
+
+        createdCalendarItems += summary.createdCalendarItems;
+        matchedCompletions += summary.matched;
+        skippedDuplicates += summary.skippedExisting;
+
+        await prisma.stravaSyncIntent.update({
+          where: { id: intent.id },
+          data: {
+            status: 'DONE',
+            processedAt: now,
+            lastError: null,
+            nextAttemptAt: null,
+          },
+        });
+
+        doneCount += 1;
+
+        if (summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'))) {
+          rateLimited = true;
+          break;
+        }
+      } catch (error: any) {
+        const message = error instanceof Error ? error.message : 'Strava sync failed.';
+
+        const current = await prisma.stravaSyncIntent.findUnique({
+          where: { id: intent.id },
+          select: { attempts: true },
+        });
+        const attempts = current?.attempts ?? 1;
+
+        if (error?.status === 429 || error?.code === 'STRAVA_RATE_LIMITED') {
+          rateLimited = true;
+        }
+
+        const nextAttemptAt = new Date(now.getTime() + computeBackoffMs(attempts));
+        const terminal = attempts >= 10;
+
+        await prisma.stravaSyncIntent.update({
+          where: { id: intent.id },
+          data: {
+            status: terminal ? 'FAILED' : 'PENDING',
+            lastError: message.slice(0, 500),
+            nextAttemptAt: terminal ? null : nextAttemptAt,
+            processedAt: terminal ? now : null,
+          },
+        });
+
+        failedCount += 1;
+        if (rateLimited) break;
+      }
+    }
+  }
+
+  // Optional bounded backfill safety net.
+  if (!rateLimited && forceDays !== null && (mode === 'backfill' || drainedCount === 0)) {
+    const connections = await prisma.athleteProfile.findMany({
+      where: {
+        ...(athleteId ? { userId: athleteId } : {}),
+        stravaConnection: { isNot: null },
+      },
+      take: maxAthletesPerBackfillRun,
       select: {
         userId: true,
         coachId: true,
@@ -198,90 +210,58 @@ async function runCron(request: NextRequest) {
       },
     });
 
-    const connection = athlete?.stravaConnection;
-    if (!athlete || !connection) {
-      await prisma.stravaSyncIntent.update({
-        where: { athleteId: intent.athleteId },
-        data: {
-          pending: false,
-          lockedUntil: null,
-          nextAttemptAt: null,
-          lastError: null,
-        },
-      });
-      continue;
-    }
+    const entries: StravaConnectionEntry[] = connections
+      .map((a) => {
+        if (!a.stravaConnection) return null;
+        return {
+          athleteId: a.userId,
+          athleteTimezone: a.user?.timezone ?? 'UTC',
+          coachId: a.coachId,
+          connection: a.stravaConnection as any,
+        };
+      })
+      .filter(Boolean) as any;
 
-    const entry: StravaConnectionEntry = {
-      athleteId: athlete.userId,
-      athleteTimezone: athlete.user?.timezone ?? 'UTC',
-      coachId: athlete.coachId,
-      connection: connection as any,
-    };
-
-    try {
-      const afterUnixSeconds = computeAfterUnixSeconds({
-        lastSyncAt: connection.lastSyncAt ? new Date(connection.lastSyncAt) : null,
-        now,
-      });
-      const summary = await syncStravaForConnections(
-        [entry],
-        forceDays !== null ? { forceDays } : { overrideAfterUnixSeconds: afterUnixSeconds }
-      );
-
-      processedAthletes += 1;
+    if (entries.length > 0) {
+      const summary = await syncStravaForConnections(entries, { forceDays });
       createdCalendarItems += summary.createdCalendarItems;
       matchedCompletions += summary.matched;
       skippedDuplicates += summary.skippedExisting;
-
-      await prisma.stravaSyncIntent.update({
-        where: { athleteId: intent.athleteId },
-        data: {
-          pending: false,
-          attempts: 0,
-          nextAttemptAt: null,
-          lockedUntil: null,
-          lastError: null,
-          lastSuccessAt: new Date(),
-        },
-      });
-
       if (summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'))) {
         rateLimited = true;
-        break;
       }
-    } catch (error: any) {
-      const message = error instanceof Error ? error.message : 'Strava sync failed.';
-      errors.push({ athleteId: intent.athleteId, message });
-
-      if (error?.status === 429 || error?.code === 'STRAVA_RATE_LIMITED') {
-        rateLimited = true;
-      }
-
-      const backoffMs = computeBackoffMs((intent.attempts ?? 0) + 1);
-
-      await prisma.stravaSyncIntent.update({
-        where: { athleteId: intent.athleteId },
-        data: {
-          pending: true,
-          lockedUntil: null,
-          nextAttemptAt: new Date(now.getTime() + backoffMs),
-          lastError: message.slice(0, 500),
-        },
-      });
-
-      if (rateLimited) break;
     }
   }
+
+  const pendingRemaining = await prisma.stravaSyncIntent.count({
+    where: {
+      status: 'PENDING',
+      ...(athleteId ? { athleteId } : {}),
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+    } as any,
+  });
+
+  console.info('[strava cron] run summary', {
+    drainedCount,
+    doneCount,
+    failedCount,
+    pendingRemaining,
+    createdCalendarItems,
+    matchedCompletions,
+    skippedDuplicates,
+    rateLimited,
+  });
 
   return NextResponse.json(
     {
       ok: true,
-      processedAthletes,
+      drainedCount,
+      doneCount,
+      failedCount,
+      pendingRemaining,
       createdCalendarItems,
       matchedCompletions,
       skippedDuplicates,
-      errorsCount: errors.length,
       rateLimited,
     },
     { status: 200 }

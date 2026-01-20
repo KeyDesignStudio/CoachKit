@@ -6,6 +6,7 @@ import { ApiError } from '@/lib/errors';
 import { handleError } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function isAutosyncEnabled() {
   return process.env.STRAVA_AUTOSYNC_ENABLED !== '0';
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     const ownerId = event.owner_id ? String(event.owner_id) : null;
     const activityId = event.object_id ? String(event.object_id) : null;
 
-    if (!ownerId) {
+    if (!ownerId || !activityId) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -80,28 +81,43 @@ export async function POST(request: NextRequest) {
     });
 
     if (!connection) {
+      console.warn('[strava webhook] no matching connection', { ownerId, activityId });
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const receivedAt = new Date();
-    const eventTime = typeof event.event_time === 'number' ? new Date(event.event_time * 1000) : receivedAt;
+    const now = new Date();
+    const eventType = event.aspect_type ?? 'create';
 
-    // Debounced intent per athlete: always record the event.
     await prisma.stravaSyncIntent.upsert({
-      where: { athleteId: connection.athleteId },
+      where: {
+        athleteId_stravaActivityId: {
+          athleteId: connection.athleteId,
+          stravaActivityId: activityId,
+        },
+      },
       create: {
         athleteId: connection.athleteId,
-        pending: true,
-        lastEventAt: eventTime,
-        lastActivityId: activityId,
-      },
-      update: {
-        pending: true,
-        lastEventAt: eventTime,
-        lastActivityId: activityId,
+        stravaAthleteId: ownerId,
+        stravaActivityId: activityId,
+        eventType,
+        status: 'PENDING',
+        attempts: 0,
+        lastError: null,
         nextAttemptAt: null,
-      },
+        processedAt: null,
+        createdAt: now,
+      } as any,
+      update: {
+        stravaAthleteId: ownerId,
+        eventType,
+        status: 'PENDING',
+        lastError: null,
+        nextAttemptAt: null,
+        processedAt: null,
+      } as any,
     });
+
+    console.info('[strava webhook] intent queued', { athleteId: connection.athleteId, activityId, eventType });
 
     // Serverless-safe: only record intent. Sync happens via the cron backfill endpoint.
     return NextResponse.json({ ok: true, recorded: true }, { status: 200 });

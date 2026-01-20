@@ -14,10 +14,10 @@ export async function GET(_request: NextRequest) {
     const autosyncEnabled = process.env.STRAVA_AUTOSYNC_ENABLED !== '0';
 
     const intentAgg = await prisma.stravaSyncIntent.aggregate({
-      where: { pending: true },
-      _count: { athleteId: true },
-      _min: { lastEventAt: true },
-      _max: { lastAttemptAt: true },
+      where: { status: 'PENDING' },
+      _count: { id: true },
+      _min: { createdAt: true },
+      _max: { updatedAt: true },
     });
 
     return NextResponse.json(
@@ -32,9 +32,9 @@ export async function GET(_request: NextRequest) {
           hasClientSecret: getEnvBool('STRAVA_CLIENT_SECRET'),
         },
         pending: {
-          count: intentAgg._count.athleteId,
-          oldestEventAt: intentAgg._min.lastEventAt,
-          lastAttemptAt: intentAgg._max.lastAttemptAt,
+          count: intentAgg._count.id,
+          oldestCreatedAt: intentAgg._min.createdAt,
+          lastUpdatedAt: intentAgg._max.updatedAt,
         },
       },
       { status: 200 }
