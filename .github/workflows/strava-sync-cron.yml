@@ -1,54 +1,38 @@
-name: Strava intent drain
+name: Strava sync cron (Hobby-safe)
 
 on:
   schedule:
-    # GitHub cron is UTC.
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
-  strava-drain:
+  strava_sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Preflight: required env/secrets
-        env:
-          COACHKIT_BASE_URL: ${{ vars.COACHKIT_BASE_URL }}
-          COACHKIT_CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
+      - name: Preflight (required secrets/vars)
+        shell: bash
         run: |
-          set -euo pipefail
-
-          if [ -z "${COACHKIT_BASE_URL:-}" ]; then
-            echo "Missing vars.COACHKIT_BASE_URL" >&2
+          if [ -z "${{ secrets.COACHKIT_CRON_SECRET }}" ]; then
+            echo "Missing required secret: COACHKIT_CRON_SECRET"
             exit 1
           fi
-          if [ -z "${COACHKIT_CRON_SECRET:-}" ]; then
-            echo "Missing secrets.COACHKIT_CRON_SECRET (must match Vercel CRON_SECRET)" >&2
+          if [ -z "${{ vars.COACHKIT_BASE_URL }}" ]; then
+            echo "Missing required variable: COACHKIT_BASE_URL"
             exit 1
           fi
 
-      - name: Call CoachKit Strava cron endpoint
-        env:
-          COACHKIT_BASE_URL: ${{ vars.COACHKIT_BASE_URL }}
-          COACHKIT_CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
+      - name: Call CoachKit cron endpoint (intents mode)
+        shell: bash
         run: |
-          set -euo pipefail
-
-          url="${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?mode=intents&forceDays=1"
-          host=$(python3 -c 'import os,urllib.parse; print(urllib.parse.urlparse(os.environ["URL"]).netloc)' URL="$url")
-
-          # Capture status without leaking secrets.
-          http_status=$(curl -sS -o /tmp/cron-response.json -w "%{http_code}" -X POST \
-            "$url" \
-            -H "Authorization: Bearer ${COACHKIT_CRON_SECRET}" \
-            -H "Content-Type: application/json" \
-            --data '{}')
-
-          echo "Strava cron call host=${host} status=${http_status}"
-
-          # Treat non-200 as failure.
-          if [ "${http_status}" != "200" ]; then
-            echo "Strava cron call failed (expected 200)." >&2
-            cat /tmp/cron-response.json >&2 || true
+          BASE_URL="${{ vars.COACHKIT_BASE_URL }}"
+          URL="${BASE_URL}/api/integrations/strava/cron?mode=intents&forceDays=1"
+          echo "Calling host=$(echo "$BASE_URL" | sed -E 's#https?://##')"
+          STATUS=$(curl -sS -o /tmp/cron.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.COACHKIT_CRON_SECRET }}" \
+            "$URL" || true)
+          echo "HTTP status=$STATUS"
+          cat /tmp/cron.json | head -c 2000 || true
+          if [ "$STATUS" != "200" ]; then
+            echo "Cron call failed (status=$STATUS)"
             exit 1
           fi
