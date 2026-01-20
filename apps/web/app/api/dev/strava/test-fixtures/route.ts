@@ -86,5 +86,25 @@ export async function POST(_request: NextRequest) {
     select: { athleteId: true, stravaAthleteId: true },
   });
 
+  // Keep Playwright runs deterministic when reusing a local DB.
+  // The Strava stub always includes activity id 999, so remove any prior records.
+  await prisma.completedActivity.deleteMany({
+    where: {
+      athleteId: athlete.id,
+      source: 'STRAVA',
+      externalActivityId: '999',
+    },
+  });
+  await prisma.calendarItem.deleteMany({
+    where: {
+      athleteId: athlete.id,
+      origin: 'STRAVA',
+      sourceActivityId: '999',
+    },
+  });
+  await prisma.stravaSyncIntent.deleteMany({
+    where: { athleteId: athlete.id },
+  });
+
   return NextResponse.json({ ok: true, coachId: coach.id, athleteId: athlete.id, stravaAthleteId: connection.stravaAthleteId });
 }
