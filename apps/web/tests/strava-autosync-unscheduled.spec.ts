@@ -31,7 +31,7 @@ test.describe('Strava autosync (debounced)', () => {
     const now = new Date();
     const from = dayKeyUtc(new Date(now.getTime() - 2 * 24 * 60 * 60_000));
     const to = dayKeyUtc(new Date(now.getTime() + 2 * 24 * 60 * 60_000));
-    const cookieHeader = { cookie: 'coachkit-role=ATHLETE' };
+    const cookieHeader = { Cookie: 'coachkit-role=ATHLETE' };
 
     // Webhook is intent-only; calendar API should NOT show the item until cron runs.
     const calBefore = await request.get(`/api/athlete/calendar?from=${from}&to=${to}`, {
