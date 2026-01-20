@@ -43,7 +43,7 @@ test.describe('Strava autosync (debounced)', () => {
     expect(titlesBefore.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
 
     // Backfill endpoint should surface it and remain idempotent (safety net).
-    const cron2 = await request.post('/api/integrations/strava/cron?forceDays=2', {
+    const cron2 = await request.post('/api/integrations/strava/cron?athleteId=dev-athlete&forceDays=2', {
       headers: {
         authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
@@ -63,7 +63,7 @@ test.describe('Strava autosync (debounced)', () => {
     expect(titlesAfter.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeTruthy();
 
     // Repeat cron; should not duplicate.
-    const cron3 = await request.post('/api/integrations/strava/cron?forceDays=2', {
+    const cron3 = await request.post('/api/integrations/strava/cron?athleteId=dev-athlete&forceDays=2', {
       headers: {
         authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
