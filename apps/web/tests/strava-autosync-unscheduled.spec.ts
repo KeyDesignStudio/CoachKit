@@ -29,14 +29,6 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(webhook.ok()).toBeTruthy();
 
-    // Cron processes pending intents.
-    const cron = await request.get('/api/integrations/strava/cron', {
-      headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
-      },
-    });
-    expect(cron.ok()).toBeTruthy();
-
     // Verify calendar shows the unscheduled item.
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
@@ -48,11 +40,12 @@ test.describe('Strava autosync (debounced)', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toBeVisible();
 
-    // Running cron again should not create duplicates.
-    const cron2 = await request.get('/api/integrations/strava/cron', {
+    // Backfill endpoint should be idempotent too (safety net).
+    const cron2 = await request.post('/api/integrations/strava/cron?forceDays=2', {
       headers: {
         authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
+      data: {},
     });
     expect(cron2.ok()).toBeTruthy();
 

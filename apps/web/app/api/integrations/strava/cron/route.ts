@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
-import { handleError, success } from '@/lib/http';
+import { handleError } from '@/lib/http';
 import { syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +55,17 @@ function computeBackoffMs(attempts: number) {
   return Math.min(max, base * Math.pow(2, exp));
 }
 
+function parseForceDays(raw: string | null) {
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    throw new ApiError(400, 'INVALID_FORCE_DAYS', 'forceDays must be an integer.');
+  }
+
+  // Keep the lookback bounded to stay rate-limit and runtime safe.
+  return Math.max(1, Math.min(14, n));
+}
+
 async function runCron(request: NextRequest) {
   const authResponse = requireCronAuth(request);
   if (authResponse) return authResponse;
@@ -65,14 +76,40 @@ async function runCron(request: NextRequest) {
 
   const url = new URL(request.url);
   const athleteId = url.searchParams.get('athleteId');
+  const forceDays = parseForceDays(url.searchParams.get('forceDays'));
 
   const now = new Date();
   const maxAthletesPerRun = 20;
   const leaseMs = 10 * 60_000;
 
+  // If this is a scheduled backfill run (e.g. GitHub Actions), queue a batch of all connections.
+  if (!athleteId && forceDays !== null) {
+    const connections = await prisma.stravaConnection.findMany({
+      select: { athleteId: true },
+      orderBy: [{ lastSyncAt: 'asc' }],
+      take: maxAthletesPerRun,
+    });
+
+    for (const row of connections) {
+      await prisma.stravaSyncIntent.upsert({
+        where: { athleteId: row.athleteId },
+        create: {
+          athleteId: row.athleteId,
+          pending: true,
+          lastEventAt: now,
+        },
+        update: {
+          pending: true,
+          lastEventAt: now,
+          nextAttemptAt: null,
+        },
+      });
+    }
+  }
+
   // If no webhook has marked athletes as pending recently, do a small safety sweep
   // to avoid missed webhook events leaving athletes permanently unsynced.
-  if (!athleteId) {
+  if (!athleteId && forceDays === null) {
     const staleCutoff = new Date(now.getTime() - 12 * 60 * 60_000);
     const stale = await prisma.stravaConnection.findMany({
       where: {
@@ -177,7 +214,7 @@ async function runCron(request: NextRequest) {
 
     const entry: StravaConnectionEntry = {
       athleteId: athlete.userId,
-      athleteTimezone: athlete.user?.timezone ?? 'Australia/Brisbane',
+      athleteTimezone: athlete.user?.timezone ?? 'UTC',
       coachId: athlete.coachId,
       connection: connection as any,
     };
@@ -187,8 +224,10 @@ async function runCron(request: NextRequest) {
         lastSyncAt: connection.lastSyncAt ? new Date(connection.lastSyncAt) : null,
         now,
       });
-
-      const summary = await syncStravaForConnections([entry], { overrideAfterUnixSeconds: afterUnixSeconds });
+      const summary = await syncStravaForConnections(
+        [entry],
+        forceDays !== null ? { forceDays } : { overrideAfterUnixSeconds: afterUnixSeconds }
+      );
 
       processedAthletes += 1;
       createdCalendarItems += summary.createdCalendarItems;

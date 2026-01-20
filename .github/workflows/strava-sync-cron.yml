@@ -1,0 +1,35 @@
+name: Strava daily backfill
+
+on:
+  schedule:
+    # GitHub cron is UTC.
+    - cron: "0 19 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  strava-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call CoachKit Strava cron endpoint
+        env:
+          COACHKIT_BASE_URL: ${{ vars.COACHKIT_BASE_URL }}
+          COACHKIT_CRON_SECRET: ${{ secrets.COACHKIT_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${COACHKIT_BASE_URL:-}" ]; then
+            echo "Missing vars.COACHKIT_BASE_URL" >&2
+            exit 1
+          fi
+          if [ -z "${COACHKIT_CRON_SECRET:-}" ]; then
+            echo "Missing secrets.COACHKIT_CRON_SECRET" >&2
+            exit 1
+          fi
+
+          # Backfill the last 2 days (idempotent).
+          curl -sS -f -X POST \
+            "${COACHKIT_BASE_URL%/}/api/integrations/strava/cron?forceDays=2" \
+            -H "Authorization: Bearer ${COACHKIT_CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            --data '{}'

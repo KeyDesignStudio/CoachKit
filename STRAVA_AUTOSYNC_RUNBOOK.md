@@ -2,8 +2,8 @@
 
 ## What this does
 
-- Strava webhook: **marks an athlete “pending sync”** (fast, debounced, no heavy work inline).
-- Vercel Cron: runs every 15 minutes and **processes pending athletes in batches**.
+- Strava webhook: triggers a **debounced, best-effort sync** for the athlete (fast response; avoids sync storms).
+- GitHub Actions (daily): runs a **backfill/reconciliation** sync (idempotent) to catch missed webhook events.
 - Guarantee: every Strava activity for a connected athlete becomes calendar-visible:
   - matches planned workout → links completion to planned `CalendarItem`
   - no match → creates provider-origin `CalendarItem` (origin=STRAVA, planningStatus=UNPLANNED) and links completion
@@ -17,20 +17,25 @@ Set these in Vercel → Project → Settings → Environment Variables:
 - `STRAVA_AUTOSYNC_ENABLED`
   - `1` to enable, `0` to disable autosync quickly
 - `CRON_SECRET`
-  - Random string (16+ chars). Vercel will automatically send this as `Authorization: Bearer <CRON_SECRET>` when invoking cron.
+  - Random string (16+ chars). Used to authorize the backfill endpoint.
 - `STRAVA_WEBHOOK_VERIFY_TOKEN`
   - Random string (16+ chars). Used only for Strava webhook subscription verification.
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 
-## Vercel Cron setup (production-only)
+## GitHub Actions daily backfill (Hobby-safe)
 
-This repo configures the cron in `vercel.json`:
+This repo configures a daily workflow:
 
-- Schedule: `*/15 * * * *` (every 15 minutes, UTC)
-- Path: `/api/integrations/strava/cron`
+- File: `.github/workflows/strava-sync-cron.yml`
+- Schedule: `0 19 * * *` (19:00 UTC)
 
-Vercel cron jobs only invoke **production deployments**.
+Configure your GitHub repo:
+
+- Secrets:
+  - `COACHKIT_CRON_SECRET` (must match Vercel `CRON_SECRET`)
+- Variables:
+  - `COACHKIT_BASE_URL` (e.g. `https://coach-kit.vercel.app`, no trailing slash)
 
 ## Health / diagnostics endpoints
 
@@ -68,7 +73,7 @@ Expected JSON:
 
 ```bash
 curl -sS -H "Authorization: Bearer $CRON_SECRET" \
-  "$APP_BASE_URL/api/integrations/strava/cron" \
+  "$APP_BASE_URL/api/integrations/strava/cron?forceDays=2" \
   | head -c 4000
 ```
 
