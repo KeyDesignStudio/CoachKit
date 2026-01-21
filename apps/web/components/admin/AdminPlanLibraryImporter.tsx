@@ -1,8 +1,9 @@
+
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { useApi } from '@/components/api-client';
+import { ApiClientError, useApi } from '@/components/api-client';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -33,6 +34,17 @@ type ImportResult = {
   message?: string;
 };
 
+type ImportUiError = {
+  code: string;
+  message: string;
+  details?: unknown;
+};
+
+type PlanLibraryDiagnostics = {
+  tables?: Array<{ table: string; exists: boolean; rowCount: number | null }>;
+  workoutLibrary?: { planLibrary?: { total?: number } };
+};
+
 type PublishResult = {
   matchedCount: number;
   publishedCount: number;
@@ -58,8 +70,11 @@ export function AdminPlanLibraryImporter() {
   const [offset, setOffset] = useState('0');
 
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ImportUiError | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+
+  const [diag, setDiag] = useState<PlanLibraryDiagnostics | null>(null);
+  const [diagError, setDiagError] = useState<ImportUiError | null>(null);
 
   const [publishConfirm, setPublishConfirm] = useState('');
   const [publishRunning, setPublishRunning] = useState(false);
@@ -79,6 +94,47 @@ export function AdminPlanLibraryImporter() {
   }, [offset]);
 
   const canApply = !dryRun && confirmText.trim().toUpperCase() === 'IMPORT';
+
+  const planTemplateCount = useMemo(() => {
+    const n = diag?.tables?.find((t) => t.table === 'PlanTemplate')?.rowCount;
+    return typeof n === 'number' ? n : null;
+  }, [diag]);
+
+  const planLibrarySessionCount = useMemo(() => {
+    const n = diag?.workoutLibrary?.planLibrary?.total;
+    return typeof n === 'number' ? n : null;
+  }, [diag]);
+
+  const scheduleDepsKnown = planTemplateCount != null && planLibrarySessionCount != null;
+  const scheduleDepsMissing = scheduleDepsKnown && (planTemplateCount === 0 || planLibrarySessionCount === 0);
+  const scheduleApplyBlocked = dataset === 'SCHEDULE' && !dryRun && (scheduleDepsMissing || !scheduleDepsKnown);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        setDiagError(null);
+        const data = await request<PlanLibraryDiagnostics>('/api/admin/diagnostics/plan-library', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        if (!cancelled) setDiag(data);
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof ApiClientError) {
+          setDiagError({ code: e.code, message: e.message, details: e.diagnostics });
+        } else {
+          setDiagError({ code: 'DIAGNOSTICS_FAILED', message: e instanceof Error ? e.message : 'Diagnostics failed' });
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [request]);
 
   const run = async () => {
     setRunning(true);
@@ -102,7 +158,11 @@ export function AdminPlanLibraryImporter() {
 
       setResult(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed');
+      if (e instanceof ApiClientError) {
+        setError({ code: e.code, message: e.message, details: e.diagnostics });
+      } else {
+        setError({ code: 'IMPORT_FAILED', message: e instanceof Error ? e.message : 'Import failed' });
+      }
     } finally {
       setRunning(false);
     }
@@ -199,19 +259,65 @@ export function AdminPlanLibraryImporter() {
         </div>
       ) : null}
 
-      {error ? <div className="mt-3 text-sm text-red-600">{error}</div> : null}
+      {dataset === 'SCHEDULE' && scheduleDepsMissing ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="font-semibold">Schedule depends on Plans + Sessions.</div>
+          <div className="mt-1">Import PLANS then SESSIONS first, or run ALL.</div>
+          <div className="mt-2 text-[11px] text-amber-800">
+            Detected: PLANS={planTemplateCount ?? 'unknown'} • SESSIONS={planLibrarySessionCount ?? 'unknown'}
+          </div>
+        </div>
+      ) : null}
+
+      {dataset === 'SCHEDULE' && !scheduleDepsKnown && diagError ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="font-semibold">Schedule depends on Plans + Sessions.</div>
+          <div className="mt-1">Import PLANS then SESSIONS first, or run ALL.</div>
+          <div className="mt-2 text-[11px] text-amber-800">
+            Unable to confirm dependency state: {diagError.code} — {diagError.message}
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div
+          className={
+            error.code === 'PLAN_LIBRARY_DEPENDENCY_MISSING'
+              ? 'mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900'
+              : 'mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800'
+          }
+        >
+          <div className="font-semibold">{error.code}</div>
+          <div className="mt-1">{error.message}</div>
+          {error.code === 'PLAN_LIBRARY_DEPENDENCY_MISSING' ? (
+            <div className="mt-2 text-[11px] text-amber-800">Fix: Run: PLANS → SESSIONS → SCHEDULE, or run ALL.</div>
+          ) : null}
+          {error.details != null ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px]">details</summary>
+              <pre className="mt-2 max-h-[220px] overflow-auto rounded-lg bg-[var(--bg-structure)] p-2 text-[10px] text-[var(--text)]">
+                {JSON.stringify(error.details, null, 2)}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-3 flex items-center gap-2">
         <Button
           data-testid="admin-plan-library-run"
           variant={dryRun ? 'secondary' : 'primary'}
           size="sm"
-          disabled={running || (!dryRun && !canApply)}
+          disabled={running || (!dryRun && !canApply) || scheduleApplyBlocked}
           onClick={() => void run()}
         >
           {running ? 'Running…' : dryRun ? 'Run Dry-Run' : 'Import Now'}
         </Button>
       </div>
+
+      {dataset === 'SCHEDULE' && !dryRun && scheduleApplyBlocked ? (
+        <div className="mt-2 text-xs text-amber-700">Import PLANS then SESSIONS first, or run ALL.</div>
+      ) : null}
 
       {result ? (
         <div data-testid="admin-plan-library-result" className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">

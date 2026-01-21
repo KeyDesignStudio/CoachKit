@@ -1269,6 +1269,28 @@ export async function POST(request: NextRequest) {
 
     const body = bodySchema.parse(await request.json());
 
+    if (body.dataset === 'SCHEDULE' && !body.dryRun) {
+      const [planCount, sessionCount] = await prisma.$transaction([
+        prisma.planTemplate.count(),
+        prisma.workoutLibrarySession.count({ where: { source: WorkoutLibrarySource.PLAN_LIBRARY } }),
+      ]);
+
+      if (planCount === 0 || sessionCount === 0) {
+        return failure(
+          'PLAN_LIBRARY_DEPENDENCY_MISSING',
+          'Plans/Sessions must be imported before Schedule. Run PLANS then SESSIONS then SCHEDULE, or run ALL.',
+          400,
+          requestId,
+          {
+            diagnostics: {
+              planTemplate: planCount,
+              workoutLibrarySessionPlanLibrary: sessionCount,
+            },
+          }
+        );
+      }
+    }
+
     if (body.reset) {
       // reset is intentionally disallowed in production.
       if (!body.dryRun && body.confirmApply === true) {
@@ -1290,13 +1312,20 @@ export async function POST(request: NextRequest) {
           }
         : null;
 
+    // Chunking semantics (non-negotiable): for dataset=ALL in APPLY mode, limit/offset apply ONLY to SCHEDULE.
+    // PLANS and SESSIONS are always loaded from the start of their CSVs so SCHEDULE never fails due to chunking.
+    const plansSessionsLimit = body.dataset === 'ALL' && !body.dryRun ? undefined : body.limit;
+    const plansSessionsOffset = body.dataset === 'ALL' && !body.dryRun ? 0 : body.offset;
+    const scheduleLimit = body.limit;
+    const scheduleOffset = body.offset;
+
     for (const dataset of order) {
       if (dataset === 'PLANS') {
         const res = await importPlans({
           requestId,
           dryRun: body.dryRun,
-          limit: body.limit,
-          offset: body.offset,
+          limit: plansSessionsLimit,
+          offset: plansSessionsOffset,
           planIdByExternal: resolveMaps?.planIdByExternal,
         });
         urlMeta = urlMeta ?? res.url;
@@ -1320,8 +1349,8 @@ export async function POST(request: NextRequest) {
         const res = await importSessions({
           requestId,
           dryRun: body.dryRun,
-          limit: body.limit,
-          offset: body.offset,
+          limit: plansSessionsLimit,
+          offset: plansSessionsOffset,
           createdByUserId: user.id,
           sessionIdByExternal: resolveMaps?.sessionIdByExternal,
         });
@@ -1346,8 +1375,8 @@ export async function POST(request: NextRequest) {
         const res = await importSchedule({
           requestId,
           dryRun: body.dryRun,
-          limit: body.limit,
-          offset: body.offset,
+          limit: scheduleLimit,
+          offset: scheduleOffset,
           resolveMaps: body.dataset === 'ALL' && resolveMaps ? resolveMaps : undefined,
         });
         urlMeta = urlMeta ?? res.url;
@@ -1371,6 +1400,11 @@ export async function POST(request: NextRequest) {
     const finishedAt = new Date();
     const url = urlMeta ?? sanitizeUrlForLogs(getPlanLibraryDatasetUrl('PLANS'));
 
+    const message =
+      body.dataset === 'ALL' && (body.limit != null || body.offset !== 0)
+        ? 'Note: for dataset=ALL, limit/offset apply to SCHEDULE only (PLANS and SESSIONS run fully each request).'
+        : undefined;
+
     return success({
       requestId,
       dataset: body.dataset,
@@ -1379,6 +1413,7 @@ export async function POST(request: NextRequest) {
       startedAt: startedAt.toISOString(),
       finishedAt: finishedAt.toISOString(),
       steps,
+      message,
     } satisfies ImportSummary);
   } catch (error) {
     return handleError(error, { requestId, where: 'POST /api/admin/plan-library/import' });
