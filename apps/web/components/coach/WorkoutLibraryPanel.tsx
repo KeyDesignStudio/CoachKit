@@ -149,6 +149,7 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
   const [error, setError] = useState('');
   const [items, setItems] = useState<LibraryListItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -233,12 +234,15 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
         return [...prev, ...next];
       });
       setTotal(data.total);
+      setLastUpdatedAt(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load workout library.');
     } finally {
       setLoading(false);
     }
   }, [listUrl, request]);
+
+  const showLastUpdated = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DIAG_MODE === '1';
 
   useEffect(() => {
     loadList();
@@ -296,6 +300,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                 ? 'Your saved templates'
                 : 'Browse templates, favorite, and inject into Session Builder'}
             </p>
+            {showLastUpdated ? (
+              <p className="mt-1 text-[11px] text-[var(--muted)]" data-testid="workout-library-last-updated">
+                Last updated: {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString() : '…'}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
