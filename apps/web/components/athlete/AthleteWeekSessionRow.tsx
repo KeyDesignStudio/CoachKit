@@ -11,6 +11,9 @@ export type AthleteWeekSessionRowItem = {
   date: string;
   plannedStartTimeLocal: string | null;
   displayTimeLocal?: string | null;
+  origin?: string | null;
+  planningStatus?: string | null;
+  sourceActivityId?: string | null;
   discipline: string;
   status: string;
   title: string;
@@ -98,6 +101,11 @@ export function AthleteWeekSessionRow({
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
 
+  const isRecordedFromStrava = item.origin === 'STRAVA' && item.planningStatus === 'UNPLANNED';
+  const titleLabel = isRecordedFromStrava
+    ? `${(item.title || 'Recorded activity').trim()} (unscheduled)`
+    : item.title || disciplineLabel;
+
   const pain = item.latestCompletedActivity?.painFlag ?? false;
   const statusBar = getStatusBarConfig({ item, now: effectiveNow, timeZone });
 
@@ -155,7 +163,7 @@ export function AthleteWeekSessionRow({
             {item.displayTimeLocal ?? ''}
           </p>
           <p className={cn(isStacked ? 'text-[11px]' : 'text-xs', 'font-normal truncate text-[var(--text)]')}>
-            {item.title || disciplineLabel}
+            {titleLabel}
           </p>
         </div>
 
