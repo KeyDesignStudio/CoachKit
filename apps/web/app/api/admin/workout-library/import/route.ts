@@ -132,7 +132,6 @@ const importItemSchema = z
 const importBodySchema = z.object({
   dryRun: z.boolean().default(true),
   confirmApply: z.boolean().default(false),
-  source: z.nativeEnum(WorkoutLibrarySource).default(WorkoutLibrarySource.MANUAL),
   onDuplicate: z.enum(['skip']).default('skip'),
   items: z.array(z.unknown()).default([]),
 });
@@ -141,22 +140,13 @@ const MAX_IMPORT_ROWS = 500;
 
 export async function POST(request: NextRequest) {
   const requestId = randomUUID();
-  let ctx: { dryRun?: boolean; itemCount?: number; source?: string } = {};
+  let ctx: { dryRun?: boolean; itemCount?: number } = {};
   try {
     const { user } = await requireWorkoutLibraryAdmin();
 
     const parsedBody = importBodySchema.parse(await request.json());
-    ctx = { source: parsedBody.source, dryRun: parsedBody.dryRun, itemCount: parsedBody.items.length };
+    ctx = { dryRun: parsedBody.dryRun, itemCount: parsedBody.items.length };
     const dryRun = parsedBody.dryRun;
-
-    if (parsedBody.source !== WorkoutLibrarySource.MANUAL) {
-      return failure(
-        'INVALID_SOURCE',
-        'Only MANUAL imports are supported on this endpoint. Use the source-specific import routes for KAGGLE and FREE_EXERCISE_DB.',
-        400,
-        requestId
-      );
-    }
 
     if (!dryRun && !parsedBody.confirmApply) {
       return failure('CONFIRM_APPLY_REQUIRED', 'confirmApply is required when dryRun=false.', 400, requestId);
@@ -267,7 +257,7 @@ export async function POST(request: NextRequest) {
             title: item.title,
             discipline: item.discipline,
             status: WorkoutLibrarySessionStatus.DRAFT,
-            source: parsedBody.source,
+            source: WorkoutLibrarySource.MANUAL,
             fingerprint,
             tags: item.tags,
             description: item.description,

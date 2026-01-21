@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
+import { ApiClientError } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -19,6 +20,7 @@ import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthl
 import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 type CompletedActivity = {
   id: string;
@@ -79,7 +81,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [item, setItem] = useState<CalendarItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; kind: 'success' | 'error' } | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
     durationMinutes: 60,
     distanceKm: '',
@@ -222,7 +227,11 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workout.');
+      if (err instanceof ApiClientError && err.status === 404) {
+        setError('Workout not found (it may have been deleted).');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load workout.');
+      }
     } finally {
       setLoading(false);
 
@@ -248,6 +257,49 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }
   }, [request, user?.role, user?.userId, workoutId]);
 
+  const showToast = useCallback((message: string, kind: 'success' | 'error') => {
+    setToast({ message, kind });
+    window.setTimeout(() => {
+      setToast((current) => (current?.message === message ? null : current));
+    }, 3000);
+  }, []);
+
+  const deleteWorkout = useCallback(async () => {
+    if (deleting || submitting) return;
+    setDeleting(true);
+    setError('');
+
+    try {
+      const result = await request<{ ok: true; deleted?: boolean; alreadyDeleted?: boolean }>(
+        `/api/athlete/calendar-items/${workoutId}`,
+        { method: 'DELETE' }
+      );
+
+      if (result?.alreadyDeleted) {
+        showToast('Workout already deleted.', 'success');
+      } else {
+        showToast('Workout deleted.', 'success');
+      }
+
+      // Let the toast render briefly, then navigate away.
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      router.push('/athlete/calendar');
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 404) {
+        showToast('Workout already deleted.', 'success');
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        router.push('/athlete/calendar');
+      } else if (err instanceof ApiClientError && err.status === 403) {
+        showToast('You can only delete your own workouts.', 'error');
+      } else {
+        showToast('Failed to delete workout.', 'error');
+      }
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteOpen(false);
+    }
+  }, [deleting, request, router, showToast, submitting, workoutId]);
+
   const loadWeather = useCallback(
     async (bypassCache = false) => {
       if (user?.role !== 'ATHLETE' || !user.userId) return;
@@ -271,7 +323,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   );
 
   const handleClose = useCallback(() => {
-    if (submitting) return;
+    if (submitting || deleting) return;
 
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back();
@@ -279,7 +331,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }
 
     router.push('/athlete/calendar');
-  }, [router, submitting]);
+  }, [deleting, router, submitting]);
 
   useEffect(() => {
     loadData();
@@ -716,11 +768,21 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                     ) : null}
                     <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-[44px] w-full sm:w-auto text-rose-600 hover:bg-rose-500/10"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                      disabled={submitting || deleting}
+                    >
+                      Delete
+                    </Button>
+                    <Button
+                      type="button"
                       variant="secondary"
                       size="sm"
                       className="min-h-[44px] w-full sm:w-auto"
                       onClick={handleClose}
-                      disabled={submitting}
+                      disabled={submitting || deleting}
                     >
                       Close
                     </Button>
@@ -775,11 +837,21 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
                   <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-[44px] w-full sm:w-auto text-rose-600 hover:bg-rose-500/10"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={submitting || deleting}
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    type="button"
                     variant="secondary"
                     size="sm"
                     className="min-h-[44px] w-full sm:w-auto"
                     onClick={handleClose}
-                    disabled={submitting}
+                    disabled={submitting || deleting}
                   >
                     Close
                   </Button>
@@ -787,6 +859,32 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               </Card>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      <ConfirmModal
+        isOpen={confirmDeleteOpen}
+        title="Delete workout?"
+        message="This removes the workout from your calendar and your coach's calendar.\n\nThis can't be undone."
+        confirmLabel={deleting ? 'Deleting…' : 'Delete workout'}
+        cancelLabel="Cancel"
+        onCancel={() => (deleting ? null : setConfirmDeleteOpen(false))}
+        onConfirm={() => void deleteWorkout()}
+      />
+
+      {toast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="athlete-workout-toast"
+          className={
+            'fixed bottom-4 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur ' +
+            (toast.kind === 'success'
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900'
+              : 'border-rose-500/30 bg-rose-500/10 text-rose-900')
+          }
+        >
+          {toast.message}
         </div>
       ) : null}
     </section>

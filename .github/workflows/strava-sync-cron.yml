@@ -1,0 +1,38 @@
+name: Strava sync cron (Hobby-safe)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  strava_sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight (required secrets/vars)
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.COACHKIT_CRON_SECRET }}" ]; then
+            echo "Missing required secret: COACHKIT_CRON_SECRET"
+            exit 1
+          fi
+          if [ -z "${{ vars.COACHKIT_BASE_URL }}" ]; then
+            echo "Missing required variable: COACHKIT_BASE_URL"
+            exit 1
+          fi
+
+      - name: Call CoachKit cron endpoint (intents mode)
+        shell: bash
+        run: |
+          BASE_URL="${{ vars.COACHKIT_BASE_URL }}"
+          URL="${BASE_URL}/api/integrations/strava/cron?mode=intents&forceDays=1"
+          echo "Calling host=$(echo "$BASE_URL" | sed -E 's#https?://##')"
+          STATUS=$(curl -sS -o /tmp/cron.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.COACHKIT_CRON_SECRET }}" \
+            "$URL" || true)
+          echo "HTTP status=$STATUS"
+          cat /tmp/cron.json | head -c 2000 || true
+          if [ "$STATUS" != "200" ]; then
+            echo "Cron call failed (status=$STATUS)"
+            exit 1
+          fi

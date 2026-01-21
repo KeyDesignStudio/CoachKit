@@ -138,6 +138,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           coachId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...athleteFilter,
           ...disciplineFilter,
@@ -147,6 +148,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           coachId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...athleteFilter,
           ...disciplineFilter,
@@ -160,6 +162,7 @@ export async function GET(request: NextRequest) {
     const completedItems = await prisma.calendarItem.findMany({
       where: {
         coachId: user.id,
+        deletedAt: null,
         ...rangeFilter,
         ...athleteFilter,
         ...disciplineFilter,
@@ -208,6 +211,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           coachId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...athleteFilter,
           ...disciplineFilter,
@@ -217,6 +221,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           coachId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...athleteFilter,
           ...disciplineFilter,
@@ -226,6 +231,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           coachId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...athleteFilter,
           ...disciplineFilter,
@@ -239,6 +245,7 @@ export async function GET(request: NextRequest) {
     const inboxItems = await prisma.calendarItem.findMany({
       where: {
         coachId: user.id,
+        deletedAt: null,
         ...rangeFilter,
         ...athleteFilter,
         ...disciplineFilter,

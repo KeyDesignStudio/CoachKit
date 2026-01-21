@@ -77,8 +77,13 @@ enum WorkoutLibrarySessionStatus {
 
 enum WorkoutLibrarySource {
   MANUAL
-  KAGGLE
-  FREE_EXERCISE_DB
+}
+
+enum StravaSyncIntentStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
 }
 
 model User {
@@ -108,6 +113,7 @@ model User {
   coachJournalEntries CoachJournalEntry[]
   oauthStates         OAuthState[]
   workoutLibrarySessionsCreated WorkoutLibrarySession[]
+  workoutLibrarySessionsPublished WorkoutLibrarySession[] @relation("WorkoutLibrarySessionPublishedBy")
   workoutLibraryFavorites       WorkoutLibraryFavorite[]
   workoutLibraryUsage           WorkoutLibraryUsage[]
 
@@ -131,17 +137,21 @@ model WorkoutLibrarySession {
   notes              String?
   equipment          String[]
   workoutStructure   Json?
+  publishedAt        DateTime?
+  publishedByUserId  String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   createdByUserId    String?
 
   createdByUser      User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  publishedByUser    User?                   @relation("WorkoutLibrarySessionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
   favorites          WorkoutLibraryFavorite[]
   usage              WorkoutLibraryUsage[]
 
   @@index([discipline])
   @@index([status])
   @@index([source])
+  @@index([publishedAt])
   @@index([title])
   @@index([intensityCategory])
   @@index([tags], type: Gin)
@@ -203,6 +213,7 @@ model AthleteProfile {
   planWeeks           PlanWeek[]
   coachJournalEntries CoachJournalEntry[]
   stravaConnection    StravaConnection?
+  stravaSyncIntents   StravaSyncIntent[]
 
   @@index([coachId])
 }
@@ -327,6 +338,10 @@ model CalendarItem {
   coachId                String
   date                   DateTime // use date-only at midnight; interpret in timezone in UI
   plannedStartTimeLocal  String?
+  // For non-planned sessions (e.g. recorded-from-provider).
+  origin                 String?
+  planningStatus         String?
+  sourceActivityId       String?
   discipline             String
   subtype                String?
   title                  String
@@ -347,6 +362,10 @@ model CalendarItem {
   groupSessionId         String?
   reviewedAt             DateTime?
   actionAt               DateTime?
+
+  deletedAt              DateTime?
+  deletedByUserId        String?
+
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -365,6 +384,8 @@ model CalendarItem {
   @@index([coachId, reviewedAt, actionAt])
   @@index([status])
   @@index([coachId, reviewedAt, status])
+  @@index([deletedAt])
+  @@unique([athleteId, origin, sourceActivityId])
 }
 
 model CompletedActivity {
@@ -390,7 +411,7 @@ model CompletedActivity {
 
   @@index([athleteId, startTime])
   @@index([calendarItemId])
-  @@unique([source, externalActivityId])
+  @@unique([athleteId, source, externalActivityId])
 }
 
 model Comment {
@@ -534,4 +555,27 @@ model StravaConnection {
   @@index([athleteId])
   @@index([stravaAthleteId])
   @@index([expiresAt])
+}
+
+model StravaSyncIntent {
+  id              String               @id @default(cuid())
+  athleteId        String // AthleteProfile.userId
+  stravaAthleteId  String
+  stravaActivityId String
+  eventType        String
+
+  status       StravaSyncIntentStatus @default(PENDING)
+  attempts     Int                   @default(0)
+  nextAttemptAt DateTime?
+  lastError    String?
+
+  processedAt  DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@unique([athleteId, stravaActivityId])
+  @@index([status, createdAt])
+  @@index([athleteId, status])
 }

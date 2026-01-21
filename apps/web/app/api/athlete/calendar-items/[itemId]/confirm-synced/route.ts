@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.calendarItem.findFirst({
-        where: { id: context.params.itemId, athleteId: user.id },
+        where: { id: context.params.itemId, athleteId: user.id, deletedAt: null },
         include: includeRefs,
       });
 
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
       }
 
       const updatedItem = await tx.calendarItem.findFirst({
-        where: { id: item.id },
+        where: { id: item.id, deletedAt: null },
         include: includeRefs,
       });
 

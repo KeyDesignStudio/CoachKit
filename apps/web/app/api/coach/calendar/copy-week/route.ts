@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         where: {
           coachId: user.id,
           athleteId: payload.athleteId,
+          deletedAt: null,
           date: {
             gte: fromWeekStart,
             lte: fromWeekEnd,
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
         where: {
           coachId: user.id,
           athleteId: payload.athleteId,
+          deletedAt: null,
           date: {
             gte: toWeekStart,
             lte: toWeekEnd,

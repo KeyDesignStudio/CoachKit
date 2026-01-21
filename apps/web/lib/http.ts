@@ -14,6 +14,15 @@ type ApiFailure = {
     code: string;
     message: string;
     requestId?: string;
+    httpStatus?: number;
+    urlHost?: string;
+    urlPath?: string;
+    step?: string;
+    resolvedSource?: string;
+    headStatus?: number | null;
+    contentType?: string | null;
+    contentLength?: number | null;
+    diagnostics?: Record<string, unknown>;
   };
 };
 
@@ -21,9 +30,24 @@ export function success<T>(data: T, init?: ResponseInit) {
   return NextResponse.json<ApiSuccess<T>>({ data, error: null }, init);
 }
 
-export function failure(code: string, message: string, status = 400, requestId?: string) {
+export function failure(
+  code: string,
+  message: string,
+  status = 400,
+  requestId?: string,
+  extras?: Partial<ApiFailure['error']>
+) {
   return NextResponse.json<ApiFailure>(
-    { data: null, error: { code, message, ...(requestId ? { requestId } : {}) } },
+    {
+      data: null,
+      error: {
+        code,
+        message,
+        httpStatus: status,
+        ...(requestId ? { requestId } : {}),
+        ...(extras ?? {}),
+      },
+    },
     { status }
   );
 }
@@ -45,7 +69,7 @@ export function handleError(
   }
 
   if (error instanceof ApiError) {
-    return failure(error.code, error.message, error.status, options?.requestId);
+    return failure(error.code, error.message, error.status, options?.requestId, error.meta as any);
   }
 
   if (error instanceof z.ZodError) {

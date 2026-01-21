@@ -64,7 +64,8 @@ export async function GET(request: NextRequest) {
         where: {
           athleteId: params.athleteId,
           coachId: user.id,
-          date: {
+            deletedAt: null,
+            date: {
             gte: fromDate,
             lte: toDate,
           },
@@ -76,6 +77,9 @@ export async function GET(request: NextRequest) {
           coachId: true,
           date: true,
           plannedStartTimeLocal: true,
+          origin: true,
+          planningStatus: true,
+          sourceActivityId: true,
           discipline: true,
           subtype: true,
           title: true,
@@ -159,6 +163,9 @@ export async function GET(request: NextRequest) {
         coachId: item.coachId,
         date: formatUtcDayKey(item.date),
         plannedStartTimeLocal: item.plannedStartTimeLocal,
+        origin: item.origin ?? null,
+        planningStatus: item.planningStatus ?? null,
+        sourceActivityId: item.sourceActivityId ?? null,
         discipline: item.discipline,
         subtype: item.subtype,
         title: item.title,
@@ -210,7 +217,7 @@ export async function GET(request: NextRequest) {
     return success(
       { items: formattedItems, athleteTimezone, dayWeather },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
       }
     );
   } catch (error) {

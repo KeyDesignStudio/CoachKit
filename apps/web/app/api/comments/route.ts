@@ -25,8 +25,8 @@ const authorSelect = {
 };
 
 async function assertCommentAccess(calendarItemId: string, userId: string, role: UserRole) {
-  const calendarItem = await prisma.calendarItem.findUnique({
-    where: { id: calendarItemId },
+  const calendarItem = await prisma.calendarItem.findFirst({
+    where: { id: calendarItemId, deletedAt: null },
     select: { id: true, athleteId: true, coachId: true },
   });
 

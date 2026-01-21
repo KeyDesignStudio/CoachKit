@@ -162,6 +162,15 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
 
   const favoritesOnly = mode === 'favorites';
 
+  const hasActiveFilters =
+    Boolean(q.trim()) ||
+    disciplines.length > 0 ||
+    tags.length > 0 ||
+    Boolean(durationMin.trim()) ||
+    Boolean(durationMax.trim()) ||
+    Boolean(intensityTarget.trim()) ||
+    Boolean(intensityCategory);
+
   const setTagsFromArray = useCallback((nextTags: string[]) => {
     const next = nextTags
       .map((t) => t.trim())
@@ -511,7 +520,15 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
       <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {!loading && items.length === 0 && (
           <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
-            <p className="text-[var(--muted)]">No workouts match your filters.</p>
+            {favoritesOnly ? (
+              <p className="text-[var(--muted)]">{hasActiveFilters ? 'No workouts match your filters.' : 'No favorites yet.'}</p>
+            ) : (
+              <p className="text-[var(--muted)]">
+                {hasActiveFilters
+                  ? 'No workouts match your filters.'
+                  : 'No published workouts yet. Ask an admin to publish library workouts.'}
+              </p>
+            )}
           </div>
         )}
 

@@ -53,8 +53,8 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
     const { user } = await requireAuth();
     const itemId = context.params.itemId;
 
-    const item = await prisma.calendarItem.findUnique({
-      where: { id: itemId },
+    const item = await prisma.calendarItem.findFirst({
+      where: { id: itemId, deletedAt: null },
       select: {
         id: true,
         athleteId: true,

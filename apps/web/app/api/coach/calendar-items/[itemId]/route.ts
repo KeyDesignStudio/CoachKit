@@ -47,7 +47,7 @@ const includeRefs = {
 
 async function ensureCalendarItem(itemId: string, coachId: string) {
   const item = await prisma.calendarItem.findFirst({
-    where: { id: itemId, coachId },
+    where: { id: itemId, coachId, deletedAt: null },
     include: includeRefs,
   });
 

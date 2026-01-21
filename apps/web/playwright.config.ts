@@ -10,19 +10,21 @@ export default defineConfig({
   },
   use: {
     baseURL: `http://localhost:${PORT}`,
+    timezoneId: 'UTC',
     trace: 'retain-on-failure',
   },
   webServer: {
     // IMPORTANT: keep this cross-platform. Do not use `FOO=bar cmd` shell prefixes.
     // The server must inherit DATABASE_URL from the parent environment (e.g. Neon).
-    command: `next dev -p ${PORT}`,
+    command: `node scripts/playwright-webserver.mjs ${PORT}`,
     env: {
       ...process.env,
       NODE_ENV: 'development',
       DISABLE_AUTH: 'true',
-      // Avoid external network dependency in tests.
-      FREE_EXERCISE_DB_DATA_PATH: 'tests/fixtures/free-exercise-db-sample.json',
-      KAGGLE_DATA_PATH: 'tests/fixtures/kaggle-sample.json',
+      STRAVA_AUTOSYNC_ENABLED: process.env.STRAVA_AUTOSYNC_ENABLED ?? '1',
+      CRON_SECRET: process.env.CRON_SECRET ?? 'playwright-cron-secret',
+      STRAVA_WEBHOOK_VERIFY_TOKEN: process.env.STRAVA_WEBHOOK_VERIFY_TOKEN ?? 'playwright-webhook-token',
+      STRAVA_STUB: process.env.STRAVA_STUB ?? 'true',
     },
     port: PORT,
     reuseExistingServer: false,
