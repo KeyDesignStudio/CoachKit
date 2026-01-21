@@ -29,6 +29,9 @@ export async function GET(request: NextRequest, { params }: { params: { athleteI
       where: {
         athleteId,
         painFlag: true,
+        calendarItem: {
+          deletedAt: null,
+        },
       },
       orderBy: {
         startTime: 'desc',

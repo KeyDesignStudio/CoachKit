@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
     const items = await prisma.calendarItem.findMany({
       where: {
         coachId: user.id,
+        deletedAt: null,
         ...(fromDate && toDate
           ? {
               date: {
