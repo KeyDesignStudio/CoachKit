@@ -21,7 +21,13 @@ Important: never log or paste full connection strings.
 
 These are only needed if you plan to use specific admin-only features in Preview/Production.
 
-External dataset ingestion sources will be reintroduced once a validated CSV dataset is selected.
+Plan Library ingestion (admin-only):
+
+- `PLAN_LIBRARY_PLANS_URL`
+- `PLAN_LIBRARY_SESSIONS_URL`
+- `PLAN_LIBRARY_SCHEDULE_URL`
+
+If unset, the server uses the default hardcoded public Vercel Blob URLs.
 
 ## Preview vs Production
 

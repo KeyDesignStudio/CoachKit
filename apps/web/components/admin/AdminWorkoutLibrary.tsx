@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { AdminPlanLibraryImporter } from '@/components/admin/AdminPlanLibraryImporter';
 import { CANONICAL_EQUIPMENT, type CanonicalEquipment } from '@/lib/workout-library-taxonomy';
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
@@ -945,6 +946,8 @@ export function AdminWorkoutLibrary() {
             <div className="text-xs text-[var(--muted)]">
               Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions (not visible to coaches until published).
             </div>
+
+            <AdminPlanLibraryImporter />
 
             {showDbBanner ? (
               <div className="rounded border border-[var(--border)] bg-white p-3 text-xs text-[var(--text)]">
