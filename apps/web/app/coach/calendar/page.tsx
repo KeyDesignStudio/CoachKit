@@ -1172,7 +1172,7 @@ export default function CoachCalendarPage() {
                     dayWeather={day.weather}
                     isEmpty={false}
                     isToday={isDayToday}
-                    onAddClick={selected.length === 1 ? () => openCreateDrawerForAthlete(selected[0].userId, dateKey) : undefined}
+                    headerTestId="coach-calendar-date-header"
                   >
                     <div className="flex flex-col">
                       {selected.map((athlete, index) => {
@@ -1194,7 +1194,11 @@ export default function CoachCalendarPage() {
                         );
 
                         return (
-                          <div key={athlete.userId} className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]">
+                          <div
+                            key={athlete.userId}
+                            data-testid="coach-calendar-athlete-row"
+                            className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]"
+                          >
                             {/* Athlete subheader: always on desktop; on mobile only when stacked */}
                             <div
                               className={cn(
@@ -1208,6 +1212,7 @@ export default function CoachCalendarPage() {
                               <button
                                 type="button"
                                 onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
+                                data-testid="add-schedule-button"
                                 className="hidden md:inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                                 aria-label="Add workout"
                                 title="Add workout"
