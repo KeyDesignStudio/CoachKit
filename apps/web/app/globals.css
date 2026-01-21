@@ -10,7 +10,7 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
-  --border-subtle: rgba(0, 0, 0, 0.04);
+  --border-subtle: #fff;
 
   /* Interaction tokens */
   --today-border: rgba(59, 130, 246, 0.40);
@@ -32,7 +32,7 @@
     --bg-surface: rgba(13, 17, 35, 0.75);
     --bg-structure: rgba(18, 24, 45, 0.65);
     --bg-card: rgba(18, 24, 45, 0.85);
-    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-subtle: #fff;
 
     /* Interaction tokens */
     --today-border: rgba(158, 193, 255, 0.50);
