@@ -319,6 +319,7 @@ async function matchAndLinkCalendarItem(params: {
     where: {
       athleteId,
       discipline,
+      deletedAt: null,
       date: { gte: rangeStart, lte: rangeEnd },
       status: { in: [CalendarItemStatus.PLANNED, CalendarItemStatus.MODIFIED] },
     },
@@ -423,6 +424,33 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     }
 
     const externalActivityId = String(activity.id);
+
+    // Tombstone guard: if the athlete deleted a STRAVA-origin calendar item for this activity,
+    // do NOT recreate or update it (and do not recreate the completion row).
+    const tombstone = await prisma.calendarItem.findUnique({
+      where: {
+        athleteId_origin_sourceActivityId: {
+          athleteId: entry.athleteId,
+          origin: 'STRAVA',
+          sourceActivityId: externalActivityId,
+        },
+      } as any,
+      select: { id: true, deletedAt: true },
+    });
+
+    if (tombstone?.deletedAt) {
+      // Defensive cleanup: ensure we don't keep recreating orphaned completions.
+      await prisma.completedActivity.deleteMany({
+        where: {
+          athleteId: entry.athleteId,
+          source: CompletionSource.STRAVA,
+          externalActivityId,
+        },
+      });
+      summary.skippedExisting += 1;
+      continue;
+    }
+
     const discipline = mapStravaDiscipline(activity);
     const startInstant = new Date(activity.start_date);
     const activityDateOnly = toNaiveUtcDateOnlyFromZone(startInstant, entry.athleteTimezone);

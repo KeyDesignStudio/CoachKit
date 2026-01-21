@@ -31,6 +31,7 @@ export async function DELETE(
     const usageCount = await prisma.calendarItem.count({
       where: {
         coachId: user.id,
+        deletedAt: null,
         discipline: record.discipline,
         title: record.title,
       },

@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.findMany({
         where: {
           athleteId: user.id,
+          deletedAt: null,
           date: {
             gte: fromDate,
             lte: toDate,
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
       return success(
         { items: [] },
         {
-          headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+          headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
         }
       );
     }
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
     return success(
       { items: formattedItems, dayWeather },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
       }
     );
   } catch (error) {

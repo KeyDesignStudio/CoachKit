@@ -64,7 +64,8 @@ export async function GET(request: NextRequest) {
         where: {
           athleteId: params.athleteId,
           coachId: user.id,
-          date: {
+            deletedAt: null,
+            date: {
             gte: fromDate,
             lte: toDate,
           },
@@ -216,7 +217,7 @@ export async function GET(request: NextRequest) {
     return success(
       { items: formattedItems, athleteTimezone, dayWeather },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
       }
     );
   } catch (error) {

@@ -34,7 +34,7 @@ export async function POST(
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.calendarItem.findFirst({
-        where: { id: context.params.itemId, athleteId: user.id },
+        where: { id: context.params.itemId, athleteId: user.id, deletedAt: null },
         include: includeRefs,
       });
 

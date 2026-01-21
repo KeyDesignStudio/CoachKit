@@ -4,7 +4,7 @@ import { CompletionSource } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
-import { notFound } from '@/lib/errors';
+import { forbidden, notFound } from '@/lib/errors';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { privateCacheHeaders } from '@/lib/cache';
 
@@ -69,7 +69,7 @@ export async function GET(
 
     const [item, comments, completedActivities] = await Promise.all([
       prisma.calendarItem.findFirst({
-        where: { id: itemId, athleteId: user.id },
+        where: { id: itemId, athleteId: user.id, deletedAt: null },
         include: baseIncludeRefs,
       }),
       prisma.comment.findMany({
@@ -122,9 +122,58 @@ export async function GET(
         },
       },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
       }
     );
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: { itemId: string } }
+) {
+  try {
+    const { user } = await requireAthlete();
+    const itemId = context.params.itemId;
+
+    const existing = await prisma.calendarItem.findUnique({
+      where: { id: itemId },
+      select: { id: true, athleteId: true, deletedAt: true },
+    });
+
+    if (!existing) {
+      throw notFound('Calendar item not found.');
+    }
+
+    if (existing.athleteId !== user.id) {
+      throw forbidden('Forbidden.');
+    }
+
+    if (existing.deletedAt) {
+      return success({ ok: true, alreadyDeleted: true });
+    }
+
+    const now = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.calendarItem.update({
+        where: { id: itemId },
+        data: {
+          deletedAt: now,
+          deletedByUserId: user.id,
+        },
+        select: { id: true },
+      });
+
+      // Remove linked completion rows so deleted sessions don't affect stats.
+      await tx.completedActivity.deleteMany({
+        where: { calendarItemId: itemId },
+      });
+    });
+
+    return success({ ok: true, deleted: true });
   } catch (error) {
     return handleError(error);
   }

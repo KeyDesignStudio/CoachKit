@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           athleteId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...disciplineFilter,
           status: { in: COMPLETED_CONFIRMED },
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           athleteId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...disciplineFilter,
           status: CalendarItemStatus.SKIPPED,
@@ -82,6 +84,7 @@ export async function GET(request: NextRequest) {
       prisma.calendarItem.count({
         where: {
           athleteId: user.id,
+          deletedAt: null,
           ...rangeFilter,
           ...disciplineFilter,
           status: CalendarItemStatus.COMPLETED_SYNCED_DRAFT,
@@ -94,6 +97,7 @@ export async function GET(request: NextRequest) {
     const workoutsMissed = await prisma.calendarItem.count({
       where: {
         athleteId: user.id,
+        deletedAt: null,
         ...rangeFilter,
         ...disciplineFilter,
         status: CalendarItemStatus.PLANNED,
@@ -109,6 +113,7 @@ export async function GET(request: NextRequest) {
     const painFlagWorkouts = await prisma.calendarItem.count({
       where: {
         athleteId: user.id,
+        deletedAt: null,
         ...rangeFilter,
         ...disciplineFilter,
         status: { in: COMPLETED_CONFIRMED },
@@ -119,6 +124,7 @@ export async function GET(request: NextRequest) {
     const completedItems = await prisma.calendarItem.findMany({
       where: {
         athleteId: user.id,
+        deletedAt: null,
         ...rangeFilter,
         ...disciplineFilter,
         status: { in: COMPLETED_CONFIRMED },
