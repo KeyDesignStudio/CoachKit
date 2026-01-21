@@ -77,6 +77,12 @@ enum WorkoutLibrarySessionStatus {
 
 enum WorkoutLibrarySource {
   MANUAL
+  PLAN_LIBRARY
+}
+
+enum AthletePlanStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 enum StravaSyncIntentStatus {
@@ -87,66 +93,74 @@ enum StravaSyncIntentStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      UserRole
-  timezone  String   @default("Australia/Brisbane")
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  role           UserRole
+  timezone       String   @default("Australia/Brisbane")
   authProviderId String?  @unique // Clerk user ID for authentication
-  createdAt DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   // Relations
-  athleteProfile      AthleteProfile?
-  coachedAthletes     AthleteProfile[] @relation("CoachToAthletes")
-  comments            Comment[]
-  messageThreadsAsCoach MessageThread[] @relation("CoachThreads")
-  messageThreadsAsAthlete MessageThread[] @relation("AthleteThreads")
-  messages            Message[]
-  squads              Squad[]
-  workoutTemplates    WorkoutTemplate[]
-  planTemplates       PlanTemplate[]
-  groupSessions       GroupSession[]
-  calendarItemsCoached CalendarItem[]
-  branding            CoachBranding?
-  workoutTitles       WorkoutTitle[]
-  planWeeks           PlanWeek[]
-  coachJournalEntries CoachJournalEntry[]
-  oauthStates         OAuthState[]
-  workoutLibrarySessionsCreated WorkoutLibrarySession[]
-  workoutLibrarySessionsPublished WorkoutLibrarySession[] @relation("WorkoutLibrarySessionPublishedBy")
-  workoutLibraryFavorites       WorkoutLibraryFavorite[]
-  workoutLibraryUsage           WorkoutLibraryUsage[]
+  athleteProfile                  AthleteProfile?
+  coachedAthletes                 AthleteProfile[]         @relation("CoachToAthletes")
+  comments                        Comment[]
+  messageThreadsAsCoach           MessageThread[]          @relation("CoachThreads")
+  messageThreadsAsAthlete         MessageThread[]          @relation("AthleteThreads")
+  messages                        Message[]
+  squads                          Squad[]
+  workoutTemplates                WorkoutTemplate[]
+  groupSessions                   GroupSession[]
+  calendarItemsCoached            CalendarItem[]
+  branding                        CoachBranding?
+  workoutTitles                   WorkoutTitle[]
+  planWeeks                       PlanWeek[]
+  coachJournalEntries             CoachJournalEntry[]
+  oauthStates                     OAuthState[]
+  workoutLibrarySessionsCreated   WorkoutLibrarySession[]
+  workoutLibrarySessionsPublished WorkoutLibrarySession[]  @relation("WorkoutLibrarySessionPublishedBy")
+  workoutLibraryFavorites         WorkoutLibraryFavorite[]
+  workoutLibraryUsage             WorkoutLibraryUsage[]
+
+  athletePlanInstances      AthletePlanInstance[] @relation("AthletePlanInstances")
+  coachCreatedPlanInstances AthletePlanInstance[] @relation("CoachCreatedPlanInstances")
 
   @@index([role])
 }
 
 model WorkoutLibrarySession {
-  id                 String                  @id @default(cuid())
-  title              String
-  discipline         WorkoutLibraryDiscipline
-  status             WorkoutLibrarySessionStatus @default(DRAFT)
-  source             WorkoutLibrarySource     @default(MANUAL)
-  fingerprint        String?                 @unique
-  tags               String[]
-  description        String
-  durationSec        Int
-  intensityTarget    String
-  intensityCategory  WorkoutLibraryIntensityCategory?
-  distanceMeters     Float?
+  id                  String                           @id @default(cuid())
+  title               String
+  discipline          WorkoutLibraryDiscipline
+  status              WorkoutLibrarySessionStatus      @default(DRAFT)
+  source              WorkoutLibrarySource             @default(MANUAL)
+  externalId          String?                          @unique @map("externalSessionId")
+  fingerprint         String?                          @unique
+  tags                String[]
+  description         String
+  durationSec         Int
+  intensityTarget     String
+  intensityCategory   WorkoutLibraryIntensityCategory?
+  distanceMeters      Float?
   elevationGainMeters Float?
-  notes              String?
-  equipment          String[]
-  workoutStructure   Json?
-  publishedAt        DateTime?
-  publishedByUserId  String?
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  createdByUserId    String?
+  notes               String?
+  category            String?
+  rawText             String?
+  paceTargetsJson     Json?
+  prescriptionJson    Json?
+  equipment           String[]
+  workoutStructure    Json?
+  publishedAt         DateTime?
+  publishedByUserId   String?
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
+  createdByUserId     String?
 
-  createdByUser      User?                   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  publishedByUser    User?                   @relation("WorkoutLibrarySessionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
-  favorites          WorkoutLibraryFavorite[]
-  usage              WorkoutLibraryUsage[]
+  createdByUser            User?                     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  publishedByUser          User?                     @relation("WorkoutLibrarySessionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  favorites                WorkoutLibraryFavorite[]
+  usage                    WorkoutLibraryUsage[]
+  planTemplateScheduleRows PlanTemplateScheduleRow[]
 
   @@index([discipline])
   @@index([status])
@@ -158,13 +172,13 @@ model WorkoutLibrarySession {
 }
 
 model WorkoutLibraryFavorite {
-  id               String               @id @default(cuid())
+  id               String   @id @default(cuid())
   coachId          String
   librarySessionId String
-  createdAt        DateTime             @default(now())
+  createdAt        DateTime @default(now())
 
-  coach           User                @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  librarySession  WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
+  coach          User                  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  librarySession WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
 
   @@unique([coachId, librarySessionId])
   @@index([coachId])
@@ -172,30 +186,30 @@ model WorkoutLibraryFavorite {
 }
 
 model WorkoutLibraryUsage {
-  id               String               @id @default(cuid())
+  id               String   @id @default(cuid())
   coachId          String
   librarySessionId String
-  usedAt           DateTime             @default(now())
+  usedAt           DateTime @default(now())
 
-  coach           User                @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  librarySession  WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
+  coach          User                  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  librarySession WorkoutLibrarySession @relation(fields: [librarySessionId], references: [id], onDelete: Cascade)
 
   @@index([librarySessionId, usedAt])
   @@index([coachId, usedAt])
 }
 
 model AthleteProfile {
-  userId          String    @id
-  coachId         String
-  disciplines     String[] // e.g. ["RUN","BIKE","SWIM"]
-  goalsText       String?
-  planCadenceDays Int       @default(7) // LEGACY: kept for backward compatibility. Do not use in UI. Use trainingPlanFrequency/day/weekOfMonth.
+  userId                  String                @id
+  coachId                 String
+  disciplines             String[] // e.g. ["RUN","BIKE","SWIM"]
+  goalsText               String?
+  planCadenceDays         Int                   @default(7) // LEGACY: kept for backward compatibility. Do not use in UI. Use trainingPlanFrequency/day/weekOfMonth.
   trainingPlanFrequency   TrainingPlanFrequency @default(AD_HOC)
   trainingPlanDayOfWeek   Int?
   trainingPlanWeekOfMonth Int?
-  zonesJson       Json?
-  coachNotes      String?
-  dateOfBirth     DateTime?
+  zonesJson               Json?
+  coachNotes              String?
+  dateOfBirth             DateTime?
 
   // v1: Default location for weather on workout detail pages.
   defaultLat           Float?
@@ -224,7 +238,7 @@ model Squad {
   name      String
   createdAt DateTime @default(now())
 
-  coach               User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach               User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
   members             SquadMember[]
   groupSessionTargets GroupSessionTarget[]
 
@@ -237,7 +251,7 @@ model SquadMember {
   athleteId String // references AthleteProfile.userId
   createdAt DateTime @default(now())
 
-  squad   Squad           @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  squad   Squad          @relation(fields: [squadId], references: [id], onDelete: Cascade)
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
 
   @@id([squadId, athleteId])
@@ -256,7 +270,7 @@ model WorkoutTemplate {
   attachmentsJson    Json?
   createdAt          DateTime @default(now())
 
-  coach         User            @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach         User           @relation(fields: [coachId], references: [id], onDelete: Cascade)
   calendarItems CalendarItem[]
 
   @@index([coachId])
@@ -278,39 +292,105 @@ model WorkoutTitle {
 }
 
 model PlanTemplate {
-  id           String   @id @default(cuid())
-  coachId      String
-  name         String
-  durationDays Int
-  itemsJson    Json
-  createdAt    DateTime @default(now())
+  id                String   @id @default(cuid())
+  planIdExternal    String   @unique @map("externalPlanId")
+  name              String
+  tags              String[] @default([])
+  level             String?
+  durationDays      Int?
+  goalDistancesJson Json?
+  goalTimesJson     Json?
+  sourceFile        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  scheduleRows         PlanTemplateScheduleRow[]
+  athletePlanInstances AthletePlanInstance[]
 
-  @@index([coachId])
+  @@index([planIdExternal])
+}
+
+model PlanTemplateScheduleRow {
+  id                      String   @id @default(cuid())
+  planTemplateId          String
+  workoutLibrarySessionId String?
+  weekIndex               Int
+  dayIndex                Int
+  dayOfWeek               Int
+  ordinal                 Int      @default(0)
+  isOptional              Boolean  @default(false)
+  isOff                   Boolean  @default(false)
+  rawText                 String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  planTemplate             PlanTemplate              @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  workoutLibrarySession    WorkoutLibrarySession?    @relation(fields: [workoutLibrarySessionId], references: [id], onDelete: SetNull)
+  athletePlanInstanceItems AthletePlanInstanceItem[]
+
+  @@unique([planTemplateId, weekIndex, dayIndex, ordinal])
+  @@index([planTemplateId, weekIndex])
+  @@index([planTemplateId, dayOfWeek])
+}
+
+model AthletePlanInstance {
+  id               String            @id @default(cuid())
+  athleteId        String
+  planTemplateId   String
+  startDateLocal   DateTime
+  timezone         String
+  status           AthletePlanStatus @default(ACTIVE)
+  createdByCoachId String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  athlete        User                      @relation("AthletePlanInstances", fields: [athleteId], references: [id], onDelete: Cascade)
+  planTemplate   PlanTemplate              @relation(fields: [planTemplateId], references: [id], onDelete: Restrict)
+  createdByCoach User                      @relation("CoachCreatedPlanInstances", fields: [createdByCoachId], references: [id], onDelete: Restrict)
+  items          AthletePlanInstanceItem[]
+  calendarItems  CalendarItem[]
+
+  @@index([athleteId, status])
+  @@index([planTemplateId])
+  @@index([createdByCoachId])
+}
+
+model AthletePlanInstanceItem {
+  id                        String   @id @default(cuid())
+  athletePlanInstanceId     String
+  planTemplateScheduleRowId String
+  calendarItemId            String
+  createdAt                 DateTime @default(now())
+
+  athletePlanInstance     AthletePlanInstance     @relation(fields: [athletePlanInstanceId], references: [id], onDelete: Cascade)
+  planTemplateScheduleRow PlanTemplateScheduleRow @relation(fields: [planTemplateScheduleRowId], references: [id], onDelete: Cascade)
+  calendarItem            CalendarItem            @relation(fields: [calendarItemId], references: [id], onDelete: Cascade)
+
+  @@unique([athletePlanInstanceId, planTemplateScheduleRowId])
+  @@index([calendarItemId])
 }
 
 model GroupSession {
-  id              String             @id @default(cuid())
-  coachId         String
-  title           String
-  discipline      String
-  location        String?
-  startTimeLocal  String // "06:00" etc (keep MVP simple)
-  durationMinutes Int
-  distanceMeters  Float?
-  intensityTarget String?
-  tags            String[]           @default([])
-  equipment       String[]           @default([])
+  id               String              @id @default(cuid())
+  coachId          String
+  title            String
+  discipline       String
+  location         String?
+  startTimeLocal   String // "06:00" etc (keep MVP simple)
+  durationMinutes  Int
+  distanceMeters   Float?
+  intensityTarget  String?
+  tags             String[]            @default([])
+  equipment        String[]            @default([])
   workoutStructure Json?
-  notes           String?
-  description     String?
-  recurrenceRule  String // iCal RRULE string
-  visibilityType  GroupVisibilityType @default(ALL)
-  optionalFlag    Boolean            @default(false)
-  createdAt       DateTime           @default(now())
+  notes            String?
+  description      String?
+  recurrenceRule   String // iCal RRULE string
+  visibilityType   GroupVisibilityType @default(ALL)
+  optionalFlag     Boolean             @default(false)
+  createdAt        DateTime            @default(now())
 
-  coach         User               @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach         User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
   targets       GroupSessionTarget[]
   calendarItems CalendarItem[]
 
@@ -318,7 +398,7 @@ model GroupSession {
 }
 
 model GroupSessionTarget {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   groupSessionId String
   athleteId      String?
   squadId        String?
@@ -333,9 +413,10 @@ model GroupSessionTarget {
 }
 
 model CalendarItem {
-  id                     String   @id @default(cuid())
-  athleteId              String   // AthleteProfile.userId
+  id                     String             @id @default(cuid())
+  athleteId              String // AthleteProfile.userId
   coachId                String
+  athletePlanInstanceId  String?
   date                   DateTime // use date-only at midnight; interpret in timezone in UI
   plannedStartTimeLocal  String?
   // For non-planned sessions (e.g. recorded-from-provider).
@@ -349,9 +430,9 @@ model CalendarItem {
   plannedDistanceKm      Float?
   distanceMeters         Float?
   intensityTarget        String?
-  tags                   String[] @default([])
-  equipment              String[] @default([])
-  workoutStructure        Json?
+  tags                   String[]           @default([])
+  equipment              String[]           @default([])
+  workoutStructure       Json?
   notes                  String?
   intensityType          String?
   intensityTargetJson    Json?
@@ -363,20 +444,23 @@ model CalendarItem {
   reviewedAt             DateTime?
   actionAt               DateTime?
 
-  deletedAt              DateTime?
-  deletedByUserId        String?
+  deletedAt       DateTime?
+  deletedByUserId String?
 
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  athlete      AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
-  coach        User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
-  template     WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  groupSession GroupSession?   @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
+  athlete             AthleteProfile       @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  coach               User                 @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  athletePlanInstance AthletePlanInstance? @relation(fields: [athletePlanInstanceId], references: [id], onDelete: SetNull)
+  template            WorkoutTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  groupSession        GroupSession?        @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
 
-  completedActivities CompletedActivity[]
-  comments            Comment[]
+  completedActivities      CompletedActivity[]
+  comments                 Comment[]
+  athletePlanInstanceItems AthletePlanInstanceItem[]
 
+  @@unique([athleteId, origin, sourceActivityId])
   @@index([athleteId, date])
   @@index([coachId, date])
   @@index([coachId, athleteId, date])
@@ -385,33 +469,33 @@ model CalendarItem {
   @@index([status])
   @@index([coachId, reviewedAt, status])
   @@index([deletedAt])
-  @@unique([athleteId, origin, sourceActivityId])
+  @@index([athletePlanInstanceId])
 }
 
 model CompletedActivity {
-  id              String   @id @default(cuid())
-  athleteId       String
-  calendarItemId  String?
-  source          CompletionSource
-  externalProvider String?
+  id                 String           @id @default(cuid())
+  athleteId          String
+  calendarItemId     String?
+  source             CompletionSource
+  externalProvider   String?
   externalActivityId String?
-  startTime       DateTime
-  durationMinutes Int
-  distanceKm      Float?
-  rpe             Int?
-  notes           String?
-  painFlag        Boolean  @default(false)
-  confirmedAt     DateTime?
-  metricsJson     Json?
-  fileUrl         String?
-  createdAt       DateTime @default(now())
+  startTime          DateTime
+  durationMinutes    Int
+  distanceKm         Float?
+  rpe                Int?
+  notes              String?
+  painFlag           Boolean          @default(false)
+  confirmedAt        DateTime?
+  metricsJson        Json?
+  fileUrl            String?
+  createdAt          DateTime         @default(now())
 
   athlete      AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
   calendarItem CalendarItem?  @relation(fields: [calendarItemId], references: [id], onDelete: SetNull)
 
+  @@unique([athleteId, source, externalActivityId])
   @@index([athleteId, startTime])
   @@index([calendarItemId])
-  @@unique([athleteId, source, externalActivityId])
 }
 
 model Comment {
@@ -422,7 +506,7 @@ model Comment {
   createdAt      DateTime @default(now())
 
   calendarItem CalendarItem @relation(fields: [calendarItemId], references: [id], onDelete: Cascade)
-  author       User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([calendarItemId, createdAt])
 }
@@ -434,8 +518,8 @@ model MessageThread {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  coach   User @relation("CoachThreads", fields: [coachId], references: [id], onDelete: Cascade)
-  athlete User @relation("AthleteThreads", fields: [athleteId], references: [id], onDelete: Cascade)
+  coach    User      @relation("CoachThreads", fields: [coachId], references: [id], onDelete: Cascade)
+  athlete  User      @relation("AthleteThreads", fields: [athleteId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@unique([coachId, athleteId])
@@ -444,12 +528,12 @@ model MessageThread {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  threadId  String
-  senderUserId  String   @map("authorId")
-  senderRole    UserRole @default(COACH)
-  body      String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  threadId     String
+  senderUserId String   @map("authorId")
+  senderRole   UserRole @default(COACH)
+  body         String
+  createdAt    DateTime @default(now())
 
   deletedAt       DateTime?
   deletedByUserId String?
@@ -498,8 +582,8 @@ model PlanWeek {
 }
 
 model CoachBranding {
-  coachId     String  @id
-  displayName String  @default("CoachKit")
+  coachId     String   @id
+  displayName String   @default("CoachKit")
   logoUrl     String?
   darkLogoUrl String?
   updatedAt   DateTime @updatedAt
@@ -539,16 +623,16 @@ model OAuthState {
 }
 
 model StravaConnection {
-  id              String   @id @default(cuid())
-  athleteId       String   @unique // AthleteProfile.userId
-  stravaAthleteId String   @unique
+  id              String    @id @default(cuid())
+  athleteId       String    @unique // AthleteProfile.userId
+  stravaAthleteId String    @unique
   accessToken     String
   refreshToken    String
   expiresAt       DateTime
   scope           String?
   lastSyncAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
 
@@ -558,20 +642,20 @@ model StravaConnection {
 }
 
 model StravaSyncIntent {
-  id              String               @id @default(cuid())
+  id               String @id @default(cuid())
   athleteId        String // AthleteProfile.userId
   stravaAthleteId  String
   stravaActivityId String
   eventType        String
 
-  status       StravaSyncIntentStatus @default(PENDING)
-  attempts     Int                   @default(0)
+  status        StravaSyncIntentStatus @default(PENDING)
+  attempts      Int                    @default(0)
   nextAttemptAt DateTime?
-  lastError    String?
+  lastError     String?
 
-  processedAt  DateTime?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
 
