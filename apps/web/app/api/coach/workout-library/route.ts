@@ -4,9 +4,12 @@ import { Prisma, WorkoutLibraryDiscipline, WorkoutLibraryIntensityCategory, Work
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
-import { privateCacheHeaders } from '@/lib/cache';
+import { getSafeDbInfoFromDatabase, getSafeDbInfoFromEnv, noStoreHeaders } from '@/lib/db-diagnostics';
+
+import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type SortKey = 'relevance' | 'newest' | 'popular' | 'durationAsc' | 'durationDesc' | 'intensityAsc' | 'intensityDesc' | 'titleAsc';
 
@@ -52,6 +55,7 @@ function clamp(value: number, min: number, max: number): number {
 
 export async function GET(request: NextRequest) {
   try {
+    const requestId = randomUUID();
     const { user } = await requireCoach();
 
     const { searchParams } = new URL(request.url);
@@ -199,24 +203,45 @@ export async function GET(request: NextRequest) {
 
     const favoriteSet = new Set(favorites.map((f) => f.librarySessionId));
 
-    return success(
-      {
-        items: sessions.map((s) => {
-          const { _count, ...rest } = s;
-          return {
-            ...rest,
-            usageCount: _count.usage,
-            favorite: favoriteSet.has(s.id),
-          };
-        }),
-        total,
-        page,
-        pageSize,
-      },
-      {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
-      }
-    );
+    const payload = {
+      items: sessions.map((s) => {
+        const { _count, ...rest } = s;
+        return {
+          ...rest,
+          usageCount: _count.usage,
+          favorite: favoriteSet.has(s.id),
+        };
+      }),
+      total,
+      page,
+      pageSize,
+    };
+
+    const headers = noStoreHeaders({ 'X-Request-Id': requestId });
+
+    if (process.env.DIAG_MODE === '1') {
+      const envDb = getSafeDbInfoFromEnv();
+      const db = await getSafeDbInfoFromDatabase();
+      const sample = sessions.slice(0, 3).map((s) => ({ id: s.id, title: s.title }));
+
+      console.log(
+        JSON.stringify({
+          where: 'GET /api/coach/workout-library',
+          requestId,
+          db: {
+            host: envDb.host,
+            database: db.database ?? envDb.database,
+            schema: db.schema ?? envDb.schema,
+          },
+          countReturned: sessions.length,
+          total,
+          first3: sample,
+          responseCacheControl: headers['Cache-Control'],
+        })
+      );
+    }
+
+    return success(payload, { headers });
   } catch (error) {
     return handleError(error);
   }
