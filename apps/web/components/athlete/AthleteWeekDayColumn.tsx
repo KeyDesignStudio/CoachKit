@@ -16,6 +16,8 @@ type AthleteWeekDayColumnProps = {
   onHeaderClick?: () => void;
   onEmptyClick?: () => void;
   onAddClick?: () => void;
+  headerTestId?: string;
+  addButtonTestId?: string;
   density?: 'default' | 'compact';
   children: ReactNode;
 };
@@ -29,6 +31,8 @@ export function AthleteWeekDayColumn({
   onHeaderClick,
   onEmptyClick,
   onAddClick,
+  headerTestId,
+  addButtonTestId,
   density = 'default',
   children,
 }: AthleteWeekDayColumnProps) {
@@ -47,6 +51,7 @@ export function AthleteWeekDayColumn({
     <button
       type="button"
       onClick={onAddClick}
+      data-testid={addButtonTestId ?? 'athlete-week-day-column-add'}
       className={cn(
         'inline-flex h-11 w-11 md:h-6 md:w-6 items-center justify-center rounded-full',
         'text-[var(--muted)] hover:text-[var(--primary)]',
@@ -74,6 +79,7 @@ export function AthleteWeekDayColumn({
       <WeatherTooltip weather={dayWeather}>
         <div
           className={cn('flex items-center justify-between gap-2', headerClassName)}
+          data-testid={headerTestId}
           tabIndex={headerNeedsTabStop ? 0 : undefined}
           aria-label={headerNeedsTabStop ? `${dayName} ${formattedDate}` : undefined}
         >
