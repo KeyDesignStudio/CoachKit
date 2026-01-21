@@ -17,11 +17,29 @@ test.describe('Plan Library import (admin)', () => {
 
     await setRoleCookie(page, 'ADMIN');
 
+    // Ensure we start from an empty Plan Library state (non-prod only).
+    const resetRes = await page.request.post('/api/admin/plan-library/import', {
+      data: {
+        dataset: 'ALL',
+        dryRun: false,
+        confirmApply: true,
+        reset: true,
+      },
+    });
+
+    if (!resetRes.ok()) {
+      const payload = (await resetRes.json()) as any;
+      const code = payload?.error?.code;
+      test.skip(code === 'RESET_BLOCKED_HAS_ATHLETE_DATA', 'Reset blocked: athlete plan history exists in test DB.');
+      throw new Error(`Plan Library reset failed: ${code ?? 'unknown_error'}`);
+    }
+
     const dryRunRes = await page.request.post('/api/admin/plan-library/import', {
       data: {
         dataset: 'ALL',
         dryRun: true,
         confirmApply: false,
+        limit: 20,
       },
     });
 
@@ -29,6 +47,16 @@ test.describe('Plan Library import (admin)', () => {
     const dryRunPayload = (await dryRunRes.json()) as any;
     const dryRunSteps: any[] = dryRunPayload?.data?.steps ?? [];
     expect(dryRunSteps.length).toBeGreaterThan(0);
+
+    const plansStep = dryRunSteps.find((s) => s?.dataset === 'PLANS');
+    const sessionsStep = dryRunSteps.find((s) => s?.dataset === 'SESSIONS');
+    const scheduleStep = dryRunSteps.find((s) => s?.dataset === 'SCHEDULE');
+
+    expect((plansStep?.wouldCreate ?? 0) + (plansStep?.wouldUpdate ?? 0)).toBeGreaterThan(0);
+    expect((sessionsStep?.wouldCreate ?? 0) + (sessionsStep?.wouldUpdate ?? 0)).toBeGreaterThan(0);
+    expect(scheduleStep?.errorCount ?? 0).toBe(0);
+    expect(scheduleStep?.errors ?? []).toEqual([]);
+
     for (const step of dryRunSteps) {
       expect(step?.errorCount ?? 0).toBe(0);
       expect(step?.created ?? 0).toBe(0);
