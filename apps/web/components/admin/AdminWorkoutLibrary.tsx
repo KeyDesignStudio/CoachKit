@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { AdminPlanLibraryImporter } from '@/components/admin/AdminPlanLibraryImporter';
+import { AdminPlanLibraryPurge } from '@/components/admin/AdminPlanLibraryPurge';
 import { CANONICAL_EQUIPMENT, type CanonicalEquipment } from '@/lib/workout-library-taxonomy';
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
@@ -866,6 +867,8 @@ export function AdminWorkoutLibrary() {
             </div>
 
             <AdminPlanLibraryImporter />
+
+            <AdminPlanLibraryPurge />
 
             {showDbBanner ? (
               <div className="rounded border border-[var(--border)] bg-white p-3 text-xs text-[var(--text)]">
