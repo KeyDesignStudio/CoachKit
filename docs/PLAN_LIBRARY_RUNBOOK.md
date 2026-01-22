@@ -7,11 +7,13 @@ This runbook describes how to ingest the Plan Library datasets from Vercel Blob 
 - Imports are **admin-only** (`ADMIN` role required).
 - **Dry-run is the default.** Writes require `dryRun=false` + `confirmApply=true`.
 - Imports are **idempotent** (re-running does not duplicate rows).
-- Imports write **only** to:
+- Plan Library imports write **only** to:
   - `PlanTemplate`
-  - `WorkoutLibrarySession` (with `source=PLAN_LIBRARY`, `status=DRAFT`)
   - `PlanTemplateScheduleRow`
 - Imports do **not** touch athlete history tables (`CalendarItem`, `CompletedActivity`, etc).
+- Plan Library does **not** publish or create Workout Library templates.
+  - Any attempt to write `WorkoutLibrarySession` with `source=PLAN_LIBRARY` is blocked with a structured `400` error:
+    `PLAN_LIBRARY_TEMPLATES_DISABLED`.
 
 ## Datasets
 
@@ -74,41 +76,26 @@ Expected outcome:
 - `steps[].created` is `> 0`
 - `steps[].errorCount` is `0`
 
-## Publish imported sessions
+## Notes
 
-Coaches only see **PUBLISHED** sessions.
-
-From the Admin UI:
-
-- In the Plan Library panel, type `PUBLISH`
-- Click **Publish now**
-
-From curl:
-
-```bash
-curl -s \
-  -H 'content-type: application/json' \
-  -d '{"confirmApply":true}' \
-  http://localhost:3000/api/admin/plan-library/publish
-```
+- The `SESSIONS` dataset import step is validation/inspection only (kept for future athlete self-assign work).
+- `PlanTemplateScheduleRow.rawText` is preserved exactly as imported (no trimming/normalization).
 
 ## Diagnostics
 
 - `GET /api/admin/diagnostics/plan-library`
   - Confirms Plan Library tables exist + row counts
-  - Shows `WorkoutLibrarySession` counts for `source=PLAN_LIBRARY` by status
 
 - `GET /api/admin/diagnostics/workout-library`
   - Confirms Workout Library totals
 
 ## Rollback (safe)
 
-Preferred rollback is **unpublish**, then **purge by source**:
+Preferred rollback is to **purge plan-derived Workout Library templates**, if any exist from legacy imports.
 
-1) Unpublish PLAN_LIBRARY sessions (admin tooling)
-2) Purge drafts by source via Workout Library maintenance tooling
+- Use the admin purge tool (dry-run first).
 
 Notes:
 
 - Avoid deleting rows from PlanTemplate/Schedule in production unless you are certain nothing references them.
-- If you need a hard delete strategy later, add a dedicated admin-only purge endpoint that deletes in a safe order and refuses if athlete plan instances exist.
+- Avoid deleting rows from PlanTemplate/Schedule in production unless you are certain nothing references them.
