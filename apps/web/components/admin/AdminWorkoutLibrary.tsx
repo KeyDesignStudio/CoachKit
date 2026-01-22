@@ -229,6 +229,20 @@ export function AdminWorkoutLibrary() {
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [maintenanceResult, setMaintenanceResult] = useState<MaintenanceSummary | null>(null);
 
+  const [testArtifactsConfirmText, setTestArtifactsConfirmText] = useState('');
+  const [testArtifactsRunning, setTestArtifactsRunning] = useState(false);
+  const [testArtifactsError, setTestArtifactsError] = useState<string | null>(null);
+  const [testArtifactsResult, setTestArtifactsResult] = useState<
+    | null
+    | {
+        dryRun: boolean;
+        matchedCount: number;
+        deletedCount: number;
+        sampleIds: string[];
+        sampleTitles: string[];
+      }
+  >(null);
+
   const [publishRunning, setPublishRunning] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishOk, setPublishOk] = useState<string | null>(null);
@@ -238,6 +252,39 @@ export function AdminWorkoutLibrary() {
   const [unpublishRunning, setUnpublishRunning] = useState(false);
   const [unpublishError, setUnpublishError] = useState<string | null>(null);
   const [unpublishOk, setUnpublishOk] = useState<string | null>(null);
+
+  const runPurgeTestArtifacts = useCallback(
+    async (confirmApply: boolean) => {
+      setTestArtifactsRunning(true);
+      setTestArtifactsError(null);
+      setTestArtifactsResult(null);
+
+      try {
+        const data = await request<{
+          dryRun: boolean;
+          matchedCount: number;
+          deletedCount: number;
+          sampleIds: string[];
+          sampleTitles: string[];
+        }>('/api/admin/workout-library/purge-test-artifacts', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ confirmApply }),
+        });
+
+        setTestArtifactsResult(data);
+      } catch (e) {
+        if (e instanceof ApiClientError) {
+          setTestArtifactsError(`${e.code}: ${e.message}`);
+        } else {
+          setTestArtifactsError(e instanceof Error ? e.message : 'Cleanup failed');
+        }
+      } finally {
+        setTestArtifactsRunning(false);
+      }
+    },
+    [request]
+  );
   const [maintenanceUnpublishConfirm, setMaintenanceUnpublishConfirm] = useState('');
 
   const selected = useMemo(
@@ -1123,6 +1170,63 @@ export function AdminWorkoutLibrary() {
                   )}
                 </div>
               ) : null}
+
+              <div className="rounded-2xl border border-[var(--border-subtle)] p-4">
+                <div className="text-sm font-semibold text-[var(--text)]">Cleanup test artifacts</div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  Deletes only Workout Library rows with titles starting with "PW Publish Draft" and created within the last 30 days.
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={testArtifactsRunning}
+                    onClick={() => void runPurgeTestArtifacts(false)}
+                  >
+                    {testArtifactsRunning ? 'Running…' : 'Dry-run cleanup'}
+                  </Button>
+
+                  <Input
+                    placeholder='Type "DELETE" to enable'
+                    value={testArtifactsConfirmText}
+                    onChange={(e) => setTestArtifactsConfirmText(e.target.value)}
+                  />
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    disabled={
+                      testArtifactsRunning ||
+                      testArtifactsConfirmText.trim().toUpperCase() !== 'DELETE'
+                    }
+                    onClick={() => void runPurgeTestArtifacts(true)}
+                  >
+                    {testArtifactsRunning ? 'Deleting…' : 'Delete test artifacts'}
+                  </Button>
+                </div>
+
+                {testArtifactsError ? <div className="mt-2 text-sm text-red-600">{testArtifactsError}</div> : null}
+
+                {testArtifactsResult ? (
+                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]">
+                    <div>
+                      dryRun={String(testArtifactsResult.dryRun)} • matched={testArtifactsResult.matchedCount} • deleted=
+                      {testArtifactsResult.deletedCount}
+                    </div>
+                    {testArtifactsResult.sampleTitles?.length ? (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer">Show sample titles</summary>
+                        <pre className="mt-2 max-h-48 overflow-auto rounded-lg border border-[var(--border-subtle)] bg-white p-2 text-[11px] text-[var(--text)]">
+                          {JSON.stringify(testArtifactsResult.sampleTitles, null, 2)}
+                        </pre>
+                      </details>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           )
         )}
