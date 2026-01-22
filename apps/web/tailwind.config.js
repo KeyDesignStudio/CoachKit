@@ -8,7 +8,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Space Grotesk', 'Segoe UI', 'sans-serif'],
+        display: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       boxShadow: {
         glass: '0 20px 40px -24px rgba(15,23,42,0.45)',
