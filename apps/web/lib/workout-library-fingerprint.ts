@@ -54,3 +54,14 @@ export function computeWorkoutLibraryFingerprint(input: {
 
   return sha256Hex(base);
 }
+
+export function computeWorkoutLibraryPromptFingerprint(input: {
+  discipline: WorkoutLibraryDiscipline;
+  title: string;
+  category: string | null;
+}): string {
+  const normalizedTitle = normalizeTitle(input.title);
+  const normalizedCategory = (input.category ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const base = [input.discipline, normalizedTitle, normalizedCategory].join('|');
+  return sha256Hex(base);
+}

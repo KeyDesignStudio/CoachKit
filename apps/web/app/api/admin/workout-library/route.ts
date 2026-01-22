@@ -9,33 +9,27 @@ import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/li
 
 export const dynamic = 'force-dynamic';
 
-const createSchema = z
-  .object({
-    title: z.string().trim().min(1),
-    discipline: z.nativeEnum(WorkoutLibraryDiscipline),
-    status: z.nativeEnum(WorkoutLibrarySessionStatus).default(WorkoutLibrarySessionStatus.DRAFT),
-    source: z.nativeEnum(WorkoutLibrarySource).default(WorkoutLibrarySource.MANUAL),
-    tags: z.array(z.string().trim().min(1)).default([]),
-    description: z.string().trim().min(1),
-    durationSec: z.number().int().positive().optional(),
-    intensityTarget: z.string().trim().min(1),
-    distanceMeters: z.number().positive().optional().nullable(),
-    elevationGainMeters: z.number().nonnegative().optional().nullable(),
-    notes: z.string().trim().max(20000).optional().nullable(),
-    equipment: z.array(z.string().trim().min(1)).default([]),
-    workoutStructure: z.unknown().optional().nullable(),
-  })
-  .superRefine((data, ctx) => {
-    const hasDuration = typeof data.durationSec === 'number' && data.durationSec > 0;
-    const hasDistance = typeof data.distanceMeters === 'number' && data.distanceMeters > 0;
+const createSchema = z.object({
+  // Prompt templates (primary use-case)
+  title: z.string().trim().min(1),
+  discipline: z.nativeEnum(WorkoutLibraryDiscipline),
+  category: z.string().trim().min(1),
+  description: z.string().min(1),
 
-    if (!hasDuration && !hasDistance) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'durationSec or distanceMeters is required.',
-      });
-    }
-  });
+  // Metadata
+  status: z.nativeEnum(WorkoutLibrarySessionStatus).default(WorkoutLibrarySessionStatus.DRAFT),
+  source: z.nativeEnum(WorkoutLibrarySource).default(WorkoutLibrarySource.MANUAL),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  equipment: z.array(z.string().trim().min(1)).default([]),
+  notes: z.string().trim().max(20000).optional().nullable(),
+
+  // Optional structured fields (allowed, but not required for prompt templates)
+  durationSec: z.number().int().nonnegative().optional(),
+  intensityTarget: z.string().max(2000).optional(),
+  distanceMeters: z.number().positive().optional().nullable(),
+  elevationGainMeters: z.number().nonnegative().optional().nullable(),
+  workoutStructure: z.unknown().optional().nullable(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -122,7 +116,8 @@ export async function POST(request: NextRequest) {
 
     const tags = normalizeTags(payload.tags);
     const equipment = normalizeEquipment(payload.equipment);
-    const intensityCategory = deriveIntensityCategory(payload.intensityTarget);
+    const intensityTarget = (payload.intensityTarget ?? '').trim();
+    const intensityCategory = intensityTarget ? deriveIntensityCategory(intensityTarget) : null;
 
     const created = await prisma.workoutLibrarySession.create({
       data: {
@@ -131,9 +126,10 @@ export async function POST(request: NextRequest) {
         status: payload.status,
         source: payload.source,
         tags,
+        category: payload.category,
         description: payload.description,
         durationSec: payload.durationSec ?? 0,
-        intensityTarget: payload.intensityTarget,
+        intensityTarget,
         intensityCategory,
         distanceMeters: payload.distanceMeters ?? null,
         elevationGainMeters: payload.elevationGainMeters ?? null,

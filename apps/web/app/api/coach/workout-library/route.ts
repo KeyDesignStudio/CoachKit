@@ -171,6 +171,7 @@ export async function GET(request: NextRequest) {
           title: true,
           discipline: true,
           tags: true,
+          category: true,
           description: true,
           durationSec: true,
           intensityTarget: true,

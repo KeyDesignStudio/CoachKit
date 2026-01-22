@@ -18,6 +18,7 @@ type LibraryListItem = {
   title: string;
   discipline: Discipline;
   tags: string[];
+  category: string | null;
   description: string;
   durationSec: number;
   intensityTarget: string;
@@ -572,6 +573,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
+              {it.category ? (
+                <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                  {it.category}
+                </span>
+              ) : null}
               {formatDurationMinutes(it.durationSec) && (
                 <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
                   {formatDurationMinutes(it.durationSec)}
@@ -582,6 +588,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                   {formatDistance(it.distanceMeters)}
                 </span>
               )}
+              {it.intensityTarget.trim() ? (
+                <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                  {it.intensityTarget}
+                </span>
+              ) : null}
               {it.tags.slice(0, 3).map((tag) => {
                 const active = activeTagSet.has(tag.toLowerCase());
                 return (
@@ -663,6 +674,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                   <div className="rounded-2xl border border-white/20 bg-white/40 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted)]">Overview</p>
                     <div className="mt-2 flex flex-wrap gap-2">
+                      {detail.session.category ? (
+                        <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                          {detail.session.category}
+                        </span>
+                      ) : null}
                       {formatDurationMinutes(detail.session.durationSec) && (
                         <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
                           {formatDurationMinutes(detail.session.durationSec)}
@@ -673,9 +689,11 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
                           {formatDistance(detail.session.distanceMeters)}
                         </span>
                       )}
-                      <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
-                        {detail.session.intensityTarget}
-                      </span>
+                      {detail.session.intensityTarget.trim() ? (
+                        <span className="rounded-full border border-white/30 bg-white/40 px-3 py-1 text-xs text-[var(--muted)]">
+                          {detail.session.intensityTarget}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 

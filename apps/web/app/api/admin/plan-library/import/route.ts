@@ -1,11 +1,7 @@
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import {
-  WorkoutLibraryDiscipline,
-  WorkoutLibrarySource,
-  WorkoutLibrarySessionStatus,
-} from '@prisma/client';
+import { WorkoutLibraryDiscipline, WorkoutLibrarySource } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/auth';
@@ -173,7 +169,10 @@ async function fetchCsvRowsOrThrow(dataset: PlanLibraryDataset, requestId: strin
   const safe = sanitizeUrlForLogs(url);
 
   const head = await headWithTimeout(url, { timeoutMs: HEAD_TIMEOUT_MS });
-  if (!head.ok) {
+  // Some hosts (including our internal Playwright fixtures) don't support HEAD for route handlers.
+  // Fall back to GET; we still enforce MAX_BYTES during fetch.
+  const shouldFallbackToGet = !head.ok && (head.status === 404 || head.status === 405);
+  if (!head.ok && !shouldFallbackToGet) {
     throw new ApiError(502, 'HEAD_FAILED', `HEAD failed: ${head.status}`, {
       ...safe,
       headStatus: head.status,
@@ -184,7 +183,7 @@ async function fetchCsvRowsOrThrow(dataset: PlanLibraryDataset, requestId: strin
     });
   }
 
-  if (head.contentLength != null && head.contentLength > MAX_BYTES) {
+  if (head.ok && head.contentLength != null && head.contentLength > MAX_BYTES) {
     return {
       rows: [],
       safe,
@@ -251,6 +250,7 @@ async function importPlans(opts: {
   dryRun: boolean;
   limit?: number;
   offset: number;
+  planIdByExternal?: Map<string, string>;
 }): Promise<{
   step: StepSummary;
   url: { urlHost: string; urlPath: string; resolvedSource: string };
@@ -259,6 +259,15 @@ async function importPlans(opts: {
 }>{
   const fetched = await fetchCsvRowsOrThrow('PLANS', opts.requestId);
   if (fetched.blocked) return { step: emptyStep('PLANS', opts.dryRun), url: fetched.safe, blocked: fetched.blocked, planIds: [] };
+
+  // For dataset=ALL dry-run, schedule validation should be able to resolve any plan ids present in
+  // the PLANS CSV, even if the user applies a small limit/offset for faster iteration.
+  if (opts.dryRun && opts.planIdByExternal) {
+    for (const r of fetched.rows) {
+      const id = asTrimmedString((r as any).plan_id);
+      if (id) opts.planIdByExternal.set(id, `temp_plan_${id}`);
+    }
+  }
 
   const sliced = fetched.rows.slice(opts.offset, opts.limit ? opts.offset + opts.limit : undefined);
 
@@ -298,6 +307,7 @@ async function importPlans(opts: {
   }
 
   const keys = Array.from(new Set(items.map((it) => it.planIdExternal)));
+
   const existing = await prisma.planTemplate.findMany({
     where: { planIdExternal: { in: keys } },
     select: { planIdExternal: true },
@@ -349,7 +359,7 @@ async function importPlans(opts: {
 
   for (let i = 0; i < items.length; i += 100) {
     const batch = items.slice(i, i + 100);
-    await prisma.$transaction(
+    const results = await prisma.$transaction(
       batch.map((it) =>
         prisma.planTemplate.upsert({
           where: { planIdExternal: it.planIdExternal },
@@ -368,9 +378,16 @@ async function importPlans(opts: {
             goalDistancesJson: it.goalDistancesJson ?? undefined,
             goalTimesJson: it.goalTimesJson ?? undefined,
           },
+          select: { id: true, planIdExternal: true },
         })
       )
     );
+
+    if (opts.planIdByExternal) {
+      for (const row of results) {
+        opts.planIdByExternal.set(row.planIdExternal, row.id);
+      }
+    }
   }
 
   return {
@@ -397,7 +414,6 @@ async function importSessions(opts: {
   dryRun: boolean;
   limit?: number;
   offset: number;
-  createdByUserId: string;
 }): Promise<{
   step: StepSummary;
   url: { urlHost: string; urlPath: string; resolvedSource: string };
@@ -431,13 +447,14 @@ async function importSessions(opts: {
 
   for (let i = 0; i < sliced.length; i++) {
     const r = sliced[i] ?? {};
-    const externalId = asTrimmedString(r.session_id);
+
+    const externalId = asTrimmedString((r as any).session_id);
     if (!externalId) {
-      errors.push({ index: opts.offset + i + 1, code: 'SESSION_ID_REQUIRED', message: 'session_id is required.' });
+      errors.push({ index: i + 1, code: 'SESSION_ID_REQUIRED', message: 'session_id is required.' });
       continue;
     }
 
-    const discipline = parseDiscipline(r.discipline);
+    const discipline = parseDiscipline((r as any).discipline);
     const category = asTrimmedString(r.category) || null;
     const instructions = asTrimmedString(r.instructions);
     const rawText = asTrimmedString(r.raw_text) || null;
@@ -521,14 +538,12 @@ async function importSessions(opts: {
   }
 
   const keys = Array.from(new Set(items.map((it) => it.externalId)));
-  const existing = await prisma.workoutLibrarySession.findMany({
-    where: { externalId: { in: keys } },
-    select: { externalId: true },
-  });
-  const existingSet = new Set(existing.map((e) => e.externalId).filter(Boolean) as string[]);
 
-  const wouldCreate = items.filter((it) => !existingSet.has(it.externalId)).length;
-  const wouldUpdate = items.length - wouldCreate;
+  // IMPORTANT: Plan Library is NOT the Workout Library.
+  // We keep the SESSIONS dataset endpoint for validation/inspection of the source CSV,
+  // but we do NOT create or update WorkoutLibrarySession rows from this import.
+  const wouldCreate = 0;
+  const wouldUpdate = 0;
 
   if (!opts.dryRun && errors.length > 0) {
     return {
@@ -550,73 +565,6 @@ async function importSessions(opts: {
     };
   }
 
-  if (opts.dryRun) {
-    return {
-      step: {
-        dataset: 'SESSIONS',
-        dryRun: true,
-        scanned: sliced.length,
-        valid: items.length,
-        wouldCreate,
-        wouldUpdate,
-        created: 0,
-        updated: 0,
-        errorCount: errors.length,
-        errors: errors.slice(0, 50),
-      },
-      url: fetched.safe,
-      blocked: null,
-      sessionIds: keys,
-    };
-  }
-
-  for (let i = 0; i < items.length; i += 100) {
-    const batch = items.slice(i, i + 100);
-    await prisma.$transaction(
-      batch.map((it) =>
-        prisma.workoutLibrarySession.upsert({
-          where: { externalId: it.externalId },
-          update: {
-            title: it.title,
-            discipline: it.discipline,
-            status: WorkoutLibrarySessionStatus.DRAFT,
-            source: WorkoutLibrarySource.PLAN_LIBRARY,
-            tags: it.tags,
-            description: it.description,
-            durationSec: it.durationSec,
-            intensityTarget: it.intensityTarget,
-            intensityCategory: it.intensityCategory,
-            distanceMeters: it.distanceMeters,
-            category: it.category,
-            rawText: it.rawText,
-            paceTargetsJson: it.paceTargetsJson ?? undefined,
-            prescriptionJson: it.prescriptionJson ?? undefined,
-            equipment: it.equipment,
-          },
-          create: {
-            externalId: it.externalId,
-            title: it.title,
-            discipline: it.discipline,
-            status: WorkoutLibrarySessionStatus.DRAFT,
-            source: WorkoutLibrarySource.PLAN_LIBRARY,
-            tags: it.tags,
-            description: it.description,
-            durationSec: it.durationSec,
-            intensityTarget: it.intensityTarget,
-            intensityCategory: it.intensityCategory,
-            distanceMeters: it.distanceMeters,
-            category: it.category,
-            rawText: it.rawText,
-            paceTargetsJson: it.paceTargetsJson ?? undefined,
-            prescriptionJson: it.prescriptionJson ?? undefined,
-            equipment: it.equipment,
-            createdByUserId: opts.createdByUserId,
-          },
-        })
-      )
-    );
-  }
-
   return {
     step: {
       dataset: 'SESSIONS',
@@ -625,8 +573,8 @@ async function importSessions(opts: {
       valid: items.length,
       wouldCreate,
       wouldUpdate,
-      created: wouldCreate,
-      updated: wouldUpdate,
+      created: 0,
+      updated: 0,
       errorCount: errors.length,
       errors: errors.slice(0, 50),
     },
@@ -649,9 +597,8 @@ async function importSchedule(opts: {
   dryRun: boolean;
   limit?: number;
   offset: number;
-  resolveHints?: {
-    planIds: Set<string>;
-    sessionIds: Set<string>;
+  resolveMaps?: {
+    planIdByExternal: Map<string, string>;
   };
 }): Promise<{ step: StepSummary; url: { urlHost: string; urlPath: string; resolvedSource: string }; blocked: Response | null }>{
   const fetched = await fetchCsvRowsOrThrow('SCHEDULE', opts.requestId);
@@ -698,7 +645,13 @@ async function importSchedule(opts: {
 
     const isOptional = parseBoolean(r.is_optional);
     const isOff = parseBoolean(r.is_off);
-    const rawText = asTrimmedString(r.raw_text) || null;
+    // IMPORTANT: rawText must be preserved EXACTLY as imported (no trimming/normalization).
+    const rawText =
+      typeof (r as any).raw_text === 'string'
+        ? ((r as any).raw_text as string)
+        : (r as any).raw_text == null
+          ? null
+          : String((r as any).raw_text);
 
     const sessionExternalId = isOff ? null : asTrimmedString(r.session_id) || null;
     if (!isOff && !sessionExternalId) {
@@ -733,11 +686,10 @@ async function importSchedule(opts: {
   }
 
   const planIds = Array.from(new Set(rawItems.map((it) => it.planIdExternal)));
-  const sessionIds = Array.from(new Set(rawItems.map((it) => it.sessionExternalId).filter(Boolean) as string[]));
 
-  // Special-case: dataset=ALL dry-run should validate schedule against the same-request plans/sessions,
-  // without requiring prior DB writes.
-  if (opts.dryRun && opts.resolveHints) {
+  // Special-case: dataset=ALL dry-run should validate schedule against the same-request plans/sessions first,
+  // then fall back to DB existence checks (without requiring prior DB writes).
+  if (opts.dryRun && opts.resolveMaps) {
     const items = rawItems
       .map((it) => ({
         planIdExternal: it.planIdExternal,
@@ -752,9 +704,25 @@ async function importSchedule(opts: {
       }))
       .filter(Boolean);
 
+    const missingPlanIds = Array.from(
+      new Set(items.map((it) => it.planIdExternal).filter((id) => !opts.resolveMaps!.planIdByExternal.has(id)))
+    );
+    const dbPlans =
+      missingPlanIds.length > 0
+        ? await prisma.planTemplate.findMany({
+            where: { planIdExternal: { in: missingPlanIds } },
+            select: { id: true, planIdExternal: true },
+          })
+        : [];
+
+    for (const p of dbPlans) {
+      opts.resolveMaps.planIdByExternal.set(p.planIdExternal, p.id);
+    }
+
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      if (!opts.resolveHints.planIds.has(it.planIdExternal)) {
+      const planTemplateId = opts.resolveMaps.planIdByExternal.get(it.planIdExternal);
+      if (!planTemplateId) {
         errors.push({
           index: opts.offset + i + 1,
           code: 'PLAN_NOT_FOUND',
@@ -763,15 +731,6 @@ async function importSchedule(opts: {
         });
       }
 
-      if (!it.isOff && it.sessionExternalId && !opts.resolveHints.sessionIds.has(it.sessionExternalId)) {
-        errors.push({
-          index: opts.offset + i + 1,
-          code: 'SESSION_NOT_FOUND',
-          message: `Session not found for session_id=${it.sessionExternalId}.`,
-          planIdExternal: it.planIdExternal,
-          sessionExternalId: it.sessionExternalId,
-        });
-      }
     }
 
     return {
@@ -792,13 +751,192 @@ async function importSchedule(opts: {
     };
   }
 
+  // dataset=ALL apply mode can pass resolveMaps containing real ids from the earlier steps.
+  // Fill any gaps from the DB as a fallback.
+  if (opts.resolveMaps) {
+    const missingPlanIds = planIds.filter((id) => !opts.resolveMaps!.planIdByExternal.has(id));
+
+    if (missingPlanIds.length > 0) {
+      const dbPlans = await prisma.planTemplate.findMany({
+        where: { planIdExternal: { in: missingPlanIds } },
+        select: { id: true, planIdExternal: true },
+      });
+      for (const p of dbPlans) opts.resolveMaps.planIdByExternal.set(p.planIdExternal, p.id);
+    }
+
+    const planMap = opts.resolveMaps.planIdByExternal;
+
+    // Continue with the existing schedule import logic using the pre-resolved maps.
+    const items: Array<{
+      planTemplateId: string;
+      weekIndex: number;
+      dayIndex: number;
+      dayOfWeek: number;
+      ordinal: number;
+      isOptional: boolean;
+      isOff: boolean;
+      rawText: string | null;
+      workoutLibrarySessionId: string | null;
+    }> = [];
+
+    for (let i = 0; i < rawItems.length; i++) {
+      const it = rawItems[i];
+      const planTemplateId = planMap.get(it.planIdExternal);
+      if (!planTemplateId) {
+        errors.push({
+          index: opts.offset + i + 1,
+          code: 'PLAN_NOT_FOUND',
+          message: `Plan not found for plan_id=${it.planIdExternal}.`,
+          planIdExternal: it.planIdExternal,
+        });
+        continue;
+      }
+
+      const workoutLibrarySessionId = null;
+
+      items.push({
+        planTemplateId,
+        weekIndex: it.weekIndex,
+        dayIndex: it.dayIndex,
+        dayOfWeek: it.dayOfWeek,
+        ordinal: it.ordinal,
+        isOptional: it.isOptional,
+        isOff: it.isOff,
+        rawText: it.rawText,
+        workoutLibrarySessionId,
+      });
+    }
+
+    // Determine wouldCreate/wouldUpdate by looking up existing compound keys.
+    const existingSet = new Set<string>();
+    for (let i = 0; i < items.length; i += 200) {
+      const batch = items.slice(i, i + 200);
+      const existing = await prisma.planTemplateScheduleRow.findMany({
+        where: {
+          OR: batch.map((b) => ({
+            planTemplateId: b.planTemplateId,
+            weekIndex: b.weekIndex,
+            dayIndex: b.dayIndex,
+            ordinal: b.ordinal,
+          })),
+        },
+        select: { planTemplateId: true, weekIndex: true, dayIndex: true, ordinal: true },
+      });
+
+      for (const row of existing) {
+        existingSet.add(
+          scheduleKey({
+            planTemplateId: row.planTemplateId,
+            weekIndex: row.weekIndex,
+            dayIndex: row.dayIndex,
+            ordinal: row.ordinal,
+          })
+        );
+      }
+    }
+
+    const wouldCreate = items.filter((it) => !existingSet.has(scheduleKey(it))).length;
+    const wouldUpdate = items.length - wouldCreate;
+
+    if (!opts.dryRun && errors.length > 0) {
+      return {
+        step: {
+          dataset: 'SCHEDULE',
+          dryRun: opts.dryRun,
+          scanned: sliced.length,
+          valid: items.length,
+          wouldCreate,
+          wouldUpdate,
+          created: 0,
+          updated: 0,
+          errorCount: errors.length,
+          errors: errors.slice(0, 50),
+        },
+        url: fetched.safe,
+        blocked: null,
+      };
+    }
+
+    if (opts.dryRun) {
+      return {
+        step: {
+          dataset: 'SCHEDULE',
+          dryRun: true,
+          scanned: sliced.length,
+          valid: items.length,
+          wouldCreate,
+          wouldUpdate,
+          created: 0,
+          updated: 0,
+          errorCount: errors.length,
+          errors: errors.slice(0, 50),
+        },
+        url: fetched.safe,
+        blocked: null,
+      };
+    }
+
+    for (let i = 0; i < items.length; i += 100) {
+      const batch = items.slice(i, i + 100);
+      await prisma.$transaction(
+        batch.map((it) =>
+          prisma.planTemplateScheduleRow.upsert({
+            where: {
+              planTemplateId_weekIndex_dayIndex_ordinal: {
+                planTemplateId: it.planTemplateId,
+                weekIndex: it.weekIndex,
+                dayIndex: it.dayIndex,
+                ordinal: it.ordinal,
+              },
+            },
+            update: {
+              workoutLibrarySessionId: it.workoutLibrarySessionId,
+              dayOfWeek: it.dayOfWeek,
+              isOptional: it.isOptional,
+              isOff: it.isOff,
+              rawText: it.rawText,
+            },
+            create: {
+              planTemplateId: it.planTemplateId,
+              workoutLibrarySessionId: it.workoutLibrarySessionId,
+              weekIndex: it.weekIndex,
+              dayIndex: it.dayIndex,
+              dayOfWeek: it.dayOfWeek,
+              ordinal: it.ordinal,
+              isOptional: it.isOptional,
+              isOff: it.isOff,
+              rawText: it.rawText,
+            },
+          })
+        )
+      );
+    }
+
+    return {
+      step: {
+        dataset: 'SCHEDULE',
+        dryRun: false,
+        scanned: sliced.length,
+        valid: items.length,
+        wouldCreate,
+        wouldUpdate,
+        created: wouldCreate,
+        updated: wouldUpdate,
+        errorCount: errors.length,
+        errors: errors.slice(0, 50),
+      },
+      url: fetched.safe,
+      blocked: null,
+    };
+  }
+
   const [plans, sessions] = await prisma.$transaction([
     prisma.planTemplate.findMany({ where: { planIdExternal: { in: planIds } }, select: { id: true, planIdExternal: true } }),
-    prisma.workoutLibrarySession.findMany({ where: { externalId: { in: sessionIds } }, select: { id: true, externalId: true } }),
+    prisma.workoutLibrarySession.findMany({ where: { externalId: { in: [] } }, select: { id: true, externalId: true } }),
   ]);
 
   const planMap = new Map(plans.map((p) => [p.planIdExternal, p.id] as const));
-  const sessionMap = new Map(sessions.map((s) => [s.externalId as string, s.id] as const));
+  void sessions;
 
   const items: Array<{
     planTemplateId: string;
@@ -825,22 +963,7 @@ async function importSchedule(opts: {
       continue;
     }
 
-    const workoutLibrarySessionId = it.isOff
-      ? null
-      : it.sessionExternalId
-        ? sessionMap.get(it.sessionExternalId) ?? null
-        : null;
-
-    if (!it.isOff && it.sessionExternalId && !workoutLibrarySessionId) {
-      errors.push({
-        index: opts.offset + i + 1,
-        code: 'SESSION_NOT_FOUND',
-        message: `Session not found for session_id=${it.sessionExternalId}.`,
-        planIdExternal: it.planIdExternal,
-        sessionExternalId: it.sessionExternalId,
-      });
-      continue;
-    }
+    const workoutLibrarySessionId = null;
 
     items.push({
       planTemplateId,
@@ -1000,17 +1123,31 @@ export async function POST(request: NextRequest) {
     const steps: StepSummary[] = [];
     let urlMeta: { urlHost: string; urlPath: string; resolvedSource: string } | null = null;
 
-    let hints: { planIds: Set<string>; sessionIds: Set<string> } | null = null;
+    const resolveMaps =
+      body.dataset === 'ALL'
+        ? {
+            planIdByExternal: new Map<string, string>(),
+          }
+        : null;
+
+    // Chunking semantics (non-negotiable): for dataset=ALL in APPLY mode, limit/offset apply ONLY to SCHEDULE.
+    // PLANS and SESSIONS are always loaded from the start of their CSVs so SCHEDULE never fails due to chunking.
+    const plansSessionsLimit = body.dataset === 'ALL' && !body.dryRun ? undefined : body.limit;
+    const plansSessionsOffset = body.dataset === 'ALL' && !body.dryRun ? 0 : body.offset;
+    const scheduleLimit = body.limit;
+    const scheduleOffset = body.offset;
 
     for (const dataset of order) {
       if (dataset === 'PLANS') {
-        const res = await importPlans({ requestId, dryRun: body.dryRun, limit: body.limit, offset: body.offset });
+        const res = await importPlans({
+          requestId,
+          dryRun: body.dryRun,
+          limit: plansSessionsLimit,
+          offset: plansSessionsOffset,
+          planIdByExternal: resolveMaps?.planIdByExternal,
+        });
         urlMeta = urlMeta ?? res.url;
         steps.push(res.step);
-        if (body.dataset === 'ALL' && body.dryRun) {
-          hints = hints ?? { planIds: new Set(), sessionIds: new Set() };
-          for (const id of res.planIds) hints.planIds.add(id);
-        }
         if (res.blocked) return res.blocked;
         if (!body.dryRun && res.step.errorCount > 0) {
           return success({
@@ -1030,16 +1167,11 @@ export async function POST(request: NextRequest) {
         const res = await importSessions({
           requestId,
           dryRun: body.dryRun,
-          limit: body.limit,
-          offset: body.offset,
-          createdByUserId: user.id,
+          limit: plansSessionsLimit,
+          offset: plansSessionsOffset,
         });
         urlMeta = urlMeta ?? res.url;
         steps.push(res.step);
-        if (body.dataset === 'ALL' && body.dryRun) {
-          hints = hints ?? { planIds: new Set(), sessionIds: new Set() };
-          for (const id of res.sessionIds) hints.sessionIds.add(id);
-        }
         if (res.blocked) return res.blocked;
         if (!body.dryRun && res.step.errorCount > 0) {
           return success({
@@ -1059,9 +1191,9 @@ export async function POST(request: NextRequest) {
         const res = await importSchedule({
           requestId,
           dryRun: body.dryRun,
-          limit: body.limit,
-          offset: body.offset,
-          resolveHints: body.dataset === 'ALL' && body.dryRun && hints ? hints : undefined,
+          limit: scheduleLimit,
+          offset: scheduleOffset,
+          resolveMaps: body.dataset === 'ALL' && resolveMaps ? resolveMaps : undefined,
         });
         urlMeta = urlMeta ?? res.url;
         steps.push(res.step);
@@ -1084,6 +1216,11 @@ export async function POST(request: NextRequest) {
     const finishedAt = new Date();
     const url = urlMeta ?? sanitizeUrlForLogs(getPlanLibraryDatasetUrl('PLANS'));
 
+    const message =
+      body.dataset === 'ALL' && (body.limit != null || body.offset !== 0)
+        ? 'Note: for dataset=ALL, limit/offset apply to SCHEDULE only (PLANS and SESSIONS run fully each request).'
+        : undefined;
+
     return success({
       requestId,
       dataset: body.dataset,
@@ -1092,6 +1229,7 @@ export async function POST(request: NextRequest) {
       startedAt: startedAt.toISOString(),
       finishedAt: finishedAt.toISOString(),
       steps,
+      message,
     } satisfies ImportSummary);
   } catch (error) {
     return handleError(error, { requestId, where: 'POST /api/admin/plan-library/import' });

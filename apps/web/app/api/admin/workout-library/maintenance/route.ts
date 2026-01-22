@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
         }
 
         if (body.action === 'recomputeIntensityCategory') {
-          const next = deriveIntensityCategory(s.intensityTarget);
+          const target = (s.intensityTarget ?? '').trim();
+          const next = target ? deriveIntensityCategory(target) : null;
           const isSame = s.intensityCategory === next;
           if (isSame) {
             unchanged++;

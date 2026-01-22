@@ -29,9 +29,8 @@ test.describe('Admin import UI enablement', () => {
         {
           title: 'Test Manual Workout',
           discipline: 'RUN',
-          description: 'Fixture workout for manual import.',
-          intensityTarget: 'Easy',
-          durationSec: 1800,
+          category: 'Playwright',
+          workoutDetail: 'Fixture prompt for manual import.',
         },
       ])
     );

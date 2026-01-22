@@ -9,22 +9,10 @@ import { ApiError } from '@/lib/errors';
 import { getDatabaseHost, getRuntimeEnvInfo } from '@/lib/db-connection';
 import { isPrismaInitError, logPrismaInitError } from '@/lib/prisma-diagnostics';
 import { requireWorkoutLibraryAdmin } from '@/lib/workout-library-admin';
-import { computeWorkoutLibraryFingerprint } from '@/lib/workout-library-fingerprint';
-import { deriveIntensityCategory, normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
+import { computeWorkoutLibraryPromptFingerprint } from '@/lib/workout-library-fingerprint';
+import { normalizeEquipment, normalizeTags } from '@/lib/workout-library-taxonomy';
 
 export const dynamic = 'force-dynamic';
-
-function parseNumber(raw: unknown): number | undefined {
-  if (raw === null || raw === undefined) return undefined;
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (!trimmed) return undefined;
-    const parsed = Number(trimmed);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
-}
 
 function parseCommaList(raw: unknown): string[] {
   if (raw === null || raw === undefined) return [];
@@ -44,34 +32,14 @@ function parseCommaList(raw: unknown): string[] {
   return [];
 }
 
-function parseWorkoutStructure(raw: unknown): unknown | undefined {
-  if (raw === null || raw === undefined) return undefined;
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (!trimmed) return undefined;
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      // Leave as string; validation will reject non-JSON strings if needed.
-      return raw;
-    }
-  }
-  return raw;
-}
-
 const importRawItemSchema = z
   .object({
     title: z.any(),
     discipline: z.any(),
+    category: z.any().optional(),
     tags: z.any().optional(),
-    description: z.any(),
-    durationSec: z.any().optional(),
-    intensityTarget: z.any(),
-    distanceMeters: z.any().optional(),
-    elevationGainMeters: z.any().optional(),
-    notes: z.any().optional(),
     equipment: z.any().optional(),
-    workoutStructure: z.any().optional(),
+    workoutDetail: z.any(),
   })
   .transform((raw) => {
     const title = typeof raw.title === 'string' ? raw.title.trim() : String(raw.title ?? '').trim();
@@ -79,27 +47,17 @@ const importRawItemSchema = z
       typeof raw.discipline === 'string'
         ? raw.discipline.trim().toUpperCase()
         : String(raw.discipline ?? '').trim().toUpperCase();
-    const description =
-      typeof raw.description === 'string'
-        ? raw.description.trim()
-        : String(raw.description ?? '').trim();
-    const intensityTarget =
-      typeof raw.intensityTarget === 'string'
-        ? raw.intensityTarget.trim()
-        : String(raw.intensityTarget ?? '').trim();
+
+    const category = typeof raw.category === 'string' ? raw.category.trim() : raw.category ? String(raw.category).trim() : '';
+    const workoutDetail = typeof raw.workoutDetail === 'string' ? raw.workoutDetail : String(raw.workoutDetail ?? '');
 
     return {
       title,
       discipline,
+      category: category || null,
       tags: parseCommaList(raw.tags),
-      description,
-      durationSec: parseNumber(raw.durationSec),
-      intensityTarget,
-      distanceMeters: parseNumber(raw.distanceMeters),
-      elevationGainMeters: parseNumber(raw.elevationGainMeters),
-      notes: typeof raw.notes === 'string' ? raw.notes.trim() : raw.notes ? String(raw.notes) : undefined,
       equipment: parseCommaList(raw.equipment),
-      workoutStructure: parseWorkoutStructure(raw.workoutStructure),
+      workoutDetail: workoutDetail,
     };
   });
 
@@ -107,26 +65,10 @@ const importItemSchema = z
   .object({
     title: z.string().min(1),
     discipline: z.nativeEnum(WorkoutLibraryDiscipline),
+    category: z.string().trim().min(1),
     tags: z.array(z.string().trim().min(1)).default([]),
-    description: z.string().min(1),
-    durationSec: z.number().int().positive().optional(),
-    intensityTarget: z.string().min(1),
-    distanceMeters: z.number().positive().optional(),
-    elevationGainMeters: z.number().nonnegative().optional(),
-    notes: z.string().trim().max(20000).optional(),
+    workoutDetail: z.string().min(1),
     equipment: z.array(z.string().trim().min(1)).default([]),
-    workoutStructure: z.unknown().optional(),
-  })
-  .superRefine((data, ctx) => {
-    const hasDuration = typeof data.durationSec === 'number' && data.durationSec > 0;
-    const hasDistance = typeof data.distanceMeters === 'number' && data.distanceMeters > 0;
-
-    if (!hasDuration && !hasDistance) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'durationSec or distanceMeters is required.',
-      });
-    }
   });
 
 const importBodySchema = z.object({
@@ -226,18 +168,12 @@ export async function POST(request: NextRequest) {
     }
 
     const candidates = normalized.map((item) => {
-      const durationSec = item.durationSec ?? 0;
-      const distanceMeters = item.distanceMeters ?? null;
-      const workoutStructure = item.workoutStructure ?? null;
-      const fingerprint = computeWorkoutLibraryFingerprint({
+      const fingerprint = computeWorkoutLibraryPromptFingerprint({
         discipline: item.discipline,
         title: item.title,
-        durationSec,
-        distanceMeters,
-        intensityTarget: item.intensityTarget,
-        workoutStructure,
+        category: item.category,
       });
-      return { item, durationSec, distanceMeters, workoutStructure, fingerprint };
+      return { item, fingerprint };
     });
 
     const fingerprints = candidates.map((c) => c.fingerprint);
@@ -251,7 +187,7 @@ export async function POST(request: NextRequest) {
     const skippedExistingCount = candidates.length - toCreate.length;
 
     const created = await prisma.$transaction(
-      toCreate.map(({ item, durationSec, distanceMeters, workoutStructure, fingerprint }) =>
+      toCreate.map(({ item, fingerprint }) =>
         prisma.workoutLibrarySession.create({
           data: {
             title: item.title,
@@ -260,15 +196,16 @@ export async function POST(request: NextRequest) {
             source: WorkoutLibrarySource.MANUAL,
             fingerprint,
             tags: item.tags,
-            description: item.description,
-            durationSec,
-            intensityTarget: item.intensityTarget,
-            intensityCategory: deriveIntensityCategory(item.intensityTarget),
-            distanceMeters,
-            elevationGainMeters: item.elevationGainMeters ?? null,
-            notes: item.notes ?? null,
+            category: item.category,
+            description: item.workoutDetail,
+            durationSec: 0,
+            intensityTarget: '',
+            intensityCategory: null,
+            distanceMeters: null,
+            elevationGainMeters: null,
+            notes: null,
             equipment: item.equipment,
-            workoutStructure: workoutStructure ?? undefined,
+            workoutStructure: undefined,
             createdByUserId: user.id,
           },
           select: { id: true },
