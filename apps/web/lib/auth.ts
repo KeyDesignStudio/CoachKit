@@ -51,6 +51,7 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
       role,
       ...(preferredId ? { id: preferredId } : {}),
     },
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       role: true,
@@ -65,6 +66,7 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
     user ??
     (await prisma.user.findFirst({
       where: { role },
+      orderBy: { id: 'asc' },
       select: {
         id: true,
         role: true,

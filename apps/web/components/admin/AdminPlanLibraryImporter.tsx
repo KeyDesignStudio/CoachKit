@@ -45,15 +45,8 @@ type PlanLibraryDiagnostics = {
   workoutLibrary?: { planLibrary?: { total?: number } };
 };
 
-type PublishResult = {
-  matchedCount: number;
-  publishedCount: number;
-  alreadyPublishedCount: number;
-  errors: string[];
-};
-
 const DATASETS: Array<{ value: Dataset; label: string }> = [
-  { value: 'ALL', label: 'ALL (Plans → Sessions → Schedule)' },
+  { value: 'ALL', label: 'ALL (Plans → Sessions (validate) → Schedule)' },
   { value: 'PLANS', label: 'PLANS' },
   { value: 'SESSIONS', label: 'SESSIONS' },
   { value: 'SCHEDULE', label: 'SCHEDULE' },
@@ -76,11 +69,6 @@ export function AdminPlanLibraryImporter() {
   const [diag, setDiag] = useState<PlanLibraryDiagnostics | null>(null);
   const [diagError, setDiagError] = useState<ImportUiError | null>(null);
 
-  const [publishConfirm, setPublishConfirm] = useState('');
-  const [publishRunning, setPublishRunning] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
-  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
-
   const parsedLimit = useMemo(() => {
     const n = Number(limit.trim());
     if (!Number.isFinite(n) || n <= 0) return undefined;
@@ -99,15 +87,6 @@ export function AdminPlanLibraryImporter() {
     const n = diag?.tables?.find((t) => t.table === 'PlanTemplate')?.rowCount;
     return typeof n === 'number' ? n : null;
   }, [diag]);
-
-  const planLibrarySessionCount = useMemo(() => {
-    const n = diag?.workoutLibrary?.planLibrary?.total;
-    return typeof n === 'number' ? n : null;
-  }, [diag]);
-
-  const scheduleDepsKnown = planTemplateCount != null && planLibrarySessionCount != null;
-  const scheduleDepsMissing = scheduleDepsKnown && (planTemplateCount === 0 || planLibrarySessionCount === 0);
-  const scheduleApplyBlocked = dataset === 'SCHEDULE' && !dryRun && (scheduleDepsMissing || !scheduleDepsKnown);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,38 +147,12 @@ export function AdminPlanLibraryImporter() {
     }
   };
 
-  const publish = async () => {
-    setPublishRunning(true);
-    setPublishError(null);
-    setPublishResult(null);
-
-    try {
-      const confirmApply = publishConfirm.trim().toUpperCase() === 'PUBLISH';
-      if (!confirmApply) {
-        setPublishError('Type PUBLISH to confirm.');
-        return;
-      }
-
-      const data = await request<PublishResult>('/api/admin/plan-library/publish', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ confirmApply: true }),
-      });
-
-      setPublishResult(data);
-    } catch (e) {
-      setPublishError(e instanceof Error ? e.message : 'Publish failed');
-    } finally {
-      setPublishRunning(false);
-    }
-  };
-
   return (
     <Card className="p-4 md:p-6">
       <div className="text-sm font-semibold text-[var(--text)]">Plan Library (Vercel Blob CSV)</div>
       <div className="mt-1 text-xs text-[var(--muted)]">
-        Safety: dry-run by default. Turning dry-run off requires typing IMPORT. This import writes only to PlanTemplate,
-        WorkoutLibrarySession (source=PLAN_LIBRARY), and PlanTemplateScheduleRow.
+        Safety: dry-run by default. Turning dry-run off requires typing IMPORT. This import writes only to PlanTemplate and
+        PlanTemplateScheduleRow. It does not create or update coach Workout Library templates.
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -259,26 +212,6 @@ export function AdminPlanLibraryImporter() {
         </div>
       ) : null}
 
-      {dataset === 'SCHEDULE' && scheduleDepsMissing ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <div className="font-semibold">Schedule depends on Plans + Sessions.</div>
-          <div className="mt-1">Import PLANS then SESSIONS first, or run ALL.</div>
-          <div className="mt-2 text-[11px] text-amber-800">
-            Detected: PLANS={planTemplateCount ?? 'unknown'} • SESSIONS={planLibrarySessionCount ?? 'unknown'}
-          </div>
-        </div>
-      ) : null}
-
-      {dataset === 'SCHEDULE' && !scheduleDepsKnown && diagError ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <div className="font-semibold">Schedule depends on Plans + Sessions.</div>
-          <div className="mt-1">Import PLANS then SESSIONS first, or run ALL.</div>
-          <div className="mt-2 text-[11px] text-amber-800">
-            Unable to confirm dependency state: {diagError.code} — {diagError.message}
-          </div>
-        </div>
-      ) : null}
-
       {error ? (
         <div
           className={
@@ -289,9 +222,6 @@ export function AdminPlanLibraryImporter() {
         >
           <div className="font-semibold">{error.code}</div>
           <div className="mt-1">{error.message}</div>
-          {error.code === 'PLAN_LIBRARY_DEPENDENCY_MISSING' ? (
-            <div className="mt-2 text-[11px] text-amber-800">Fix: Run: PLANS → SESSIONS → SCHEDULE, or run ALL.</div>
-          ) : null}
           {error.details != null ? (
             <details className="mt-2">
               <summary className="cursor-pointer text-[11px]">details</summary>
@@ -308,16 +238,17 @@ export function AdminPlanLibraryImporter() {
           data-testid="admin-plan-library-run"
           variant={dryRun ? 'secondary' : 'primary'}
           size="sm"
-          disabled={running || (!dryRun && !canApply) || scheduleApplyBlocked}
+          disabled={running || (!dryRun && !canApply)}
           onClick={() => void run()}
         >
           {running ? 'Running…' : dryRun ? 'Run Dry-Run' : 'Import Now'}
         </Button>
       </div>
 
-      {dataset === 'SCHEDULE' && !dryRun && scheduleApplyBlocked ? (
-        <div className="mt-2 text-xs text-amber-700">Import PLANS then SESSIONS first, or run ALL.</div>
-      ) : null}
+      <div className="mt-3 text-[11px] text-[var(--muted)]">
+        Current DB: PlanTemplate={planTemplateCount ?? 'unknown'}
+        {diagError ? ` • diagnostics unavailable: ${diagError.code}` : ''}
+      </div>
 
       {result ? (
         <div data-testid="admin-plan-library-result" className="mt-4 rounded-2xl border border-[var(--border-subtle)] p-4">
@@ -360,39 +291,6 @@ export function AdminPlanLibraryImporter() {
         </div>
       ) : null}
 
-      <div className="mt-6 border-t border-[var(--border-subtle)] pt-4">
-        <div className="text-sm font-semibold text-[var(--text)]">Publish imported sessions</div>
-        <div className="mt-1 text-xs text-[var(--muted)]">
-          Coaches only see PUBLISHED sessions. This publishes drafts where source=PLAN_LIBRARY.
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Input
-            data-testid="admin-plan-library-publish-confirm"
-            placeholder='Type "PUBLISH" to enable'
-            value={publishConfirm}
-            onChange={(e) => setPublishConfirm(e.target.value)}
-          />
-          <div className="flex items-center gap-2">
-            <Button
-              data-testid="admin-plan-library-publish-run"
-              size="sm"
-              disabled={publishRunning || publishConfirm.trim().toUpperCase() !== 'PUBLISH'}
-              onClick={() => void publish()}
-            >
-              {publishRunning ? 'Publishing…' : 'Publish now'}
-            </Button>
-          </div>
-        </div>
-
-        {publishError ? <div className="mt-2 text-sm text-red-600">{publishError}</div> : null}
-
-        {publishResult ? (
-          <div data-testid="admin-plan-library-publish-result" className="mt-3 rounded-xl border border-[var(--border-subtle)] p-3 text-xs">
-            Published {publishResult.publishedCount} (matched {publishResult.matchedCount}, already published {publishResult.alreadyPublishedCount})
-          </div>
-        ) : null}
-      </div>
     </Card>
   );
 }

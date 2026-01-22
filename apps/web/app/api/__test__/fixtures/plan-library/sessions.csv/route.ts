@@ -8,3 +8,10 @@ export async function GET() {
 
   return csvResponse(getSessionsCsv());
 }
+
+export async function HEAD() {
+  const blocked = guardTestFixtures();
+  if (blocked) return blocked;
+
+  return csvResponse(getSessionsCsv());
+}

@@ -12,7 +12,7 @@ async function setRoleCookie(page: any, role: 'ADMIN') {
 }
 
 test.describe('Plan Library import (admin)', () => {
-  test('ALL apply succeeds from empty DB (chunk-safe) and is idempotent on rerun', async ({ page }) => {
+  test('ALL apply populates plan tables only (no Workout Library pollution) and is idempotent on rerun', async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, 'DATABASE_URL is required for plan-library import tests.');
 
     await setRoleCookie(page, 'ADMIN');
@@ -33,6 +33,11 @@ test.describe('Plan Library import (admin)', () => {
       test.skip(code === 'RESET_BLOCKED_HAS_ATHLETE_DATA', 'Reset blocked: athlete plan history exists in test DB.');
       throw new Error(`Plan Library reset failed: ${code ?? 'unknown_error'}`);
     }
+
+    const diag0 = await page.request.get('/api/admin/diagnostics/plan-library');
+    expect(diag0.ok()).toBeTruthy();
+    const diagPayload0 = (await diag0.json()) as any;
+    expect(diagPayload0?.data?.workoutLibrary?.planLibrary?.total ?? 0).toBe(0);
 
     // Dry-run must validate schedule against same-request keysets (no PLAN_NOT_FOUND / SESSION_NOT_FOUND).
     const dryRunRes = await page.request.post('/api/admin/plan-library/import', {
@@ -77,8 +82,19 @@ test.describe('Plan Library import (admin)', () => {
     const scheduleStep1 = applySteps.find((s) => s?.dataset === 'SCHEDULE');
 
     expect(plansStep1?.created ?? 0).toBeGreaterThan(0);
-    expect(sessionsStep1?.created ?? 0).toBeGreaterThan(0);
+    expect(sessionsStep1?.created ?? 0).toBe(0);
+    expect(sessionsStep1?.wouldCreate ?? 0).toBe(0);
     expect(scheduleStep1?.created ?? 0).toBeGreaterThan(0);
+
+    const diag1 = await page.request.get('/api/admin/diagnostics/plan-library');
+    expect(diag1.ok()).toBeTruthy();
+    const diagPayload1 = (await diag1.json()) as any;
+    const tables1: any[] = diagPayload1?.data?.tables ?? [];
+    const planCount = tables1.find((t) => t?.table === 'PlanTemplate')?.rowCount;
+    const scheduleCount = tables1.find((t) => t?.table === 'PlanTemplateScheduleRow')?.rowCount;
+    expect(planCount ?? 0).toBeGreaterThan(0);
+    expect(scheduleCount ?? 0).toBeGreaterThan(0);
+    expect(diagPayload1?.data?.workoutLibrary?.planLibrary?.total ?? 0).toBe(0);
 
     // Rerun apply: should be idempotent (no create) and still no reference errors.
     const applyRes2 = await page.request.post('/api/admin/plan-library/import', {
@@ -103,7 +119,7 @@ test.describe('Plan Library import (admin)', () => {
     expect(scheduleStep2?.created ?? 0).toBe(0);
   });
 
-  test('SCHEDULE apply blocked without dependencies', async ({ page }) => {
+  test('SESSIONS apply is validation-only (never creates WorkoutLibrarySession)', async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, 'DATABASE_URL is required for plan-library import tests.');
 
     await setRoleCookie(page, 'ADMIN');
@@ -127,7 +143,7 @@ test.describe('Plan Library import (admin)', () => {
 
     const res = await page.request.post('/api/admin/plan-library/import', {
       data: {
-        dataset: 'SCHEDULE',
+        dataset: 'SESSIONS',
         dryRun: false,
         confirmApply: true,
         limit: 50,
@@ -135,9 +151,16 @@ test.describe('Plan Library import (admin)', () => {
       },
     });
 
-    expect(res.status()).toBe(400);
+    expect(res.ok()).toBeTruthy();
     const payload = (await res.json()) as any;
-    expect(payload?.error?.code).toBe('PLAN_LIBRARY_DEPENDENCY_MISSING');
-    expect(String(payload?.error?.message ?? '')).toContain('Import PLANS then SESSIONS');
+    const steps: any[] = payload?.data?.steps ?? [];
+    const sessionsStep = steps.find((s) => s?.dataset === 'SESSIONS');
+    expect(sessionsStep?.created ?? 0).toBe(0);
+    expect(sessionsStep?.updated ?? 0).toBe(0);
+
+    const diag = await page.request.get('/api/admin/diagnostics/plan-library');
+    expect(diag.ok()).toBeTruthy();
+    const diagPayload = (await diag.json()) as any;
+    expect(diagPayload?.data?.workoutLibrary?.planLibrary?.total ?? 0).toBe(0);
   });
 });

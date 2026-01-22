@@ -8,3 +8,12 @@ export async function GET() {
 
   return csvResponse(getPlansCsv());
 }
+
+export async function HEAD() {
+  const blocked = guardTestFixtures();
+  if (blocked) return blocked;
+
+  // Next.js does not automatically map HEAD -> GET for route handlers.
+  // Plan Library import performs a HEAD to validate dataset size/type.
+  return csvResponse(getPlansCsv());
+}
