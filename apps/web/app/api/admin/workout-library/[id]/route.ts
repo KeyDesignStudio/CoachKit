@@ -18,36 +18,15 @@ const patchSchema = z
     status: z.nativeEnum(WorkoutLibrarySessionStatus).optional(),
     source: z.nativeEnum(WorkoutLibrarySource).optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
+    category: z.string().trim().min(1).optional(),
     description: z.string().trim().min(1).optional(),
     durationSec: z.number().int().nonnegative().optional(),
-    intensityTarget: z.string().trim().min(1).optional(),
+    intensityTarget: z.string().max(2000).optional(),
     distanceMeters: z.number().positive().nullable().optional(),
     elevationGainMeters: z.number().nonnegative().nullable().optional(),
     notes: z.string().trim().max(20000).nullable().optional(),
     equipment: z.array(z.string().trim().min(1)).optional(),
     workoutStructure: z.unknown().nullable().optional(),
-  })
-  .superRefine((data, ctx) => {
-    // Optional: if durationSec is explicitly set to 0 and no distanceMeters, reject.
-    // This preserves the rule that durationSec OR distanceMeters should be present.
-    if (Object.prototype.hasOwnProperty.call(data, 'durationSec')) {
-      const duration = data.durationSec;
-      const distance = data.distanceMeters;
-      const hasDuration = typeof duration === 'number' && duration > 0;
-      const hasDistance = typeof distance === 'number' && distance > 0;
-      if (duration === 0 && !hasDistance) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'durationSec must be > 0 unless distanceMeters is provided.',
-        });
-      }
-      if (!hasDuration && !hasDistance && typeof duration === 'number') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'durationSec or distanceMeters is required.',
-        });
-      }
-    }
   });
 
 export async function GET(_request: NextRequest, context: { params: { id: string } }) {
@@ -75,26 +54,22 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
 
     const normalizedTags = payload.tags !== undefined ? normalizeTags(payload.tags) : undefined;
     const normalizedEquipment = payload.equipment !== undefined ? normalizeEquipment(payload.equipment) : undefined;
+
+    const intensityTargetTrimmed =
+      payload.intensityTarget !== undefined ? (payload.intensityTarget ?? '').trim() : undefined;
     const intensityCategory =
-      payload.intensityTarget !== undefined ? deriveIntensityCategory(payload.intensityTarget) : undefined;
+      intensityTargetTrimmed !== undefined
+        ? intensityTargetTrimmed
+          ? deriveIntensityCategory(intensityTargetTrimmed)
+          : null
+        : undefined;
 
     const existing = await prisma.workoutLibrarySession.findUnique({
       where: { id },
-      select: { id: true, durationSec: true, distanceMeters: true },
+      select: { id: true },
     });
 
     if (!existing) throw notFound('Library session not found.');
-
-    const durationAfter = payload.durationSec ?? existing.durationSec;
-    const distanceAfter =
-      payload.distanceMeters !== undefined ? payload.distanceMeters : existing.distanceMeters;
-
-    const hasDurationAfter = typeof durationAfter === 'number' && durationAfter > 0;
-    const hasDistanceAfter = typeof distanceAfter === 'number' && distanceAfter > 0;
-
-    if (!hasDurationAfter && !hasDistanceAfter) {
-      throw new ApiError(400, 'VALIDATION_ERROR', 'durationSec or distanceMeters is required.');
-    }
 
     const updated = await prisma.workoutLibrarySession.update({
       where: { id },
@@ -104,9 +79,10 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
         ...(payload.status !== undefined ? { status: payload.status } : {}),
         ...(payload.source !== undefined ? { source: payload.source } : {}),
         ...(normalizedTags !== undefined ? { tags: normalizedTags } : {}),
+        ...(payload.category !== undefined ? { category: payload.category } : {}),
         ...(payload.description !== undefined ? { description: payload.description } : {}),
         ...(payload.durationSec !== undefined ? { durationSec: payload.durationSec } : {}),
-        ...(payload.intensityTarget !== undefined ? { intensityTarget: payload.intensityTarget } : {}),
+        ...(intensityTargetTrimmed !== undefined ? { intensityTarget: intensityTargetTrimmed } : {}),
         ...(intensityCategory !== undefined ? { intensityCategory } : {}),
         ...(payload.distanceMeters !== undefined ? { distanceMeters: payload.distanceMeters } : {}),
         ...(payload.elevationGainMeters !== undefined ? { elevationGainMeters: payload.elevationGainMeters } : {}),

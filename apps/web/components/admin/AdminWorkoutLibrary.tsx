@@ -20,15 +20,11 @@ type LibraryItem = {
   discipline: Discipline;
   status?: 'DRAFT' | 'PUBLISHED';
   source?: 'MANUAL';
+  category?: string | null;
   tags: string[];
   description: string;
-  durationSec: number;
-  intensityTarget: string;
-  distanceMeters: number | null;
-  elevationGainMeters: number | null;
   notes: string | null;
   equipment: string[];
-  workoutStructure: unknown | null;
   createdAt: string;
   updatedAt: string;
   createdByUserId: string | null;
@@ -67,14 +63,6 @@ function splitCommaList(text: string): string[] {
     .split(',')
     .map((v) => v.trim())
     .filter(Boolean);
-}
-
-function parseOptionalNumber(text: string): number | undefined {
-  const trimmed = text.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) return undefined;
-  return parsed;
 }
 
 function parseCsvLine(line: string): string[] {
@@ -140,7 +128,8 @@ function parseCsv(text: string): { items: Record<string, unknown>[]; errors: str
   }
 
   // Basic header sanity check to avoid confusing failures.
-  const required = ['title', 'discipline', 'description', 'intensityTarget'];
+  // Prompt Library import columns (minimal): title, discipline, category, workoutDetail.
+  const required = ['title', 'discipline', 'category', 'workoutDetail'];
   const missing = required.filter((k) => !header.includes(k));
   if (missing.length > 0) {
     errors.push(`Missing required columns: ${missing.join(', ')}`);
@@ -182,15 +171,11 @@ export function AdminWorkoutLibrary() {
 
   const [title, setTitle] = useState('');
   const [formDiscipline, setFormDiscipline] = useState<Discipline>('RUN');
+  const [category, setCategory] = useState('');
   const [tagsText, setTagsText] = useState('');
   const [description, setDescription] = useState('');
-  const [durationSecText, setDurationSecText] = useState('');
-  const [distanceMetersText, setDistanceMetersText] = useState('');
-  const [elevationGainMetersText, setElevationGainMetersText] = useState('');
-  const [intensityTarget, setIntensityTarget] = useState('');
   const [equipment, setEquipment] = useState<CanonicalEquipment[]>([]);
   const [notes, setNotes] = useState('');
-  const [workoutStructureText, setWorkoutStructureText] = useState('');
 
   const [activeRightTab, setActiveRightTab] = useState<'edit' | 'import' | 'maintenance'>('edit');
 
@@ -229,7 +214,6 @@ export function AdminWorkoutLibrary() {
 
   const [importDryRun, setImportDryRun] = useState(true);
   const [importConfirmApply, setImportConfirmApply] = useState(false);
-  const importSource: 'MANUAL' = 'MANUAL';
   const [importItems, setImportItems] = useState<unknown[]>([]);
   const [importParseError, setImportParseError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -296,15 +280,11 @@ export function AdminWorkoutLibrary() {
   const resetForm = useCallback(() => {
     setTitle('');
     setFormDiscipline('RUN');
+    setCategory('');
     setTagsText('');
     setDescription('');
-    setDurationSecText('');
-    setDistanceMetersText('');
-    setElevationGainMetersText('');
-    setIntensityTarget('');
     setEquipment([]);
     setNotes('');
-    setWorkoutStructureText('');
     setSaveError(null);
     setSaveOk(null);
   }, []);
@@ -328,12 +308,9 @@ export function AdminWorkoutLibrary() {
 
       setTitle(item.title ?? '');
       setFormDiscipline(item.discipline);
+      setCategory(item.category ?? '');
       setTagsText((item.tags ?? []).join(', '));
       setDescription(item.description ?? '');
-      setDurationSecText(item.durationSec ? String(item.durationSec) : '');
-      setDistanceMetersText(item.distanceMeters != null ? String(item.distanceMeters) : '');
-      setElevationGainMetersText(item.elevationGainMeters != null ? String(item.elevationGainMeters) : '');
-      setIntensityTarget(item.intensityTarget ?? '');
       setEquipment(() => {
         const raw = item.equipment ?? [];
         const canonical = raw.filter((e): e is CanonicalEquipment =>
@@ -344,9 +321,6 @@ export function AdminWorkoutLibrary() {
         return canonical;
       });
       setNotes(item.notes ?? '');
-      setWorkoutStructureText(
-        item.workoutStructure != null ? JSON.stringify(item.workoutStructure, null, 2) : ''
-      );
 
       setSaveError(null);
       setSaveOk(null);
@@ -446,38 +420,15 @@ export function AdminWorkoutLibrary() {
     try {
       const tags = splitCommaList(tagsText);
       const equipmentPayload = equipment;
-      const durationSec = parseOptionalNumber(durationSecText);
-      const distanceMeters = parseOptionalNumber(distanceMetersText);
-      const elevationGainMeters = parseOptionalNumber(elevationGainMetersText);
-
-      let workoutStructure: unknown | null | undefined = undefined;
-      const wsTrimmed = workoutStructureText.trim();
-      if (wsTrimmed) {
-        try {
-          workoutStructure = JSON.parse(wsTrimmed);
-        } catch {
-          throw new Error('workoutStructure must be valid JSON (or empty).');
-        }
-      }
-
-      const hasDuration = typeof durationSec === 'number' && durationSec > 0;
-      const hasDistance = typeof distanceMeters === 'number' && distanceMeters > 0;
-      if (!hasDuration && !hasDistance) {
-        throw new Error('Provide durationSec or distanceMeters.');
-      }
 
       const payload = {
         title: title.trim(),
         discipline: formDiscipline,
         tags,
+        category: category.trim(),
         description: description.trim(),
-        durationSec: hasDuration ? Math.round(durationSec!) : undefined,
-        intensityTarget: intensityTarget.trim(),
-        distanceMeters: hasDistance ? distanceMeters : null,
-        elevationGainMeters: elevationGainMeters ?? null,
         notes: notes.trim() ? notes.trim() : null,
         equipment: equipmentPayload,
-        workoutStructure: workoutStructure ?? null,
       };
 
       if (mode === 'create') {
@@ -504,21 +455,17 @@ export function AdminWorkoutLibrary() {
       setSaving(false);
     }
   }, [
+    category,
     description,
-    distanceMetersText,
-    elevationGainMetersText,
     equipment,
     fetchList,
     formDiscipline,
-    intensityTarget,
     mode,
     notes,
     request,
     selectedId,
     tagsText,
     title,
-    workoutStructureText,
-    durationSecText,
   ]);
 
   const runMaintenance = useCallback(
@@ -678,7 +625,7 @@ export function AdminWorkoutLibrary() {
               {loadingList ? 'Loading…' : 'Refresh'}
             </Button>
             <div className="text-xs text-[var(--muted)]">Showing {items.length} (max 200)</div>
-            <div className="text-xs text-[var(--muted)]">Coaches only see PUBLISHED workouts.</div>
+            <div className="text-xs text-[var(--muted)]">Coaches only see PUBLISHED prompts.</div>
           </div>
 
           {listError ? <div className="text-sm text-red-600">{listError}</div> : null}
@@ -712,8 +659,7 @@ export function AdminWorkoutLibrary() {
                             </span>
                           ) : null}
                           <span>Usage: {it.usageCount ?? 0}</span>
-                          {it.durationSec ? <span>{it.durationSec}s</span> : null}
-                          {it.distanceMeters != null ? <span>{it.distanceMeters}m</span> : null}
+                          {it.category ? <span>Category: {it.category}</span> : null}
                         </div>
                         {it.tags?.length ? (
                           <div className="mt-1 truncate text-xs text-[var(--muted)]">
@@ -789,43 +735,22 @@ export function AdminWorkoutLibrary() {
             </div>
 
             <Input
+              placeholder="Category (e.g. Endurance / Tempo / Skills)"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+
+            <Input
               placeholder="Tags (comma-separated)"
               value={tagsText}
               onChange={(e) => setTagsText(e.target.value)}
             />
 
             <Textarea
-              placeholder="Description"
+              placeholder="Workout detail (prompt)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-            />
-
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <Input
-                placeholder="durationSec"
-                inputMode="numeric"
-                value={durationSecText}
-                onChange={(e) => setDurationSecText(e.target.value)}
-              />
-              <Input
-                placeholder="distanceMeters"
-                inputMode="decimal"
-                value={distanceMetersText}
-                onChange={(e) => setDistanceMetersText(e.target.value)}
-              />
-              <Input
-                placeholder="elevationGainMeters"
-                inputMode="decimal"
-                value={elevationGainMetersText}
-                onChange={(e) => setElevationGainMetersText(e.target.value)}
-              />
-            </div>
-
-            <Input
-              placeholder="Intensity target (e.g. Z2 / RPE 6-7 / CSS)"
-              value={intensityTarget}
-              onChange={(e) => setIntensityTarget(e.target.value)}
             />
 
             <div className="rounded-2xl border border-[var(--border-subtle)] p-3">
@@ -868,20 +793,13 @@ export function AdminWorkoutLibrary() {
               rows={4}
             />
 
-            <Textarea
-              placeholder="workoutStructure JSON (optional)"
-              value={workoutStructureText}
-              onChange={(e) => setWorkoutStructureText(e.target.value)}
-              rows={8}
-            />
-
             {saveError ? <div className="text-sm text-red-600">{saveError}</div> : null}
             {saveOk ? <div className="text-sm text-green-700">{saveOk}</div> : null}
 
             {publishError ? <div className="text-sm text-red-600">{publishError}</div> : null}
             {publishOk ? <div className="text-sm text-green-700">{publishOk}</div> : null}
-              {unpublishError ? <div className="text-sm text-red-600">{unpublishError}</div> : null}
-              {unpublishOk ? <div className="text-sm text-green-700">{unpublishOk}</div> : null}
+            {unpublishError ? <div className="text-sm text-red-600">{unpublishError}</div> : null}
+            {unpublishOk ? <div className="text-sm text-green-700">{unpublishOk}</div> : null}
 
             <div className="flex items-center gap-2">
               <Button onClick={() => void onSave()} disabled={saving}>
@@ -944,7 +862,7 @@ export function AdminWorkoutLibrary() {
             <div className="mt-4 flex flex-col gap-3">
             <div className="text-sm font-semibold text-[var(--text)]">Import</div>
             <div className="text-xs text-[var(--muted)]">
-              Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT sessions (not visible to coaches until published).
+              Safety: dry-run by default. Apply requires confirmation. Imports create DRAFT prompts (not visible to coaches until published).
             </div>
 
             <AdminPlanLibraryImporter />
@@ -1039,13 +957,11 @@ export function AdminWorkoutLibrary() {
                     </div>
 
                     {!importDryRun ? (
-                      <div className="text-xs text-amber-700">
-                        This will create workouts in the library.
-                      </div>
+                      <div className="text-xs text-amber-700">This will create prompts in the library.</div>
                     ) : null}
 
                     <div className="text-xs text-[var(--muted)]">
-                      Reminder: coaches only see PUBLISHED workouts. Use the Publish controls after importing.
+                      Reminder: coaches only see PUBLISHED prompts. Use the Publish controls after importing.
                     </div>
 
                     <input
@@ -1069,9 +985,8 @@ export function AdminWorkoutLibrary() {
                       data-testid="admin-import-debug"
                       className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3 text-xs text-[var(--text)]"
                     >
-                      source={importSource} busy={String(busy)} hasRows={String(hasRows)} confirmApply={String(
-                        importConfirmApply
-                      )} dryRunChecked={String(importDryRun)} canDryRun={String(canDryRun)} canApply={String(canApply)}
+                      busy={String(busy)} hasRows={String(hasRows)} confirmApply={String(importConfirmApply)}
+                      dryRunChecked={String(importDryRun)} canDryRun={String(canDryRun)} canApply={String(canApply)}
                     </div>
                   ) : null}
 

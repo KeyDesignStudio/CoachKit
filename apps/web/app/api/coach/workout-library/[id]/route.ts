@@ -21,6 +21,7 @@ export async function GET(_request: NextRequest, context: { params: { id: string
         discipline: true,
         status: true,
         tags: true,
+        category: true,
         description: true,
         durationSec: true,
         intensityTarget: true,
