@@ -13,10 +13,8 @@ This document inventories the font loading strategy and the typography utilities
 
 ### Primary text font
 
-- Loaded via Google Fonts CSS import in `apps/web/app/globals.css`:
-  - `Space Grotesk` with weights `400`, `500`, `600`.
 - Applied globally on `body` in `apps/web/app/globals.css`:
-  - `font-family: 'Space Grotesk', 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;`
+  - `font-family: 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;`
 
 ### Icon font
 
@@ -27,7 +25,7 @@ This document inventories the font loading strategy and the typography utilities
 ### Tailwind font-family utilities
 
 - Tailwind config defines a single custom family in `apps/web/tailwind.config.js`:
-  - `theme.extend.fontFamily.display = ['Space Grotesk', 'Segoe UI', 'sans-serif']`
+  - `theme.extend.fontFamily.display = ['SF Pro Display', 'Segoe UI', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']`
 - Observed usage:
   - `font-display` is used (currently in the global header branding).
 
@@ -145,7 +143,7 @@ This is not a full per-component catalog; it highlights the primary surfaces tha
 
 - Global defaults:
   - `apps/web/app/layout.tsx`: `<body className="bg-[var(--bg-page)] text-[var(--text)]">`
-  - `apps/web/app/globals.css`: applies `Space Grotesk` stack to `body`.
+  - `apps/web/app/globals.css`: applies the system font stack to `body`.
 - Header branding:
   - `apps/web/components/app-header.tsx`: center CoachKit mark uses `font-display font-semibold tracking-tight`.
 
@@ -185,21 +183,13 @@ This is not a full per-component catalog; it highlights the primary surfaces tha
 
 These are concrete “drift points” discovered from the inventory.
 
-1) **`font-bold` used, but Space Grotesk 700 is not loaded**
-- Global font import loads `400/500/600` only.
-- `font-bold` appears (e.g. `apps/web/app/coach/athletes/page.tsx`).
-- Result: browsers may synthesize bold or fall back inconsistently.
-- Fix options:
-  - Add `700` to the Google Fonts import for `Space Grotesk`, or
-  - Avoid `font-bold` and stick to `font-semibold` as the heaviest weight.
-
-2) **Mixed text color strategies**
+1) **Mixed text color strategies**
 - Many components use CSS variable colors: `text-[var(--text)]`, `text-[var(--muted)]`.
 - Some surfaces still use Tailwind palette colors (examples observed):
   - `text-slate-600`, `text-emerald-700`, `text-red-700`, `text-rose-500`, `text-amber-700`.
 - This isn’t strictly a font issue, but it affects readability/contrast consistency and makes typography roles harder to standardize.
 
-3) **Label tracking is split across named + arbitrary utilities**
+2) **Label tracking is split across named + arbitrary utilities**
 - Both `tracking-wide` and `tracking-[0.18em]` / `tracking-[0.3em]` are used.
 - Recommendation: pick one canonical label tracking (or define semantic Tailwind tokens) so headings/eyebrows look identical across coach + athlete surfaces.
 
