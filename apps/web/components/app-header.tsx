@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { UserButton } from '@clerk/nextjs';
 
 import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
@@ -10,6 +9,7 @@ import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { AdminHeader } from '@/components/admin/AdminHeader';
+import { UserHeaderControl } from '@/components/UserHeaderControl';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
@@ -179,8 +179,8 @@ export async function AppHeader() {
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
-            <div className="flex w-11 justify-end">
-              {userId && <UserButton afterSignOutUrl="/" />}
+            <div className="flex min-w-0 max-w-[40vw] justify-end">
+              {userId && <UserHeaderControl />}
             </div>
           </div>
 
@@ -256,7 +256,7 @@ export async function AppHeader() {
               </nav>
             ) : null}
 
-            {userId && <UserButton afterSignOutUrl="/" />}
+            {userId && <UserHeaderControl />}
           </div>
         </div>
         </Card>

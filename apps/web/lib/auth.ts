@@ -90,14 +90,36 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
     };
   }
 
+  // Dev-only escape hatch: create a minimal user so downstream DB writes don't violate FKs.
+  // This runs only when auth is disabled (development) and no user exists for the role.
+  const devId = preferredId ?? `dev-${role.toLowerCase()}`;
+  const created = await prisma.user.create({
+    data: {
+      id: devId,
+      email: `${devId}@local`,
+      name: null,
+      role,
+      timezone: 'UTC',
+      authProviderId: devId,
+    },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      name: true,
+      timezone: true,
+      authProviderId: true,
+    },
+  });
+
   return {
     user: {
-      id: `dev-${role.toLowerCase()}`,
-      role,
-      email: `dev-${role.toLowerCase()}@local`,
-      name: null,
-      timezone: 'UTC',
-      authProviderId: `dev-${role.toLowerCase()}`,
+      id: created.id,
+      role: created.role,
+      email: created.email,
+      name: created.name,
+      timezone: created.timezone,
+      authProviderId: created.authProviderId ?? devId,
     },
   };
 }
