@@ -95,9 +95,6 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState('');
-  const [showFullStravaDescription, setShowFullStravaDescription] = useState(false);
-  const [showAllStravaLapsDesktop, setShowAllStravaLapsDesktop] = useState(false);
-  const [showStravaLapsMobile, setShowStravaLapsMobile] = useState(false);
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
@@ -223,6 +220,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const stravaMaxWatts = (stravaActivity.max_watts ?? stravaActivity.maxWatts) as number | undefined;
   const stravaSufferScore = (stravaActivity.suffer_score ?? stravaActivity.sufferScore) as number | undefined;
   const stravaPerceivedExertion = (stravaActivity.perceived_exertion ?? stravaActivity.perceivedExertion) as number | string | undefined;
+
+  const activityAverageHeartrate =
+    (stravaActivity.average_heartrate ?? stravaActivity.averageHeartrate ?? stravaAvgHr) as number | undefined;
+  const activityMaxHeartrate = (stravaActivity.max_heartrate ?? stravaActivity.maxHeartrate ?? stravaMaxHr) as number | undefined;
 
   const actualTimeLabel = formatZonedTime(stravaStartUtc);
   const actualDateTimeLabel = formatZonedDateTime(stravaStartUtc);
@@ -674,7 +675,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 <div className="flex items-center gap-2">
                   <p className={uiLabel}>STRAVA DETECTED</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/integrations/strava.webp" alt="Strava" className="h-6 w-6 shrink-0" />
+                  <img src="/integrations/strava.webp" alt="Strava" className="h-[21px] w-[21px] shrink-0" />
                 </div>
                 {isDraftStrava ? <p className="mt-1 text-xs text-[var(--muted)]">Pending confirmation</p> : null}
               </div>
@@ -682,7 +683,6 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-4">
                 {/* Column 1: Activity */}
                 <div className="min-w-0 space-y-3">
-                  <p className="text-xs font-semibold text-[var(--muted)]">Activity</p>
                   <FieldRow label="Start time" value={actualDateTimeLabel} />
                   <FieldRow
                     label="Activity"
@@ -698,46 +698,27 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   {stravaDescription ? (
                     <div>
                       <p className="text-xs font-medium text-[var(--muted)]">Description</p>
-                      <p className="text-sm mt-1 text-[var(--text)] whitespace-pre-wrap break-words">
-                        {showFullStravaDescription || stravaDescription.length <= 200
-                          ? stravaDescription
-                          : `${stravaDescription.slice(0, 200)}…`}
-                      </p>
-                      {stravaDescription.length > 200 ? (
-                        <button
-                          type="button"
-                          className="mt-1 text-xs font-medium text-[var(--text)] underline underline-offset-2"
-                          onClick={() => setShowFullStravaDescription((v) => !v)}
-                        >
-                          {showFullStravaDescription ? 'Show less' : 'Show more'}
-                        </button>
-                      ) : null}
+                      <p className="text-sm mt-1 text-[var(--text)] whitespace-pre-wrap break-words">{stravaDescription}</p>
                     </div>
                   ) : null}
                 </div>
 
                 {/* Column 2: Distance & Elevation */}
                 <div className="min-w-0 space-y-3">
-                  <p className="text-xs font-semibold text-[var(--muted)]">Distance & Elevation</p>
                   <FieldRow label="Avg speed" value={avgSpeedLabel ?? avgPaceLabel} />
                   <FieldRow label="Elevation gain" value={elevationGainLabel} />
                   <FieldRow label="Calories" value={caloriesLabel} />
                   <FieldRow label="City" value={stravaLocationCity} />
-                  {stravaSummaryPolyline ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Route</p>
-                      <div className="mt-1">
-                        <Badge className="px-2 py-0.5 text-[10px]">Route available</Badge>
-                      </div>
-                    </div>
-                  ) : null}
+                  <FieldRow
+                    label="Polyline"
+                    value={stravaSummaryPolyline ? `${stravaSummaryPolyline.length} chars` : null}
+                  />
                 </div>
 
                 {/* Column 3: Effort & Load */}
                 <div className="min-w-0 space-y-3">
-                  <p className="text-xs font-semibold text-[var(--muted)]">Effort & Load</p>
-                  <FieldRow label="Avg HR" value={formatIntUnit(stravaAvgHr, 'bpm')} />
-                  <FieldRow label="Max HR" value={formatIntUnit(stravaMaxHr, 'bpm')} />
+                  <FieldRow label="Avg HR" value={formatIntUnit(activityAverageHeartrate, 'bpm')} />
+                  <FieldRow label="Max HR" value={formatIntUnit(activityMaxHeartrate, 'bpm')} />
                   <FieldRow label="Avg watts" value={formatIntUnit(stravaAverageWatts, 'W')} />
                   <FieldRow label="Max watts" value={formatIntUnit(stravaMaxWatts, 'W')} />
                   <FieldRow label="Suffer score" value={stravaSufferScore !== undefined && Number.isFinite(stravaSufferScore) ? Math.round(stravaSufferScore) : null} />
@@ -753,89 +734,24 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
                 {/* Column 4: Device & Laps */}
                 <div className="min-w-0 space-y-3">
-                  <p className="text-xs font-semibold text-[var(--muted)]">Device & Laps</p>
                   <FieldRow label="Device" value={stravaDeviceName} />
 
                   {Array.isArray(stravaLaps) && stravaLaps.length > 0 ? (
-                    <div>
-                      {/* Mobile: collapsed by default if >3 laps */}
-                      <div className="lg:hidden">
-                        <button
-                          type="button"
-                          className="w-full text-left"
-                          onClick={() => setShowStravaLapsMobile((v) => !v)}
-                        >
-                          <p className="text-xs font-medium text-[var(--muted)]">Laps ({stravaLaps.length})</p>
-                          {stravaLaps.length > 3 ? (
-                            <p className="mt-1 text-xs text-[var(--muted)]">{showStravaLapsMobile ? 'Hide laps' : 'Show laps'}</p>
-                          ) : null}
-                        </button>
+                    <div className="space-y-2">
+                      {(stravaLaps as any[]).map((lap, idx) => {
+                        const lapDistance = formatKm(lap?.distance);
+                        const lapMoving = formatDurationHms(lap?.moving_time);
+                        const lapSpeed = formatSpeedKmh(lap?.average_speed);
+                        const lapHr = formatIntUnit(lap?.average_heartrate, 'bpm');
+                        const parts = [
+                          lapDistance ? `Distance ${lapDistance}` : null,
+                          lapMoving ? `Moving ${lapMoving}` : null,
+                          lapSpeed ? `Avg speed ${lapSpeed}` : null,
+                          lapHr ? `Avg HR ${lapHr}` : null,
+                        ].filter(Boolean) as string[];
 
-                        {showStravaLapsMobile || stravaLaps.length <= 3 ? (
-                          <div className="mt-2 space-y-2">
-                            {(stravaLaps as any[]).map((lap, idx) => {
-                              const lapDistance = formatKm(lap?.distance);
-                              const lapMoving = formatDurationHms(lap?.moving_time);
-                              const lapSpeed = formatSpeedKmh(lap?.average_speed);
-                              const lapHr = formatIntUnit(lap?.average_heartrate, 'bpm');
-                              if (!lapDistance && !lapMoving && !lapSpeed && !lapHr) return null;
-                              return (
-                                <div key={idx} className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
-                                  <p className="text-xs font-medium text-[var(--text)]">Lap {idx + 1}</p>
-                                  <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
-                                    {lapDistance ? <p className="text-xs text-[var(--muted)]">Distance</p> : null}
-                                    {lapDistance ? <p className="text-xs text-[var(--text)]">{lapDistance}</p> : null}
-                                    {lapMoving ? <p className="text-xs text-[var(--muted)]">Moving</p> : null}
-                                    {lapMoving ? <p className="text-xs text-[var(--text)]">{lapMoving}</p> : null}
-                                    {lapSpeed ? <p className="text-xs text-[var(--muted)]">Avg speed</p> : null}
-                                    {lapSpeed ? <p className="text-xs text-[var(--text)]">{lapSpeed}</p> : null}
-                                    {lapHr ? <p className="text-xs text-[var(--muted)]">Avg HR</p> : null}
-                                    {lapHr ? <p className="text-xs text-[var(--text)]">{lapHr}</p> : null}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {/* Desktop: show first 5 + toggle */}
-                      <div className="hidden lg:block">
-                        <p className="text-xs font-medium text-[var(--muted)]">Laps</p>
-                        <div className="mt-2 overflow-hidden rounded-2xl border border-white/15">
-                          <table className="w-full text-xs">
-                            <thead className="bg-white/10 text-[var(--muted)]">
-                              <tr>
-                                <th className="px-2 py-2 text-left font-medium">#</th>
-                                <th className="px-2 py-2 text-left font-medium">Distance</th>
-                                <th className="px-2 py-2 text-left font-medium">Moving</th>
-                                <th className="px-2 py-2 text-left font-medium">Avg speed</th>
-                                <th className="px-2 py-2 text-left font-medium">Avg HR</th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white/5 text-[var(--text)]">
-                              {(showAllStravaLapsDesktop ? (stravaLaps as any[]) : (stravaLaps as any[]).slice(0, 5)).map((lap, idx) => (
-                                <tr key={idx} className="border-t border-white/10">
-                                  <td className="px-2 py-2">{idx + 1}</td>
-                                  <td className="px-2 py-2">{formatKm(lap?.distance) ?? '—'}</td>
-                                  <td className="px-2 py-2">{formatDurationHms(lap?.moving_time) ?? '—'}</td>
-                                  <td className="px-2 py-2">{formatSpeedKmh(lap?.average_speed) ?? '—'}</td>
-                                  <td className="px-2 py-2">{formatIntUnit(lap?.average_heartrate, 'bpm') ?? '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {stravaLaps.length > 5 ? (
-                          <button
-                            type="button"
-                            className="mt-2 text-xs font-medium text-[var(--text)] underline underline-offset-2"
-                            onClick={() => setShowAllStravaLapsDesktop((v) => !v)}
-                          >
-                            {showAllStravaLapsDesktop ? 'Show first 5 laps' : 'Show all laps'}
-                          </button>
-                        ) : null}
-                      </div>
+                        return <FieldRow key={idx} label={`Lap ${idx + 1}`} value={parts.length ? parts.join(' · ') : null} />;
+                      })}
                     </div>
                   ) : null}
                 </div>
