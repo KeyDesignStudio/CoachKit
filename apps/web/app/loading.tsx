@@ -3,5 +3,5 @@
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 
 export default function Loading() {
-  return <FullScreenLogoLoader delayMs={200} />;
+  return <FullScreenLogoLoader />;
 }
