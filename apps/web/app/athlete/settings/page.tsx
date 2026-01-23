@@ -8,6 +8,7 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { WeatherLocationSelect } from '@/components/WeatherLocationSelect';
@@ -49,6 +50,12 @@ export default function AthleteSettingsPage() {
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [timezoneMessage, setTimezoneMessage] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
+
+  const [icalUrl, setIcalUrl] = useState('');
+  const [loadingIcal, setLoadingIcal] = useState(false);
+  const [resettingIcal, setResettingIcal] = useState(false);
+  const [icalMessage, setIcalMessage] = useState('');
+  const [icalError, setIcalError] = useState('');
 
   useEffect(() => {
     const raw = user?.timezone?.trim() ?? '';
@@ -94,6 +101,59 @@ export default function AthleteSettingsPage() {
     if (user?.role !== 'ATHLETE') return;
     void loadStatus();
   }, [user?.role, loadStatus]);
+
+  const loadIcalLink = useCallback(async () => {
+    setLoadingIcal(true);
+    setIcalMessage('');
+    setIcalError('');
+
+    try {
+      const data = await request<{ url: string }>('/api/athlete/ical-link');
+      setIcalUrl(data.url);
+    } catch (err) {
+      setIcalError(err instanceof Error ? err.message : 'Failed to load calendar link.');
+    } finally {
+      setLoadingIcal(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    if (user?.role !== 'ATHLETE') return;
+    void loadIcalLink();
+  }, [user?.role, loadIcalLink]);
+
+  const handleCopyIcal = async () => {
+    setIcalMessage('');
+    setIcalError('');
+
+    if (!icalUrl) {
+      setIcalError('Calendar link not available yet.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(icalUrl);
+      setIcalMessage('Copied.');
+    } catch {
+      setIcalError('Copy failed. Please select and copy the link manually.');
+    }
+  };
+
+  const handleResetIcal = async () => {
+    setResettingIcal(true);
+    setIcalMessage('');
+    setIcalError('');
+
+    try {
+      const data = await request<{ url: string }>('/api/athlete/ical-link/reset', { method: 'POST' });
+      setIcalUrl(data.url);
+      setIcalMessage('Link reset. Re-subscribe in your calendar app.');
+    } catch (err) {
+      setIcalError(err instanceof Error ? err.message : 'Failed to reset calendar link.');
+    } finally {
+      setResettingIcal(false);
+    }
+  };
 
   const handleConnect = () => {
     window.location.href = '/api/integrations/strava/connect?redirectTo=/athlete/settings';
@@ -265,6 +325,47 @@ export default function AthleteSettingsPage() {
                 {status.connection.scope ? <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p> : null}
               </div>
             ) : null}
+          </Card>
+        </div>
+
+        <div className="min-w-0">
+          <Card className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold">Calendar Sync</h2>
+              <p className="text-sm text-[var(--muted)]">Subscribe to a private iCal feed to see your workouts in Apple, Google, or Outlook.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-[var(--muted)]">Subscribe link</p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <Input
+                  value={loadingIcal ? 'Loading…' : icalUrl}
+                  readOnly
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="CoachKit iCal subscribe link"
+                />
+                <div className="flex gap-3">
+                  <Button variant="secondary" onClick={handleCopyIcal} disabled={!icalUrl || loadingIcal}>
+                    Copy
+                  </Button>
+                  <Button variant="secondary" onClick={handleResetIcal} disabled={loadingIcal || resettingIcal}>
+                    {resettingIcal ? 'Resetting…' : 'Reset link'}
+                  </Button>
+                </div>
+              </div>
+
+              {icalMessage ? <p className="text-sm text-emerald-700">{icalMessage}</p> : null}
+              {icalError ? <p className="text-sm text-red-700">{icalError}</p> : null}
+            </div>
+
+            <div className="rounded-2xl border border-white/25 bg-white/30 p-4 text-sm text-[var(--muted)]">
+              <p className="font-medium text-[var(--text)]">How to add</p>
+              <p className="mt-2">Apple Calendar (iPhone/Mac): Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste link.</p>
+              <p className="mt-2">Google Calendar (Web): Other calendars → From URL → paste link.</p>
+              <p className="mt-2">Outlook: Add calendar → Subscribe from web → paste link.</p>
+              <p className="mt-3">Calendar apps may refresh every 15 minutes to a few hours.</p>
+              <p className="mt-2">If you reset the link, you must re-subscribe in your calendar app.</p>
+            </div>
           </Card>
         </div>
       </div>
