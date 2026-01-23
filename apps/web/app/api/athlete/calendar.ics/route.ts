@@ -30,6 +30,12 @@ function getBaseUrl(): string {
   return `https://${raw.replace(/\/$/, '')}`;
 }
 
+function getBaseUrlFromRequest(request: NextRequest): string | null {
+  const origin = request.nextUrl.origin?.trim();
+  if (!origin || origin === 'null') return null;
+  return origin.replace(/\/$/, '');
+}
+
 function rateLimitOrNull(token: string): NextResponse | null {
   const now = Date.now();
   const key = token;
@@ -132,7 +138,9 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim()
+    ? getBaseUrl()
+    : (getBaseUrlFromRequest(request) ?? getBaseUrl());
 
   const events = items.map((item) => {
     const latest = item.completedActivities[0] ?? null;
