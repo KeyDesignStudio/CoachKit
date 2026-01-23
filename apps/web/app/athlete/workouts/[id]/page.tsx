@@ -138,6 +138,40 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   };
 
+  const formatDurationHms = (seconds: number | undefined) => {
+    if (seconds === undefined || seconds === null || !Number.isFinite(seconds) || seconds <= 0) return null;
+    const totalSeconds = Math.round(seconds);
+    const s = totalSeconds % 60;
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const m = totalMinutes % 60;
+    const h = Math.floor(totalMinutes / 60);
+    if (h <= 0) return `${m}:${String(s).padStart(2, '0')}`;
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const formatKm = (meters: number | undefined) => {
+    if (meters === undefined || meters === null || !Number.isFinite(meters) || meters <= 0) return null;
+    return `${(meters / 1000).toFixed(2)} km`;
+  };
+
+  const FieldRow = ({
+    label,
+    value,
+    valueClassName,
+  }: {
+    label: string;
+    value: string | number | null | undefined;
+    valueClassName?: string;
+  }) => {
+    if (value === undefined || value === null || value === '') return null;
+    return (
+      <div>
+        <p className="text-xs font-medium text-[var(--muted)]">{label}</p>
+        <p className={`text-sm mt-1 text-[var(--text)] ${valueClassName ?? ''}`.trim()}>{value}</p>
+      </div>
+    );
+  };
+
   const formatIntUnit = (value: number | undefined, unit: string) => {
     if (value === undefined || value === null || !Number.isFinite(value)) return null;
     return `${Math.round(value)} ${unit}`;
@@ -166,16 +200,38 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const stravaMaxHr = (strava.maxHeartrateBpm ?? strava.maxHr ?? strava.max_heartrate) as number | undefined;
   const stravaMaxSpeedMps = (strava.maxSpeedMps ?? strava.max_speed) as number | undefined;
   const stravaMovingTimeSec = (strava.movingTimeSec ?? strava.moving_time) as number | undefined;
+  const stravaElapsedTimeSec = (strava.elapsedTimeSec ?? strava.elapsed_time) as number | undefined;
   const stravaElevationGainM = (strava.totalElevationGainM ?? strava.total_elevation_gain) as number | undefined;
   const stravaCaloriesKcal = (strava.caloriesKcal ?? strava.calories) as number | undefined;
   const stravaCadenceRpm = (strava.averageCadenceRpm ?? strava.average_cadence) as number | undefined;
+
+  const stravaActivity = (strava.activity ?? strava) as Record<string, any>;
+  const stravaDescription = typeof stravaActivity.description === 'string' ? stravaActivity.description.trim() : null;
+  const stravaDeviceName = typeof stravaActivity.device_name === 'string' ? stravaActivity.device_name.trim() : null;
+  const stravaLocationCity = typeof stravaActivity.location_city === 'string' ? stravaActivity.location_city.trim() : null;
+  const stravaSummaryPolyline =
+    (typeof stravaActivity.map?.summary_polyline === 'string' ? stravaActivity.map.summary_polyline : null) ??
+    (typeof stravaActivity.summary_polyline === 'string' ? stravaActivity.summary_polyline : null) ??
+    (typeof stravaActivity.summaryPolyline === 'string' ? stravaActivity.summaryPolyline : null) ??
+    (typeof (strava as any).summaryPolyline === 'string' ? (strava as any).summaryPolyline : null);
+  const stravaLaps = (Array.isArray(stravaActivity.laps) ? stravaActivity.laps : null) ?? (Array.isArray((strava as any).laps) ? (strava as any).laps : []);
+
+  const stravaAverageWatts = (stravaActivity.average_watts ?? stravaActivity.averageWatts) as number | undefined;
+  const stravaMaxWatts = (stravaActivity.max_watts ?? stravaActivity.maxWatts) as number | undefined;
+  const stravaSufferScore = (stravaActivity.suffer_score ?? stravaActivity.sufferScore) as number | undefined;
+  const stravaPerceivedExertion = (stravaActivity.perceived_exertion ?? stravaActivity.perceivedExertion) as number | string | undefined;
+
+  const activityAverageHeartrate =
+    (stravaActivity.average_heartrate ?? stravaActivity.averageHeartrate ?? stravaAvgHr) as number | undefined;
+  const activityMaxHeartrate = (stravaActivity.max_heartrate ?? stravaActivity.maxHeartrate ?? stravaMaxHr) as number | undefined;
 
   const actualTimeLabel = formatZonedTime(stravaStartUtc);
   const actualDateTimeLabel = formatZonedDateTime(stravaStartUtc);
   const avgSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaAvgSpeedMps) : null;
   const avgPaceLabel = item?.discipline === 'RUN' ? formatPace(stravaAvgPaceSecPerKm ?? derivedPaceSecPerKm) : null;
   const maxSpeedLabel = item?.discipline === 'BIKE' ? formatSpeedKmh(stravaMaxSpeedMps) : null;
-  const movingTimeLabel = formatDuration(stravaMovingTimeSec);
+  const movingTimeLabel = formatDurationHms(stravaMovingTimeSec);
+  const elapsedTimeLabel = formatDurationHms(stravaElapsedTimeSec);
   const elevationGainLabel = formatIntUnit(stravaElevationGainM, 'm');
   const caloriesLabel = formatIntUnit(stravaCaloriesKcal, 'kcal');
   const cadenceLabel = formatIntUnit(stravaCadenceRpm, 'rpm');
@@ -615,68 +671,90 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           {/* STRAVA DETECTED (top-right on desktop) */}
           {hasStravaData ? (
             <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-1" data-athlete-workout-quadrant="strava">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
                   <p className={uiLabel}>STRAVA DETECTED</p>
-                  {isDraftStrava ? <p className="mt-1 text-xs text-[var(--muted)]">Pending confirmation</p> : null}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/integrations/strava.webp" alt="Strava" className="h-[21px] w-[21px] shrink-0" />
                 </div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/integrations/strava.webp"
-                  alt="Strava"
-                  className="h-4 w-4 scale-110 inline-block"
-                />
+                {isDraftStrava ? <p className="mt-1 text-xs text-[var(--muted)]">Pending confirmation</p> : null}
               </div>
 
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {actualDateTimeLabel ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Start time</p>
-                    <p className="text-sm mt-1">{actualDateTimeLabel}</p>
-                  </div>
-                ) : null}
+              <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-4">
+                {/* Column 1: Activity */}
+                <div className="min-w-0 space-y-3">
+                  <FieldRow label="Start time" value={actualDateTimeLabel} />
+                  <FieldRow
+                    label="Activity"
+                    value={
+                      stravaType || stravaName
+                        ? `${stravaType ?? ''}${stravaType && stravaName ? ' — ' : ''}${stravaName ?? ''}`
+                        : null
+                    }
+                  />
+                  <FieldRow label="Moving time" value={movingTimeLabel} />
+                  <FieldRow label="Elapsed time" value={elapsedTimeLabel} />
 
-                {stravaType ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Activity type</p>
-                    <p className="text-sm mt-1">{stravaType}</p>
-                  </div>
-                ) : null}
+                  {stravaDescription ? (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--muted)]">Description</p>
+                      <p className="text-sm mt-1 text-[var(--text)] whitespace-pre-wrap break-words">{stravaDescription}</p>
+                    </div>
+                  ) : null}
+                </div>
 
-                {stravaName ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Activity name</p>
-                    <p className="text-sm mt-1">{stravaName}</p>
-                  </div>
-                ) : null}
+                {/* Column 2: Distance & Elevation */}
+                <div className="min-w-0 space-y-3">
+                  <FieldRow label="Avg speed" value={avgSpeedLabel ?? avgPaceLabel} />
+                  <FieldRow label="Elevation gain" value={elevationGainLabel} />
+                  <FieldRow label="Calories" value={caloriesLabel} />
+                  <FieldRow label="City" value={stravaLocationCity} />
+                  <FieldRow
+                    label="Polyline"
+                    value={stravaSummaryPolyline ? `${stravaSummaryPolyline.length} chars` : null}
+                  />
+                </div>
 
-                {formatSpeedKmh(stravaAvgSpeedMps) ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Average speed</p>
-                    <p className="text-sm mt-1">{formatSpeedKmh(stravaAvgSpeedMps)}</p>
-                  </div>
-                ) : null}
+                {/* Column 3: Effort & Load */}
+                <div className="min-w-0 space-y-3">
+                  <FieldRow label="Avg HR" value={formatIntUnit(activityAverageHeartrate, 'bpm')} />
+                  <FieldRow label="Max HR" value={formatIntUnit(activityMaxHeartrate, 'bpm')} />
+                  <FieldRow label="Avg watts" value={formatIntUnit(stravaAverageWatts, 'W')} />
+                  <FieldRow label="Max watts" value={formatIntUnit(stravaMaxWatts, 'W')} />
+                  <FieldRow label="Suffer score" value={stravaSufferScore !== undefined && Number.isFinite(stravaSufferScore) ? Math.round(stravaSufferScore) : null} />
+                  <FieldRow
+                    label="Perceived exertion"
+                    value={
+                      stravaPerceivedExertion === undefined || stravaPerceivedExertion === null || stravaPerceivedExertion === ''
+                        ? null
+                        : String(stravaPerceivedExertion)
+                    }
+                  />
+                </div>
 
-                {movingTimeLabel ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Moving time</p>
-                    <p className="text-sm mt-1">{movingTimeLabel}</p>
-                  </div>
-                ) : null}
+                {/* Column 4: Device & Laps */}
+                <div className="min-w-0 space-y-3">
+                  <FieldRow label="Device" value={stravaDeviceName} />
 
-                {elevationGainLabel ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Elevation gain</p>
-                    <p className="text-sm mt-1">{elevationGainLabel}</p>
-                  </div>
-                ) : null}
+                  {Array.isArray(stravaLaps) && stravaLaps.length > 0 ? (
+                    <div className="space-y-2">
+                      {(stravaLaps as any[]).map((lap, idx) => {
+                        const lapDistance = formatKm(lap?.distance);
+                        const lapMoving = formatDurationHms(lap?.moving_time);
+                        const lapSpeed = formatSpeedKmh(lap?.average_speed);
+                        const lapHr = formatIntUnit(lap?.average_heartrate, 'bpm');
+                        const parts = [
+                          lapDistance ? `Distance ${lapDistance}` : null,
+                          lapMoving ? `Moving ${lapMoving}` : null,
+                          lapSpeed ? `Avg speed ${lapSpeed}` : null,
+                          lapHr ? `Avg HR ${lapHr}` : null,
+                        ].filter(Boolean) as string[];
 
-                {caloriesLabel ? (
-                  <div>
-                    <p className="text-xs font-medium text-[var(--muted)]">Calories</p>
-                    <p className="text-sm mt-1">{caloriesLabel}</p>
-                  </div>
-                ) : null}
+                        return <FieldRow key={idx} label={`Lap ${idx + 1}`} value={parts.length ? parts.join(' · ') : null} />;
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </Card>
           ) : null}

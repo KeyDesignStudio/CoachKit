@@ -44,6 +44,8 @@ export const ICON_NAMES = [
   'close',
   'filter',
   'settings',
+  'expandMore',
+  'logout',
   'info',
   'warning',
 
@@ -104,6 +106,8 @@ export const ICONS: Record<IconName, string> = {
   close: 'close',
   filter: 'filter_list',
   settings: 'settings',
+  expandMore: 'expand_more',
+  logout: 'logout',
   info: 'info',
   warning: 'warning_amber',
 

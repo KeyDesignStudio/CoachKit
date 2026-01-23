@@ -13,10 +13,9 @@ This document inventories the font loading strategy and the typography utilities
 
 ### Primary text font
 
-- Loaded via Google Fonts CSS import in `apps/web/app/globals.css`:
-  - `Space Grotesk` with weights `400`, `500`, `600`.
+- No external webfont is loaded for primary text.
 - Applied globally on `body` in `apps/web/app/globals.css`:
-  - `font-family: 'Space Grotesk', 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;`
+  - `font-family: 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;`
 
 ### Icon font
 
@@ -27,7 +26,7 @@ This document inventories the font loading strategy and the typography utilities
 ### Tailwind font-family utilities
 
 - Tailwind config defines a single custom family in `apps/web/tailwind.config.js`:
-  - `theme.extend.fontFamily.display = ['Space Grotesk', 'Segoe UI', 'sans-serif']`
+  - `theme.extend.fontFamily.display = ['SF Pro Display', 'Segoe UI', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']`
 - Observed usage:
   - `font-display` is used (currently in the global header branding).
 
@@ -145,7 +144,7 @@ This is not a full per-component catalog; it highlights the primary surfaces tha
 
 - Global defaults:
   - `apps/web/app/layout.tsx`: `<body className="bg-[var(--bg-page)] text-[var(--text)]">`
-  - `apps/web/app/globals.css`: applies `Space Grotesk` stack to `body`.
+  - `apps/web/app/globals.css`: applies the system font stack to `body`.
 - Header branding:
   - `apps/web/components/app-header.tsx`: center CoachKit mark uses `font-display font-semibold tracking-tight`.
 
@@ -185,13 +184,12 @@ This is not a full per-component catalog; it highlights the primary surfaces tha
 
 These are concrete “drift points” discovered from the inventory.
 
-1) **`font-bold` used, but Space Grotesk 700 is not loaded**
-- Global font import loads `400/500/600` only.
+1) **`font-bold` usage should be treated cautiously**
 - `font-bold` appears (e.g. `apps/web/app/coach/athletes/page.tsx`).
-- Result: browsers may synthesize bold or fall back inconsistently.
+- Result: depending on the platform font, bold may appear heavier than intended.
 - Fix options:
-  - Add `700` to the Google Fonts import for `Space Grotesk`, or
-  - Avoid `font-bold` and stick to `font-semibold` as the heaviest weight.
+  - Prefer `font-semibold` as the heaviest weight for consistency, or
+  - Keep `font-bold` limited to headings only.
 
 2) **Mixed text color strategies**
 - Many components use CSS variable colors: `text-[var(--text)]`, `text-[var(--muted)]`.
