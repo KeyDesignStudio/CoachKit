@@ -187,7 +187,7 @@ export async function AppHeader() {
         {/* Desktop: keep existing multi-brand header */}
         <div className="relative hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4 md:p-5">
           {/* CoachKit branding: centered within the left half to avoid nav overlap */}
-          <div className="pointer-events-none absolute left-1/4 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
+          <div className="pointer-events-none absolute left-1/4 2xl:left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
             <Link
               href="/" 
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
