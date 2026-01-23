@@ -1134,34 +1134,10 @@ export default function CoachDashboardConsolePage() {
 
           {/* RIGHT: Messages */}
           <div className="min-w-0" data-testid="coach-dashboard-messages">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
-              <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-            </div>
-
             <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
-                    <Select
-                      className="min-h-[44px]"
-                      value={messageAthleteId}
-                      onChange={(e) => setMessageAthleteId(e.target.value)}
-                      aria-label="Select athlete thread"
-                    >
-                      <option value="">Select an athlete</option>
-                      {(data?.athletes ?? []).map((a) => {
-                        const thread = messageThreads.find((mt) => mt.athlete.id === a.id);
-                        const unread = thread?.unreadCountForCoach ?? 0;
-                        const suffix = unread > 0 ? ` (${unread} new)` : '';
-                        return (
-                          <option key={a.id} value={a.id}>
-                            {(a.name ?? 'Unnamed athlete') + suffix}
-                          </option>
-                        );
-                      })}
-                    </Select>
-                  </div>
+                  <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1201,6 +1177,28 @@ export default function CoachDashboardConsolePage() {
                     Broadcast
                   </Button>
                 </div>
+              </div>
+
+              <div className="mt-3 min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
+                <Select
+                  className="min-h-[44px]"
+                  value={messageAthleteId}
+                  onChange={(e) => setMessageAthleteId(e.target.value)}
+                  aria-label="Select athlete thread"
+                >
+                  <option value="">Select an athlete</option>
+                  {(data?.athletes ?? []).map((a) => {
+                    const thread = messageThreads.find((mt) => mt.athlete.id === a.id);
+                    const unread = thread?.unreadCountForCoach ?? 0;
+                    const suffix = unread > 0 ? ` (${unread} new)` : '';
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {(a.name ?? 'Unnamed athlete') + suffix}
+                      </option>
+                    );
+                  })}
+                </Select>
               </div>
 
               {messageStatus ? <div className="mt-3 text-sm text-emerald-700">{messageStatus}</div> : null}
