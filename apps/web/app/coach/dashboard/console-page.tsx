@@ -204,11 +204,13 @@ function AlertStripItem({
 
 function ReviewInboxRow({
   item,
+  timeZone,
   isChecked,
   onToggleSelected,
   onOpen,
 }: {
   item: ReviewItem;
+  timeZone: string;
   isChecked: boolean;
   onToggleSelected: (id: string, checked: boolean) => void;
   onOpen: (item: ReviewItem) => void;
@@ -218,6 +220,48 @@ function ReviewInboxRow({
   const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
   const painFlag = item.latestCompletedActivity?.painFlag ?? false;
   const isSkipped = item.status === 'SKIPPED';
+  const isCompleted = item.status.startsWith('COMPLETED');
+
+  function toDateKeyInTimeZone(dateIso: string, tz: string): string | null {
+    const date = new Date(dateIso);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const yyyy = parts.find((p) => p.type === 'year')?.value;
+    const mm = parts.find((p) => p.type === 'month')?.value;
+    const dd = parts.find((p) => p.type === 'day')?.value;
+    if (!yyyy || !mm || !dd) return null;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function formatInboxDateLabel(dateKey: string, tz: string): string | null {
+    const anchor = new Date(`${dateKey}T00:00:00.000Z`);
+    if (Number.isNaN(anchor.getTime())) return null;
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }).formatToParts(anchor);
+
+    const weekday = parts.find((p) => p.type === 'weekday')?.value;
+    const day = parts.find((p) => p.type === 'day')?.value;
+    const month = parts.find((p) => p.type === 'month')?.value;
+    if (!weekday || !day || !month) return null;
+    return `${weekday} ${day} ${month}`;
+  }
+
+  const completedDateKey = item.latestCompletedActivity?.startTime ? toDateKeyInTimeZone(item.latestCompletedActivity.startTime, timeZone) : null;
+  const plannedDateKey = item.date || null;
+  const displayDateKey = isCompleted ? (completedDateKey ?? plannedDateKey) : plannedDateKey;
+  const dateLabel = displayDateKey ? formatInboxDateLabel(displayDateKey, timeZone) : null;
 
   const statusText = item.status
     .replace('COMPLETED_', 'COMPLETED ')
@@ -248,7 +292,8 @@ function ReviewInboxRow({
         )}
       >
         <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
-        <span className="block min-w-0 max-w-[45%] truncate text-sm text-[var(--text)]">{item.title}</span>
+        {dateLabel ? <span className="flex-shrink-0 text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
+        <span className="block min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
 
         <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
           <Icon name={theme.iconName} size="sm" className={theme.textClass} />
@@ -923,7 +968,12 @@ export default function CoachDashboardConsolePage() {
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
-                  <Select className="min-h-[44px]" value={athleteId ?? ''} onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}>
+                  <Select
+                    className="min-h-[44px]"
+                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                    value={athleteId ?? ''}
+                    onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}
+                  >
                     <option value="">All athletes</option>
                     {(data?.athletes ?? []).map((a) => (
                       <option key={a.id} value={a.id}>
@@ -948,7 +998,12 @@ export default function CoachDashboardConsolePage() {
                 {/* Row 2 */}
                 <div className="md:col-start-1 md:row-start-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                  <Select className="min-h-[44px]" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                  <Select
+                    className="min-h-[44px]"
+                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                    value={timeRange}
+                    onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                  >
                     <option value="LAST_7">Last 7 days</option>
                     <option value="LAST_14">Last 14 days</option>
                     <option value="LAST_30">Last 30 days</option>
@@ -1095,11 +1150,16 @@ export default function CoachDashboardConsolePage() {
         <div className="mt-10 grid grid-cols-1 gap-6 items-start md:grid-cols-2">
           {/* LEFT: Review inbox */}
           <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
-              <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
+            {/* Preserve vertical rhythm from the prior layout (title used to sit above the card). */}
+            <div className="mb-2" aria-hidden="true">
+              <div className="h-4" />
             </div>
 
             <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
+              <div className="px-3 pt-3 pb-2">
+                <h2 className="text-sm font-semibold text-[var(--text)]">Review inbox</h2>
+              </div>
+
               <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
                 <div className="text-xs text-[var(--muted)]">
                   Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
@@ -1123,6 +1183,7 @@ export default function CoachDashboardConsolePage() {
                   <ReviewInboxRow
                     key={item.id}
                     item={item}
+                    timeZone={coachTimeZone}
                     isChecked={selectedIds.has(item.id)}
                     onToggleSelected={handleToggleSelected}
                     onOpen={(it) => setSelectedItem(it)}
