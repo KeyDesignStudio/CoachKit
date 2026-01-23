@@ -211,6 +211,10 @@ model AthleteProfile {
   coachNotes              String?
   dateOfBirth             DateTime?
 
+  // Calendar Sync (private iCal subscription)
+  icalToken          String?   @unique
+  icalTokenRotatedAt DateTime?
+
   // v1: Default location for weather on workout detail pages.
   defaultLat           Float?
   defaultLon           Float?
