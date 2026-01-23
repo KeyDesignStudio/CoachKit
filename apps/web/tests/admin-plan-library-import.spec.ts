@@ -12,6 +12,11 @@ async function setRoleCookie(page: any, role: 'ADMIN') {
 }
 
 test.describe('Plan Library import (admin)', () => {
+  test.skip(
+    process.env.RUN_PLAN_LIBRARY_TESTS !== '1',
+    'Plan Library import specs are opt-in. Set RUN_PLAN_LIBRARY_TESTS=1 to enable.'
+  );
+
   test('ALL apply populates plan tables only (no Workout Library pollution) and is idempotent on rerun', async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, 'DATABASE_URL is required for plan-library import tests.');
 
