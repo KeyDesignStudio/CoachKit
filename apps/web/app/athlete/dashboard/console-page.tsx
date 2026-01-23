@@ -14,6 +14,7 @@ import { uiH1 } from '@/components/ui/typography';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
+import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -440,11 +441,7 @@ export default function AthleteDashboardConsolePage() {
 
   // Keep loading/access gates consistent with the coach dashboard styling.
   if (userLoading) {
-    return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Loading...</p>
-      </div>
-    );
+    return <FullScreenLogoLoader />;
   }
 
   if (!user || user.role !== 'ATHLETE') {
@@ -514,9 +511,10 @@ export default function AthleteDashboardConsolePage() {
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
                     {/* Row 1 */}
                     <div className="min-w-0 col-start-1 row-start-1">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline</div>
                       <Select
                         className="min-h-[44px] w-full"
+                        style={{ border: '1px solid rgba(0,0,0,.15)' }}
                         value={discipline ?? ''}
                         onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
                       >
@@ -532,7 +530,12 @@ export default function AthleteDashboardConsolePage() {
                     {/* Row 2 */}
                     <div className="min-w-0 col-start-1 row-start-2">
                       <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                      <Select className="min-h-[44px] w-full" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
+                      <Select
+                        className="min-h-[44px] w-full"
+                        style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                        value={timeRange}
+                        onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                      >
                         <option value="LAST_7">Last 7 days</option>
                         <option value="LAST_14">Last 14 days</option>
                         <option value="LAST_30">Last 30 days</option>
@@ -647,19 +650,16 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
           {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
-          {loading ? <div className="mt-4 text-sm text-[var(--muted)]">Loading…</div> : null}
+          {loading && !data ? <FullScreenLogoLoader /> : null}
 
           {/* Messages (below top row; half-width on desktop/tablet, right-aligned) */}
           <div className="mt-6 flex justify-end">
             <div className="w-full min-w-0 md:w-1/2" data-testid="athlete-dashboard-messages">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
-                <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-              </div>
-
               <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-[var(--muted)]">Message your coach</div>
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
+                    <div className="text-xs font-medium text-[var(--muted)] mt-0.5">Message your coach</div>
                   </div>
 
                   <button

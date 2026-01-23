@@ -16,10 +16,9 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { formatTimeInTimezone } from '@/lib/formatTimeInTimezone';
-import { SkeletonAthleteWorkoutDetail } from '@/components/workouts/SkeletonAthleteWorkoutDetail';
+import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
-import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 type CompletedActivity = {
@@ -103,6 +102,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const isStravaCompletion = latestCompletion?.source === 'STRAVA';
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const showStravaBadge = Boolean(isDraftStrava || isStravaCompletion);
+  const hasStravaData = Boolean(isDraftStrava || isStravaCompletion);
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
   const tz = user?.timezone || 'Australia/Brisbane';
@@ -419,422 +419,330 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       ) : null}
 
       {showSkeleton ? (
-        <SkeletonAthleteWorkoutDetail />
+        <FullScreenLogoLoader />
       ) : item ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Left column: Coach context (5/12) */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Workout header card */}
-            <Card className="rounded-3xl" data-athlete-workout-header-version="right-status-v1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {(() => {
-                      const theme = getDisciplineTheme(item.discipline);
-                      return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
-                    })()}
-                    <h1 className="text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
-                  </div>
+        <div className="grid grid-cols-1 gap-4 min-w-0 lg:grid-cols-2 lg:grid-rows-2">
+          {/* WORKOUT PLAN (top-left) */}
+          <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-1" data-athlete-workout-quadrant="workout-plan">
+            <p className={uiLabel}>WORKOUT PLAN</p>
 
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
-                    <span>{formatDisplay(item.date)}</span>
-                    <span>·</span>
-                    <span>Planned: {headerTimeLabel}</span>
-                    <Badge>{item.discipline}</Badge>
-                  </div>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  {(() => {
+                    const theme = getDisciplineTheme(item.discipline);
+                    return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
+                  })()}
+                  <h1 className="min-w-0 text-xl font-semibold text-[var(--text)] truncate">{item.title}</h1>
+
+                  {statusIndicator ? (
+                    <span
+                      className="flex-shrink-0"
+                      title={statusIndicator.ariaLabel}
+                      aria-label={statusIndicator.ariaLabel}
+                    >
+                      <Icon name={statusIndicator.iconName} size="lg" className={statusIndicator.colorClass} />
+                    </span>
+                  ) : null}
                 </div>
 
-                {statusIndicator ? (
-                  <div className="flex items-center gap-2 flex-shrink-0 justify-end min-w-[44px] sm:min-w-[180px]">
-                    <span title={statusIndicator.ariaLabel} aria-label={statusIndicator.ariaLabel}>
-                      <Icon name={statusIndicator.iconName} size="xs" className={statusIndicator.colorClass} />
-                    </span>
-                    <Badge className="hidden sm:inline-flex">{statusLabel}</Badge>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+                  <span>{formatDisplay(item.date)}</span>
+                  <span>·</span>
+                  <span>Planned: {headerTimeLabel}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-shrink-0 items-start justify-end gap-2">
+                {showStravaBadge ? <Badge>{statusLabel}</Badge> : <Badge className="hidden sm:inline-flex">{statusLabel}</Badge>}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {/* Duration, Distance, RPE */}
+              {item.status === 'PLANNED' || isDraftStrava ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {isDraftStrava ? (
+                    <>
+                      <div>
+                        <p className="text-xs font-medium text-[var(--muted)]">Duration</p>
+                        <p className="text-sm mt-1">{item.completedActivities?.[0]?.durationMinutes ?? '—'} min</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-[var(--muted)]">Distance</p>
+                        <p className="text-sm mt-1">{item.completedActivities?.[0]?.distanceKm ?? '—'} km</p>
+                      </div>
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                        RPE
+                        <Input
+                          type="number"
+                          value={completionForm.rpe}
+                          min={1}
+                          max={10}
+                          onChange={(event) =>
+                            setCompletionForm({
+                              ...completionForm,
+                              rpe: event.target.value === '' ? '' : Number(event.target.value),
+                            })
+                          }
+                          className="text-sm min-h-[44px]"
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                        Duration
+                        <Input
+                          type="number"
+                          value={completionForm.durationMinutes}
+                          onChange={(event) => setCompletionForm({ ...completionForm, durationMinutes: Number(event.target.value) })}
+                          min={1}
+                          required
+                          className="text-sm min-h-[44px]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                        Distance
+                        <Input
+                          type="number"
+                          value={completionForm.distanceKm}
+                          onChange={(event) => setCompletionForm({ ...completionForm, distanceKm: event.target.value })}
+                          min={0}
+                          step="0.1"
+                          className="text-sm min-h-[44px]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                        RPE
+                        <Input
+                          type="number"
+                          value={completionForm.rpe}
+                          min={1}
+                          max={10}
+                          onChange={(event) =>
+                            setCompletionForm({
+                              ...completionForm,
+                              rpe: event.target.value === '' ? '' : Number(event.target.value),
+                            })
+                          }
+                          className="text-sm min-h-[44px]"
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Duration</p>
+                    <p className="text-sm mt-1">
+                      {(latestCompletion?.durationMinutes ?? item.plannedDurationMinutes) ? `${latestCompletion?.durationMinutes ?? item.plannedDurationMinutes} min` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Distance</p>
+                    <p className="text-sm mt-1">
+                      {(latestCompletion?.distanceKm ?? item.plannedDistanceKm) ? `${latestCompletion?.distanceKm ?? item.plannedDistanceKm} km` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">RPE</p>
+                    <p className="text-sm mt-1">{latestCompletion?.rpe ?? item.intensityTarget ?? '—'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Workout Description */}
+              <div>
+                <p className="text-xs font-medium text-[var(--muted)]">Workout Description</p>
+                <p className="mt-1 text-sm text-[var(--text)] whitespace-pre-wrap">{item.workoutDetail?.trim() || '—'}</p>
+              </div>
+
+              {item.template ? <p className="text-xs text-[var(--muted)]">Template: {item.template.title}</p> : null}
+              {item.groupSession ? <p className="text-xs text-[var(--muted)]">Group: {item.groupSession.title}</p> : null}
+            </div>
+          </Card>
+
+          {/* WEATHER (bottom-left on desktop) */}
+          <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-2" data-athlete-workout-quadrant="weather">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className={uiLabel}>WEATHER</p>
+
+                {weatherLoading ? (
+                  <div className="mt-2 animate-pulse">
+                    <div className="h-4 w-40 rounded bg-black/10" />
+                    <div className="mt-2 h-4 w-52 rounded bg-black/10" />
+                    <div className="mt-2 h-4 w-48 rounded bg-black/10" />
+                  </div>
+                ) : weather?.enabled ? (
+                  <div className="mt-2 flex items-center gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/30">
+                      <Icon name={WEATHER_ICON_NAME[weather.icon]} size="lg" className="text-[var(--text)]" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-sm text-[var(--text)]">Max: {Math.round(weather.maxTempC)}°C</p>
+                      <p className="text-sm text-[var(--muted)]">Sunrise: {weather.sunriseLocal}</p>
+                      <p className="text-sm text-[var(--muted)]">Sunset: {weather.sunsetLocal}</p>
+                    </div>
+                  </div>
+                ) : weather?.enabled === false ? (
+                  <p className="mt-2 text-sm text-[var(--muted)]">Add a default workout location in Settings to enable weather.</p>
+                ) : weatherError ? (
+                  <p className="mt-2 text-sm text-[var(--muted)]">Weather unavailable.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--muted)]">Loading weather…</p>
+                )}
+              </div>
+
+              {weather?.enabled === false ? null : (
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/30 text-[var(--text)] hover:bg-white/40 disabled:opacity-50"
+                  onClick={() => void loadWeather(true)}
+                  disabled={weatherLoading}
+                  aria-label="Refresh weather"
+                  title="Refresh weather"
+                >
+                  <Icon name="refresh" size="sm" />
+                </button>
+              )}
+            </div>
+          </Card>
+
+          {/* STRAVA DETECTED (top-right on desktop) */}
+          {hasStravaData ? (
+            <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-1" data-athlete-workout-quadrant="strava">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className={uiLabel}>STRAVA DETECTED</p>
+                  {isDraftStrava ? <p className="mt-1 text-xs text-[var(--muted)]">Pending confirmation</p> : null}
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/integrations/strava.webp"
+                  alt="Strava"
+                  className="h-4 w-4 scale-110 inline-block"
+                />
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {actualDateTimeLabel ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Start time</p>
+                    <p className="text-sm mt-1">{actualDateTimeLabel}</p>
+                  </div>
+                ) : null}
+
+                {stravaType ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Activity type</p>
+                    <p className="text-sm mt-1">{stravaType}</p>
+                  </div>
+                ) : null}
+
+                {stravaName ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Activity name</p>
+                    <p className="text-sm mt-1">{stravaName}</p>
+                  </div>
+                ) : null}
+
+                {formatSpeedKmh(stravaAvgSpeedMps) ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Average speed</p>
+                    <p className="text-sm mt-1">{formatSpeedKmh(stravaAvgSpeedMps)}</p>
+                  </div>
+                ) : null}
+
+                {movingTimeLabel ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Moving time</p>
+                    <p className="text-sm mt-1">{movingTimeLabel}</p>
+                  </div>
+                ) : null}
+
+                {elevationGainLabel ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Elevation gain</p>
+                    <p className="text-sm mt-1">{elevationGainLabel}</p>
+                  </div>
+                ) : null}
+
+                {caloriesLabel ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Calories</p>
+                    <p className="text-sm mt-1">{caloriesLabel}</p>
                   </div>
                 ) : null}
               </div>
-              {item.template ? (
-                <p className="mt-1 text-xs text-[var(--muted)]">Template: {item.template.title}</p>
-              ) : null}
-              {item.groupSession ? (
-                <p className="mt-1 text-xs text-[var(--muted)]">Group: {item.groupSession.title}</p>
-              ) : null}
             </Card>
+          ) : null}
 
-            {/* Weather panel (non-blocking) */}
-            <Card className="rounded-3xl">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className={uiLabel}>Weather</p>
-
-                  {weatherLoading ? (
-                    <div className="mt-2 animate-pulse">
-                      <div className="h-4 w-40 rounded bg-black/10" />
-                      <div className="mt-2 h-4 w-52 rounded bg-black/10" />
-                      <div className="mt-2 h-4 w-48 rounded bg-black/10" />
-                    </div>
-                  ) : weather?.enabled ? (
-                    <div className="mt-2 flex items-center gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/30">
-                        <Icon name={WEATHER_ICON_NAME[weather.icon]} size="lg" className="text-[var(--text)]" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="text-sm text-[var(--text)]">Max: {Math.round(weather.maxTempC)}°C</p>
-                        <p className="text-sm text-[var(--muted)]">Sunrise: {weather.sunriseLocal}</p>
-                        <p className="text-sm text-[var(--muted)]">Sunset: {weather.sunsetLocal}</p>
-                      </div>
-                    </div>
-                  ) : weather?.enabled === false ? (
-                    <p className="mt-2 text-sm text-[var(--muted)]">Add a default workout location in Settings to enable weather.</p>
-                  ) : weatherError ? (
-                    <p className="mt-2 text-sm text-[var(--muted)]">Weather unavailable.</p>
-                  ) : (
-                    <p className="mt-2 text-sm text-[var(--muted)]">Loading weather…</p>
-                  )}
-                </div>
-
-                {weather?.enabled === false ? null : (
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/30 text-[var(--text)] hover:bg-white/40 disabled:opacity-50"
-                    onClick={() => void loadWeather(true)}
-                    disabled={weatherLoading}
-                    aria-label="Refresh weather"
-                    title="Refresh weather"
-                  >
-                    <Icon name="refresh" size="sm" />
-                  </button>
+          {/* ATHLETE LOG (bottom-right) */}
+          {item.status === 'PLANNED' || isDraftStrava ? (
+            <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
+              <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
+                <p className={uiLabel}>ATHLETE LOG</p>
+                {isDraftStrava ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">Add notes/pain and confirm to share with your coach</p>
+                ) : (
+                  <p className="mt-1 text-xs text-[var(--muted)]">Log your effort below</p>
                 )}
-              </div>
-            </Card>
 
-            {/* Workout detail card (only if present) */}
-            {item.workoutDetail ? (
-              <Card className="rounded-3xl">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className={uiLabel}>Workout Detail</p>
-                    <p className="mt-1 text-sm text-[var(--text)]">{item.workoutDetail}</p>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
-          </div>
+                <div className="mt-3 space-y-3">
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                    Athlete notes to Coach
+                    <Textarea
+                      rows={2}
+                      placeholder="Optional message to your coach"
+                      value={commentDraft}
+                      onChange={(event) => setCommentDraft(event.target.value)}
+                      className="text-sm"
+                    />
+                  </label>
 
-          {/* Right column: Athlete log (7/12) */}
-          <div className="lg:col-span-7">
-            {isStravaCompletion ? (
-              <Card className="rounded-3xl mb-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">From Strava</h2>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/integrations/strava.webp"
-                        alt="Strava"
-                        title={isDraftStrava ? 'Strava detected (pending confirmation)' : 'Synced from Strava'}
-                        className="h-4 w-4 scale-105 inline-block"
-                      />
-                    </div>
-                    {actualDateTimeLabel ? (
-                      <p className="text-xs text-[var(--muted)] mt-1">
-                        Actual start time (from Strava):{' '}
-                        <span className="text-[var(--text)] font-medium">{actualDateTimeLabel}</span>
-                      </p>
-                    ) : null}
-                  </div>
-                  {isDraftStrava ? (
-                    <Badge>Pending confirmation</Badge>
-                  ) : null}
+                  <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
+                    Athlete notes to Self
+                    <Textarea
+                      value={completionForm.notes}
+                      onChange={(event) => setCompletionForm({ ...completionForm, notes: event.target.value })}
+                      rows={2}
+                      className="text-sm"
+                      placeholder={isDraftStrava ? 'Add notes before confirming' : 'Private notes for yourself'}
+                    />
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={completionForm.painFlag}
+                      onChange={(event) => setCompletionForm({ ...completionForm, painFlag: event.target.checked })}
+                      className="w-4 h-4 rounded border-white/30 text-rose-500 focus:ring-2 focus:ring-rose-500/50"
+                    />
+                    <span className="text-[var(--text)]">Felt pain / discomfort</span>
+                  </label>
+
+                  <p className="text-xs text-[var(--muted)]">
+                    {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or skip'}
+                  </p>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {stravaType ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Activity type</p>
-                      <p className="text-sm mt-1">{stravaType}</p>
-                    </div>
-                  ) : null}
-
-                  {stravaName ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Activity name</p>
-                      <p className="text-sm mt-1">{stravaName}</p>
-                    </div>
-                  ) : null}
-
-                  {avgSpeedLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Avg speed</p>
-                      <p className="text-sm mt-1">{avgSpeedLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {maxSpeedLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Max speed</p>
-                      <p className="text-sm mt-1">{maxSpeedLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {avgPaceLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Avg pace</p>
-                      <p className="text-sm mt-1">{avgPaceLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {movingTimeLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Moving time</p>
-                      <p className="text-sm mt-1">{movingTimeLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {elevationGainLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Elevation gain</p>
-                      <p className="text-sm mt-1">{elevationGainLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {caloriesLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Calories</p>
-                      <p className="text-sm mt-1">{caloriesLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {cadenceLabel ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Cadence</p>
-                      <p className="text-sm mt-1">{cadenceLabel}</p>
-                    </div>
-                  ) : null}
-
-                  {typeof stravaAvgHr === 'number' ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Avg HR</p>
-                      <p className="text-sm mt-1">{Math.round(stravaAvgHr)} bpm</p>
-                    </div>
-                  ) : null}
-
-                  {typeof stravaMaxHr === 'number' ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Max HR</p>
-                      <p className="text-sm mt-1">{Math.round(stravaMaxHr)} bpm</p>
-                    </div>
-                  ) : null}
-                </div>
-              </Card>
-            ) : null}
-
-            {item.status === 'PLANNED' || isDraftStrava ? (
-              <Card className="rounded-3xl">
-                <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
-                  <div className="space-y-3">
-                    <div>
-                      <h2 className="text-lg font-semibold">Athlete log</h2>
-                      {isDraftStrava ? (
-                        <p className="text-xs text-[var(--muted)]">Strava detected a workout — add notes/pain and confirm to share with your coach</p>
-                      ) : (
-                        <p className="text-xs text-[var(--muted)]">Log your effort below</p>
-                      )}
-                    </div>
-
-                    {isDraftStrava ? (
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <p className="text-xs font-medium text-[var(--muted)]">Duration (min)</p>
-                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.durationMinutes ?? '—'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-[var(--muted)]">Distance (km)</p>
-                          <p className="text-sm mt-1">{item.completedActivities?.[0]?.distanceKm ?? '—'}</p>
-                        </div>
-                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                          RPE (1-10)
-                          <Input
-                            type="number"
-                            value={completionForm.rpe}
-                            min={1}
-                            max={10}
-                            onChange={(event) =>
-                              setCompletionForm({
-                                ...completionForm,
-                                rpe: event.target.value === '' ? '' : Number(event.target.value),
-                              })
-                            }
-                            className="text-sm min-h-[44px]"
-                          />
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                          Duration (min)
-                          <Input
-                            type="number"
-                            value={completionForm.durationMinutes}
-                            onChange={(event) =>
-                              setCompletionForm({ ...completionForm, durationMinutes: Number(event.target.value) })
-                            }
-                            min={1}
-                            required
-                            className="text-sm min-h-[44px]"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                          Distance (km)
-                          <Input
-                            type="number"
-                            value={completionForm.distanceKm}
-                            onChange={(event) => setCompletionForm({ ...completionForm, distanceKm: event.target.value })}
-                            min={0}
-                            step="0.1"
-                            className="text-sm min-h-[44px]"
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                          RPE (1-10)
-                          <Input
-                            type="number"
-                            value={completionForm.rpe}
-                            min={1}
-                            max={10}
-                            onChange={(event) =>
-                              setCompletionForm({
-                                ...completionForm,
-                                rpe: event.target.value === '' ? '' : Number(event.target.value),
-                              })
-                            }
-                            className="text-sm min-h-[44px]"
-                          />
-                        </label>
-                      </div>
-                    )}
-
-                    <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                      Athlete notes to Self
-                      <Textarea
-                        value={completionForm.notes}
-                        onChange={(event) => setCompletionForm({ ...completionForm, notes: event.target.value })}
-                        rows={2}
-                        className="text-sm"
-                        placeholder={isDraftStrava ? 'Add notes before confirming' : 'Private notes for yourself'}
-                      />
-                    </label>
-
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={completionForm.painFlag}
-                        onChange={(event) => setCompletionForm({ ...completionForm, painFlag: event.target.checked })}
-                        className="w-4 h-4 rounded border-white/30 text-rose-500 focus:ring-2 focus:ring-rose-500/50"
-                      />
-                      <span className="text-[var(--text)]">Felt pain or discomfort during this workout</span>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                      Athlete notes to Coach
-                      <Textarea
-                        rows={2}
-                        placeholder="Optional message to your coach"
-                        value={commentDraft}
-                        onChange={(event) => setCommentDraft(event.target.value)}
-                        className="text-sm"
-                      />
-                      <p className="text-xs text-[var(--muted)] mt-1">
-                        {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or skip'}
-                      </p>
-                    </label>
-                  </div>
-
-                  {/* Action buttons at bottom */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
-                    {item.status === 'PLANNED' ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={skipWorkout}
-                        className="min-h-[44px] w-full sm:w-auto"
-                        disabled={submitting}
-                      >
-                        Skip
-                      </Button>
-                    ) : null}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
+                  {item.status === 'PLANNED' ? (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="min-h-[44px] w-full sm:w-auto text-rose-600 hover:bg-rose-500/10"
-                      onClick={() => setConfirmDeleteOpen(true)}
-                      disabled={submitting || deleting}
-                    >
-                      Delete
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
+                      onClick={skipWorkout}
                       className="min-h-[44px] w-full sm:w-auto"
-                      onClick={handleClose}
-                      disabled={submitting || deleting}
+                      disabled={submitting}
                     >
-                      Close
+                      Skip
                     </Button>
-                    <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
-                      {isDraftStrava ? 'Confirm' : 'Complete'}
-                    </Button>
-                  </div>
-                </form>
-              </Card>
-            ) : null}
-
-            {/* Show completed activity data if workout is already completed */}
-            {!isDraftStrava && item.status !== 'PLANNED' && item.completedActivities?.[0] ? (
-              <Card className="rounded-3xl">
-                <h2 className="text-lg font-semibold">Athlete log</h2>
-                <div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Duration (min)</p>
-                      <p className="text-sm mt-1">{item.completedActivities[0].durationMinutes}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Distance (km)</p>
-                      <p className="text-sm mt-1">{item.completedActivities[0].distanceKm ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">RPE (1-10)</p>
-                      <p className="text-sm mt-1">{item.completedActivities[0].rpe ?? '—'}</p>
-                    </div>
-                  </div>
-                  {item.completedActivities[0].painFlag ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                      <Icon name="warning" size="sm" className="text-rose-500 shrink-0" />
-                      <p className="text-sm text-rose-600">Athlete reported pain or discomfort</p>
-                    </div>
                   ) : null}
-                  {item.completedActivities[0].notes ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Self</p>
-                      <p className="text-sm mt-1 whitespace-pre-wrap">{item.completedActivities[0].notes}</p>
-                    </div>
-                  ) : null}
-
-                  {latestNoteToCoach ? (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--muted)]">Sent to coach</p>
-                      <p className="text-sm mt-1 whitespace-pre-wrap">{latestNoteToCoach}</p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
                   <Button
                     type="button"
                     variant="ghost"
@@ -855,10 +763,71 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   >
                     Close
                   </Button>
+                  <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
+                    {isDraftStrava ? 'Confirm' : 'Complete'}
+                  </Button>
                 </div>
-              </Card>
-            ) : null}
-          </div>
+              </form>
+            </Card>
+          ) : (
+            <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
+              <p className={uiLabel}>ATHLETE LOG</p>
+
+              <div className="mt-3 space-y-3">
+                {latestNoteToCoach ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Coach</p>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{latestNoteToCoach}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Coach</p>
+                    <p className="text-sm mt-1">—</p>
+                  </div>
+                )}
+
+                {item.completedActivities?.[0]?.notes ? (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Self</p>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{item.completedActivities[0].notes}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-medium text-[var(--muted)]">Athlete notes to Self</p>
+                    <p className="text-sm mt-1">—</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs font-medium text-[var(--muted)]">Felt pain / discomfort</p>
+                  <p className="text-sm mt-1">{item.completedActivities?.[0]?.painFlag ? 'Yes' : 'No'}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 mt-4 pt-3 border-t border-white/20">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-[44px] w-full sm:w-auto text-rose-600 hover:bg-rose-500/10"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={submitting || deleting}
+                >
+                  Delete
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-[44px] w-full sm:w-auto"
+                  onClick={handleClose}
+                  disabled={submitting || deleting}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       ) : null}
 
@@ -868,7 +837,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         message="This removes the workout from your calendar and your coach's calendar.\n\nThis can't be undone."
         confirmLabel={deleting ? 'Deleting…' : 'Delete workout'}
         cancelLabel="Cancel"
-        onCancel={() => (deleting ? null : setConfirmDeleteOpen(false))}
+        onCancel={() => {
+          if (deleting) return;
+          setConfirmDeleteOpen(false);
+        }}
         onConfirm={() => void deleteWorkout()}
       />
 
