@@ -33,9 +33,10 @@ function initialsFromName(name: string): string {
 
 type UserHeaderControlProps = {
   className?: string;
+  roleLabel?: 'COACH' | 'ATHLETE';
 };
 
-export function UserHeaderControl({ className }: UserHeaderControlProps) {
+export function UserHeaderControl({ className, roleLabel }: UserHeaderControlProps) {
   const { openUserProfile, signOut } = useClerk();
   const { user, isLoaded } = useUser();
   const menuId = useId();
@@ -114,11 +115,22 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           </div>
         )}
 
-        <span
-          data-testid="user-header-name"
-          className="min-w-0 truncate text-sm font-medium text-[var(--text)]"
-        >
-          {displayName}
+        <span className="min-w-0">
+          <span
+            data-testid="user-header-name"
+            className="block min-w-0 truncate text-sm font-medium leading-tight text-[var(--text)]"
+          >
+            {displayName}
+          </span>
+
+          {roleLabel ? (
+            <span
+              data-testid="user-header-role"
+              className="block min-w-0 truncate text-xs font-medium uppercase tracking-wide text-[var(--muted)]"
+            >
+              {roleLabel}
+            </span>
+          ) : null}
         </span>
       </button>
 

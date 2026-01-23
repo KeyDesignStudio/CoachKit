@@ -124,6 +124,8 @@ export async function AppHeader() {
     return <AdminHeader />;
   }
 
+  const headerRoleLabel = userRole === 'COACH' || userRole === 'ATHLETE' ? userRole : undefined;
+
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
@@ -180,7 +182,7 @@ export async function AppHeader() {
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
             <div className="flex min-w-0 max-w-[40vw] justify-end">
-              {userId && <UserHeaderControl />}
+              {userId && <UserHeaderControl roleLabel={headerRoleLabel} />}
             </div>
           </div>
 
