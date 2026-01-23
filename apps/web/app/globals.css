@@ -82,3 +82,14 @@ a {
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
 }
+
+@layer utilities {
+  .text-sm {
+    font-size: 0.7rem;
+  }
+
+  .px-3 {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
