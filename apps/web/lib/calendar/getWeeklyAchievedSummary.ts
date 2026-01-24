@@ -98,6 +98,56 @@ function sumStructureDurationSec(structure: unknown): number | null {
   return hadAny ? totalSec : null;
 }
 
+function sumStructureDistanceMeters(structure: unknown): number | null {
+  if (!structure) return null;
+
+  const segments: Array<Record<string, unknown>> = [];
+
+  if (Array.isArray(structure)) {
+    for (const v of structure) {
+      if (v && typeof v === 'object') segments.push(v as Record<string, unknown>);
+    }
+  } else if (typeof structure === 'object') {
+    const rec = structure as Record<string, unknown>;
+    const maybeSegments = rec.segments ?? rec.intervals ?? rec.steps;
+    if (Array.isArray(maybeSegments)) {
+      for (const v of maybeSegments) {
+        if (v && typeof v === 'object') segments.push(v as Record<string, unknown>);
+      }
+    }
+
+    const topLevelMeters = asNumber(rec.totalDistanceMeters ?? rec.distanceMeters ?? rec.distance_m);
+    if (topLevelMeters != null && topLevelMeters > 0) return Math.round(topLevelMeters);
+
+    const topLevelKm = asNumber(rec.totalDistanceKm ?? rec.distanceKm ?? rec.distance_km);
+    if (topLevelKm != null && topLevelKm > 0) return Math.round(topLevelKm * 1000);
+  }
+
+  if (segments.length === 0) return null;
+
+  let totalMeters = 0;
+  let hadAny = false;
+
+  for (const seg of segments) {
+    const meters = asNumber(seg.distanceMeters ?? seg.distance_m ?? seg.meters ?? seg.distanceM);
+    const km = asNumber(seg.distanceKm ?? seg.distance_km);
+
+    if (km != null && km > 0) {
+      totalMeters += Math.round(km * 1000);
+      hadAny = true;
+      continue;
+    }
+
+    if (meters != null && meters > 0) {
+      totalMeters += Math.round(meters);
+      hadAny = true;
+      continue;
+    }
+  }
+
+  return hadAny ? totalMeters : null;
+}
+
 function getCompletedDurationSec(item: CalendarItemForWeeklySummary): number {
   // Prefer explicit plannedDurationMinutes (we don't have completion duration in the calendar API payload).
   if (typeof item.plannedDurationMinutes === 'number' && Number.isFinite(item.plannedDurationMinutes)) {
@@ -133,6 +183,11 @@ function getCompletedDistanceMetersWithPresence(item: CalendarItemForWeeklySumma
 
   if (typeof item.plannedDistanceKm === 'number' && Number.isFinite(item.plannedDistanceKm) && item.plannedDistanceKm > 0) {
     return { meters: Math.round(item.plannedDistanceKm * 1000), hasDistance: true };
+  }
+
+  const fromStructure = sumStructureDistanceMeters(item.workoutStructure);
+  if (typeof fromStructure === 'number' && Number.isFinite(fromStructure) && fromStructure > 0) {
+    return { meters: Math.round(fromStructure), hasDistance: true };
   }
 
   return { meters: 0, hasDistance: false };
