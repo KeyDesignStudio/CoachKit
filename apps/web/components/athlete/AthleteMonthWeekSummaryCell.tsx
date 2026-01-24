@@ -49,14 +49,14 @@ export function AthleteMonthWeekSummaryCell({ weekStartKey, athleteTimezone, ite
     ]
       .map((d) => {
         const entry = summary.perDiscipline[d.key];
-        const hasAny = entry.timeSec > 0 || entry.distanceMeters > 0;
+        const hasAny = entry.completedCount + entry.skippedCount > 0;
         if (!hasAny) return null;
 
         if (d.key === 'SWIM') {
           return {
             label: d.label,
             time: formatHhMm(entry.timeSec),
-            distance: `${formatSwimMeters(entry.distanceMeters)} m`,
+            distance: entry.hasDistance ? `${formatSwimMeters(entry.distanceMeters)} m` : entry.timeSec > 0 ? '—' : null,
           };
         }
 
@@ -71,7 +71,7 @@ export function AthleteMonthWeekSummaryCell({ weekStartKey, athleteTimezone, ite
         return {
           label: d.label,
           time: formatHhMm(entry.timeSec),
-          distance: `${formatKm(entry.distanceMeters)} km`,
+          distance: entry.hasDistance ? `${formatKm(entry.distanceMeters)} km` : entry.timeSec > 0 ? '—' : null,
         };
       })
       .filter(Boolean) as Array<{ label: string; time: string; distance: string | null }>

@@ -5,7 +5,16 @@ export type WeeklyAchievedSummary = {
   skippedCount: number;
   totalTimeSec: number;
   totalDistanceMeters: number;
-  perDiscipline: Record<WeeklyAchievedSummaryDisciplineKey, { timeSec: number; distanceMeters: number }>;
+  perDiscipline: Record<
+    WeeklyAchievedSummaryDisciplineKey,
+    {
+      completedCount: number;
+      skippedCount: number;
+      timeSec: number;
+      distanceMeters: number;
+      hasDistance: boolean;
+    }
+  >;
 };
 
 export type CalendarItemForWeeklySummary = {
@@ -32,7 +41,7 @@ function isWeeklySummaryCompleted(item: CalendarItemForWeeklySummary): boolean {
 }
 
 function disciplineBucket(raw: string | null | undefined): WeeklyAchievedSummaryDisciplineKey {
-  const d = (raw ?? 'OTHER').trim().toUpperCase();
+  const d = String(raw ?? 'OTHER').trim().toUpperCase();
   if (d === 'RUN') return 'RUN';
   if (d === 'BIKE') return 'BIKE';
   if (d === 'SWIM') return 'SWIM';
@@ -117,6 +126,18 @@ function getCompletedDistanceMeters(item: CalendarItemForWeeklySummary): number 
   return 0;
 }
 
+function getCompletedDistanceMetersWithPresence(item: CalendarItemForWeeklySummary): { meters: number; hasDistance: boolean } {
+  if (typeof item.distanceMeters === 'number' && Number.isFinite(item.distanceMeters) && item.distanceMeters > 0) {
+    return { meters: Math.round(item.distanceMeters), hasDistance: true };
+  }
+
+  if (typeof item.plannedDistanceKm === 'number' && Number.isFinite(item.plannedDistanceKm) && item.plannedDistanceKm > 0) {
+    return { meters: Math.round(item.plannedDistanceKm * 1000), hasDistance: true };
+  }
+
+  return { meters: 0, hasDistance: false };
+}
+
 export function getWeeklyAchievedSummary(
   items: CalendarItemForWeeklySummary[],
   _athleteTimezone: string
@@ -125,10 +146,10 @@ export function getWeeklyAchievedSummary(
   const completedItems = eligibleItems.filter(isWeeklySummaryCompleted);
 
   const perDiscipline: WeeklyAchievedSummary['perDiscipline'] = {
-    RUN: { timeSec: 0, distanceMeters: 0 },
-    BIKE: { timeSec: 0, distanceMeters: 0 },
-    SWIM: { timeSec: 0, distanceMeters: 0 },
-    OTHER: { timeSec: 0, distanceMeters: 0 },
+    RUN: { completedCount: 0, skippedCount: 0, timeSec: 0, distanceMeters: 0, hasDistance: false },
+    BIKE: { completedCount: 0, skippedCount: 0, timeSec: 0, distanceMeters: 0, hasDistance: false },
+    SWIM: { completedCount: 0, skippedCount: 0, timeSec: 0, distanceMeters: 0, hasDistance: false },
+    OTHER: { completedCount: 0, skippedCount: 0, timeSec: 0, distanceMeters: 0, hasDistance: false },
   };
 
   let completedCount = 0;
@@ -138,21 +159,28 @@ export function getWeeklyAchievedSummary(
 
   for (const item of eligibleItems) {
     const status = (item.status ?? '').toUpperCase();
-    if (INCLUDED_SKIPPED_STATUSES.has(status)) skippedCount += 1;
+    const key = disciplineBucket(item.discipline);
+    if (INCLUDED_SKIPPED_STATUSES.has(status)) {
+      skippedCount += 1;
+      perDiscipline[key].skippedCount += 1;
+    }
   }
 
   for (const item of completedItems) {
     completedCount += 1;
 
     const timeSec = getCompletedDurationSec(item);
-    const distM = getCompletedDistanceMeters(item);
+    const dist = getCompletedDistanceMetersWithPresence(item);
+    const distM = dist.meters;
 
     totalTimeSec += timeSec;
     totalDistanceMeters += distM;
 
     const key = disciplineBucket(item.discipline);
+    perDiscipline[key].completedCount += 1;
     perDiscipline[key].timeSec += timeSec;
     perDiscipline[key].distanceMeters += distM;
+    perDiscipline[key].hasDistance = perDiscipline[key].hasDistance || dist.hasDistance;
   }
 
   return {
