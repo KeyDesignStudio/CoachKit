@@ -78,18 +78,22 @@ export function FullScreenLogoLoader() {
         const clone = node.cloneNode(true) as HTMLDivElement;
         clone.setAttribute('data-cloned-loader', 'true');
         clone.className = node.className;
-        clone.style.opacity = '0.5';
-        clone.style.transitionProperty = 'opacity';
-        clone.style.transitionDuration = `${FADE_DURATION_MS}ms`;
-        clone.style.transitionTimingFunction = 'ease-in-out';
         document.body.appendChild(clone);
 
         clone.classList.remove('pointer-events-auto');
         clone.classList.add('pointer-events-none');
 
+        const logo = clone.querySelector<HTMLImageElement>('img[data-loader-logo="true"]');
+        if (!logo) return;
+
+        logo.style.opacity = '0.25';
+        logo.style.transitionProperty = 'opacity';
+        logo.style.transitionDuration = `${FADE_DURATION_MS}ms`;
+        logo.style.transitionTimingFunction = 'ease-in-out';
+
         // Force a reflow so the transition applies.
-        void clone.getBoundingClientRect();
-        clone.style.opacity = '0';
+        void logo.getBoundingClientRect();
+        logo.style.opacity = '0';
 
         window.setTimeout(() => {
           try {
@@ -113,21 +117,22 @@ export function FullScreenLogoLoader() {
       aria-label="Loading"
       aria-live="polite"
       className={
-        'fixed inset-0 z-[80] flex items-center justify-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain will-change-[opacity] ' +
-        (reduceMotion
-          ? 'opacity-50 pointer-events-auto'
-          :
-              'transition-opacity ' +
-              (isVisible
-                ? `opacity-50 pointer-events-auto duration-[${FADE_DURATION_MS}ms] ease-in-out`
-                : `opacity-0 pointer-events-none duration-[${FADE_DURATION_MS}ms] ease-in-out`))
+        'fixed inset-0 z-[80] flex items-center justify-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain ' +
+        (isVisible ? 'pointer-events-auto' : 'pointer-events-none')
       }
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        data-loader-logo="true"
         src={useDarkLogo ? '/brand/CoachKit_Dark.png' : '/brand/coachkit-logo.png'}
         alt=""
-        className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
+        className={
+          'h-[300px] w-auto max-w-[75vw] select-none object-contain will-change-[opacity] ' +
+          (reduceMotion
+            ? ''
+            : `transition-opacity duration-[${FADE_DURATION_MS}ms] ease-in-out`)
+        }
+        style={{ opacity: isVisible ? 0.25 : 0 }}
       />
     </div>
   );
