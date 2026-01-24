@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-const FADE_IN_DELAY_MS = 80;
-const FADE_IN_DURATION_MS = 180;
-const FADE_OUT_DURATION_MS = 160;
+const FADE_IN_DELAY_MS = 120;
+const FADE_IN_DURATION_MS = 520;
+const FADE_OUT_DURATION_MS = 520;
 
 export function FullScreenLogoLoader() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -56,19 +56,17 @@ export function FullScreenLogoLoader() {
         clone.setAttribute('data-cloned-loader', 'true');
         clone.className = node.className;
         clone.style.opacity = '1';
+        clone.style.transitionProperty = 'opacity';
+        clone.style.transitionDuration = `${FADE_OUT_DURATION_MS}ms`;
+        clone.style.transitionTimingFunction = 'ease-in-out';
         document.body.appendChild(clone);
+
+        clone.classList.remove('pointer-events-auto');
+        clone.classList.add('pointer-events-none');
 
         // Force a reflow so the transition applies.
         void clone.getBoundingClientRect();
-
-        clone.classList.remove('opacity-100');
-        clone.classList.add('opacity-0');
-        clone.classList.remove('pointer-events-auto');
-        clone.classList.add('pointer-events-none');
-        clone.classList.remove('ease-out');
-        clone.classList.add('ease-in');
-        clone.style.transitionProperty = 'opacity';
-        clone.style.transitionDuration = `${FADE_OUT_DURATION_MS}ms`;
+        clone.style.opacity = '0';
 
         window.setTimeout(() => {
           try {
@@ -92,22 +90,24 @@ export function FullScreenLogoLoader() {
       aria-label="Loading"
       aria-live="polite"
       className={
-        'fixed inset-0 z-[80] grid place-items-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain ' +
+        'fixed inset-0 z-[80] flex items-center justify-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain ' +
         'transition-opacity ' +
         (isVisible
-          ? `opacity-100 pointer-events-auto duration-[${FADE_IN_DURATION_MS}ms] ease-out`
-          : `opacity-0 pointer-events-none duration-[${FADE_OUT_DURATION_MS}ms] ease-in`)
+          ? `opacity-100 pointer-events-auto duration-[${FADE_IN_DURATION_MS}ms] ease-in-out`
+          : `opacity-0 pointer-events-none duration-[${FADE_OUT_DURATION_MS}ms] ease-in-out`)
       }
     >
-      <picture>
-        <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/coachkit-logo.png"
-          alt=""
-          className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
-        />
-      </picture>
+      <div className="opacity-50">
+        <picture>
+          <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/coachkit-logo.png"
+            alt=""
+            className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
+          />
+        </picture>
+      </div>
     </div>
   );
 }

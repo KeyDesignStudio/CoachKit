@@ -40,8 +40,8 @@ test.describe('Mobile screenshots', () => {
       await expect(page.locator('[data-mobile-nav-drawer="v1"]')).toBeVisible();
       // Ensure key coach links are visible and tappable
       await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Manage Athletes' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Workout Scheduling' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Athletes' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Scheduling' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'SESSION BUILDER' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
       await page.screenshot({ path: screenshotPath(testInfo, 'mobile-menu-drawer.png'), fullPage: true });
