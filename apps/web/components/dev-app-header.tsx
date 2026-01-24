@@ -8,6 +8,7 @@ import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
+import { ThemeAwareCoachKitLogo } from '@/components/ThemeAwareLogos';
 
 type Role = 'COACH' | 'ATHLETE' | 'ADMIN' | null;
 
@@ -63,15 +64,7 @@ export function DevAppHeader() {
             aria-label="CoachKit"
           >
             <span className="text-sm">CoachKit</span>
-            <picture>
-              <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/coachkit-logo.png"
-                alt="CoachKit"
-                className="h-[42px] w-[42px] object-contain"
-              />
-            </picture>
+            <ThemeAwareCoachKitLogo className="h-[42px] w-[42px] object-contain" />
           </Link>
         </div>
       </div>

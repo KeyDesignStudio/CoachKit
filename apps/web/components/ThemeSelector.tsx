@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 export type CoachKitThemeChoice = 'system' | 'light' | 'dark';
 
 const STORAGE_KEY = 'coachkit-theme';
+const THEME_CHANGE_EVENT = 'coachkit:theme-change';
 
 function isThemeChoice(value: unknown): value is CoachKitThemeChoice {
   return value === 'system' || value === 'light' || value === 'dark';
@@ -64,6 +65,12 @@ export function ThemeSelector({ className }: { className?: string }) {
     }
 
     applyCoachKitTheme(next);
+
+    try {
+      window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+    } catch {
+      // ignore
+    }
   }, []);
 
   return (
