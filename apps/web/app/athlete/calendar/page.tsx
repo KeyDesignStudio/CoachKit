@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { AthleteWeekGrid } from '@/components/athlete/AthleteWeekGrid';
 import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
 import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
+import { AthleteWeekSummaryColumn } from '@/components/athlete/AthleteWeekSummaryColumn';
+import { AthleteMonthWeekSummaryCell } from '@/components/athlete/AthleteMonthWeekSummaryCell';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
@@ -59,6 +61,10 @@ interface CalendarItem {
   discipline: string;
   status: string;
   notes: string | null;
+  plannedDurationMinutes?: number | null;
+  plannedDistanceKm?: number | null;
+  distanceMeters?: number | null;
+  workoutStructure?: unknown;
   latestCompletedActivity?: {
     painFlag: boolean;
     source: 'MANUAL' | 'STRAVA';
@@ -425,7 +431,7 @@ export default function AthleteCalendarPage() {
           {showSkeleton ? (
             <SkeletonWeekGrid />
           ) : (
-            <AthleteWeekGrid>
+            <AthleteWeekGrid columns={8}>
               {weekDays.map((day) => {
                 const dayItems = (itemsByDate[day.date] || []).map((item) => ({
                   ...item,
@@ -453,6 +459,12 @@ export default function AthleteCalendarPage() {
                   </AthleteWeekDayColumn>
                 );
               })}
+
+              <AthleteWeekSummaryColumn
+                weekStartKey={weekStartKey}
+                athleteTimezone={athleteTimezone}
+                items={weekDays.flatMap((d) => itemsByDate[d.date] ?? [])}
+              />
             </AthleteWeekGrid>
           )}
         </CalendarShell>
@@ -461,23 +473,37 @@ export default function AthleteCalendarPage() {
           {showSkeleton ? (
             <SkeletonMonthGrid />
           ) : (
-            <MonthGrid>
-              {monthDays.map((day) => (
-                <AthleteMonthDayCell
-                  key={day.dateStr}
-                  date={day.date}
-                  dateStr={day.dateStr}
-                  dayWeather={day.weather}
-                  items={day.items}
-                  isCurrentMonth={day.isCurrentMonth}
-                  isToday={day.dateStr === todayKey}
-                  athleteTimezone={athleteTimezone}
-                  onDayClick={handleDayClick}
-                  onAddClick={(dateStr) => openCreateDrawer(dateStr)}
-                  canAdd
-                  onItemClick={handleItemIdClick}
-                />
-              ))}
+            <MonthGrid columns={8} extraHeaderLabel="Week">
+              {Array.from({ length: 6 }, (_, weekIndex) => {
+                const start = weekIndex * 7;
+                const weekDaysSlice = monthDays.slice(start, start + 7);
+                const gridStartKey = getMonthGridStartKey(currentMonth.year, currentMonth.month);
+                const weekStart = addDaysToDayKey(gridStartKey, weekIndex * 7);
+                const weekItems = weekDaysSlice.flatMap((d) => itemsByDate[d.dateStr] ?? []);
+
+                return (
+                  <div key={weekStart} className="contents">
+                    {weekDaysSlice.map((day) => (
+                      <AthleteMonthDayCell
+                        key={day.dateStr}
+                        date={day.date}
+                        dateStr={day.dateStr}
+                        dayWeather={day.weather}
+                        items={day.items}
+                        isCurrentMonth={day.isCurrentMonth}
+                        isToday={day.dateStr === todayKey}
+                        athleteTimezone={athleteTimezone}
+                        onDayClick={handleDayClick}
+                        onAddClick={(dateStr) => openCreateDrawer(dateStr)}
+                        canAdd
+                        onItemClick={handleItemIdClick}
+                      />
+                    ))}
+
+                    <AthleteMonthWeekSummaryCell weekStartKey={weekStart} athleteTimezone={athleteTimezone} items={weekItems} />
+                  </div>
+                );
+              })}
             </MonthGrid>
           )}
         </CalendarShell>
