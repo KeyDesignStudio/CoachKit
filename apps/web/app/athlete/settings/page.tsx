@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { WeatherLocationSelect } from '@/components/WeatherLocationSelect';
+import { ThemeSelector } from '@/components/ThemeSelector';
 
 type StravaStatusResponse = {
   connected: boolean;
@@ -247,6 +248,16 @@ export default function AthleteSettingsPage() {
             <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
             {timezoneMessage ? <p className="text-sm text-emerald-700">{timezoneMessage}</p> : null}
             {timezoneError ? <p className="text-sm text-red-700">{timezoneError}</p> : null}
+          </Card>
+        </div>
+
+        <div className="min-w-0">
+          <Card className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold">Appearance</h2>
+              <p className="text-sm text-[var(--muted)]">Choose light/dark mode or follow your device.</p>
+            </div>
+            <ThemeSelector />
           </Card>
         </div>
 

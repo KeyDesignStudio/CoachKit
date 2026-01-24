@@ -7,6 +7,7 @@ import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { cn } from '@/lib/cn';
 
 type Role = 'COACH' | 'ATHLETE' | 'ADMIN' | null;
 
@@ -17,8 +18,8 @@ const DESKTOP_NAV_LINK_CLASS =
 
 const ALL_NAV_LINKS: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
@@ -48,6 +49,8 @@ export function DevAppHeader() {
 
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
+  const notificationsHref = role === 'COACH' ? '/coach/notifications' : role === 'ATHLETE' ? '/athlete/notifications' : null;
+
   return (
     <>
       {/* Mobile-only top branding: scrolls away; sticky header remains */}
@@ -66,7 +69,7 @@ export function DevAppHeader() {
               <img
                 src="/brand/coachkit-logo.png"
                 alt="CoachKit"
-                className="h-[29px] w-[29px] object-contain"
+                className="h-[42px] w-[42px] object-contain"
               />
             </picture>
           </Link>
@@ -79,7 +82,20 @@ export function DevAppHeader() {
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
-            <div className="flex w-11 justify-end">
+            <div className="flex items-center gap-1 justify-end">
+              {notificationsHref ? (
+                <Link
+                  href={notificationsHref}
+                  aria-label="Notifications"
+                  className={cn(
+                    'relative inline-flex h-11 w-11 items-center justify-center rounded-full',
+                    'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+                    'text-[var(--muted)] hover:bg-[var(--bg-structure)]'
+                  )}
+                >
+                  <Icon name="notifications" size="md" className="text-[var(--muted)]" aria-hidden />
+                </Link>
+              ) : null}
               {/* Placeholder avatar in dev mode */}
               <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
                 D
@@ -107,8 +123,26 @@ export function DevAppHeader() {
             ))}
           </nav>
 
-          <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
-            D
+          <div className="flex items-center gap-2">
+            {notificationsHref ? (
+              <Link
+                href={notificationsHref}
+                aria-label="Notifications"
+                className={cn(
+                  'relative rounded-full min-h-[44px] inline-flex items-center justify-center',
+                  'px-3 py-2',
+                  'text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+                )}
+              >
+                <Icon name="notifications" size="md" className="text-[var(--muted)]" aria-hidden />
+                <span className="sr-only">Notifications</span>
+              </Link>
+            ) : null}
+
+            <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
+              D
+            </div>
           </div>
         </div>
         </Card>

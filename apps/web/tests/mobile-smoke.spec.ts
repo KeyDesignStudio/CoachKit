@@ -64,20 +64,10 @@ test.describe('Mobile smoke', () => {
     const disciplineOverflow = await disciplineCard.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(disciplineOverflow, 'Discipline load section should not overflow horizontally').toBeFalsy();
 
+    // Review Inbox stays on the dashboard.
     await expect(page.getByRole('heading', { level: 2, name: 'Review inbox' })).toBeVisible();
     const inboxSection = page.getByTestId('coach-dashboard-review-inbox');
     await expect(inboxSection).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Mark Reviewed/ })).toBeVisible();
-
-    // Bulk select still works when inbox rows exist.
-    const inboxCard = inboxSection.locator('div.rounded-2xl').first();
-    const inboxCheckboxes = inboxCard.locator('input[type="checkbox"]');
-    const inboxCheckboxCount = await inboxCheckboxes.count();
-    if (inboxCheckboxCount > 0) {
-      await inboxCheckboxes.first().click();
-      await expect(page.getByRole('button', { name: /Mark Reviewed.*\(1\)/ })).toBeVisible();
-        await expect(page.getByTestId('coach-dashboard-review-inbox').getByRole('button', { name: 'Clear' })).toBeEnabled();
-    }
 
     await assertNoHorizontalScroll(page);
   });
@@ -93,6 +83,27 @@ test.describe('Mobile smoke', () => {
     await setRoleCookie(page, 'COACH');
     await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
     await expect(page.locator('h1', { hasText: 'Weekly Calendar' })).toBeVisible();
+    await assertNoHorizontalScroll(page);
+  });
+
+  test('Coach messages loads (messages-only) and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'COACH');
+    await page.goto('/coach/notifications', { waitUntil: 'networkidle' });
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Messages' })).toBeVisible();
+
+    const messagesSection = page.getByTestId('coach-notifications-messages');
+    await expect(messagesSection).toBeVisible();
+
+    const compose = page.getByTestId('coach-notifications-messages-compose');
+    await expect(compose).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Broadcast$/ })).toBeVisible();
+
+    // Review Inbox must NOT be present on notifications.
+    await expect(page.getByTestId('coach-dashboard-review-inbox')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Review inbox' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Mark Reviewed/i })).toHaveCount(0);
+
     await assertNoHorizontalScroll(page);
   });
 
@@ -164,8 +175,17 @@ test.describe('Mobile smoke', () => {
     const statsBox = page.getByTestId('athlete-dashboard-at-a-glance-stats');
     await expect(statsBox).toBeVisible();
     await expect(statsBox.getByTestId('athlete-dashboard-at-a-glance-stat-row')).toHaveCount(4);
+    await assertNoHorizontalScroll(page);
+  });
 
-    const compose = page.getByTestId('athlete-dashboard-messages-compose');
+  test('Athlete messages loads and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/notifications', { waitUntil: 'networkidle' });
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Messages' })).toBeVisible();
+
+    const compose = page.getByTestId('athlete-notifications-messages-compose');
     await expect(compose).toBeVisible();
     await expect(compose.getByRole('button', { name: /^Send$/ })).toBeVisible();
 

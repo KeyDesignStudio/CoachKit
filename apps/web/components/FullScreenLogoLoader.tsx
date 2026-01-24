@@ -1,10 +1,9 @@
+
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-const FADE_IN_DELAY_MS = 80;
-const FADE_IN_DURATION_MS = 180;
-const FADE_OUT_DURATION_MS = 160;
+const FADE_DURATION_MS = 450;
 
 export function FullScreenLogoLoader() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -12,6 +11,7 @@ export function FullScreenLogoLoader() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [useDarkLogo, setUseDarkLogo] = useState(false);
 
   useEffect(() => {
     isVisibleRef.current = isVisible;
@@ -26,6 +26,29 @@ export function FullScreenLogoLoader() {
   }, []);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const mql = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const compute = () => {
+      const explicit = document.documentElement.getAttribute('data-theme');
+      if (explicit === 'dark') return setUseDarkLogo(true);
+      if (explicit === 'light') return setUseDarkLogo(false);
+      return setUseDarkLogo(Boolean(mql?.matches));
+    };
+
+    compute();
+
+    const observer = new MutationObserver(() => compute());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    mql?.addEventListener?.('change', compute);
+
+    return () => {
+      observer.disconnect();
+      mql?.removeEventListener?.('change', compute);
+    };
+  }, []);
+
+  useEffect(() => {
     // This component being rendered means "shouldShowLoader" is true.
     if (reduceMotion) {
       setIsMounted(true);
@@ -35,8 +58,8 @@ export function FullScreenLogoLoader() {
 
     setIsMounted(true);
     setIsVisible(false);
-    const timer = window.setTimeout(() => setIsVisible(true), FADE_IN_DELAY_MS);
-    return () => window.clearTimeout(timer);
+    const raf = window.requestAnimationFrame(() => setIsVisible(true));
+    return () => window.cancelAnimationFrame(raf);
   }, [reduceMotion]);
 
   // When React unmounts the loader (e.g. route finished loading), clone the overlay
@@ -55,20 +78,18 @@ export function FullScreenLogoLoader() {
         const clone = node.cloneNode(true) as HTMLDivElement;
         clone.setAttribute('data-cloned-loader', 'true');
         clone.className = node.className;
-        clone.style.opacity = '1';
+        clone.style.opacity = '0.5';
+        clone.style.transitionProperty = 'opacity';
+        clone.style.transitionDuration = `${FADE_DURATION_MS}ms`;
+        clone.style.transitionTimingFunction = 'ease-in-out';
         document.body.appendChild(clone);
+
+        clone.classList.remove('pointer-events-auto');
+        clone.classList.add('pointer-events-none');
 
         // Force a reflow so the transition applies.
         void clone.getBoundingClientRect();
-
-        clone.classList.remove('opacity-100');
-        clone.classList.add('opacity-0');
-        clone.classList.remove('pointer-events-auto');
-        clone.classList.add('pointer-events-none');
-        clone.classList.remove('ease-out');
-        clone.classList.add('ease-in');
-        clone.style.transitionProperty = 'opacity';
-        clone.style.transitionDuration = `${FADE_OUT_DURATION_MS}ms`;
+        clone.style.opacity = '0';
 
         window.setTimeout(() => {
           try {
@@ -76,7 +97,7 @@ export function FullScreenLogoLoader() {
           } catch {
             // noop
           }
-        }, FADE_OUT_DURATION_MS);
+        }, FADE_DURATION_MS);
       } catch {
         // noop
       }
@@ -92,22 +113,22 @@ export function FullScreenLogoLoader() {
       aria-label="Loading"
       aria-live="polite"
       className={
-        'fixed inset-0 z-[80] grid place-items-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain ' +
-        'transition-opacity ' +
-        (isVisible
-          ? `opacity-100 pointer-events-auto duration-[${FADE_IN_DURATION_MS}ms] ease-out`
-          : `opacity-0 pointer-events-none duration-[${FADE_OUT_DURATION_MS}ms] ease-in`)
+        'fixed inset-0 z-[80] flex items-center justify-center bg-[var(--bg-page)] px-6 touch-none overscroll-contain will-change-[opacity] ' +
+        (reduceMotion
+          ? 'opacity-50 pointer-events-auto'
+          :
+              'transition-opacity ' +
+              (isVisible
+                ? `opacity-50 pointer-events-auto duration-[${FADE_DURATION_MS}ms] ease-in-out`
+                : `opacity-0 pointer-events-none duration-[${FADE_DURATION_MS}ms] ease-in-out`))
       }
     >
-      <picture>
-        <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/coachkit-logo.png"
-          alt=""
-          className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
-        />
-      </picture>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={useDarkLogo ? '/brand/CoachKit_Dark.png' : '/brand/coachkit-logo.png'}
+        alt=""
+        className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
+      />
     </div>
   );
 }

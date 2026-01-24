@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
+import { cn } from '@/lib/cn';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { AdminHeader } from '@/components/admin/AdminHeader';
@@ -18,8 +19,8 @@ const DESKTOP_NAV_LINK_CLASS =
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
@@ -48,6 +49,7 @@ export async function AppHeader() {
     darkLogoUrl: null as string | null,
   };
   let brandingCoachId: string | null = null;
+  let dbUserId: string | null = null;
 
   if (userId) {
     // Try to find user by authProviderId first
@@ -84,6 +86,7 @@ export async function AppHeader() {
 
     if (user) {
       userRole = user.role;
+      dbUserId = user.id;
 
       // Resolve the coachId we should use for club branding
       if (user.role === 'COACH' || user.role === 'ADMIN') {
@@ -119,6 +122,42 @@ export async function AppHeader() {
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
+  const notificationsHref: Route | null =
+    userRole === 'COACH' ? '/coach/notifications' : userRole === 'ATHLETE' ? '/athlete/notifications' : null;
+
+  const hasUnreadNotifications = await (async () => {
+    if (!userId || !userRole || !dbUserId) return false;
+
+    if (userRole === 'COACH') {
+      const unreadMessage = await prisma.message.findFirst({
+        where: {
+          thread: { coachId: dbUserId },
+          deletedAt: null,
+          coachReadAt: null,
+          senderRole: 'ATHLETE',
+        },
+        select: { id: true },
+      });
+
+      return Boolean(unreadMessage);
+    }
+
+    if (userRole === 'ATHLETE') {
+      const unreadMessage = await prisma.message.findFirst({
+        where: {
+          thread: { athleteId: dbUserId },
+          deletedAt: null,
+          athleteReadAt: null,
+          senderRole: 'COACH',
+        },
+        select: { id: true },
+      });
+      return Boolean(unreadMessage);
+    }
+
+    return false;
+  })();
+
   // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
   if (userRole === 'ADMIN') {
     return <AdminHeader />;
@@ -143,7 +182,7 @@ export async function AppHeader() {
                 <img
                   src={headerClubBranding.logoUrl}
                   alt={`${headerClubBranding.name} logo`}
-                  className="h-8 w-auto object-contain"
+                  className="h-[46px] w-auto object-contain"
                 />
               </picture>
             ) : (
@@ -165,7 +204,7 @@ export async function AppHeader() {
               <img
                 src="/brand/coachkit-logo.png"
                 alt="CoachKit"
-                  className="h-[29px] w-[29px] object-contain"
+                className="h-[42px] w-[42px] object-contain"
               />
             </picture>
           </Link>
@@ -179,7 +218,26 @@ export async function AppHeader() {
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
-            <div className="flex min-w-0 max-w-[40vw] justify-end">
+            <div className="flex min-w-0 max-w-[40vw] justify-end items-center gap-1">
+              {notificationsHref ? (
+                <Link
+                  href={notificationsHref}
+                  aria-label="Notifications"
+                  className={cn(
+                    'relative inline-flex h-11 w-11 items-center justify-center rounded-full',
+                    'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+                    'text-[var(--muted)] hover:bg-[var(--bg-structure)]'
+                  )}
+                >
+                  <Icon name="notifications" size="md" className="text-[var(--muted)]" aria-hidden />
+                  {hasUnreadNotifications ? (
+                    <span
+                      className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-600"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </Link>
+              ) : null}
               {userId && <UserHeaderControl />}
             </div>
           </div>
@@ -254,6 +312,25 @@ export async function AppHeader() {
                   )
                 )}
               </nav>
+            ) : null}
+
+            {notificationsHref ? (
+              <Link
+                href={notificationsHref}
+                aria-label="Notifications"
+                className={cn(
+                  'relative rounded-full min-h-[44px] inline-flex items-center justify-center',
+                  'px-3 py-2',
+                  'text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+                )}
+              >
+                <Icon name="notifications" size="md" className="text-[var(--muted)]" aria-hidden />
+                {hasUnreadNotifications ? (
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-600" aria-hidden="true" />
+                ) : null}
+                <span className="sr-only">Notifications</span>
+              </Link>
             ) : null}
 
             {userId && <UserHeaderControl />}

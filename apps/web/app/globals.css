@@ -23,6 +23,52 @@
   --ring: #91b4ff;
 }
 
+/*
+  Manual theme override (persisted in localStorage).
+  - data-theme="light" forces the light palette.
+  - data-theme="dark" forces the dark palette.
+  - when absent, prefers-color-scheme drives the palette (System).
+*/
+html[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-page: #EEF0F3;
+  --bg-surface: #F6F7F9;
+  --bg-structure: #E6E9ED;
+  --bg-card: #FFFFFF;
+  --border-subtle: #fff;
+
+  --today-border: rgba(59, 130, 246, 0.40);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #0c1222;
+  --muted: #5a647d;
+  --primary: #2f68ff;
+  --ring: #91b4ff;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-page: #05060e;
+  --bg-surface: rgba(13, 17, 35, 0.75);
+  --bg-structure: rgba(18, 24, 45, 0.65);
+  --bg-card: rgba(18, 24, 45, 0.85);
+  --border-subtle: #fff;
+
+  --today-border: rgba(158, 193, 255, 0.50);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #f8fbff;
+  --muted: #94a3b8;
+  --primary: #7ba6ff;
+  --ring: #9ec1ff;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     /* Preserve existing dark-mode behavior (no new feature work) */

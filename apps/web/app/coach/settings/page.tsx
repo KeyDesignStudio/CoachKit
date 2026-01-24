@@ -11,6 +11,7 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { ThemeSelector } from '@/components/ThemeSelector';
 
 type SaveState =
   | { kind: 'idle' }
@@ -496,6 +497,14 @@ export default function CoachSettingsPage() {
               </button>
             </div>
           ) : null}
+        </Card>
+
+        <Card className="w-full">
+          <h2 className="m-0 text-base font-semibold text-[var(--text)]">Appearance</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Choose light/dark mode or follow your device.</p>
+          <div className="mt-3">
+            <ThemeSelector />
+          </div>
         </Card>
 
         <Card className="w-full">

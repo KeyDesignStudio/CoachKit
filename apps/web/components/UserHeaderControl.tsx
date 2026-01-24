@@ -121,8 +121,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           style={{ top: menuPosition.top, left: menuPosition.left, width: menuPosition.width }}
         >
           <div className="px-4 py-3">
-            <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
-            <div className="text-xs text-[var(--muted)] truncate">Account</div>
+            <div className="text-sm font-semibold text-[var(--text)]">Account</div>
           </div>
           <div className="h-px bg-[var(--border-subtle)]" />
           <div className="p-2">
@@ -168,7 +167,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
       </>,
       document.body
     );
-  }, [close, displayName, menuPosition.left, menuPosition.top, menuPosition.width, open, openUserProfile, signOut]);
+  }, [close, menuPosition.left, menuPosition.top, menuPosition.width, open, openUserProfile, signOut]);
 
   return (
     <>
@@ -197,10 +196,6 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
             {initialsFromName(displayName)}
           </div>
         )}
-
-        <span data-testid="user-header-name" className="min-w-0 truncate text-sm font-medium text-[var(--text)]">
-          {displayName}
-        </span>
 
         <Icon name={open ? 'close' : 'expandMore'} size="sm" className="text-[var(--muted)]" aria-hidden />
       </button>
