@@ -203,6 +203,20 @@ function ReviewInboxRow({
   const isSkipped = item.status === 'SKIPPED';
   const isCompleted = item.status.startsWith('COMPLETED');
 
+  function formatAthleteNameMobile(name: string): string {
+    const tokens = name
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return 'Unknown athlete';
+    if (tokens.length === 1) return tokens[0];
+
+    const first = tokens[0];
+    const last = tokens[tokens.length - 1];
+    return `${first[0]?.toUpperCase() ?? ''}. ${last}`;
+  }
+
   function toDateKeyInTimeZone(dateIso: string, tz: string): string | null {
     const date = new Date(dateIso);
     if (Number.isNaN(date.getTime())) return null;
@@ -254,7 +268,7 @@ function ReviewInboxRow({
       <label className="h-11 w-11 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
-          className="h-5 w-5 accent-blue-600"
+          className="h-4 w-4 md:h-5 md:w-5 accent-blue-600"
           checked={isChecked}
           onChange={(e) => {
             e.stopPropagation();
@@ -272,21 +286,34 @@ function ReviewInboxRow({
           painFlag ? 'bg-rose-500/10 rounded-xl px-2 py-2 -mx-2' : ''
         )}
       >
-        <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
-        {dateLabel ? <span className="flex-shrink-0 text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
-        <span className="block min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
-
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-          <span className={cn('text-xs uppercase text-[var(--muted)] font-medium', theme.textClass)}>{disciplineLabel}</span>
+        {/* Mobile: strict compact row (name initial + date + discipline icon) */}
+        <div className="md:hidden flex items-center gap-2 min-w-0 flex-1">
+          <span className="block min-w-0 truncate text-xs font-medium text-[var(--text)]">{formatAthleteNameMobile(athleteName)}</span>
+          {dateLabel ? <span className="flex-shrink-0 text-[11px] text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
+          <span className="flex-1" aria-hidden="true" />
+          <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'text-[13px]')} />
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          <span className={cn('text-xs uppercase', painFlag ? 'text-rose-700 font-medium' : 'text-[var(--muted)]')}>{statusText}</span>
-          <div className="flex items-center gap-1">
-            {item.hasAthleteComment ? <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} /> : null}
-            {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
-            {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} /> : null}
+        {/* Desktop/tablet: keep full row details */}
+        <div className="hidden md:flex items-center gap-2 min-w-0 flex-1">
+          <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
+          {dateLabel ? <span className="flex-shrink-0 text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
+          <span className="block min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
+
+          <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+            <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+            <span className={cn('text-xs uppercase text-[var(--muted)] font-medium', theme.textClass)}>{disciplineLabel}</span>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+            <span className={cn('text-xs uppercase', painFlag ? 'text-rose-700 font-medium' : 'text-[var(--muted)]')}>{statusText}</span>
+            <div className="flex items-center gap-1">
+              {item.hasAthleteComment ? (
+                <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} />
+              ) : null}
+              {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
+              {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} /> : null}
+            </div>
           </div>
         </div>
       </button>
@@ -671,7 +698,7 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
-          <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
+          <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
               data-testid="coach-dashboard-at-a-glance"

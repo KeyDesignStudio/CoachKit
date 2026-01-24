@@ -307,7 +307,7 @@ export default function AthleteNotificationsConsolePage() {
               <button
                 type="button"
                 className={cn(
-                  'min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                  'min-h-[44px] rounded-full px-3 py-2 text-xs font-medium transition-colors md:px-4 md:text-sm',
                   'border border-[var(--border-subtle)]',
                   threadId && messages.length > 0 && !messageDeleteLoading
                     ? 'bg-rose-600 text-white hover:bg-rose-700'
@@ -333,7 +333,7 @@ export default function AthleteNotificationsConsolePage() {
               <div className="flex items-center justify-end gap-2">
                 <Button
                   type="button"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] text-xs px-4 py-1.5 md:text-sm md:px-5 md:py-2"
                   onClick={sendMessage}
                   disabled={messageSending || messageDraft.trim().length === 0}
                 >
@@ -429,7 +429,7 @@ export default function AthleteNotificationsConsolePage() {
                               disabled={messageDeleteLoading}
                               aria-label="Delete message"
                             >
-                              <Icon name="delete" size="sm" aria-hidden />
+                              <Icon name="delete" size="sm" className="text-[13px] md:text-base" aria-hidden />
                             </button>
                           </div>
                         </div>

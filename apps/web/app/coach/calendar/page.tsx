@@ -646,7 +646,7 @@ export default function CoachCalendarPage() {
     const title =
       viewMode === 'month'
         ? new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-        : 'Calendar';
+        : 'Scheduling';
 
     window.dispatchEvent(new CustomEvent('coachkit:mobile-header-title', { detail: { title } }));
   }, [currentMonth.month, currentMonth.year, isMobile, viewMode]);

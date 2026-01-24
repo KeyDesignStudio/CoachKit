@@ -182,7 +182,7 @@ export async function AppHeader() {
                 <img
                   src={headerClubBranding.logoUrl}
                   alt={`${headerClubBranding.name} logo`}
-                  className="h-8 w-auto object-contain"
+                  className="h-[38px] w-auto object-contain"
                 />
               </picture>
             ) : (
@@ -204,7 +204,7 @@ export async function AppHeader() {
               <img
                 src="/brand/coachkit-logo.png"
                 alt="CoachKit"
-                  className="h-[29px] w-[29px] object-contain"
+                className="h-[35px] w-[35px] object-contain"
               />
             </picture>
           </Link>

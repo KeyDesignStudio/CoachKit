@@ -69,7 +69,7 @@ export function DevAppHeader() {
               <img
                 src="/brand/coachkit-logo.png"
                 alt="CoachKit"
-                className="h-[29px] w-[29px] object-contain"
+                className="h-[35px] w-[35px] object-contain"
               />
             </picture>
           </Link>
