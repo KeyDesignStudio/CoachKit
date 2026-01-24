@@ -31,6 +31,7 @@ export const ICON_NAMES = [
   
   // Navigation / actions
   'menu',
+  'notifications',
   'prev',
   'next',
   'today',
@@ -93,6 +94,7 @@ export const ICONS: Record<IconName, string> = {
   
   // Navigation / actions
   menu: 'menu',
+  notifications: 'notifications',
   prev: 'chevron_left',
   next: 'chevron_right',
   today: 'today',
