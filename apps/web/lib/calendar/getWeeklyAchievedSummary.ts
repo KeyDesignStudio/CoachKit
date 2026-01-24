@@ -18,8 +18,18 @@ export type CalendarItemForWeeklySummary = {
   workoutStructure?: unknown;
 };
 
-const INCLUDED_COMPLETED_STATUSES = new Set(['COMPLETED_MANUAL', 'COMPLETED_SYNCED', 'COMPLETED_SYNCED_DRAFT']);
+const INCLUDED_COMPLETED_STATUSES = new Set(['COMPLETED_MANUAL', 'COMPLETED_SYNCED']);
 const INCLUDED_SKIPPED_STATUSES = new Set(['SKIPPED']);
+
+export function isWeeklySummaryEligible(item: CalendarItemForWeeklySummary): boolean {
+  const status = (item.status ?? '').toUpperCase();
+  return INCLUDED_COMPLETED_STATUSES.has(status) || INCLUDED_SKIPPED_STATUSES.has(status);
+}
+
+function isWeeklySummaryCompleted(item: CalendarItemForWeeklySummary): boolean {
+  const status = (item.status ?? '').toUpperCase();
+  return INCLUDED_COMPLETED_STATUSES.has(status);
+}
 
 function disciplineBucket(raw: string | null | undefined): WeeklyAchievedSummaryDisciplineKey {
   const d = (raw ?? 'OTHER').trim().toUpperCase();
@@ -111,6 +121,9 @@ export function getWeeklyAchievedSummary(
   items: CalendarItemForWeeklySummary[],
   _athleteTimezone: string
 ): WeeklyAchievedSummary {
+  const eligibleItems = items.filter(isWeeklySummaryEligible);
+  const completedItems = eligibleItems.filter(isWeeklySummaryCompleted);
+
   const perDiscipline: WeeklyAchievedSummary['perDiscipline'] = {
     RUN: { timeSec: 0, distanceMeters: 0 },
     BIKE: { timeSec: 0, distanceMeters: 0 },
@@ -123,30 +136,23 @@ export function getWeeklyAchievedSummary(
   let totalTimeSec = 0;
   let totalDistanceMeters = 0;
 
-  for (const item of items) {
+  for (const item of eligibleItems) {
     const status = (item.status ?? '').toUpperCase();
+    if (INCLUDED_SKIPPED_STATUSES.has(status)) skippedCount += 1;
+  }
 
-    const isCompleted = INCLUDED_COMPLETED_STATUSES.has(status);
-    const isSkipped = INCLUDED_SKIPPED_STATUSES.has(status);
+  for (const item of completedItems) {
+    completedCount += 1;
 
-    if (!isCompleted && !isSkipped) continue;
+    const timeSec = getCompletedDurationSec(item);
+    const distM = getCompletedDistanceMeters(item);
 
-    if (isCompleted) {
-      completedCount += 1;
+    totalTimeSec += timeSec;
+    totalDistanceMeters += distM;
 
-      const timeSec = getCompletedDurationSec(item);
-      const distM = getCompletedDistanceMeters(item);
-
-      totalTimeSec += timeSec;
-      totalDistanceMeters += distM;
-
-      const key = disciplineBucket(item.discipline);
-      perDiscipline[key].timeSec += timeSec;
-      perDiscipline[key].distanceMeters += distM;
-    } else if (isSkipped) {
-      skippedCount += 1;
-      // Skipped workouts do not contribute to time/distance totals.
-    }
+    const key = disciplineBucket(item.discipline);
+    perDiscipline[key].timeSec += timeSec;
+    perDiscipline[key].distanceMeters += distM;
   }
 
   return {
