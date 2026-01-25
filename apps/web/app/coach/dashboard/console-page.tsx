@@ -217,10 +217,26 @@ function ReviewInboxRow({
 }) {
   const theme = getDisciplineTheme(item.discipline);
   const athleteName = item.athlete?.name ?? 'Unknown athlete';
-  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
-  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
   const isSkipped = item.status === 'SKIPPED';
-  const isCompleted = item.status.startsWith('COMPLETED');
+  const isCompleted = item.status.toUpperCase().startsWith('COMPLETED');
+
+  const statusLabel: 'COMPLETED' | 'SKIPPED' = isSkipped ? 'SKIPPED' : 'COMPLETED';
+
+  function formatAthleteDisplayName(fullName: string): string {
+    const tokens = fullName
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return 'Unknown athlete';
+
+    const first = tokens[0];
+    const last = tokens.length > 1 ? tokens[tokens.length - 1] : '';
+    const initial = first[0]?.toUpperCase() ?? '';
+
+    // Desired format: "G Price". If last name missing, fall back to first initial only.
+    return last ? `${initial} ${last}`.trim() : initial || first;
+  }
 
   function toDateKeyInTimeZone(dateIso: string, tz: string): string | null {
     const date = new Date(dateIso);
@@ -247,7 +263,7 @@ function ReviewInboxRow({
     const parts = new Intl.DateTimeFormat('en-GB', {
       timeZone: tz,
       weekday: 'short',
-      day: '2-digit',
+      day: 'numeric',
       month: 'short',
     }).formatToParts(anchor);
 
@@ -260,13 +276,16 @@ function ReviewInboxRow({
 
   const completedDateKey = item.latestCompletedActivity?.startTime ? toDateKeyInTimeZone(item.latestCompletedActivity.startTime, timeZone) : null;
   const plannedDateKey = item.date || null;
-  const displayDateKey = isCompleted ? (completedDateKey ?? plannedDateKey) : plannedDateKey;
+  const displayDateKey = isSkipped ? plannedDateKey : isCompleted ? completedDateKey : plannedDateKey;
   const dateLabel = displayDateKey ? formatInboxDateLabel(displayDateKey, timeZone) : null;
 
-  const statusText = item.status
-    .replace('COMPLETED_', 'COMPLETED ')
-    .replace(/_/g, ' ')
-    .trim();
+  const athleteDisplayName = formatAthleteDisplayName(athleteName);
+  const statusPillClassName = cn(
+    'inline-flex items-center rounded-full px-2 py-0.5',
+    'text-xs font-semibold uppercase tracking-wide whitespace-nowrap',
+    'border border-black/10',
+    statusLabel === 'SKIPPED' ? 'bg-amber-500/10 text-amber-700' : 'bg-emerald-500/10 text-emerald-700'
+  );
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 min-w-0">
@@ -287,27 +306,14 @@ function ReviewInboxRow({
         type="button"
         onClick={() => onOpen(item)}
         className={cn(
-          'flex items-center gap-2 min-w-0 flex-1 text-left justify-start min-h-[44px]',
-          painFlag ? 'bg-rose-500/10 rounded-xl px-2 py-2 -mx-2' : ''
+          'flex items-center gap-2 min-w-0 flex-1 text-left justify-start min-h-[44px]'
         )}
       >
-        <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
-        {dateLabel ? <span className="flex-shrink-0 text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
-        <span className="block min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
-
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-          <span className={cn('text-xs uppercase text-[var(--muted)] font-medium', theme.textClass)}>{disciplineLabel}</span>
-        </div>
-
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          <span className={cn('text-xs uppercase', painFlag ? 'text-rose-700 font-medium' : 'text-[var(--muted)]')}>{statusText}</span>
-          <div className="flex items-center gap-1">
-            {item.hasAthleteComment ? <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} /> : null}
-            {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
-            {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} /> : null}
-          </div>
-        </div>
+        <span className="flex-shrink-0 max-w-[96px] truncate text-xs md:text-sm font-medium text-[var(--text)]">{athleteDisplayName}</span>
+        <span className={statusPillClassName}>{statusLabel}</span>
+        {dateLabel ? <span className="flex-shrink-0 text-[11px] md:text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
+        <Icon name={theme.iconName} size="sm" className={cn(theme.textClass, 'flex-shrink-0 text-[13px] md:text-[16px]')} />
+        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-xs md:text-sm text-[var(--text)]">{item.title}</span>
       </button>
     </div>
   );
@@ -1146,7 +1152,7 @@ export default function CoachDashboardConsolePage() {
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
 
-        {/* Review Inbox + Messages split (desktop/tablet); stacked on mobile */}
+        {/* Review Inbox + Messages split (tablet+); stacked on mobile */}
         <div className="mt-10 grid grid-cols-1 gap-6 items-start md:grid-cols-2">
           {/* LEFT: Review inbox */}
           <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
@@ -1579,7 +1585,13 @@ export default function CoachDashboardConsolePage() {
         </>
       ) : null}
 
-      <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
+      <ReviewDrawer
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        onMarkReviewed={markReviewed}
+        showSessionTimes={false}
+        timeZone={coachTimeZone}
+      />
     </>
   );
 }
