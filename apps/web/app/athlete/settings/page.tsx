@@ -9,9 +9,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { WeatherLocationSelect } from '@/components/WeatherLocationSelect';
+import { useThemePreference } from '@/components/theme-preference';
 
 type StravaStatusResponse = {
   connected: boolean;
@@ -38,6 +40,8 @@ export default function AthleteSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const searchParams = useSearchParams();
+
+  const { preference: themePreference, setThemePreference } = useThemePreference();
 
   const [status, setStatus] = useState<StravaStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -247,6 +251,30 @@ export default function AthleteSettingsPage() {
             <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
             {timezoneMessage ? <p className="text-sm text-emerald-700">{timezoneMessage}</p> : null}
             {timezoneError ? <p className="text-sm text-red-700">{timezoneError}</p> : null}
+          </Card>
+        </div>
+
+        <div className="min-w-0">
+          <Card className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 flex-col gap-1">
+                <h2 className="text-lg font-semibold">Appearance</h2>
+                <p className="text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
+              </div>
+              <Badge className="text-[var(--muted)]">
+                {themePreference === 'system' ? 'System' : themePreference === 'dark' ? 'Dark' : 'Light'}
+              </Badge>
+            </div>
+
+            <Select
+              value={themePreference}
+              onChange={(e) => setThemePreference(e.target.value as any)}
+              aria-label="Theme"
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </Select>
           </Card>
         </div>
 
