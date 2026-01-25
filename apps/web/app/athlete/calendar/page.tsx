@@ -24,6 +24,7 @@ import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
+import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -59,10 +60,15 @@ interface CalendarItem {
   discipline: string;
   status: string;
   notes: string | null;
+  plannedDurationMinutes?: number | null;
+  plannedDistanceKm?: number | null;
   latestCompletedActivity?: {
     painFlag: boolean;
     source: 'MANUAL' | 'STRAVA';
     effectiveStartTimeUtc: string;
+    durationMinutes?: number | null;
+    distanceKm?: number | null;
+    caloriesKcal?: number | null;
   } | null;
 }
 
@@ -423,9 +429,9 @@ export default function AthleteCalendarPage() {
       {viewMode === 'week' ? (
         <CalendarShell variant="week" data-athlete-week-view-version="athlete-week-v2">
           {showSkeleton ? (
-            <SkeletonWeekGrid />
+            <SkeletonWeekGrid showSummaryColumn />
           ) : (
-            <AthleteWeekGrid>
+            <AthleteWeekGrid includeSummaryColumn>
               {weekDays.map((day) => {
                 const dayItems = (itemsByDate[day.date] || []).map((item) => ({
                   ...item,
@@ -453,31 +459,148 @@ export default function AthleteCalendarPage() {
                   </AthleteWeekDayColumn>
                 );
               })}
+
+              {/* Weekly summary column (desktop: right of Sunday) */}
+              <div className="hidden md:flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden border border-[var(--border-subtle)]">
+                <div className="bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5">
+                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
+                  <p className="text-sm font-medium truncate">This week</p>
+                </div>
+                <div className="flex flex-col gap-2 p-2">
+                  <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
+                    <div className="text-sm font-semibold text-[var(--text)]">
+                      {items.filter((i) => {
+                        const dateKey = getLocalDayKey(i.date, athleteTimezone);
+                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6);
+                      }).length}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const toDayKey = addDaysToDayKey(weekStartKey, 6);
+                    const summary = getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStartKey,
+                      toDayKey,
+                      includePlannedFallback: true,
+                    });
+                    const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
+
+                    return (
+                      <>
+                        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
+                          <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
+                            {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
+                          </div>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
+                        </div>
+
+                        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
+                          {top.length === 0 ? (
+                            <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
+                          ) : (
+                            <div className="mt-1 space-y-1">
+                              {top.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </AthleteWeekGrid>
           )}
         </CalendarShell>
       ) : (
         <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
           {showSkeleton ? (
-            <SkeletonMonthGrid />
+            <SkeletonMonthGrid showSummaryColumn />
           ) : (
-            <MonthGrid>
-              {monthDays.map((day) => (
-                <AthleteMonthDayCell
-                  key={day.dateStr}
-                  date={day.date}
-                  dateStr={day.dateStr}
-                  dayWeather={day.weather}
-                  items={day.items}
-                  isCurrentMonth={day.isCurrentMonth}
-                  isToday={day.dateStr === todayKey}
-                  athleteTimezone={athleteTimezone}
-                  onDayClick={handleDayClick}
-                  onAddClick={(dateStr) => openCreateDrawer(dateStr)}
-                  canAdd
-                  onItemClick={handleItemIdClick}
-                />
-              ))}
+            <MonthGrid includeSummaryColumn>
+              {Array.from({ length: 6 }, (_, weekIndex) => {
+                const start = weekIndex * 7;
+                const week = monthDays.slice(start, start + 7);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.length, 0);
+                const weekStart = week[0]?.dateStr ?? '';
+                const weekEnd = week[6]?.dateStr ?? '';
+                const weekSummary = weekStart && weekEnd
+                  ? getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStart,
+                      toDayKey: weekEnd,
+                      includePlannedFallback: true,
+                    })
+                  : null;
+                const weekTopDisciplines = weekSummary
+                  ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
+                  : [];
+
+                return (
+                  <div key={`week-${weekIndex}`} className="contents">
+                    {week.map((day) => (
+                      <AthleteMonthDayCell
+                        key={day.dateStr}
+                        date={day.date}
+                        dateStr={day.dateStr}
+                        dayWeather={day.weather}
+                        items={day.items}
+                        isCurrentMonth={day.isCurrentMonth}
+                        isToday={day.dateStr === todayKey}
+                        athleteTimezone={athleteTimezone}
+                        onDayClick={handleDayClick}
+                        onAddClick={(dateStr) => openCreateDrawer(dateStr)}
+                        canAdd
+                        onItemClick={handleItemIdClick}
+                      />
+                    ))}
+
+                    <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
+                      <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
+                        {weekSummary ? (
+                          <>
+                            {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
+                          </>
+                        ) : (
+                          <>{weekWorkoutCount} workouts</>
+                        )}
+                      </div>
+                      {weekSummary ? (
+                        <>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
+                          {weekTopDisciplines.length ? (
+                            <div className="mt-1 space-y-0.5">
+                              {weekTopDisciplines.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="text-xs text-[var(--muted)]">{weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </MonthGrid>
           )}
         </CalendarShell>

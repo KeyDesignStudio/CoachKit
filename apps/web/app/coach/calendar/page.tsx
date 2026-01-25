@@ -25,7 +25,8 @@ import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { addDaysToDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
+import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
 import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -72,6 +73,9 @@ type CalendarItem = {
     source?: 'MANUAL' | 'STRAVA';
     effectiveStartTimeUtc?: string;
     startTime?: string;
+    durationMinutes?: number | null;
+    distanceKm?: number | null;
+    caloriesKcal?: number | null;
   } | null;
 };
 
@@ -1153,12 +1157,12 @@ export default function CoachCalendarPage() {
       {/* Calendar Grid - Week or Month */}
       {showSkeleton ? (
         <CalendarShell variant={viewMode}>
-          {viewMode === 'week' ? <SkeletonWeekGrid pillsPerDay={3} /> : <SkeletonMonthGrid />}
+          {viewMode === 'week' ? <SkeletonWeekGrid pillsPerDay={3} showSummaryColumn /> : <SkeletonMonthGrid showSummaryColumn />}
         </CalendarShell>
       ) : selectedAthleteIds.size > 0 ? (
         viewMode === 'week' ? (
           <CalendarShell variant="week" data-coach-week-view-version="coach-week-v2">
-            <WeekGrid>
+            <WeekGrid includeSummaryColumn>
               {weekDays.map((day) => {
                 const dateKey = day.date;
                 const isDayToday = dateKey === getTodayDayKey(athleteTimezone);
@@ -1252,42 +1256,168 @@ export default function CoachCalendarPage() {
                   </AthleteWeekDayColumn>
                 );
               })}
+
+              {/* Weekly summary column (desktop: right of Sunday) */}
+              <div className="hidden md:flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden border border-[var(--border-subtle)]">
+                <div className="bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5">
+                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
+                  <p className="text-sm font-medium truncate">Selected athletes</p>
+                </div>
+                <div className="flex flex-col gap-2 p-2">
+                  <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Athletes</div>
+                    <div className="text-sm font-semibold text-[var(--text)]">{selectedAthleteIds.size}</div>
+                  </div>
+
+                  <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
+                    <div className="text-sm font-semibold text-[var(--text)]">
+                      {items.filter((item) => {
+                        const dateKey = getLocalDayKey(item.date, athleteTimezone);
+                        if (dateKey < weekStartKey || dateKey > addDaysToDayKey(weekStartKey, 6)) return false;
+                        const athleteId = item.athleteId ?? '';
+                        return selectedAthleteIds.has(athleteId);
+                      }).length}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const toDayKey = addDaysToDayKey(weekStartKey, 6);
+                    const summary = getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStartKey,
+                      toDayKey,
+                      includePlannedFallback: true,
+                      filter: (it) => selectedAthleteIds.has((it as any).athleteId ?? ''),
+                    });
+                    const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
+
+                    return (
+                      <>
+                        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
+                          <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
+                            {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
+                          </div>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
+                        </div>
+
+                        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
+                          {top.length === 0 ? (
+                            <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
+                          ) : (
+                            <div className="mt-1 space-y-1">
+                              {top.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </WeekGrid>
           </CalendarShell>
         ) : (
           <CalendarShell variant="month" data-coach-month-view-version="coach-month-v2">
-            <MonthGrid>
-              {monthDays.map((day) => (
-                <AthleteMonthDayCell
-                  key={day.dateStr}
-                  date={day.date}
-                  dateStr={day.dateStr}
-                  dayWeather={day.weather}
-                  items={day.items as any}
-                  isCurrentMonth={day.isCurrentMonth}
-                  isToday={day.dateStr === getTodayDayKey(athleteTimezone)}
-                  canAdd={selectedAthleteIds.size === 1}
-                  onDayClick={(dateStr) => {
-                    if (isMobile) {
-                      openMobileDaySheet(dateStr);
-                      return;
-                    }
+            <MonthGrid includeSummaryColumn>
+              {Array.from({ length: 6 }, (_, weekIndex) => {
+                const start = weekIndex * 7;
+                const week = monthDays.slice(start, start + 7);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.length, 0);
+                const weekStart = week[0]?.dateStr ?? '';
+                const weekEnd = week[6]?.dateStr ?? '';
+                const weekSummary = weekStart && weekEnd
+                  ? getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStart,
+                      toDayKey: weekEnd,
+                      includePlannedFallback: true,
+                      filter: (it) => selectedAthleteIds.has((it as any).athleteId ?? ''),
+                    })
+                  : null;
+                const weekTopDisciplines = weekSummary
+                  ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
+                  : [];
 
-                    setViewMode('week');
-                    setWeekStartKey(startOfWeekDayKey(dateStr));
-                  }}
-                  onAddClick={(dateStr) => {
-                    if (!singleAthleteId) return;
-                    openCreateDrawerForAthlete(singleAthleteId, dateStr);
-                  }}
-                  onItemClick={(itemId) => {
-                    const found = itemsById.get(itemId);
-                    if (found) {
-                      openEditDrawer(found);
-                    }
-                  }}
-                />
-              ))}
+                return (
+                  <div key={`week-${weekIndex}`} className="contents">
+                    {week.map((day) => (
+                      <AthleteMonthDayCell
+                        key={day.dateStr}
+                        date={day.date}
+                        dateStr={day.dateStr}
+                        dayWeather={day.weather}
+                        items={day.items as any}
+                        isCurrentMonth={day.isCurrentMonth}
+                        isToday={day.dateStr === getTodayDayKey(athleteTimezone)}
+                        canAdd={selectedAthleteIds.size === 1}
+                        onDayClick={(dateStr) => {
+                          if (isMobile) {
+                            openMobileDaySheet(dateStr);
+                            return;
+                          }
+
+                          setViewMode('week');
+                          setWeekStartKey(startOfWeekDayKey(dateStr));
+                        }}
+                        onAddClick={(dateStr) => {
+                          if (!singleAthleteId) return;
+                          openCreateDrawerForAthlete(singleAthleteId, dateStr);
+                        }}
+                        onItemClick={(itemId) => {
+                          const found = itemsById.get(itemId);
+                          if (found) {
+                            openEditDrawer(found);
+                          }
+                        }}
+                      />
+                    ))}
+
+                    <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
+                      <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
+                        {weekSummary ? (
+                          <>
+                            {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
+                          </>
+                        ) : (
+                          <>{weekWorkoutCount} workouts</>
+                        )}
+                      </div>
+                      {weekSummary ? (
+                        <>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
+                          {weekTopDisciplines.length ? (
+                            <div className="mt-1 space-y-0.5">
+                              {weekTopDisciplines.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="text-xs text-[var(--muted)]">{weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </MonthGrid>
           </CalendarShell>
         )

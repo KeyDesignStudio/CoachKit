@@ -6,13 +6,16 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export function SkeletonWeekGrid({
   className,
   pillsPerDay = 3,
+  showSummaryColumn = false,
 }: {
   className?: string;
   pillsPerDay?: number;
+  showSummaryColumn?: boolean;
 }) {
+  const dayNames = showSummaryColumn ? [...DAY_NAMES, 'Summary'] : DAY_NAMES;
   return (
-    <div className={cn('grid grid-cols-7 gap-2', className)} aria-hidden="true">
-      {DAY_NAMES.map((day) => (
+    <div className={cn(`grid ${showSummaryColumn ? 'grid-cols-8' : 'grid-cols-7'} gap-2`, className)} aria-hidden="true">
+      {dayNames.map((day) => (
         <div
           key={day}
           className="flex min-h-[420px] flex-col gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2"

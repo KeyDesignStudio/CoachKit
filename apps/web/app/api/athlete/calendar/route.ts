@@ -32,6 +32,8 @@ const includeRefs = {
       painFlag: true,
       startTime: true,
       source: true,
+      durationMinutes: true,
+      distanceKm: true,
       metricsJson: true,
     },
   },
@@ -100,6 +102,8 @@ export async function GET(request: NextRequest) {
         painFlag: boolean;
         startTime: Date;
         source: string;
+        durationMinutes?: number | null;
+        distanceKm?: number | null;
         metricsJson?: any;
       }>;
 
@@ -114,6 +118,14 @@ export async function GET(request: NextRequest) {
             painFlag: latest.painFlag,
             source: latest.source,
             effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
+            durationMinutes: latest.durationMinutes ?? null,
+            distanceKm: latest.distanceKm ?? null,
+            caloriesKcal:
+              typeof latest.metricsJson?.strava?.caloriesKcal === 'number'
+                ? latest.metricsJson.strava.caloriesKcal
+                : typeof latest.metricsJson?.strava?.calories === 'number'
+                  ? latest.metricsJson.strava.calories
+                  : null,
             // DEV-ONLY DEBUG — Strava time diagnostics
             // Never enabled in production. Do not rely on this data.
             debug:

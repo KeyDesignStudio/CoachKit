@@ -121,6 +121,12 @@ export async function AppHeader() {
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
+  const desktopTextLinks = navLinks.filter(
+    (link) => !link.href.endsWith('/settings') && !link.href.endsWith('/notifications')
+  );
+  const desktopNotificationsLink = navLinks.find((link) => link.href.endsWith('/notifications'));
+  const desktopSettingsLink = navLinks.find((link) => link.href.endsWith('/settings'));
+
   // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
   if (userRole === 'ADMIN') {
     return <AdminHeader />;
@@ -234,27 +240,35 @@ export async function AppHeader() {
           <div className="flex items-center gap-3 md:gap-4">
             {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
-                {navLinks.map((link) =>
-                  link.href.endsWith('/settings') ? (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      aria-label="Settings"
-                      className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-                    >
-                      <Icon name="settings" size="md" className="text-[var(--muted)]" />
-                      <span className="sr-only">Settings</span>
-                    </Link>
-                  ) : (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}
-                    >
-                      {link.label}
-                    </Link>
-                  )
-                )}
+                {desktopTextLinks.map((link) => (
+                  <Link key={link.href} href={link.href} className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}>
+                    {link.label}
+                  </Link>
+                ))}
+
+                {desktopNotificationsLink ? (
+                  <Link
+                    key={desktopNotificationsLink.href}
+                    href={desktopNotificationsLink.href}
+                    aria-label="Notifications"
+                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                  >
+                    <Icon name="inbox" size="md" className="text-[var(--muted)]" />
+                    <span className="sr-only">Notifications</span>
+                  </Link>
+                ) : null}
+
+                {desktopSettingsLink ? (
+                  <Link
+                    key={desktopSettingsLink.href}
+                    href={desktopSettingsLink.href}
+                    aria-label="Settings"
+                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                  >
+                    <Icon name="settings" size="md" className="text-[var(--muted)]" />
+                    <span className="sr-only">Settings</span>
+                  </Link>
+                ) : null}
               </nav>
             ) : null}
 

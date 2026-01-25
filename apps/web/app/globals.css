@@ -108,6 +108,16 @@ a {
   background: rgba(47, 104, 255, 0.25);
 }
 
+@keyframes coachkit-loader-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
 .glass {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);

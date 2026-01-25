@@ -2,9 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-const FADE_IN_DELAY_MS = 80;
-const FADE_IN_DURATION_MS = 180;
-const FADE_OUT_DURATION_MS = 160;
+const FADE_IN_DELAY_MS = 120;
+const FADE_IN_DURATION_MS = 650;
+const FADE_OUT_DURATION_MS = 520;
 
 export function FullScreenLogoLoader() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -105,7 +105,12 @@ export function FullScreenLogoLoader() {
         <img
           src="/brand/coachkit-logo.png"
           alt=""
-          className="h-[300px] w-auto max-w-[75vw] select-none object-contain"
+          className={
+            'h-[300px] w-auto max-w-[75vw] select-none object-contain ' +
+            (reduceMotion
+              ? 'opacity-25'
+              : 'opacity-25 animate-[coachkit-loader-breathe_4.5s_ease-in-out_infinite]')
+          }
         />
       </picture>
     </div>
