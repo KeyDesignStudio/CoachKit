@@ -73,6 +73,7 @@ type CalendarItem = {
     source?: 'MANUAL' | 'STRAVA';
     effectiveStartTimeUtc?: string;
     startTime?: string;
+    confirmedAt?: string | null;
     durationMinutes?: number | null;
     distanceKm?: number | null;
     caloriesKcal?: number | null;

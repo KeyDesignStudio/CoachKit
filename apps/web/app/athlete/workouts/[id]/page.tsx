@@ -22,6 +22,7 @@ import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PolylineRouteMap } from '@/components/workouts/PolylineRouteMap';
+import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 
 type CompletedActivity = {
   id: string;
@@ -205,7 +206,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const stravaMovingTimeSec = (strava.movingTimeSec ?? strava.moving_time) as number | undefined;
   const stravaElapsedTimeSec = (strava.elapsedTimeSec ?? strava.elapsed_time) as number | undefined;
   const stravaElevationGainM = (strava.totalElevationGainM ?? strava.total_elevation_gain) as number | undefined;
-  const stravaCaloriesKcal = (strava.caloriesKcal ?? strava.calories) as number | undefined;
+  const stravaCaloriesKcal = getStravaCaloriesKcal(strava) ?? undefined;
   const stravaCadenceRpm = (strava.averageCadenceRpm ?? strava.average_cadence) as number | undefined;
 
   const stravaActivity = (strava.activity ?? strava) as Record<string, any>;

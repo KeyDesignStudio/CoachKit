@@ -10,6 +10,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
 import { formatUtcDayKey } from '@/lib/day-key';
+import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,7 @@ const includeRefs = {
       id: true,
       painFlag: true,
       startTime: true,
+      confirmedAt: true,
       source: true,
       durationMinutes: true,
       distanceKm: true,
@@ -103,6 +105,7 @@ export async function GET(request: NextRequest) {
         id: string;
         painFlag: boolean;
         startTime: Date;
+        confirmedAt?: Date | null;
         source: string;
         durationMinutes?: number | null;
         distanceKm?: number | null;
@@ -120,15 +123,11 @@ export async function GET(request: NextRequest) {
             id: metricsCompletion.id,
             painFlag,
             source: metricsCompletion.source,
+            confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
             effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
             durationMinutes: metricsCompletion.durationMinutes ?? null,
             distanceKm: metricsCompletion.distanceKm ?? null,
-            caloriesKcal:
-              typeof metricsCompletion.metricsJson?.strava?.caloriesKcal === 'number'
-                ? metricsCompletion.metricsJson.strava.caloriesKcal
-                : typeof metricsCompletion.metricsJson?.strava?.calories === 'number'
-                  ? metricsCompletion.metricsJson.strava.calories
-                  : null,
+            caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
             // DEV-ONLY DEBUG — Strava time diagnostics
             // Never enabled in production. Do not rely on this data.
             debug:

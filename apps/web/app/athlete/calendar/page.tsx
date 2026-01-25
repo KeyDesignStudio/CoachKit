@@ -66,6 +66,7 @@ interface CalendarItem {
     painFlag: boolean;
     source: 'MANUAL' | 'STRAVA';
     effectiveStartTimeUtc: string;
+    confirmedAt?: string | null;
     durationMinutes?: number | null;
     distanceKm?: number | null;
     caloriesKcal?: number | null;

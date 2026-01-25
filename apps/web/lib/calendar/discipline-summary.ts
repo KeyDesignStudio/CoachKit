@@ -16,6 +16,7 @@ type ItemLike = {
   plannedDurationMinutes?: number | null;
   plannedDistanceKm?: number | null;
   latestCompletedActivity?: {
+    confirmedAt?: string | null;
     durationMinutes?: number | null;
     distanceKm?: number | null;
     caloriesKcal?: number | null;
@@ -93,7 +94,7 @@ export function getRangeDisciplineSummary(params: {
     const completion = item.latestCompletedActivity ?? null;
     const durationFromCompletion = safeNumber(completion?.durationMinutes);
     const distanceFromCompletion = safeNumber(completion?.distanceKm);
-    const caloriesFromCompletion = safeNumber(completion?.caloriesKcal);
+    const caloriesFromCompletion = completion?.confirmedAt ? safeNumber(completion?.caloriesKcal) : null;
 
     const durationFromPlan = includePlannedFallback ? safeNumber(item.plannedDurationMinutes) : null;
     const distanceFromPlan = includePlannedFallback ? safeNumber(item.plannedDistanceKm) : null;
