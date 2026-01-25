@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { PrismaClient } from '@prisma/client';
+import crypto from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+
+const prisma = new PrismaClient();
 
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE') {
   await page.context().addCookies([
@@ -20,6 +24,10 @@ function screenshotPath(testInfo: any, fileName: string) {
 }
 
 test.describe('Mobile screenshots', () => {
+  test.afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
   test('captures coach calendar week, month, and menu drawer', async ({ page }, testInfo) => {
     await mkdir(path.join(process.cwd(), 'screenshots', String(testInfo.project.name || 'unknown')), { recursive: true });
 
@@ -76,5 +84,87 @@ test.describe('Mobile screenshots', () => {
         // (This assertion is conditional on seeded data.)
       }
     }
+  });
+
+  test('captures athlete + coach dashboards, athlete settings, and workout detail', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'iphone16pro', 'Dashboard/settings screenshots are captured only for iphone16pro.');
+
+    await mkdir(path.join(process.cwd(), 'screenshots', String(testInfo.project.name || 'unknown')), { recursive: true });
+
+    // Ensure dev users + athlete profile exist (auth disabled uses role cookie to pick these).
+    await prisma.user.upsert({
+      where: { id: 'dev-coach' },
+      update: { role: 'COACH' },
+      create: {
+        id: 'dev-coach',
+        email: 'dev-coach@local',
+        role: 'COACH',
+        timezone: 'UTC',
+        authProviderId: 'dev-coach',
+      },
+    });
+
+    await prisma.user.upsert({
+      where: { id: 'dev-athlete' },
+      update: { role: 'ATHLETE', timezone: 'Australia/Brisbane' },
+      create: {
+        id: 'dev-athlete',
+        email: 'dev-athlete@local',
+        role: 'ATHLETE',
+        timezone: 'Australia/Brisbane',
+        authProviderId: 'dev-athlete',
+      },
+    });
+
+    await prisma.athleteProfile.upsert({
+      where: { userId: 'dev-athlete' },
+      update: { coachId: 'dev-coach', disciplines: ['RUN'] },
+      create: {
+        userId: 'dev-athlete',
+        coachId: 'dev-coach',
+        disciplines: ['RUN'],
+      },
+    });
+
+    const unique = crypto.randomUUID();
+    const workout = await prisma.calendarItem.create({
+      data: {
+        athleteId: 'dev-athlete',
+        coachId: 'dev-coach',
+        date: new Date('2026-01-24T00:00:00.000Z'),
+        plannedStartTimeLocal: '06:30',
+        plannedDurationMinutes: 50,
+        plannedDistanceKm: 10,
+        origin: 'PLAYWRIGHT',
+        sourceActivityId: `pw-${unique}-workout-detail`,
+        discipline: 'RUN',
+        title: 'Screenshot Run',
+        workoutDetail: 'Easy run. Keep it conversational.',
+        status: 'PLANNED',
+      },
+      select: { id: true },
+    });
+
+    // Athlete dashboard
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(testInfo, 'athlete-dashboard.png'), fullPage: true });
+
+    // Athlete workout detail
+    await page.goto(`/athlete/workouts/${workout.id}`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Screenshot Run' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(testInfo, 'athlete-workout-detail.png'), fullPage: true });
+
+    // Athlete settings
+    await page.goto('/athlete/settings', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Integrations' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(testInfo, 'athlete-settings.png'), fullPage: true });
+
+    // Coach dashboard
+    await setRoleCookie(page, 'COACH');
+    await page.goto('/coach/dashboard', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Coach Console' })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(testInfo, 'coach-dashboard.png'), fullPage: true });
   });
 });

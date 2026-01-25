@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
@@ -482,7 +483,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         <div className="grid grid-cols-1 gap-4 min-w-0 lg:grid-cols-2 lg:grid-rows-2">
           {/* WORKOUT PLAN (top-left) */}
           <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-1" data-athlete-workout-quadrant="workout-plan">
-            <p className={uiLabel}>WORKOUT PLAN</p>
+            <BlockTitle>Workout Plan</BlockTitle>
 
             <div className="mt-2 flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -626,7 +627,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-2" data-athlete-workout-quadrant="weather">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className={uiLabel}>WEATHER</p>
+                <BlockTitle>Weather</BlockTitle>
 
                 {weatherLoading ? (
                   <div className="mt-2 animate-pulse">
@@ -769,7 +770,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           {item.status === 'PLANNED' || isDraftStrava ? (
             <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
               <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
-                <p className={uiLabel}>ATHLETE LOG</p>
+                <BlockTitle>Athlete Log</BlockTitle>
                 {isDraftStrava ? (
                   <p className="mt-1 text-xs text-[var(--muted)]">Add notes/pain and confirm to share with your coach</p>
                 ) : (
@@ -855,7 +856,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             </Card>
           ) : (
             <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
-              <p className={uiLabel}>ATHLETE LOG</p>
+              <BlockTitle>Athlete Log</BlockTitle>
 
               <div className="mt-3 space-y-3">
                 {latestNoteToCoach ? (

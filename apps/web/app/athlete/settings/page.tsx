@@ -8,6 +8,7 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
@@ -242,7 +243,7 @@ export default function AthleteSettingsPage() {
           <Card className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-1">
-                <h2 className="text-lg font-semibold">Timezone</h2>
+                <BlockTitle>Timezone</BlockTitle>
                 <p className="text-sm text-[var(--muted)]">Times and day-boundaries (missed) use this timezone.</p>
               </div>
               <Badge className="text-[var(--muted)]">{getTimezoneLabel(timezone)}</Badge>
@@ -281,7 +282,7 @@ export default function AthleteSettingsPage() {
         <div className="min-w-0">
           <Card className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold">Weather location</h2>
+              <BlockTitle>Weather location</BlockTitle>
               <p className="text-sm text-[var(--muted)]">Used for weather. Search by place name or use your current location.</p>
             </div>
 
@@ -292,7 +293,7 @@ export default function AthleteSettingsPage() {
         <div className="min-w-0">
           <Card className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold">Calendar Sync</h2>
+              <BlockTitle>Calendar Sync</BlockTitle>
               <p className="text-sm text-[var(--muted)]">
                 Subscribe to your CoachKit workouts via a private iCal link (read-only). If you share the link, anyone with it can view your calendar.
               </p>
@@ -328,7 +329,7 @@ export default function AthleteSettingsPage() {
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-semibold">Strava</h2>
+                    <BlockTitle>Strava</BlockTitle>
                   <Badge className={connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>{connected ? 'Connected' : 'Not connected'}</Badge>
                 </div>
                 <p className="text-sm text-[var(--muted)]">Connect Strava to sync completed activities into CoachKit.</p>
