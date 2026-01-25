@@ -23,8 +23,45 @@
   --ring: #91b4ff;
 }
 
+/* Manual override (persisted via localStorage + applied to <html data-theme="…">). */
+:root[data-theme='light'] {
+  --bg-page: #EEF0F3;
+  --bg-surface: #F6F7F9;
+  --bg-structure: #E6E9ED;
+  --bg-card: #FFFFFF;
+  --border-subtle: #fff;
+
+  --today-border: rgba(59, 130, 246, 0.40);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #0c1222;
+  --muted: #5a647d;
+  --primary: #2f68ff;
+  --ring: #91b4ff;
+}
+
+:root[data-theme='dark'] {
+  --bg-page: #05060e;
+  --bg-surface: rgba(13, 17, 35, 0.75);
+  --bg-structure: rgba(18, 24, 45, 0.65);
+  --bg-card: rgba(18, 24, 45, 0.85);
+  --border-subtle: #fff;
+
+  --today-border: rgba(158, 193, 255, 0.50);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #f8fbff;
+  --muted: #94a3b8;
+  --primary: #7ba6ff;
+  --ring: #9ec1ff;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     /* Preserve existing dark-mode behavior (no new feature work) */
     --bg-page: #05060e;
     --bg-surface: rgba(13, 17, 35, 0.75);

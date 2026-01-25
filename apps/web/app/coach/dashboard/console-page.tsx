@@ -822,7 +822,13 @@ export default function CoachDashboardConsolePage() {
         </div>
       </section>
 
-      <ReviewDrawer item={selectedItem} onClose={() => setSelectedItem(null)} onMarkReviewed={markReviewed} showSessionTimes={false} />
+      <ReviewDrawer
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        onMarkReviewed={markReviewed}
+        showSessionTimes={false}
+        timeZone={coachTimeZone}
+      />
     </>
   );
 }

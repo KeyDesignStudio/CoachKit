@@ -34,6 +34,38 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-[var(--bg-page)] text-[var(--text)] overflow-x-hidden">
         <Script
+          id="coachkit-theme-preference"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  try {
+    const key = 'coachkit-theme';
+    const pref = localStorage.getItem(key);
+    const root = document.documentElement;
+
+    if (pref === 'dark' || pref === 'light') {
+      root.dataset.theme = pref;
+      if (pref === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+      root.style.colorScheme = pref;
+      return;
+    }
+
+    // system
+    root.classList.remove('dark');
+    root.style.colorScheme = '';
+    try {
+      delete root.dataset.theme;
+    } catch {
+      root.removeAttribute('data-theme');
+    }
+  } catch {
+    // ignore
+  }
+})();`,
+          }}
+        />
+        <Script
           id="coachkit-build-marker"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{

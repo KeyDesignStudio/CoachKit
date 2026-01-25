@@ -11,6 +11,8 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { Select } from '@/components/ui/Select';
+import { useThemePreference } from '@/components/theme-preference';
 
 type SaveState =
   | { kind: 'idle' }
@@ -76,6 +78,8 @@ export default function CoachSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const { branding, loading: brandingLoading, error: brandingError, refresh: refreshBranding } = useBranding();
+
+  const { preference: themePreference, setThemePreference } = useThemePreference();
   const showDevBrandingSampleButton =
     process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_SHOW_DEV_PAGES === 'true';
 
@@ -509,6 +513,19 @@ export default function CoachSettingsPage() {
           </div>
           {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
           {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
+        </Card>
+
+        <Card className="w-full">
+          <h2 className="m-0 text-base font-semibold text-[var(--text)]">Appearance</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
+
+          <div className="mt-3">
+            <Select value={themePreference} onChange={(e) => setThemePreference(e.target.value as any)} aria-label="Theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </Select>
+          </div>
         </Card>
       </div>
     </section>

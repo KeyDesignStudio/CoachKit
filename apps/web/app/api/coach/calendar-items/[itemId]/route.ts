@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
-import { CalendarItemStatus } from '@prisma/client';
+import { CalendarItemStatus, CompletionSource } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -9,6 +9,55 @@ import { handleError, success } from '@/lib/http';
 import { ApiError, notFound } from '@/lib/errors';
 import { parseDateOnly } from '@/lib/date';
 import { findCoachTemplate } from '@/lib/templates';
+
+const commentsSelect = {
+  select: {
+    id: true,
+    authorId: true,
+    body: true,
+    createdAt: true,
+    author: {
+      select: {
+        id: true,
+        name: true,
+        role: true,
+      },
+    },
+  },
+  orderBy: { createdAt: 'desc' as const },
+  take: 10,
+};
+
+const completedActivitiesSelect = {
+  select: {
+    id: true,
+    durationMinutes: true,
+    distanceKm: true,
+    rpe: true,
+    notes: true,
+    painFlag: true,
+    source: true,
+    confirmedAt: true,
+    metricsJson: true,
+    startTime: true,
+  },
+  orderBy: { startTime: 'desc' as const },
+  take: 1,
+};
+
+function getEffectiveActualStartUtc(completion: {
+  source: CompletionSource | string;
+  startTime: Date;
+  metricsJson?: any;
+}): Date {
+  if (completion.source === CompletionSource.STRAVA) {
+    const candidate = completion.metricsJson?.strava?.startDateUtc;
+    const parsed = candidate ? new Date(candidate) : null;
+    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return completion.startTime;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -192,8 +241,53 @@ export async function GET(
 ) {
   try {
     const { user } = await requireCoach();
-    const item = await ensureCalendarItem(context.params.itemId, user.id);
-    return success({ item });
+    const itemId = context.params.itemId;
+
+    const [item, comments, completedActivities] = await Promise.all([
+      prisma.calendarItem.findFirst({
+        where: { id: itemId, coachId: user.id, deletedAt: null },
+        include: {
+          ...includeRefs,
+          athlete: {
+            select: {
+              user: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      prisma.comment.findMany({
+        where: { calendarItemId: itemId },
+        ...commentsSelect,
+      }),
+      prisma.completedActivity.findMany({
+        where: { calendarItemId: itemId },
+        ...completedActivitiesSelect,
+      }),
+    ]);
+
+    if (!item) {
+      throw notFound('Calendar item not found.');
+    }
+
+    const completed = completedActivities?.[0] as
+      | ({ source: string; startTime: Date; metricsJson?: any } & Record<string, any>)
+      | undefined;
+
+    const completedWithEffective = completed
+      ? {
+          ...completed,
+          effectiveStartTimeUtc: getEffectiveActualStartUtc(completed).toISOString(),
+        }
+      : undefined;
+
+    return success({
+      item: {
+        ...item,
+        athlete: item.athlete?.user ?? null,
+        comments: comments ?? [],
+        completedActivities: completedWithEffective ? [completedWithEffective] : [],
+      },
+    });
   } catch (error) {
     return handleError(error);
   }
