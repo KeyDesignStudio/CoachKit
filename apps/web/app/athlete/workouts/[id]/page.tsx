@@ -20,6 +20,7 @@ import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { PolylineRouteMap } from '@/components/workouts/PolylineRouteMap';
 
 type CompletedActivity = {
   id: string;
@@ -99,10 +100,11 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const perfDataMarked = useRef(false);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
-  const isStravaCompletion = latestCompletion?.source === 'STRAVA';
+  const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
+  const isStravaCompletion = latestCompletion?.source === 'STRAVA' || hasStravaMetrics;
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const showStravaBadge = Boolean(isDraftStrava || isStravaCompletion);
-  const hasStravaData = Boolean(isDraftStrava || isStravaCompletion);
+  const hasStravaData = Boolean(isDraftStrava || hasStravaMetrics);
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
   const tz = user?.timezone || 'Australia/Brisbane';
@@ -709,10 +711,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   <FieldRow label="Elevation gain" value={elevationGainLabel} />
                   <FieldRow label="Calories" value={caloriesLabel} />
                   <FieldRow label="City" value={stravaLocationCity} />
-                  <FieldRow
-                    label="Polyline"
-                    value={stravaSummaryPolyline ? `${stravaSummaryPolyline.length} chars` : null}
-                  />
+                  <FieldRow label="Route" value={stravaSummaryPolyline ? 'Available' : null} />
                 </div>
 
                 {/* Column 3: Effort & Load */}
@@ -755,6 +754,13 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                     </div>
                   ) : null}
                 </div>
+
+                {stravaSummaryPolyline ? (
+                  <div className="lg:col-span-4">
+                    <p className="text-xs font-medium text-[var(--muted)] mb-2">Route map</p>
+                    <PolylineRouteMap polyline={stravaSummaryPolyline} />
+                  </div>
+                ) : null}
               </div>
             </Card>
           ) : null}

@@ -123,7 +123,9 @@ export async function GET(request: NextRequest) {
 
     prof.mark('db');
 
-    // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
+    // Format items to include latestCompletedActivity.
+    // Prefer STRAVA for metrics (duration/distance/calories) because manual completions
+    // are often used for notes/pain flags on top of a synced activity.
     const formattedItems = items.map((item: any) => {
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
@@ -137,32 +139,33 @@ export async function GET(request: NextRequest) {
 
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
-      const latest = latestManual ?? latestStrava;
+      const metricsCompletion = latestStrava ?? latestManual;
+      const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
 
-      const latestCompletedActivity = latest
+      const latestCompletedActivity = metricsCompletion
         ? {
-            id: latest.id,
-            painFlag: latest.painFlag,
-            source: latest.source,
-            effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
-            durationMinutes: latest.durationMinutes ?? null,
-            distanceKm: latest.distanceKm ?? null,
+            id: metricsCompletion.id,
+            painFlag,
+            source: metricsCompletion.source,
+            effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
+            durationMinutes: metricsCompletion.durationMinutes ?? null,
+            distanceKm: metricsCompletion.distanceKm ?? null,
             caloriesKcal:
-              typeof latest.metricsJson?.strava?.caloriesKcal === 'number'
-                ? latest.metricsJson.strava.caloriesKcal
-                : typeof latest.metricsJson?.strava?.calories === 'number'
-                  ? latest.metricsJson.strava.calories
+              typeof metricsCompletion.metricsJson?.strava?.caloriesKcal === 'number'
+                ? metricsCompletion.metricsJson.strava.caloriesKcal
+                : typeof metricsCompletion.metricsJson?.strava?.calories === 'number'
+                  ? metricsCompletion.metricsJson.strava.calories
                   : null,
             // DEV-ONLY DEBUG — Strava time diagnostics
             // Never enabled in production. Do not rely on this data.
             debug:
-              includeDebug && latest.source === CompletionSource.STRAVA
+              includeDebug && metricsCompletion.source === CompletionSource.STRAVA
                 ? {
                     stravaTime: {
                       tzUsed: athleteTimezone,
-                      stravaStartDateUtcRaw: latest.metricsJson?.strava?.startDateUtc ?? null,
-                      stravaStartDateLocalRaw: latest.metricsJson?.strava?.startDateLocal ?? null,
-                      storedStartTimeUtc: latest.startTime?.toISOString?.() ?? null,
+                      stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
+                      stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
+                      storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
                     },
                   }
                 : undefined,

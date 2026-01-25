@@ -11,6 +11,7 @@ import { Icon } from '@/components/ui/Icon';
 import { uiLabel } from '@/components/ui/typography';
 import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatusIndicator';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
+import { PolylineRouteMap } from '@/components/workouts/PolylineRouteMap';
 
 type CommentRecord = {
   id: string;
@@ -155,9 +156,10 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
 
   const latestCompletion = detail?.completedActivities?.[0] ?? null;
   const isDraftSynced = detail?.status === 'COMPLETED_SYNCED_DRAFT';
-  const isStravaCompletion = latestCompletion?.source === 'STRAVA';
+  const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
+  const isStravaCompletion = latestCompletion?.source === 'STRAVA' || hasStravaMetrics;
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
-  const hasStravaData = Boolean(isDraftStrava || isStravaCompletion);
+  const hasStravaData = Boolean(isDraftStrava || hasStravaMetrics);
   const showStravaBadge = Boolean(hasStravaData);
 
   const statusLabel = isDraftStrava ? 'Strava detected' : detail?.status ? detail.status.replace(/_/g, ' ') : '';
@@ -475,7 +477,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
                       <FieldRow label="Elevation gain" value={elevationGainLabel} />
                       <FieldRow label="Calories" value={caloriesLabel} />
                       <FieldRow label="City" value={stravaLocationCity} />
-                      <FieldRow label="Polyline" value={stravaSummaryPolyline ? `${stravaSummaryPolyline.length} chars` : null} />
+                      <FieldRow label="Route" value={stravaSummaryPolyline ? 'Available' : null} />
                     </div>
 
                     <div className="min-w-0 space-y-3">
@@ -522,6 +524,13 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
                         </div>
                       ) : null}
                     </div>
+
+                    {stravaSummaryPolyline ? (
+                      <div className="lg:col-span-4">
+                        <p className="text-xs font-medium text-[var(--muted)] mb-2">Route map</p>
+                        <PolylineRouteMap polyline={stravaSummaryPolyline} />
+                      </div>
+                    ) : null}
                   </div>
                 </Card>
               ) : null}
