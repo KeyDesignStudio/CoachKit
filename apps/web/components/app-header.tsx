@@ -19,8 +19,8 @@ const DESKTOP_NAV_LINK_CLASS =
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
   { href: '/coach/notifications', label: 'Notifications', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
@@ -253,7 +253,7 @@ export async function AppHeader() {
                     aria-label="Notifications"
                     className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
                   >
-                    <Icon name="inbox" size="md" className="text-[var(--muted)]" />
+                    <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
                     <span className="sr-only">Notifications</span>
                   </Link>
                 ) : null}
@@ -265,7 +265,7 @@ export async function AppHeader() {
                     aria-label="Settings"
                     className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
                   >
-                    <Icon name="settings" size="md" className="text-[var(--muted)]" />
+                    <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
                     <span className="sr-only">Settings</span>
                   </Link>
                 ) : null}
