@@ -47,7 +47,7 @@ export async function POST(
       }
 
       if (item.status === CalendarItemStatus.SKIPPED) {
-        throw new ApiError(409, 'ALREADY_SKIPPED', 'Skipped workouts cannot be completed.');
+        throw new ApiError(409, 'ALREADY_SKIPPED', 'Missed workouts cannot be completed.');
       }
 
       const existingManual = await tx.completedActivity.findFirst({

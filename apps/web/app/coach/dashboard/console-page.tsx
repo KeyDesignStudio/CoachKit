@@ -243,7 +243,7 @@ function ReviewInboxRow({
   const displayDateKey = isCompleted ? (completedDateKey ?? plannedDateKey) : plannedDateKey;
   const dateLabel = displayDateKey ? formatInboxDateLabel(displayDateKey, timeZone) : null;
 
-  const statusText = item.status
+  const statusText = (item.status === 'SKIPPED' ? 'MISSED' : item.status)
     .replace('COMPLETED_', 'COMPLETED ')
     .replace(/_/g, ' ')
     .trim();
@@ -285,7 +285,7 @@ function ReviewInboxRow({
           <div className="flex items-center gap-1">
             {item.hasAthleteComment ? <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} /> : null}
             {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
-            {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Skipped" aria-hidden={false} /> : null}
+            {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Missed" aria-hidden={false} /> : null}
           </div>
         </div>
       </button>
@@ -550,7 +550,7 @@ export default function CoachDashboardConsolePage() {
 
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <AlertStripItem
-                  label="Skipped workouts"
+                  label="Missed workouts"
                   count={data?.attention.skippedWorkouts ?? 0}
                   active={inboxPreset === 'SKIPPED'}
                   onClick={() => toggleInboxPreset('SKIPPED')}
@@ -569,7 +569,7 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 order-1 md:order-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
-              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
+              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
               <div className="flex items-end justify-between gap-3 mb-4">
                 <BlockTitle>Make your selection</BlockTitle>
@@ -653,18 +653,15 @@ export default function CoachDashboardConsolePage() {
 
                 <div className="md:col-start-2 md:row-start-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                  <div className="min-h-[44px] flex items-center">
-                    <div className="text-sm font-semibold text-[var(--text)]">
+                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3">
+                    <div className="text-sm font-medium text-[var(--muted)]">
                       {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                     </div>
                   </div>
                 </div>
 
-                {/* Row 3 gap */}
-                <div className="col-span-1 md:col-span-2 h-1 md:h-2" aria-hidden="true" />
-
                 {/* Row 4 */}
-                <div className="md:col-span-2 flex items-center justify-end gap-3">
+                <div className="md:col-span-2 flex items-center justify-end gap-3 mt-1">
                   <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
                     <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                     Refresh

@@ -366,7 +366,7 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
                     checked={form.optionalFlag}
                     onChange={(e) => setForm({ ...form, optionalFlag: e.target.checked })}
                   />
-                  <span>Optional (athletes can skip)</span>
+                  <span>Optional (athletes can mark as missed)</span>
                 </label>
               </div>
             </div>

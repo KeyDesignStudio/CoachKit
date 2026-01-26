@@ -64,7 +64,7 @@ function getStatusBarConfig(params: {
   }
 
   if (isSkipped) {
-    return { iconName: 'skipped', ariaLabel: 'Skipped', bgClassName: 'bg-rose-600/45', title: null };
+    return { iconName: 'skipped', ariaLabel: 'Missed', bgClassName: 'bg-rose-600/45', title: null };
   }
 
   if (isMissed) {

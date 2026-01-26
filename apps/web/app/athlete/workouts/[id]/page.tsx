@@ -464,7 +464,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       setCommentDraft('');
       await loadData(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to skip workout.');
+      setError(err instanceof Error ? err.message : 'Failed to mark workout missed.');
     }
   };
 
@@ -812,7 +812,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   </label>
 
                   <p className="text-xs text-[var(--muted)]">
-                    {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or skip'}
+                    {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or mark missed'}
                   </p>
                 </div>
 
@@ -826,7 +826,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                       className="min-h-[44px] w-full sm:w-auto"
                       disabled={submitting}
                     >
-                      Skip
+                      Mark missed
                     </Button>
                   ) : null}
                   <Button
