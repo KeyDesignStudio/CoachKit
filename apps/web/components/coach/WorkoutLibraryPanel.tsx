@@ -13,7 +13,7 @@ type IntensityCategory = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | 'RPE' | 'OTHER';
 
 type SortKey = 'relevance' | 'newest' | 'popular' | 'durationAsc' | 'durationDesc' | 'intensityAsc' | 'intensityDesc' | 'titleAsc';
 
-type LibraryListItem = {
+export type LibraryListItem = {
   id: string;
   title: string;
   discipline: Discipline;
@@ -39,7 +39,7 @@ type LibraryListResponse = {
   pageSize: number;
 };
 
-type LibraryDetailSession = Omit<LibraryListItem, 'favorite'> & {
+export type LibraryDetailSession = Omit<LibraryListItem, 'favorite'> & {
   notes: string | null;
   workoutStructure: unknown | null;
   createdAt: string;

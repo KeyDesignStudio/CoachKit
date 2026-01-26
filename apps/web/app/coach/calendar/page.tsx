@@ -31,6 +31,9 @@ import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
+import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
+import { WorkoutLibraryPanel, LibraryListItem, LibraryDetailSession } from '@/components/coach/WorkoutLibraryPanel';
+import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import type { WeatherSummary } from '@/lib/weather-model';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
@@ -229,6 +232,21 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+
+  // Context Menu & Clipboard
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: Position;
+    type: 'session' | 'day';
+    data: any;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'session', data: null });
+
+  const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
+  
+  // Library Panel Side Sheet
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryTargetDate, setLibraryTargetDate] = useState<string | null>(null);
+  const [libraryTargetAthleteId, setLibraryTargetAthleteId] = useState<string | null>(null);
 
   const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
   const [mobileDaySheetDateStr, setMobileDaySheetDateStr] = useState<string>('');
@@ -704,6 +722,101 @@ export default function CoachCalendarPage() {
     setTitleMessage('');
   };
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, type: 'session' | 'day', data: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      type,
+      data,
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleMenuAction = useCallback(async (action: ContextMenuAction) => {
+    const { type, data } = contextMenu;
+    closeContextMenu();
+
+    if (action === 'copy' && type === 'session') {
+      setClipboard(data);
+    } else if (action === 'paste' && type === 'day') {
+      if (!clipboard) return;
+      
+      const targetAthleteId = data.athleteId || effectiveAthleteId || singleAthleteId;
+      if (!targetAthleteId) {
+        setError('Select an athlete to paste workout.');
+        return;
+      }
+      
+      // Spec: No cross-athlete paste.
+      if (clipboard.athleteId && clipboard.athleteId !== targetAthleteId) {
+        setError('Cannot paste session: restricted to same athlete.');
+        return;
+      }
+
+      const payload = {
+         ...clipboard,
+         id: undefined,
+         date: data.date,
+         athleteId: targetAthleteId,
+      };
+
+      try {
+        setLoading(true);
+        await request('/api/coach/calendar-items', { method: 'POST', data: payload });
+        await loadCalendar();
+      } catch(e) {
+         setError(e instanceof Error ? e.message : 'Failed to paste session');
+      } finally {
+         setLoading(false);
+      }
+
+    } else if (action === 'library-insert' && type === 'day') {
+       setLibraryTargetDate(data.date);
+       setLibraryTargetAthleteId(data.athleteId || effectiveAthleteId);
+       setLibraryOpen(true);
+    }
+  }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
+
+  const handleLibraryTemplateUse = useCallback(async (item: LibraryDetailSession) => {
+      if (!libraryTargetDate) return;
+      const targetAthleteId = libraryTargetAthleteId || effectiveAthleteId || singleAthleteId;
+       if (!targetAthleteId) {
+        setError('Select an athlete.');
+        return;
+      }
+
+      try {
+        const payload = {
+            athleteId: targetAthleteId,
+            date: libraryTargetDate,
+            discipline: item.discipline,
+            title: item.title,
+            plannedDurationMinutes: Math.round(item.durationSec / 60),
+            workoutDetail: item.description,
+            plannedDistanceKm: item.distanceMeters ? item.distanceMeters / 1000 : undefined,
+            distanceMeters: item.distanceMeters,
+            intensityTarget: item.intensityTarget,
+            equipment: item.equipment,
+            // Spec: Preserve structure (bricks)
+            workoutStructure: (item as any).workoutStructure,
+        };
+
+        setLoading(true);
+        await request('/api/coach/calendar-items', { method: 'POST', data: payload });
+        setLibraryOpen(false);
+        await loadCalendar();
+      } catch(e) {
+         setError(e instanceof Error ? e.message : 'Failed to import template');
+      } finally {
+         setLoading(false);
+      }
+  }, [libraryTargetDate, libraryTargetAthleteId, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
+
   const openCreateDrawerForAthlete = (athleteId: string, date: string) => {
     setDrawerAthleteId(athleteId);
     setSessionForm(emptyForm(date));
@@ -1087,7 +1200,8 @@ export default function CoachCalendarPage() {
               <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <CoachCalendarHelp />
             <Button
               type="button"
               variant="secondary"
@@ -1178,6 +1292,7 @@ export default function CoachCalendarPage() {
                     isEmpty={false}
                     isToday={isDayToday}
                     headerTestId="coach-calendar-date-header"
+                    onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey })}
                   >
                     <div className="flex flex-col">
                       {selected.map((athlete, index) => {
@@ -1202,6 +1317,7 @@ export default function CoachCalendarPage() {
                           <div
                             key={athlete.userId}
                             data-testid="coach-calendar-athlete-row"
+                            onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey, athleteId: athlete.userId })}
                             className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]"
                           >
                             {/* Athlete subheader: always on desktop; on mobile only when stacked */}
@@ -1241,6 +1357,7 @@ export default function CoachCalendarPage() {
                                   }}
                                   timeZone={tz}
                                   onClick={() => openEditDrawer(item)}
+                                  onContextMenu={(e) => handleContextMenu(e, 'session', item)}
                                   showTimeOnMobile={false}
                                   statusIndicatorVariant="bar"
                                 />
@@ -1664,6 +1781,34 @@ export default function CoachCalendarPage() {
           {error && drawerMode !== 'closed' ? <p className="text-xs text-rose-500">{error}</p> : null}
         </div>
       </SessionDrawer>
+
+      {/* Context Menu */}
+      <CalendarContextMenu
+        isOpen={contextMenu.isOpen}
+        position={contextMenu.position}
+        type={contextMenu.type}
+        canPaste={!!clipboard && (!contextMenu.data?.athleteId || clipboard.athleteId === contextMenu.data.athleteId)}
+        onClose={closeContextMenu}
+        onAction={handleMenuAction}
+      />
+
+      {/* Library Panel Drawer */}
+      {libraryOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/25 backdrop-blur-sm transition-all" onClick={() => setLibraryOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-w-md flex flex-col transition-transform duration-300">
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
+               <h2 className="text-lg font-semibold">Library</h2>
+               <Button type="button" variant="ghost" onClick={() => setLibraryOpen(false)}>
+                 <Icon name="close" size="sm" />
+               </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-[var(--bg-card)]">
+               <WorkoutLibraryPanel onUseTemplate={handleLibraryTemplateUse} mode="library" />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Mobile month day bottom sheet */}
       {isMobile && viewMode === 'month' && mobileDaySheetOpen ? (

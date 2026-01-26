@@ -20,6 +20,7 @@ type AthleteWeekDayColumnProps = {
   addButtonTestId?: string;
   density?: 'default' | 'compact';
   children: ReactNode;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
 export function AthleteWeekDayColumn({
@@ -35,6 +36,7 @@ export function AthleteWeekDayColumn({
   addButtonTestId,
   density = 'default',
   children,
+  onContextMenu,
 }: AthleteWeekDayColumnProps) {
   const headerClassName =
     density === 'compact'
@@ -71,6 +73,7 @@ export function AthleteWeekDayColumn({
   return (
     <div
       data-athlete-week-day-card="v2"
+      onContextMenu={onContextMenu}
       className={cn(
         'flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'

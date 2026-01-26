@@ -6,6 +6,8 @@ import { cn } from '@/lib/cn';
 import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { mobilePillGap, mobilePillPadding } from '@/components/calendar/calendarDensity';
 
+import { asStructureSegments, segmentLabel, segmentMeta } from '@/lib/workout-structure';
+
 export type AthleteWeekSessionRowItem = {
   id: string;
   date: string;
@@ -18,6 +20,7 @@ export type AthleteWeekSessionRowItem = {
   status: string;
   title: string;
   workoutDetail?: string | null;
+  workoutStructure?: unknown | null;
   latestCompletedActivity?: {
     painFlag?: boolean;
   } | null;
@@ -26,6 +29,7 @@ export type AthleteWeekSessionRowItem = {
 type AthleteWeekSessionRowProps = {
   item: AthleteWeekSessionRowItem;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   timeZone: string;
   now?: Date;
   variant?: 'default' | 'stacked';
@@ -91,6 +95,7 @@ function getStatusBarConfig(params: {
 export function AthleteWeekSessionRow({
   item,
   onClick,
+  onContextMenu,
   now,
   timeZone,
   variant = 'default',
@@ -100,6 +105,8 @@ export function AthleteWeekSessionRow({
   const theme = getDisciplineTheme(item.discipline as any);
   const effectiveNow = now ?? new Date();
   const disciplineLabel = getDisciplineLabel(item.discipline);
+
+  const segments = item.discipline === 'BRICK' ? asStructureSegments(item.workoutStructure) : null;
 
   const isRecordedFromStrava = item.origin === 'STRAVA' && item.planningStatus === 'UNPLANNED';
   const titleLabel = isRecordedFromStrava
@@ -119,9 +126,17 @@ export function AthleteWeekSessionRow({
         e.stopPropagation();
         onClick();
       }}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          // Do not e.preventDefault() here if we want parent to handle or if onContextMenu handles it.
+          // But usually we want to stop propagation.
+          // The passed onContextMenu from page calls preventDefault/stopPropagation.
+          onContextMenu(e);
+        }
+      }}
       data-athlete-week-session-row="v2"
       className={cn(
-        'w-full cursor-pointer text-left min-h-[44px] relative overflow-hidden',
+        'w-full cursor-pointer text-left relative overflow-hidden flex flex-col',
         isStacked
           ? cn(
               'bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded',
@@ -140,7 +155,7 @@ export function AthleteWeekSessionRow({
     >
       <div
         className={cn(
-          'flex items-center min-w-0 h-full',
+          'flex items-center min-w-0 w-full min-h-[44px]',
           mobilePillGap,
           mobilePillPadding,
           statusIndicatorVariant === 'bar' ? 'pr-3 md:pr-4' : ''
@@ -153,7 +168,7 @@ export function AthleteWeekSessionRow({
         </div>
 
         {/* 2-3) Time + title */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 py-1.5">
           <p
             className={cn(
               'text-[10px] leading-none text-[var(--muted)] whitespace-nowrap',
@@ -188,6 +203,37 @@ export function AthleteWeekSessionRow({
           </div>
         ) : null}
       </div>
+
+      {segments && segments.length > 0 && (
+        <div className="w-full flex flex-col border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+          {segments.map((segment, idx) => {
+            const label = segmentLabel(segment);
+            const meta = segmentMeta(segment);
+            const type = (segment.type as string)?.toUpperCase();
+            let icon: IconName = 'disciplineOther';
+            if (type === 'RUN' || type === 'TREADMILL') icon = 'disciplineRun';
+            if (type === 'BIKE' || type === 'INDOOR_BIKE') icon = 'disciplineBike';
+            if (type === 'SWIM') icon = 'disciplineSwim';
+            if (type === 'STRENGTH') icon = 'disciplineStrength';
+            if (type === 'REST') icon = 'disciplineRest';
+            
+            const notes = typeof segment.notes === 'string' ? segment.notes.trim() : null;
+
+            return (
+              <div key={idx} className="flex items-center gap-2 px-2 py-1 min-w-0 border-b last:border-0 border-[var(--border-subtle)]/50">
+                 <Icon name={icon} size="xs" className="text-[var(--muted)] flex-shrink-0" />
+                 <div className="min-w-0 flex-1 flex flex-col">
+                   <div className="flex justify-between gap-1">
+                      <span className="text-[10px] font-medium text-[var(--text)] truncate">{label}</span>
+                      {meta && <span className="text-[9px] text-[var(--muted)] tabular-nums truncate flex-shrink-0">{meta}</span>}
+                   </div>
+                   {notes && <span className="text-[9px] text-[var(--muted)] truncate opacity-80">{notes}</span>}
+                 </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {statusIndicatorVariant === 'bar' ? (
         <div
