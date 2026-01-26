@@ -36,6 +36,7 @@ import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/c
 import { WorkoutLibraryPanel, LibraryListItem, LibraryDetailSession } from '@/components/coach/WorkoutLibraryPanel';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import type { WeatherSummary } from '@/lib/weather-model';
+import type { CalendarItem } from '@/components/coach/types';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
@@ -49,39 +50,6 @@ type AthleteOption = {
     name: string | null;
     timezone?: string | null;
   };
-};
-
-type CalendarItem = {
-  id: string;
-  date: string;
-  plannedStartTimeLocal: string | null;
-  displayTimeLocal?: string | null;
-  discipline: string;
-  status: string;
-  title: string;
-  athleteId?: string;
-  athleteName?: string | null;
-  athleteTimezone?: string;
-  workoutDetail?: string | null;
-  template?: { id: string; title: string } | null;
-  plannedDurationMinutes?: number | null;
-  plannedDistanceKm?: number | null;
-  distanceMeters?: number | null;
-  intensityTarget?: string | null;
-  tags?: string[];
-  equipment?: string[];
-  workoutStructure?: unknown | null;
-  notes?: string | null;
-  latestCompletedActivity?: {
-    painFlag: boolean;
-    source?: 'MANUAL' | 'STRAVA';
-    effectiveStartTimeUtc?: string;
-    startTime?: string;
-    confirmedAt?: string | null;
-    durationMinutes?: number | null;
-    distanceKm?: number | null;
-    caloriesKcal?: number | null;
-  } | null;
 };
 
 type SessionFormState = {

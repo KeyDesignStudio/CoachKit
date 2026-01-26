@@ -1,14 +1,10 @@
 import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { cn } from '@/lib/cn';
-import type { CalendarItem } from '@/components/coach/types'; // Need to define or import CalendarItem type. 
-// CalendarItem is defining in page.tsx locally. I should export it or stub it. 
-// I'll use `any` for items for now or duplicate the type to avoid circular dep if it's local.
-// Better: assume items is passed as any[] or generic.
-// Actually, I can import specific types if available.
+import type { CalendarItem } from '@/components/coach/types';
 
 type Props = {
-  items: any[]; // Relaxed type to avoid drift
+  items: CalendarItem[];
   selectedAthleteIds: Set<string>;
   weekStartKey: string;
   athleteTimezone: string;
