@@ -212,7 +212,7 @@ export default function CoachNotificationsPage() {
                   type="button"
                   onClick={() => setSelectedThreadId(t.threadId)}
                   className={cn(
-                    'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+                    'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
                     'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
                     'hover:bg-[var(--bg-structure)] transition-colors',
                     active ? 'ring-2 ring-[var(--ring)]' : ''

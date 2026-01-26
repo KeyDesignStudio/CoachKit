@@ -55,7 +55,7 @@ function NeedsAttentionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
         'transition-colors',
         tone === 'neutral' ? 'hover:bg-white/60' : '',
         toneClasses

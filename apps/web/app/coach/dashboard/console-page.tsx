@@ -139,7 +139,7 @@ function AttentionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
         'transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60',
         toneClasses
@@ -169,7 +169,7 @@ function AlertStripItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
         'bg-[var(--bg-card)] border border-black/15 transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60'
       )}
@@ -787,8 +787,8 @@ export default function CoachDashboardConsolePage() {
                 </div>
               </div>
 
-              {loading ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
-              {!loading && inboxItems.length === 0 ? <div className="px-4 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
+              {loading ? <div className="px-3 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
+              {!loading && inboxItems.length === 0 ? <div className="px-3 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
 
               <div className="divide-y divide-black/5">
                 {inboxItems.map((item) => (
