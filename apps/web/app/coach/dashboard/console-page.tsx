@@ -569,7 +569,7 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 order-1 md:order-1">
             <div
               className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
-              style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
             >
               <div className="flex items-end justify-between gap-3 mb-4">
                 <BlockTitle>Make your selection</BlockTitle>
