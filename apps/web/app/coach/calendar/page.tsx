@@ -792,11 +792,11 @@ export default function CoachCalendarPage() {
         return;
       }
       
-      // Spec: No cross-athlete paste.
-      if (clipboard.athleteId && clipboard.athleteId !== targetAthleteId) {
-        setError('Cannot paste session: restricted to same athlete.');
-        return;
-      }
+      // Spec: Cross-athlete paste is allowed.
+      // if (clipboard.athleteId && clipboard.athleteId !== targetAthleteId) {
+      //   setError('Cannot paste session: restricted to same athlete.');
+      //   return;
+      // }
 
       const payload = buildCalendarItemCreatePayload(clipboard, targetAthleteId, data.date);
 
@@ -1810,7 +1810,7 @@ export default function CoachCalendarPage() {
         isOpen={contextMenu.isOpen}
         position={contextMenu.position}
         type={contextMenu.type}
-        canPaste={!!clipboard && (!contextMenu.data?.athleteId || clipboard.athleteId === contextMenu.data.athleteId)}
+        canPaste={!!clipboard}
         onClose={closeContextMenu}
         onAction={handleMenuAction}
       />
