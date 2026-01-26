@@ -238,7 +238,7 @@ export default function AthleteSettingsPage() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div className="min-w-0">
           <Card className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
@@ -259,7 +259,7 @@ export default function AthleteSettingsPage() {
           <Card className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-1">
-                <h2 className="text-lg font-semibold">Appearance</h2>
+                <BlockTitle>Appearance</BlockTitle>
                 <p className="text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
               </div>
               <Badge className="text-[var(--muted)]">

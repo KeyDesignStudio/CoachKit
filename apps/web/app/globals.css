@@ -130,6 +130,15 @@ a {
   border-radius: 16px;
 }
 
+@layer components {
+  .blocktitle {
+    /* Matches the existing Calendar Sync block title style (+10% font size). */
+    @apply inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/50 px-3 py-1 font-medium uppercase tracking-wide leading-4;
+    font-size: 0.825rem;
+    color: color-mix(in srgb, var(--text) 70%, transparent);
+  }
+}
+
 @layer utilities {
   .text-sm {
     font-size: 0.7rem;
