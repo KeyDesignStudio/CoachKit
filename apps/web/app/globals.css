@@ -108,6 +108,16 @@ a {
   background: rgba(47, 104, 255, 0.25);
 }
 
+@keyframes coachkit-loader-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
 .glass {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -118,6 +128,15 @@ a {
   background: var(--bg-structure);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
+}
+
+@layer components {
+  .blocktitle {
+    /* Matches the existing Calendar Sync block title style (+10% font size). */
+    @apply inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/50 px-3 py-1 font-medium uppercase tracking-wide leading-4;
+    font-size: 0.825rem;
+    color: color-mix(in srgb, var(--text) 70%, transparent);
+  }
 }
 
 @layer utilities {

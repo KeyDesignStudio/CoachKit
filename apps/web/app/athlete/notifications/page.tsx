@@ -6,6 +6,7 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
 
@@ -156,8 +157,8 @@ export default function AthleteNotificationsPage() {
       <Card className="min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold">Thread</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">{threadId ? `Thread ID: ${threadId}` : 'No thread yet'}</p>
+            <BlockTitle>Thread</BlockTitle>
+            <p className="mt-2 text-sm text-[var(--muted)]">{threadId ? `Thread ID: ${threadId}` : 'No thread yet'}</p>
           </div>
           <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadThread(true)} disabled={threadLoading}>
             Refresh

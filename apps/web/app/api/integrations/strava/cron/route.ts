@@ -223,7 +223,7 @@ async function runCron(request: NextRequest) {
       .filter(Boolean) as any;
 
     if (entries.length > 0) {
-      const summary = await syncStravaForConnections(entries, { forceDays });
+      const summary = await syncStravaForConnections(entries, { forceDays, deep: true, deepConcurrency: 2 });
       createdCalendarItems += summary.createdCalendarItems;
       matchedCompletions += summary.matched;
       skippedDuplicates += summary.skippedExisting;

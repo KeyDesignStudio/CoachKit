@@ -42,8 +42,33 @@ const completedActivitiesSelect = {
     startTime: true,
   },
   orderBy: { startTime: 'desc' as const },
-  take: 1,
+  take: 5,
 };
+
+function mergeLatestCompletion(completions: Array<Record<string, any>>) {
+  const latestManual = completions.find((c) => c?.source === CompletionSource.MANUAL) ?? null;
+  const latestStrava = completions.find((c) => c?.source === CompletionSource.STRAVA) ?? null;
+
+  if (!latestManual && !latestStrava) return null;
+
+  const metricsCompletion = (latestStrava ?? latestManual)!;
+
+  return {
+    id: metricsCompletion.id,
+    source: latestStrava?.source ?? latestManual?.source,
+    confirmedAt: latestStrava?.confirmedAt ?? latestManual?.confirmedAt ?? null,
+    startTime: latestStrava?.startTime ?? latestManual?.startTime,
+    durationMinutes: latestStrava?.durationMinutes ?? latestManual?.durationMinutes ?? null,
+    distanceKm: latestStrava?.distanceKm ?? latestManual?.distanceKm ?? null,
+    rpe: latestManual?.rpe ?? latestStrava?.rpe ?? null,
+    notes: latestManual?.notes ?? latestStrava?.notes ?? null,
+    painFlag: Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false),
+    metricsJson:
+      latestStrava?.metricsJson && latestManual?.metricsJson
+        ? { ...latestManual.metricsJson, strava: latestStrava.metricsJson?.strava ?? latestManual.metricsJson?.strava }
+        : latestStrava?.metricsJson ?? latestManual?.metricsJson ?? null,
+  };
+}
 
 function getEffectiveActualStartUtc(completion: {
   source: CompletionSource | string;
@@ -269,9 +294,9 @@ export async function GET(
       throw notFound('Calendar item not found.');
     }
 
-    const completed = completedActivities?.[0] as
+    const completed = mergeLatestCompletion((completedActivities ?? []) as Array<Record<string, any>>) as
       | ({ source: string; startTime: Date; metricsJson?: any } & Record<string, any>)
-      | undefined;
+      | null;
 
     const completedWithEffective = completed
       ? {

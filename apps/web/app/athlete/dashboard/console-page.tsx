@@ -9,6 +9,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
 import { uiH1 } from '@/components/ui/typography';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
@@ -54,7 +55,7 @@ function NeedsAttentionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
         'transition-colors',
         tone === 'neutral' ? 'hover:bg-white/60' : '',
         toneClasses
@@ -203,7 +204,7 @@ export default function AthleteDashboardConsolePage() {
               <div className="min-w-0 order-2 md:order-2">
                 <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
                   <div className="flex items-end justify-between gap-3 mb-2">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
+                    <BlockTitle>Needs your attention</BlockTitle>
                     <div className="text-xs text-[var(--muted)]">Tap to open calendar</div>
                   </div>
 
@@ -241,7 +242,7 @@ export default function AthleteDashboardConsolePage() {
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 >
                   <div className="flex items-end justify-between gap-3 mb-4">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
+                    <BlockTitle>Make your selection</BlockTitle>
                     <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                   </div>
 
@@ -307,7 +308,7 @@ export default function AthleteDashboardConsolePage() {
                   style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
                 >
                   <div className="flex items-end justify-between gap-3 mb-2">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
+                    <BlockTitle>At a glance</BlockTitle>
                     <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                   </div>
 

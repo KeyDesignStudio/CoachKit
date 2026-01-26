@@ -6,6 +6,7 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
 
@@ -188,7 +189,7 @@ export default function CoachNotificationsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1 min-w-0">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Threads</h2>
+            <BlockTitle>Threads</BlockTitle>
             <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadThreads(true)} disabled={threadsLoading}>
               Refresh
             </Button>
@@ -211,7 +212,7 @@ export default function CoachNotificationsPage() {
                   type="button"
                   onClick={() => setSelectedThreadId(t.threadId)}
                   className={cn(
-                    'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+                    'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
                     'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
                     'hover:bg-[var(--bg-structure)] transition-colors',
                     active ? 'ring-2 ring-[var(--ring)]' : ''

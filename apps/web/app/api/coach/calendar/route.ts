@@ -11,6 +11,7 @@ import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
 import { formatUtcDayKey } from '@/lib/day-key';
+import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,8 +65,8 @@ export async function GET(request: NextRequest) {
         where: {
           athleteId: params.athleteId,
           coachId: user.id,
-            deletedAt: null,
-            date: {
+          deletedAt: null,
+          date: {
             gte: fromDate,
             lte: toDate,
           },
@@ -85,6 +86,12 @@ export async function GET(request: NextRequest) {
           title: true,
           plannedDurationMinutes: true,
           plannedDistanceKm: true,
+          distanceMeters: true,
+          intensityTarget: true,
+          tags: true,
+          equipment: true,
+          workoutStructure: true,
+          notes: true,
           intensityType: true,
           intensityTargetJson: true,
           workoutDetail: true,
@@ -107,7 +114,10 @@ export async function GET(request: NextRequest) {
               id: true,
               painFlag: true,
               startTime: true,
+              confirmedAt: true,
               source: true,
+              durationMinutes: true,
+              distanceKm: true,
               metricsJson: true,
             },
           },
@@ -121,36 +131,47 @@ export async function GET(request: NextRequest) {
 
     prof.mark('db');
 
-    // Format items to include latestCompletedActivity (prefer MANUAL over STRAVA).
+    // Format items to include latestCompletedActivity.
+    // Prefer STRAVA for metrics (duration/distance/calories) because manual completions
+    // are often used for notes/pain flags on top of a synced activity.
     const formattedItems = items.map((item: any) => {
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
         painFlag: boolean;
         startTime: Date;
+        confirmedAt?: Date | null;
         source: string;
+        durationMinutes?: number | null;
+        distanceKm?: number | null;
         metricsJson?: any;
       }>;
 
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
-      const latest = latestManual ?? latestStrava;
 
-      const latestCompletedActivity = latest
+      const metricsCompletion = latestStrava ?? latestManual;
+      const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
+
+      const latestCompletedActivity = metricsCompletion
         ? {
-            id: latest.id,
-            painFlag: latest.painFlag,
-            source: latest.source,
-            effectiveStartTimeUtc: getEffectiveActualStartUtc(latest).toISOString(),
+            id: metricsCompletion.id,
+            painFlag,
+            source: metricsCompletion.source,
+            confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
+            effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
+            durationMinutes: metricsCompletion.durationMinutes ?? null,
+            distanceKm: metricsCompletion.distanceKm ?? null,
+            caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
             // DEV-ONLY DEBUG — Strava time diagnostics
             // Never enabled in production. Do not rely on this data.
             debug:
-              includeDebug && latest.source === CompletionSource.STRAVA
+              includeDebug && metricsCompletion.source === CompletionSource.STRAVA
                 ? {
                     stravaTime: {
                       tzUsed: athleteTimezone,
-                      stravaStartDateUtcRaw: latest.metricsJson?.strava?.startDateUtc ?? null,
-                      stravaStartDateLocalRaw: latest.metricsJson?.strava?.startDateLocal ?? null,
-                      storedStartTimeUtc: latest.startTime?.toISOString?.() ?? null,
+                      stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
+                      stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
+                      storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
                     },
                   }
                 : undefined,

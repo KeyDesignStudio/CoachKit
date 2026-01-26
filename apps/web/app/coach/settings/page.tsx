@@ -12,6 +12,7 @@ import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { useThemePreference } from '@/components/theme-preference';
 
 type SaveState =
@@ -436,7 +437,7 @@ export default function CoachSettingsPage() {
         <Card className="w-full">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="m-0 text-base font-semibold text-[var(--text)]">Branding</h2>
+              <BlockTitle>Branding</BlockTitle>
               <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
             </div>
             {brandingLoading ? <span className="text-xs text-[var(--muted)]">Loading…</span> : null}
@@ -503,7 +504,7 @@ export default function CoachSettingsPage() {
         </Card>
 
         <Card className="w-full">
-          <h2 className="m-0 text-base font-semibold text-[var(--text)]">Timezone</h2>
+          <BlockTitle>Timezone</BlockTitle>
           <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
           <p className="mt-3 text-sm text-[var(--muted)]">
             Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>

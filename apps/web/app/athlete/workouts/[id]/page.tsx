@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
@@ -20,6 +21,8 @@ import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { uiLabel } from '@/components/ui/typography';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { PolylineRouteMap } from '@/components/workouts/PolylineRouteMap';
+import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 
 type CompletedActivity = {
   id: string;
@@ -99,10 +102,11 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const perfDataMarked = useRef(false);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
-  const isStravaCompletion = latestCompletion?.source === 'STRAVA';
+  const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
+  const isStravaCompletion = latestCompletion?.source === 'STRAVA' || hasStravaMetrics;
   const isDraftStrava = Boolean(isDraftSynced || (isStravaCompletion && !latestCompletion?.confirmedAt));
   const showStravaBadge = Boolean(isDraftStrava || isStravaCompletion);
-  const hasStravaData = Boolean(isDraftStrava || isStravaCompletion);
+  const hasStravaData = Boolean(isDraftStrava || hasStravaMetrics);
   const strava = (latestCompletion?.metricsJson?.strava ?? {}) as Record<string, any>;
 
   const tz = user?.timezone || 'Australia/Brisbane';
@@ -202,7 +206,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const stravaMovingTimeSec = (strava.movingTimeSec ?? strava.moving_time) as number | undefined;
   const stravaElapsedTimeSec = (strava.elapsedTimeSec ?? strava.elapsed_time) as number | undefined;
   const stravaElevationGainM = (strava.totalElevationGainM ?? strava.total_elevation_gain) as number | undefined;
-  const stravaCaloriesKcal = (strava.caloriesKcal ?? strava.calories) as number | undefined;
+  const stravaCaloriesKcal = getStravaCaloriesKcal(strava) ?? undefined;
   const stravaCadenceRpm = (strava.averageCadenceRpm ?? strava.average_cadence) as number | undefined;
 
   const stravaActivity = (strava.activity ?? strava) as Record<string, any>;
@@ -480,7 +484,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         <div className="grid grid-cols-1 gap-4 min-w-0 lg:grid-cols-2 lg:grid-rows-2">
           {/* WORKOUT PLAN (top-left) */}
           <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-1" data-athlete-workout-quadrant="workout-plan">
-            <p className={uiLabel}>WORKOUT PLAN</p>
+            <BlockTitle>Workout Plan</BlockTitle>
 
             <div className="mt-2 flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -624,7 +628,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           <Card className="rounded-3xl min-w-0 lg:col-start-1 lg:row-start-2" data-athlete-workout-quadrant="weather">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className={uiLabel}>WEATHER</p>
+                <BlockTitle>Weather</BlockTitle>
 
                 {weatherLoading ? (
                   <div className="mt-2 animate-pulse">
@@ -709,10 +713,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   <FieldRow label="Elevation gain" value={elevationGainLabel} />
                   <FieldRow label="Calories" value={caloriesLabel} />
                   <FieldRow label="City" value={stravaLocationCity} />
-                  <FieldRow
-                    label="Polyline"
-                    value={stravaSummaryPolyline ? `${stravaSummaryPolyline.length} chars` : null}
-                  />
+                  <FieldRow label="Route" value={stravaSummaryPolyline ? 'Available' : null} />
                 </div>
 
                 {/* Column 3: Effort & Load */}
@@ -755,6 +756,13 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                     </div>
                   ) : null}
                 </div>
+
+                {stravaSummaryPolyline ? (
+                  <div className="lg:col-span-4">
+                    <p className="text-xs font-medium text-[var(--muted)] mb-2">Route map</p>
+                    <PolylineRouteMap polyline={stravaSummaryPolyline} />
+                  </div>
+                ) : null}
               </div>
             </Card>
           ) : null}
@@ -763,7 +771,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           {item.status === 'PLANNED' || isDraftStrava ? (
             <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
               <form id="completion-form" onSubmit={submitCompletion} className="flex flex-col h-full">
-                <p className={uiLabel}>ATHLETE LOG</p>
+                <BlockTitle>Athlete Log</BlockTitle>
                 {isDraftStrava ? (
                   <p className="mt-1 text-xs text-[var(--muted)]">Add notes/pain and confirm to share with your coach</p>
                 ) : (
@@ -849,7 +857,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             </Card>
           ) : (
             <Card className="rounded-3xl min-w-0 lg:col-start-2 lg:row-start-2" data-athlete-workout-quadrant="athlete-log">
-              <p className={uiLabel}>ATHLETE LOG</p>
+              <BlockTitle>Athlete Log</BlockTitle>
 
               <div className="mt-3 space-y-3">
                 {latestNoteToCoach ? (
