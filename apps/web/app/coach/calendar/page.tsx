@@ -1502,7 +1502,7 @@ export default function CoachCalendarPage() {
                   style={{ gridRow: '1 / -1' }}
                 />
               </div>
-            </
+            </>
           </CalendarShell>
         ) : (
           <CalendarShell variant="month" data-coach-month-view-version="coach-month-v2">
