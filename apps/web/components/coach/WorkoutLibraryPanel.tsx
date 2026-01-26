@@ -6,7 +6,9 @@ import { useApi } from '@/components/api-client';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Input } from '@/components/ui/Input';
+import { LibraryListItem } from './types';
+
+export type { LibraryListItem };
 
 type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
 
@@ -14,24 +16,6 @@ type IntensityCategory = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | 'RPE' | 'OTHER';
 
 type SortKey = 'relevance' | 'newest' | 'popular' | 'durationAsc' | 'durationDesc' | 'intensityAsc' | 'intensityDesc' | 'titleAsc';
 
-export type LibraryListItem = {
-  id: string;
-  title: string;
-  discipline: Discipline;
-  tags: string[];
-  category: string | null;
-  description: string;
-  durationSec: number;
-  intensityTarget: string;
-  intensityCategory: IntensityCategory | null;
-  distanceMeters: number | null;
-  elevationGainMeters: number | null;
-  equipment: string[];
-  usageCount: number;
-  createdAt: string;
-  updatedAt: string;
-  favorite: boolean;
-};
 
 type LibraryListResponse = {
   items: LibraryListItem[];

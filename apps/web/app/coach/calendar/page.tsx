@@ -252,6 +252,9 @@ export default function CoachCalendarPage() {
 
   const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
   
+  // Library items for Context Menu
+  const [libraryItems, setLibraryItems] = useState<LibraryListItem[]>([]);
+  
   // Library Panel Side Sheet
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryTargetDate, setLibraryTargetDate] = useState<string | null>(null);
@@ -504,6 +507,16 @@ export default function CoachCalendarPage() {
     }
   }, [request, user?.role, user?.userId]);
 
+  const loadLibraryItems = useCallback(async () => {
+    try {
+      // Fetch a default list (e.g. relevance/recent) for the context menu quick-add
+      const data = await request<{ items: LibraryListItem[] }>('/api/coach/workout-library?pageSize=50&sort=relevance');
+      setLibraryItems(data.items);
+    } catch {
+      // access might be denied or silent fail
+    }
+  }, [request]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!didInitSelectedAthletes.current) return;
@@ -653,7 +666,8 @@ export default function CoachCalendarPage() {
 
   useEffect(() => {
     loadAthletes();
-  }, [loadAthletes]);
+    loadLibraryItems();
+  }, [loadAthletes, loadLibraryItems]);
 
   useEffect(() => {
     loadCalendar();
@@ -746,16 +760,16 @@ export default function CoachCalendarPage() {
     setContextMenu((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
-  const handleMenuAction = useCallback(async (action: ContextMenuAction) => {
-    const { type, data } = contextMenu;
+  const handleMenuAction = useCallback(async (action: ContextMenuAction, payload?: any) => {
+    const { type, data: contextData } = contextMenu;
     closeContextMenu();
 
     if (action === 'copy' && type === 'session') {
-      setClipboard(data);
+      setClipboard(contextData);
     } else if (action === 'delete' && type === 'session') {
        try {
          setLoading(true);
-         await request(`/api/coach/calendar-items/${data.id}`, { method: 'DELETE' });
+         await request(`/api/coach/calendar-items/${contextData.id}`, { method: 'DELETE' });
          await loadCalendar();
        } catch (e) {
          setError(e instanceof Error ? e.message : 'Failed to delete session');
@@ -765,23 +779,17 @@ export default function CoachCalendarPage() {
     } else if (action === 'paste' && type === 'day') {
       if (!clipboard) return;
       
-      const targetAthleteId = data.athleteId || effectiveAthleteId || singleAthleteId;
+      const targetAthleteId = contextData.athleteId || effectiveAthleteId || singleAthleteId;
       if (!targetAthleteId) {
         setError('Select an athlete to paste workout.');
         return;
       }
       
-      // Spec: Cross-athlete paste is allowed.
-      // if (clipboard.athleteId && clipboard.athleteId !== targetAthleteId) {
-      //   setError('Cannot paste session: restricted to same athlete.');
-      //   return;
-      // }
-
-      const payload = buildCalendarItemCreatePayload(clipboard, targetAthleteId, data.date);
+      const postPayload = buildCalendarItemCreatePayload(clipboard, targetAthleteId, contextData.date);
 
       try {
         setLoading(true);
-        await request('/api/coach/calendar-items', { method: 'POST', data: payload });
+        await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
         await loadCalendar();
       } catch(e) {
          setError('Couldn’t paste session. Please try copying again.');
@@ -791,9 +799,30 @@ export default function CoachCalendarPage() {
       }
 
     } else if (action === 'library-insert' && type === 'day') {
-       setLibraryTargetDate(data.date);
-       setLibraryTargetAthleteId(data.athleteId || effectiveAthleteId);
+       setLibraryTargetDate(contextData.date);
+       setLibraryTargetAthleteId(contextData.athleteId || effectiveAthleteId);
        setLibraryOpen(true);
+    } else if (action === 'library-insert-item') {
+        const item = payload as LibraryListItem;
+        const targetDate = contextData.date;
+        const targetAthleteId = contextData.athleteId || effectiveAthleteId || singleAthleteId;
+
+        if (!targetDate || !targetAthleteId) {
+            setError('Missing date or athlete for library insert.');
+            return;
+        }
+
+        try {
+           setLoading(true);
+           const res = await request<{ session: LibraryDetailSession }>(`/api/coach/workout-library/${item.id}`);
+           const postPayload = buildCalendarItemCreatePayload(res.session, targetAthleteId, targetDate);
+           await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
+           await loadCalendar();
+        } catch(e) {
+           setError('Failed to add session from library');
+        } finally {
+            setLoading(false);
+        }
     }
   }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
 
@@ -1416,7 +1445,7 @@ export default function CoachCalendarPage() {
                             key={athlete.userId}
                             data-testid="coach-calendar-athlete-row"
                             onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey, athleteId: athlete.userId })}
-                            className="flex flex-col gap-1.5 md:grid md:min-w-0 md:gap-2 md:grid-rows-[32px_auto]"
+                            className="flex flex-col gap-1.5 md:gap-2 min-w-0"
                           >
                             <div className="hidden md:flex h-8 items-center justify-between gap-2">
                               <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
@@ -1817,6 +1846,7 @@ export default function CoachCalendarPage() {
         canPaste={!!clipboard}
         onClose={closeContextMenu}
         onAction={handleMenuAction}
+        libraryItems={libraryItems}
       />
 
       {/* Library Panel Drawer */}

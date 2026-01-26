@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import type { IconName } from '@/components/ui/iconRegistry';
+import type { LibraryListItem } from '@/components/coach/types';
+import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
 export type Position = { x: number; y: number };
-export type ContextMenuAction = 'copy' | 'paste' | 'delete' | 'edit' | 'library-insert';
+export type ContextMenuAction = 'copy' | 'paste' | 'delete' | 'edit' | 'library-insert' | 'library-insert-item';
 
 type CalendarContextMenuProps = {
   isOpen: boolean;
@@ -15,7 +17,8 @@ type CalendarContextMenuProps = {
   type: 'session' | 'day';
   canPaste: boolean;
   onClose: () => void;
-  onAction: (action: ContextMenuAction) => void;
+  onAction: (action: ContextMenuAction, payload?: any) => void;
+  libraryItems?: LibraryListItem[];
 };
 
 export function CalendarContextMenu({
@@ -25,17 +28,26 @@ export function CalendarContextMenu({
   canPaste,
   onClose,
   onAction,
+  libraryItems = [],
 }: CalendarContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [showLibraryList, setShowLibraryList] = useState(false);
+
+  // Reset library list view when menu closes or re-opens
+  useEffect(() => {
+    if (!isOpen) setShowLibraryList(false);
+  }, [isOpen]);
 
   // Close on click outside or Escape
   useEffect(() => {
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
+      // If clicking inside, do nothing (let button handlers work)
+      if (ref.current && ref.current.contains(e.target as Node)) {
+        return;
       }
+      onClose();
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -64,17 +76,22 @@ export function CalendarContextMenu({
       } else {
         list.push({ label: 'Paste session', action: 'paste', disabled: true, icon: 'paste' });
       }
-      list.push({ label: 'Add from Session Library', icon: 'calendarAddOn', action: 'library-insert' });
+      
+      if (!showLibraryList) {
+        list.push({ label: 'Add from Session Library', icon: 'calendarAddOn', action: 'library-insert' });
+      }
     }
 
     return list;
-  }, [type, canPaste]);
+  }, [type, canPaste, showLibraryList]);
 
   if (!isOpen) return null;
 
   // Simple positioning logic to keep in viewport
   const menuWidth = 240;
-  const menuHeight = items.length * 40 + 16;
+  // If showing library list, expand height, otherwise calc standard
+  const standardHeight = (type === 'session' ? 2 : 2) * 40 + 16; 
+  const menuHeight = showLibraryList ? 320 : standardHeight;
   
   let x = position.x;
   let y = position.y;
@@ -88,16 +105,69 @@ export function CalendarContextMenu({
     <div
       ref={ref}
       className="fixed z-[9999] min-w-[220px] overflow-hidden rounded-xl bg-[var(--bg-surface)] p-1.5 shadow-xl border border-[var(--border-subtle)] animate-in fade-in zoom-in-95 duration-100"
-      style={{ top: y, left: x }}
+      style={{ top: y, left: x, width: menuWidth, maxHeight: showLibraryList ? 320 : undefined }}
       role="menu"
     >
-      {items.map((item) => (
+      {showLibraryList ? (
+        <div className="flex flex-col h-full max-h-[300px]">
+          <div className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--border-subtle)] mb-1">
+             <button onClick={() => setShowLibraryList(false)} className="text-xs text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">
+               <Icon name="prev" size="xs" /> Back
+             </button>
+             <span className="text-xs font-medium text-[var(--muted)]">Library</span>
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1 pr-1 custom-scrollbar">
+            {libraryItems.length === 0 ? (
+               <div className="p-3 text-center text-xs text-[var(--muted)]">No templates found</div>
+            ) : (
+               libraryItems.map(item => {
+                 const theme = getDisciplineTheme(item.discipline);
+                 return (
+                   <button
+                     key={item.id}
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       onAction('library-insert-item', item);
+                     }}
+                     className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-left hover:bg-[var(--bg-structure)] transition-colors group"
+                   >
+                     <div className={cn("flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-[var(--bg-structure)] border border-[var(--border-subtle)] group-hover:bg-[var(--bg-surface)]", theme.textClass)}>
+                       <Icon name={theme.iconName} size="xs" />
+                     </div>
+                     <div className="min-w-0 flex-1">
+                       <p className="font-medium truncate text-[var(--text)]">{item.title}</p>
+                       <p className="text-[10px] text-[var(--muted)] truncate">{Math.round(item.durationSec / 60)} min • {item.intensityTarget || 'No target'}</p>
+                     </div>
+                   </button>
+                 );
+               })
+            )}
+          </div>
+          <div className="pt-1 mt-1 border-t border-[var(--border-subtle)]">
+            <button
+               onClick={(e) => {
+                 e.stopPropagation();
+                 onAction('library-insert');
+               }}
+               className="w-full text-center text-xs text-[var(--primary)] py-1 hover:underline"
+            >
+              Open full library
+            </button>
+          </div>
+        </div>
+      ) : (
+        items.map((item) => (
         <button
           key={item.label}
           onClick={(e) => {
             e.stopPropagation();
             if (!item.disabled) {
-              onAction(item.action);
+              if (item.action === 'library-insert') {
+                 // Expand inline
+                 setShowLibraryList(true);
+              } else {
+                 onAction(item.action);
+              }
             }
           }}
           disabled={item.disabled}
@@ -108,12 +178,10 @@ export function CalendarContextMenu({
             item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--text)]'
           )}
         >
-          {item.icon ? (
-             <Icon name={item.icon} size="sm" className={cn(item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--muted)]', 'shrink-0')} />
-          ) : null}
-          <span className="truncate">{item.label}</span>
+          {item.icon ? <Icon name={item.icon} size="sm" className={item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--muted)]'} /> : <div className="w-5 h-5" />}
+          {item.label}
         </button>
-      ))}
+      )))}
     </div>,
     document.body
   );

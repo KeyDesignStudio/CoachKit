@@ -1,3 +1,25 @@
+type Discipline = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'OTHER';
+type IntensityCategory = 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | 'RPE' | 'OTHER';
+
+export type LibraryListItem = {
+  id: string;
+  title: string;
+  discipline: Discipline;
+  tags: string[];
+  category: string | null;
+  description: string;
+  durationSec: number;
+  intensityTarget: string;
+  intensityCategory: IntensityCategory | null;
+  distanceMeters: number | null;
+  elevationGainMeters: number | null;
+  equipment: string[];
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+  favorite: boolean;
+};
+
 export type CalendarItem = {
   id: string;
   date: string;
