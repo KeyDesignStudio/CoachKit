@@ -201,24 +201,36 @@ function buildCalendarItemCreatePayload(
 ) {
   const src = source as any; 
 
+  // Safely handle duration to ensure it's a positive integer or undefined
+  let durationMinutes: number | undefined;
+  const rawDuration = src.plannedDurationMinutes || (typeof src.durationSec === 'number' ? src.durationSec / 60 : undefined);
+  if (typeof rawDuration === 'number' && rawDuration > 0) {
+     durationMinutes = Math.round(rawDuration);
+  }
+
   return {
     athleteId: targetAthleteId,
     date: targetDate,
     discipline: src.discipline || 'OTHER',
-    status: 'PLANNED',
+    // status: 'PLANNED', // Not in schema, let backend default
     title: src.title || 'Workout',
     workoutDetail: src.workoutDetail ?? src.description ?? '',
     
-    plannedStartTimeLocal: src.plannedStartTimeLocal || null,
-    plannedDurationMinutes: src.plannedDurationMinutes || (typeof src.durationSec === 'number' ? Math.round(src.durationSec / 60) : null),
-    intensityTarget: src.intensityTarget || null,
-    distanceMeters: src.distanceMeters || null,
+    // Schema: explicit string or undefined. never null.
+    plannedStartTimeLocal: src.plannedStartTimeLocal || undefined,
+    
+    plannedDurationMinutes: durationMinutes,
+    
+    // Schema: string or undefined. never null.
+    intensityTarget: src.intensityTarget || undefined,
+    
+    distanceMeters: src.distanceMeters || null, // nullable allowed by schema
     
     tags: Array.isArray(src.tags) ? src.tags : [],
     equipment: Array.isArray(src.equipment) ? src.equipment : [],
-    workoutStructure: src.workoutStructure || null,
-    steps_json: src.steps_json || null,
-    notes: src.notes || null,
+    workoutStructure: src.workoutStructure || null, // nullable allowed
+    // steps_json: src.steps_json || null, // Not in schema, handled by workoutStructure
+    notes: src.notes || null, // nullable allowed
   };
 }
 

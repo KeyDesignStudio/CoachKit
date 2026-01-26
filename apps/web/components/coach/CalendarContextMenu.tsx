@@ -60,9 +60,9 @@ export function CalendarContextMenu({
       list.push({ label: 'Copy session', icon: 'copyWeek', action: 'copy' });
     } else if (type === 'day') {
       if (canPaste) {
-        list.push({ label: 'Paste session', icon: 'scheduleAdd', action: 'paste' });
+        list.push({ label: 'Paste session', action: 'paste', icon: undefined as any });
       } else {
-        list.push({ label: 'Paste session', icon: 'scheduleAdd', action: 'paste', disabled: true });
+        list.push({ label: 'Paste session', action: 'paste', disabled: true, icon: undefined as any });
       }
       list.push({ label: 'Add from Session Library', icon: 'calendarAddOn', action: 'library-insert' });
     }
