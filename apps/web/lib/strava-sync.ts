@@ -2,6 +2,7 @@ import { CalendarItemStatus, CompletionSource } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
+import { mapWithConcurrency } from '@/lib/concurrency';
 
 export type PollSummary = {
   polledAthletes: number;
@@ -53,6 +54,30 @@ type StravaActivity = {
   };
 };
 
+function sanitizeStravaActivityForStorage(activity: StravaActivity): any {
+  // Strava activity detail payloads may include large arrays (laps/segments/etc).
+  // We store a compact version so future fields can be derived without re-fetching.
+  const raw = activity as any;
+  const {
+    segment_efforts,
+    splits_metric,
+    splits_standard,
+    laps,
+    best_efforts,
+    photos,
+    similar_activities,
+    ...rest
+  } = raw ?? {};
+
+  // Ensure the payload is JSON-serializable (no `undefined`, functions, etc)
+  // so Prisma can persist it safely.
+  try {
+    return JSON.parse(JSON.stringify(rest));
+  } catch {
+    return rest;
+  }
+}
+
 function mapStravaDiscipline(activity: StravaActivity) {
   const raw = (activity.sport_type || activity.type || '').toLowerCase();
 
@@ -96,7 +121,19 @@ function shouldUpdateStravaMetrics(existing: unknown, next: Record<string, unkno
   if (!existing || typeof existing !== 'object') return true;
   const prev = existing as Record<string, unknown>;
   for (const [key, value] of Object.entries(next)) {
-    if (prev[key] !== value) return true;
+    const prevValue = prev[key];
+
+    if (value && typeof value === 'object') {
+      if (!prevValue || typeof prevValue !== 'object') return true;
+      try {
+        if (JSON.stringify(prevValue) !== JSON.stringify(value)) return true;
+      } catch {
+        return true;
+      }
+      continue;
+    }
+
+    if (prevValue !== value) return true;
   }
   return false;
 }
@@ -280,6 +317,7 @@ async function fetchActivityById(accessToken: string, activityId: string) {
   }
 
   const url = new URL(`https://www.strava.com/api/v3/activities/${encodeURIComponent(activityId)}`);
+  url.searchParams.set('include_all_efforts', 'false');
 
   const response = await fetch(url.toString(), {
     method: 'GET',
@@ -472,12 +510,17 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     const averageCadenceRpm = typeof activity.average_cadence === 'number' ? activity.average_cadence : undefined;
     const caloriesKcal = typeof activity.calories === 'number' ? activity.calories : undefined;
     const summaryPolyline = typeof activity.map?.summary_polyline === 'string' ? activity.map.summary_polyline : undefined;
+    const storedActivity = sanitizeStravaActivityForStorage(activity);
 
     const stravaMetrics = compactObject({
       activityId: externalActivityId,
       startDateUtc: activity.start_date,
       startDateLocal: activity.start_date_local,
       timezone: activity.timezone,
+
+      // Retain a compact version of Strava's payload so newly added fields can be
+      // populated without requiring another Strava API fetch.
+      activity: storedActivity,
 
       name: activity.name,
       sportType: activity.sport_type,
@@ -689,9 +732,13 @@ export async function syncStravaForConnections(
   options?: {
     forceDays?: number | null;
     overrideAfterUnixSeconds?: number;
+    deep?: boolean;
+    deepConcurrency?: number;
   }
 ): Promise<PollSummary> {
   const forceDays = options?.forceDays ?? null;
+  const deep = options?.deep ?? false;
+  const deepConcurrency = options?.deepConcurrency ?? 3;
 
   const summary: PollSummary = {
     polledAthletes: 0,
@@ -733,6 +780,14 @@ export async function syncStravaForConnections(
 
       const activities = await fetchRecentActivities(refreshed.accessToken, afterUnixSeconds);
 
+      const effectiveActivities = deep
+        ? await mapWithConcurrency(
+            activities,
+            deepConcurrency,
+            async (activity) => await fetchActivityById(refreshed.accessToken, String(activity.id))
+          )
+        : activities;
+
       await ingestActivities(
         {
           ...entry,
@@ -741,7 +796,7 @@ export async function syncStravaForConnections(
             lastSyncAt: refreshed.lastSyncAt,
           },
         },
-        activities,
+        effectiveActivities,
         summary
       );
 
