@@ -576,7 +576,7 @@ export default function CoachDashboardConsolePage() {
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-2">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-4">
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
@@ -596,8 +596,13 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 <div className="md:col-start-2 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
-                  <Select className="min-h-[44px]" value={discipline ?? ''} onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}>
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline</div>
+                  <Select
+                    className="min-h-[44px]"
+                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                    value={discipline ?? ''}
+                    onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
+                  >
                     <option value="">All disciplines</option>
                     {disciplineOptions.map((d) => (
                       <option key={d} value={d}>
