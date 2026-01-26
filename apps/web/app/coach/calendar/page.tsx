@@ -1277,7 +1277,7 @@ export default function CoachCalendarPage() {
                         const dateKey = getLocalDayKey(item.date, athleteTimezone);
                         if (dateKey < weekStartKey || dateKey > addDaysToDayKey(weekStartKey, 6)) return false;
                         const athleteId = item.athleteId ?? '';
-                        return selectedAthleteIds.has(athleteId);
+                        return selectedAthleteIds.has(athleteId) && !!item.latestCompletedActivity?.confirmedAt;
                       }).length}
                     </div>
                   </div>
@@ -1289,8 +1289,8 @@ export default function CoachCalendarPage() {
                       timeZone: athleteTimezone,
                       fromDayKey: weekStartKey,
                       toDayKey,
-                      includePlannedFallback: true,
-                      filter: (it) => selectedAthleteIds.has((it as any).athleteId ?? ''),
+                      includePlannedFallback: false,
+                      filter: (it: any) => selectedAthleteIds.has(it.athleteId ?? '') && !!it.latestCompletedActivity?.confirmedAt,
                     });
                     const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
 
@@ -1334,7 +1334,7 @@ export default function CoachCalendarPage() {
               {Array.from({ length: 6 }, (_, weekIndex) => {
                 const start = weekIndex * 7;
                 const week = monthDays.slice(start, start + 7);
-                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.length, 0);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + (d.items as any[]).filter((i) => selectedAthleteIds.has(i.athleteId ?? '') && !!i.latestCompletedActivity?.confirmedAt).length, 0);
                 const weekStart = week[0]?.dateStr ?? '';
                 const weekEnd = week[6]?.dateStr ?? '';
                 const weekSummary = weekStart && weekEnd
@@ -1343,8 +1343,8 @@ export default function CoachCalendarPage() {
                       timeZone: athleteTimezone,
                       fromDayKey: weekStart,
                       toDayKey: weekEnd,
-                      includePlannedFallback: true,
-                      filter: (it) => selectedAthleteIds.has((it as any).athleteId ?? ''),
+                      includePlannedFallback: false,
+                      filter: (it: any) => selectedAthleteIds.has((it as any).athleteId ?? '') && !!(it as any).latestCompletedActivity?.confirmedAt,
                     })
                   : null;
                 const weekTopDisciplines = weekSummary

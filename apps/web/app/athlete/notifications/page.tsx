@@ -135,7 +135,7 @@ export default function AthleteNotificationsPage() {
   }, [draft, loadMessages, loadThread, request, threadId]);
 
   const displayMessages = useMemo(() => {
-    return [...messages].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+    return [...messages].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }, [messages]);
 
   if (userLoading) {
@@ -158,7 +158,6 @@ export default function AthleteNotificationsPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <BlockTitle>Thread</BlockTitle>
-            <p className="mt-2 text-sm text-[var(--muted)]">{threadId ? `Thread ID: ${threadId}` : 'No thread yet'}</p>
           </div>
           <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadThread(true)} disabled={threadLoading}>
             Refresh
@@ -167,6 +166,23 @@ export default function AthleteNotificationsPage() {
 
         {threadLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading…</p> : null}
         {threadError ? <p className="mt-3 text-sm text-red-700">{threadError}</p> : null}
+
+        <div className="pt-4 pb-2">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Message your coach…"
+            disabled={sending}
+            rows={3}
+          />
+          <div className="mt-3 flex justify-end">
+            <Button type="button" onClick={() => void handleSend()} disabled={sending || !draft.trim()}>
+              {sending ? 'Sending…' : 'Send'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-2 text-sm text-[var(--muted)] border-t border-[var(--border-subtle)] pt-4">Messages</div>
 
         <div className="mt-4 flex flex-col gap-3 max-h-[55vh] overflow-y-auto pr-1">
           {messagesLoading ? <p className="text-sm text-[var(--muted)]">Loading messages…</p> : null}
@@ -197,19 +213,8 @@ export default function AthleteNotificationsPage() {
           })}
         </div>
 
-        <div className="mt-5 border-t border-[var(--border-subtle)] pt-4">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message your coach…"
-            disabled={sending}
-            rows={3}
-          />
-          <div className="mt-3 flex justify-end">
-            <Button type="button" onClick={() => void handleSend()} disabled={sending || !draft.trim()}>
-              {sending ? 'Sending…' : 'Send'}
-            </Button>
-          </div>
+        <div className="mt-5 border-t border-[var(--border-subtle)] pt-4 hidden">
+          {/* Moved to top */}
         </div>
       </Card>
     </section>

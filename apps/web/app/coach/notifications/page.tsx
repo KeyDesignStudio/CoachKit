@@ -176,7 +176,7 @@ export default function CoachNotificationsPage() {
     return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
 
-  const displayMessages = [...messages].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  const displayMessages = [...messages].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 
   return (
     <section className="flex flex-col gap-6">
@@ -243,7 +243,7 @@ export default function CoachNotificationsPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold truncate">{selectedThread?.athlete?.name ?? 'Thread'}</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">{selectedThreadId ? `Thread ID: ${selectedThreadId}` : 'Select a thread'}</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">{selectedThreadId ? `Viewing thread` : 'Select a thread'}</p>
             </div>
             {selectedThreadId ? (
               <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadMessages(selectedThreadId, true)} disabled={messagesLoading}>
@@ -251,6 +251,23 @@ export default function CoachNotificationsPage() {
               </Button>
             ) : null}
           </div>
+
+          <div className="pt-4 pb-2">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={selectedThread ? `Message ${selectedThread.athlete.name ?? 'athlete'}…` : 'Select a thread to message…'}
+              disabled={!selectedThread || sending}
+              rows={3}
+            />
+            <div className="mt-3 flex justify-end">
+              <Button type="button" onClick={() => void handleSend()} disabled={!selectedThread || sending || !draft.trim()}>
+                {sending ? 'Sending…' : 'Send'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-2 text-sm text-[var(--muted)] border-t border-[var(--border-subtle)] pt-4">Messages</div>
 
           {messagesLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading messages…</p> : null}
           {messagesError ? <p className="mt-3 text-sm text-red-700">{messagesError}</p> : null}
@@ -281,21 +298,10 @@ export default function CoachNotificationsPage() {
             })}
           </div>
 
-          <div className="mt-5 border-t border-[var(--border-subtle)] pt-4">
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={selectedThread ? `Message ${selectedThread.athlete.name ?? 'athlete'}…` : 'Select a thread to message…'}
-              disabled={!selectedThread || sending}
-              rows={3}
-            />
-            <div className="mt-3 flex justify-end">
-              <Button type="button" onClick={() => void handleSend()} disabled={!selectedThread || sending || !draft.trim()}>
-                {sending ? 'Sending…' : 'Send'}
-              </Button>
-            </div>
+        <div className="hidden">
+            {/* Removed footer */}
           </div>
-        </Card>
+      </Card>
       </div>
     </section>
   );

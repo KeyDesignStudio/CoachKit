@@ -473,7 +473,7 @@ export default function AthleteCalendarPage() {
                     <div className="text-sm font-semibold text-[var(--text)]">
                       {items.filter((i) => {
                         const dateKey = getLocalDayKey(i.date, athleteTimezone);
-                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6);
+                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6) && !!i.latestCompletedActivity?.confirmedAt;
                       }).length}
                     </div>
                   </div>
@@ -485,7 +485,8 @@ export default function AthleteCalendarPage() {
                       timeZone: athleteTimezone,
                       fromDayKey: weekStartKey,
                       toDayKey,
-                      includePlannedFallback: true,
+                      includePlannedFallback: false,
+                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
                     });
                     const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
 
@@ -533,7 +534,7 @@ export default function AthleteCalendarPage() {
               {Array.from({ length: 6 }, (_, weekIndex) => {
                 const start = weekIndex * 7;
                 const week = monthDays.slice(start, start + 7);
-                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.length, 0);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => !!i.latestCompletedActivity?.confirmedAt).length, 0);
                 const weekStart = week[0]?.dateStr ?? '';
                 const weekEnd = week[6]?.dateStr ?? '';
                 const weekSummary = weekStart && weekEnd
@@ -542,7 +543,8 @@ export default function AthleteCalendarPage() {
                       timeZone: athleteTimezone,
                       fromDayKey: weekStart,
                       toDayKey: weekEnd,
-                      includePlannedFallback: true,
+                      includePlannedFallback: false,
+                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
                     })
                   : null;
                 const weekTopDisciplines = weekSummary
