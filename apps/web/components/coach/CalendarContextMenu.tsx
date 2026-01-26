@@ -56,8 +56,8 @@ export function CalendarContextMenu({
     const list: Array<{ label: string; icon: IconName; action: ContextMenuAction; disabled?: boolean; variant?: 'default' | 'danger' }> = [];
 
     if (type === 'session') {
-      // Spec: ONLY Copy for now. Edit/Delete reserved for later approval.
       list.push({ label: 'Copy session', icon: 'copyWeek', action: 'copy' });
+      list.push({ label: 'Delete session', icon: 'delete', action: 'delete', variant: 'danger' });
     } else if (type === 'day') {
       if (canPaste) {
         list.push({ label: 'Paste session', action: 'paste', icon: undefined as any });

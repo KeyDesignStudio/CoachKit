@@ -783,6 +783,16 @@ export default function CoachCalendarPage() {
 
     if (action === 'copy' && type === 'session') {
       setClipboard(data);
+    } else if (action === 'delete' && type === 'session') {
+       try {
+         setLoading(true);
+         await request(`/api/coach/calendar-items/${data.id}`, { method: 'DELETE' });
+         await loadCalendar();
+       } catch (e) {
+         setError(e instanceof Error ? e.message : 'Failed to delete session');
+       } finally {
+         setLoading(false);
+       }
     } else if (action === 'paste' && type === 'day') {
       if (!clipboard) return;
       
