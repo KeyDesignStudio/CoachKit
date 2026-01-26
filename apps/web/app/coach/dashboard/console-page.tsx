@@ -804,22 +804,6 @@ export default function CoachDashboardConsolePage() {
               </div>
             </div>
           </div>
-
-          {/* RIGHT: Notifications (messages live here now) */}
-          <div className="min-w-0" data-testid="coach-dashboard-notifications">
-            <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-[var(--text)]">Notifications</h2>
-                  <div className="text-xs font-medium text-[var(--muted)] mt-0.5">Messages are in Notifications.</div>
-                </div>
-
-                <Button type="button" className="min-h-[44px]" onClick={() => (window.location.href = '/coach/notifications')}>
-                  Open
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

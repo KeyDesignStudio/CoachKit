@@ -198,10 +198,6 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           </div>
         )}
 
-        <span data-testid="user-header-name" className="min-w-0 truncate text-sm font-medium text-[var(--text)]">
-          {displayName}
-        </span>
-
         <Icon name={open ? 'close' : 'expandMore'} size="sm" className="text-[var(--muted)]" aria-hidden />
       </button>
 

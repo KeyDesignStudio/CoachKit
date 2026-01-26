@@ -69,10 +69,8 @@ test.describe('Mobile smoke', () => {
     await expect(inboxSection).toBeVisible();
     await expect(page.getByRole('button', { name: /^Mark Reviewed/ })).toBeVisible();
 
-    const notifications = page.getByTestId('coach-dashboard-notifications');
-    await expect(notifications).toBeVisible();
-    await expect(notifications.getByRole('button', { name: /^Open$/ })).toBeVisible();
-    await expect(page.getByTestId('coach-dashboard-messages')).toHaveCount(0);
+    // Notifications block removed from dashboard (redundant).
+    await expect(page.getByTestId('coach-dashboard-notifications')).toHaveCount(0);
 
     // Bulk select still works when inbox rows exist.
     const inboxCard = inboxSection.locator('div.rounded-2xl').first();
@@ -170,10 +168,8 @@ test.describe('Mobile smoke', () => {
     await expect(statsBox).toBeVisible();
     await expect(statsBox.getByTestId('athlete-dashboard-at-a-glance-stat-row')).toHaveCount(4);
 
-    const notifications = page.getByTestId('athlete-dashboard-notifications');
-    await expect(notifications).toBeVisible();
-    await expect(notifications.getByRole('button', { name: /^Open$/ })).toBeVisible();
-    await expect(page.getByTestId('athlete-dashboard-messages-compose')).toHaveCount(0);
+    // Notifications block removed from dashboard (redundant).
+    await expect(page.getByTestId('athlete-dashboard-notifications')).toHaveCount(0);
 
     await assertNoHorizontalScroll(page);
   });

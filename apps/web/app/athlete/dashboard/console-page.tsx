@@ -389,28 +389,6 @@ export default function AthleteDashboardConsolePage() {
 
           {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
           {loading && !data ? <FullScreenLogoLoader /> : null}
-
-          {/* Notifications (messages live here now) */}
-          <div className="mt-6 flex justify-end">
-            <div className="w-full min-w-0 md:w-1/2" data-testid="athlete-dashboard-notifications">
-              <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Notifications</h2>
-                    <div className="text-xs font-medium text-[var(--muted)] mt-0.5">Messages are in Notifications.</div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    className="min-h-[44px]"
-                    onClick={() => (window.location.href = '/athlete/notifications')}
-                  >
-                    Open
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </>
