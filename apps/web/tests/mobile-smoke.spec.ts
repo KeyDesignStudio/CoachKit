@@ -173,4 +173,11 @@ test.describe('Mobile smoke', () => {
 
     await assertNoHorizontalScroll(page);
   });
+
+  test('Athlete notifications loads and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/notifications', { waitUntil: 'networkidle' });
+    await expect(page.locator('h1', { hasText: 'Messages' })).toBeVisible();
+    await assertNoHorizontalScroll(page);
+  });
 });

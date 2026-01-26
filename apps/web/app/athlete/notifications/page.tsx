@@ -134,6 +134,10 @@ export default function AthleteNotificationsPage() {
     }
   }, [draft, loadMessages, loadThread, request, threadId]);
 
+  const displayMessages = useMemo(() => {
+    return [...messages].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  }, [messages]);
+
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading…</p>;
   }
@@ -141,10 +145,6 @@ export default function AthleteNotificationsPage() {
   if (!user || user.role !== 'ATHLETE') {
     return <p className="text-[var(--muted)]">Athlete access required.</p>;
   }
-
-  const displayMessages = useMemo(() => {
-    return [...messages].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
-  }, [messages]);
 
   return (
     <section className="flex flex-col gap-6">
