@@ -102,14 +102,16 @@ export function CalendarContextMenu({
           }}
           disabled={item.disabled}
           className={cn(
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left',
             'hover:bg-[var(--bg-structure)]',
             item.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
             item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--text)]'
           )}
         >
-          <Icon name={item.icon} size="sm" className={cn(item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--muted)]')} />
-          {item.label}
+          {item.icon ? (
+             <Icon name={item.icon} size="sm" className={cn(item.variant === 'danger' ? 'text-rose-600' : 'text-[var(--muted)]', 'shrink-0')} />
+          ) : null}
+          <span className="truncate">{item.label}</span>
         </button>
       ))}
     </div>,

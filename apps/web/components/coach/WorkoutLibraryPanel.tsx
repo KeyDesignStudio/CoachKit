@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
@@ -53,6 +54,7 @@ type LibraryDetailResponse = {
 type WorkoutLibraryPanelProps = {
   onUseTemplate: (session: LibraryDetailSession) => void;
   mode?: 'library' | 'favorites';
+  insertMode?: boolean;
 };
 
 function formatDurationMinutes(durationSec: number): string {
@@ -131,7 +133,7 @@ function segmentMeta(segment: Record<string, unknown>): string {
   return parts.join(' • ');
 }
 
-export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: WorkoutLibraryPanelProps) {
+export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library', insertMode = false }: WorkoutLibraryPanelProps) {
   const { request } = useApi();
 
   const [q, setQ] = useState('');
@@ -259,6 +261,13 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
       setDetailError('');
       try {
         const data = await request<LibraryDetailResponse>(`/api/coach/workout-library/${id}`);
+        
+        if (insertMode) {
+          onUseTemplate(data.session);
+          setSelectedId(null); // Reset selection to close/avoid detail view
+          return;
+        }
+
         setDetail(data);
       } catch (e) {
         setDetailError(e instanceof Error ? e.message : 'Failed to load workout.');
@@ -266,7 +275,7 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
         setDetailLoading(false);
       }
     },
-    [request]
+    [request, insertMode, onUseTemplate]
   );
 
   const toggleFavorite = useCallback(
@@ -527,7 +536,10 @@ export function WorkoutLibraryPanel({ onUseTemplate, mode = 'library' }: Workout
         </div>
       </div>
 
-      <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className={cn(
+        "grid gap-4 sm:gap-5",
+        insertMode ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      )}>
         {!loading && items.length === 0 && (
           <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
             {favoritesOnly ? (

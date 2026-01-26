@@ -194,6 +194,34 @@ function groupItemsByDate(items: CalendarItem[]): Record<string, CalendarItem[]>
   return grouped;
 }
 
+function buildCalendarItemCreatePayload(
+  source: CalendarItem | LibraryDetailSession,
+  targetAthleteId: string,
+  targetDate: string
+) {
+  const src = source as any; 
+
+  return {
+    athleteId: targetAthleteId,
+    date: targetDate,
+    discipline: src.discipline || 'OTHER',
+    status: 'PLANNED',
+    title: src.title || 'Workout',
+    workoutDetail: src.workoutDetail ?? src.description ?? '',
+    
+    plannedStartTimeLocal: src.plannedStartTimeLocal || null,
+    plannedDurationMinutes: src.plannedDurationMinutes || (typeof src.durationSec === 'number' ? Math.round(src.durationSec / 60) : null),
+    intensityTarget: src.intensityTarget || null,
+    distanceMeters: src.distanceMeters || null,
+    
+    tags: Array.isArray(src.tags) ? src.tags : [],
+    equipment: Array.isArray(src.equipment) ? src.equipment : [],
+    workoutStructure: src.workoutStructure || null,
+    steps_json: src.steps_json || null,
+    notes: src.notes || null,
+  };
+}
+
 export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -758,19 +786,15 @@ export default function CoachCalendarPage() {
         return;
       }
 
-      const payload = {
-         ...clipboard,
-         id: undefined,
-         date: data.date,
-         athleteId: targetAthleteId,
-      };
+      const payload = buildCalendarItemCreatePayload(clipboard, targetAthleteId, data.date);
 
       try {
         setLoading(true);
         await request('/api/coach/calendar-items', { method: 'POST', data: payload });
         await loadCalendar();
       } catch(e) {
-         setError(e instanceof Error ? e.message : 'Failed to paste session');
+         setError('Couldn’t paste session. Please try copying again.');
+         console.debug('Paste failure', e);
       } finally {
          setLoading(false);
       }
@@ -791,27 +815,14 @@ export default function CoachCalendarPage() {
       }
 
       try {
-        const payload = {
-            athleteId: targetAthleteId,
-            date: libraryTargetDate,
-            discipline: item.discipline,
-            title: item.title,
-            plannedDurationMinutes: Math.round(item.durationSec / 60),
-            workoutDetail: item.description,
-            plannedDistanceKm: item.distanceMeters ? item.distanceMeters / 1000 : undefined,
-            distanceMeters: item.distanceMeters,
-            intensityTarget: item.intensityTarget,
-            equipment: item.equipment,
-            // Spec: Preserve structure (bricks)
-            workoutStructure: (item as any).workoutStructure,
-        };
+        const payload = buildCalendarItemCreatePayload(item, targetAthleteId, libraryTargetDate);
 
         setLoading(true);
         await request('/api/coach/calendar-items', { method: 'POST', data: payload });
         setLibraryOpen(false);
         await loadCalendar();
       } catch(e) {
-         setError(e instanceof Error ? e.message : 'Failed to import template');
+         setError('Couldn’t add session. Try again.');
       } finally {
          setLoading(false);
       }
@@ -1796,7 +1807,7 @@ export default function CoachCalendarPage() {
       {libraryOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/25 backdrop-blur-sm transition-all" onClick={() => setLibraryOpen(false)} />
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-w-md flex flex-col transition-transform duration-300">
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-w-2xl flex flex-col transition-transform duration-300">
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
                <h2 className="text-lg font-semibold">Library</h2>
                <Button type="button" variant="ghost" onClick={() => setLibraryOpen(false)}>
@@ -1804,10 +1815,24 @@ export default function CoachCalendarPage() {
                </Button>
             </div>
             <div className="flex-1 overflow-y-auto bg-[var(--bg-card)]">
-               <WorkoutLibraryPanel onUseTemplate={handleLibraryTemplateUse} mode="library" />
+               <WorkoutLibraryPanel onUseTemplate={handleLibraryTemplateUse} mode="library" insertMode={true} />
             </div>
           </div>
         </>
+      )}
+
+      
+      {/* Global Error Toast */}
+      {error && drawerMode === 'closed' && (
+        <div className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2">
+          <div className="flex items-center gap-3 rounded-xl bg-rose-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
+            <Icon name="info" size="sm" className="text-white/90" />
+            {error}
+            <button onClick={() => setError('')} className="ml-2 text-white/80 hover:text-white">
+              <Icon name="close" size="sm" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Mobile month day bottom sheet */}
