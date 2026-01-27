@@ -187,27 +187,8 @@ export async function AppHeader() {
 
         {/* Desktop: keep existing multi-brand header */}
         <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:px-6 md:py-2">
-          {/* Center block: true-centered CoachKit branding */}
-          <div className="col-start-2 justify-self-center pointer-events-none z-10 flex items-center">
-            <Link
-              href="/" 
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
-            >
-              <span className="hidden text-base sm:inline">CoachKit</span>
-              <picture>
-                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/brand/coachkit-logo.png"
-                  alt="CoachKit"
-                  className="h-8 w-8 object-contain"
-                />
-              </picture>
-            </Link>
-          </div>
-
           {/* Left block: Club branding (row 1, col 1) */}
-          <div className="col-start-1 flex min-w-0 items-center justify-start">
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (
               <picture>
                 {headerClubBranding.darkLogoUrl ? (
@@ -217,7 +198,7 @@ export async function AppHeader() {
                 <img
                   src={headerClubBranding.logoUrl}
                   alt={`${headerClubBranding.name} logo`}
-                  className="h-10 w-auto object-contain sm:h-12"
+                  className="h-12 w-auto object-contain sm:h-14"
                 />
               </picture>
             ) : (
@@ -229,8 +210,27 @@ export async function AppHeader() {
             )}
           </div>
 
+          {/* Center block: true-centered CoachKit branding */}
+          <div className="col-start-2 row-start-1 justify-self-center pointer-events-none z-10 flex items-center">
+            <Link
+              href="/" 
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+            >
+              <span className="hidden text-base sm:inline">CoachKit</span>
+              <picture>
+                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/brand/coachkit-logo.png"
+                  alt="CoachKit"
+                  className="h-[44px] w-[44px] object-contain"
+                />
+              </picture>
+            </Link>
+          </div>
+
           {/* Right block: Nav + user (desktop) (row 1, col 3) */}
-          <div className="col-start-3 flex items-center justify-end gap-3 md:gap-4">
+          <div className="col-start-3 row-start-1 flex items-center justify-end gap-3 md:gap-4">
             {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
                 {desktopTextLinks.map((link) => (

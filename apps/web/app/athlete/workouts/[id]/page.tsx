@@ -778,40 +778,40 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                   <p className="mt-1 text-xs text-[var(--muted)]">Log your effort below</p>
                 )}
 
-                <div className="mt-3 space-y-3">
-                  <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                    Athlete notes to Coach
+                <div className="mt-5 space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="text-sm font-medium text-[var(--text)] ml-1">Athlete notes to Coach</div>
                     <Textarea
                       rows={2}
                       placeholder="Optional message to your coach"
                       value={commentDraft}
                       onChange={(event) => setCommentDraft(event.target.value)}
-                      className="text-sm"
+                      className="bg-[var(--bg-structure)] min-h-[80px] resize-none border-transparent focus:border-[var(--ring)] focus:bg-[var(--bg-card)] transition-colors"
                     />
-                  </label>
+                  </div>
 
-                  <label className="flex flex-col gap-1.5 text-xs font-medium text-[var(--muted)]">
-                    Athlete notes to Self
+                  <div className="space-y-1.5">
+                    <div className="text-sm font-medium text-[var(--text)] ml-1">Athlete notes to Self</div>
                     <Textarea
                       value={completionForm.notes}
                       onChange={(event) => setCompletionForm({ ...completionForm, notes: event.target.value })}
                       rows={2}
-                      className="text-sm"
+                      className="bg-[var(--bg-structure)] min-h-[80px] resize-none border-transparent focus:border-[var(--ring)] focus:bg-[var(--bg-card)] transition-colors"
                       placeholder={isDraftStrava ? 'Add notes before confirming' : 'Private notes for yourself'}
                     />
-                  </label>
+                  </div>
 
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label className="flex items-center gap-3 rounded-2xl bg-[var(--bg-structure)] px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--bg-structure)]/80">
                     <input
                       type="checkbox"
                       checked={completionForm.painFlag}
                       onChange={(event) => setCompletionForm({ ...completionForm, painFlag: event.target.checked })}
-                      className="w-4 h-4 rounded border-white/30 text-rose-500 focus:ring-2 focus:ring-rose-500/50"
+                      className="h-5 w-5 rounded border-[var(--border-subtle)] bg-[var(--bg-card)] text-rose-500 focus:ring-2 focus:ring-rose-500/50"
                     />
-                    <span className="text-[var(--text)]">Felt pain / discomfort</span>
+                    <span className="text-sm font-medium text-[var(--text)]">Felt pain / discomfort</span>
                   </label>
 
-                  <p className="text-xs text-[var(--muted)]">
+                  <p className="text-xs text-[var(--muted)] px-1">
                     {isDraftStrava ? 'Saved when you confirm' : 'Saved when you complete or mark missed'}
                   </p>
                 </div>
