@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { Button } from '@/components/ui/Button';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
@@ -290,13 +289,7 @@ export default function AthleteDashboardConsolePage() {
                     </div>
                   </div>
 
-                  {/* Refresh (bottom-right, spans both columns) */}
-                  <div className="flex items-center justify-end gap-3 mt-4">
-                    <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                      <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                      Refresh
-                    </Button>
-                  </div>
+                  {/* Refresh removed as data auto-reloads */}
                 </Block>
               </div>
 
