@@ -26,6 +26,7 @@ type CalendarContextMenuProps = {
   onClose: () => void;
   onAction: (action: ContextMenuAction, payload?: any) => void;
   libraryItems?: GroupSessionItem[];
+  showLibraryInsert?: boolean;
 };
 
 export function CalendarContextMenu({
@@ -36,6 +37,7 @@ export function CalendarContextMenu({
   onClose,
   onAction,
   libraryItems = [],
+  showLibraryInsert = true,
 }: CalendarContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [showLibraryList, setShowLibraryList] = useState(false);
@@ -84,13 +86,13 @@ export function CalendarContextMenu({
         list.push({ label: 'Paste session', action: 'paste', disabled: true, icon: 'paste' });
       }
       
-      if (!showLibraryList) {
+      if (!showLibraryList && showLibraryInsert) {
         list.push({ label: 'Add from Recurring Group Sessions', icon: 'calendarAddOn', action: 'library-insert' });
       }
     }
 
     return list;
-  }, [type, canPaste, showLibraryList]);
+  }, [type, canPaste, showLibraryList, showLibraryInsert]);
 
   if (!isOpen) return null;
 

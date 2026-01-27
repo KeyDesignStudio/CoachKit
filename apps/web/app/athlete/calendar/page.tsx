@@ -16,6 +16,7 @@ import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRo
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
+import { CalendarContextMenu, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
@@ -100,6 +101,13 @@ export default function AthleteCalendarPage() {
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessionForm, setSessionForm] = useState<SessionFormState>(() => emptyForm(weekStartKey));
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    type: 'session' | 'day';
+    data: any;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'day', data: null });
+  const [clipboard, setClipboard] = useState<any>(null);
 
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
@@ -316,6 +324,63 @@ export default function AthleteCalendarPage() {
     setDrawerOpen(false);
   }, []);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, type: 'session' | 'day', data: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      type,
+      data,
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleMenuAction = useCallback(async (action: ContextMenuAction, payload?: any) => {
+    const { type, data: contextData } = contextMenu;
+    closeContextMenu();
+
+    if (action === 'copy' && type === 'session') {
+      setClipboard(contextData);
+    } else if (action === 'delete' && type === 'session') {
+      if (!confirm('Are you sure you want to delete this workout?')) return;
+      try {
+        setLoading(true);
+        await request(`/api/athlete/calendar-items/${contextData.id}`, { method: 'DELETE' });
+        await loadItems(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to delete session');
+      } finally {
+        setLoading(false);
+      }
+    } else if (action === 'paste' && type === 'day') {
+      if (!clipboard) return;
+      
+      try {
+        setLoading(true);
+        await request('/api/athlete/calendar-items', {
+          method: 'POST',
+          data: {
+            date: contextData.date,
+            plannedStartTimeLocal: clipboard.plannedStartTimeLocal || undefined,
+            title: clipboard.title,
+            discipline: clipboard.discipline,
+            workoutDetail: clipboard.workoutDetail,
+            notes: clipboard.notes,
+          },
+        });
+        await loadItems(true);
+      } catch(e) {
+         setError('Couldn’t paste session.');
+      } finally {
+         setLoading(false);
+      }
+    }
+  }, [contextMenu, clipboard, request, loadItems]);
+
   const onCreateSession = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
@@ -447,6 +512,7 @@ export default function AthleteCalendarPage() {
                     isEmpty={dayItems.length === 0}
                     isToday={day.date === todayKey}
                     onAddClick={() => openCreateDrawer(day.date)}
+                    onContextMenu={(e) => handleContextMenu(e, 'day', { date: day.date })}
                   >
                     {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
                       <AthleteWeekSessionRow
@@ -455,6 +521,7 @@ export default function AthleteCalendarPage() {
                         onClick={() => handleWorkoutClick(item.id)}
                         timeZone={athleteTimezone}
                         statusIndicatorVariant="bar"
+                        onContextMenu={(e) => handleContextMenu(e, 'session', item)}
                       />
                     ))}
                   </AthleteWeekDayColumn>
@@ -567,6 +634,7 @@ export default function AthleteCalendarPage() {
                         onAddClick={(dateStr) => openCreateDrawer(dateStr)}
                         canAdd
                         onItemClick={handleItemIdClick}
+                        onContextMenu={handleContextMenu}
                       />
                     ))}
 
@@ -617,6 +685,16 @@ export default function AthleteCalendarPage() {
         </div>
       ) : null}
     </section>
+
+    <CalendarContextMenu
+      isOpen={contextMenu.isOpen}
+      position={contextMenu.position}
+      type={contextMenu.type}
+      canPaste={!!clipboard}
+      onClose={closeContextMenu}
+      onAction={handleMenuAction}
+      showLibraryInsert={false}
+    />
 
     <SessionDrawer
       isOpen={drawerOpen}
