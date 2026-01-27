@@ -5,11 +5,18 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import type { IconName } from '@/components/ui/iconRegistry';
-import type { LibraryListItem } from '@/components/coach/types';
+
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
 export type Position = { x: number; y: number };
 export type ContextMenuAction = 'copy' | 'paste' | 'delete' | 'edit' | 'library-insert' | 'library-insert-item';
+
+type GroupSessionItem = {
+  id: string;
+  title: string;
+  discipline: string;
+  durationMinutes: number;
+};
 
 type CalendarContextMenuProps = {
   isOpen: boolean;
@@ -18,7 +25,7 @@ type CalendarContextMenuProps = {
   canPaste: boolean;
   onClose: () => void;
   onAction: (action: ContextMenuAction, payload?: any) => void;
-  libraryItems?: LibraryListItem[];
+  libraryItems?: GroupSessionItem[];
 };
 
 export function CalendarContextMenu({
@@ -78,7 +85,7 @@ export function CalendarContextMenu({
       }
       
       if (!showLibraryList) {
-        list.push({ label: 'Add from Session Library', icon: 'calendarAddOn', action: 'library-insert' });
+        list.push({ label: 'Add from Recurring Group Sessions', icon: 'calendarAddOn', action: 'library-insert' });
       }
     }
 
@@ -114,11 +121,11 @@ export function CalendarContextMenu({
              <button onClick={() => setShowLibraryList(false)} className="text-xs text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">
                <Icon name="prev" size="xs" /> Back
              </button>
-             <span className="text-xs font-medium text-[var(--muted)]">Library</span>
+             <span className="text-xs font-medium text-[var(--muted)]">Recurring Group Sessions</span>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1 pr-1 custom-scrollbar">
             {libraryItems.length === 0 ? (
-               <div className="p-3 text-center text-xs text-[var(--muted)]">No templates found</div>
+               <div className="p-3 text-center text-xs text-[var(--muted)]">No sessions found</div>
             ) : (
                libraryItems.map(item => {
                  const theme = getDisciplineTheme(item.discipline);
@@ -136,7 +143,7 @@ export function CalendarContextMenu({
                      </div>
                      <div className="min-w-0 flex-1">
                        <p className="font-medium truncate text-[var(--text)]">{item.title}</p>
-                       <p className="text-[10px] text-[var(--muted)] truncate">{Math.round(item.durationSec / 60)} min • {item.intensityTarget || 'No target'}</p>
+                       <p className="text-[10px] text-[var(--muted)] truncate">{item.durationMinutes} min</p>
                      </div>
                    </button>
                  );
@@ -144,15 +151,16 @@ export function CalendarContextMenu({
             )}
           </div>
           <div className="pt-1 mt-1 border-t border-[var(--border-subtle)]">
-            <button
+            <a
+               href="/coach/group-sessions"
+               target="_blank"
                onClick={(e) => {
                  e.stopPropagation();
-                 onAction('library-insert');
                }}
-               className="w-full text-center text-xs text-[var(--primary)] py-1 hover:underline"
+               className="block w-full text-center text-xs text-[var(--primary)] py-1 hover:underline"
             >
-              Open full library
-            </button>
+              Manage Recurring sessions
+            </a>
           </div>
         </div>
       ) : (

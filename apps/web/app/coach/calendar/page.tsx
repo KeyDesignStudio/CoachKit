@@ -33,7 +33,6 @@ import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
 import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
-import { WorkoutLibraryPanel, LibraryListItem, LibraryDetailSession } from '@/components/coach/WorkoutLibraryPanel';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { CalendarItem } from '@/components/coach/types';
@@ -164,7 +163,7 @@ function groupItemsByDate(items: CalendarItem[]): Record<string, CalendarItem[]>
 }
 
 function buildCalendarItemCreatePayload(
-  source: CalendarItem | LibraryDetailSession,
+  source: CalendarItem,
   targetAthleteId: string,
   targetDate: string
 ) {
@@ -251,14 +250,6 @@ export default function CoachCalendarPage() {
   }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'session', data: null });
 
   const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
-  
-  // Library items for Context Menu
-  const [libraryItems, setLibraryItems] = useState<LibraryListItem[]>([]);
-  
-  // Library Panel Side Sheet
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [libraryTargetDate, setLibraryTargetDate] = useState<string | null>(null);
-  const [libraryTargetAthleteId, setLibraryTargetAthleteId] = useState<string | null>(null);
 
   const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
   const [mobileDaySheetDateStr, setMobileDaySheetDateStr] = useState<string>('');
@@ -507,16 +498,6 @@ export default function CoachCalendarPage() {
     }
   }, [request, user?.role, user?.userId]);
 
-  const loadLibraryItems = useCallback(async () => {
-    try {
-      // Fetch a default list (e.g. relevance/recent) for the context menu quick-add
-      const data = await request<{ items: LibraryListItem[] }>('/api/coach/workout-library?pageSize=50&sort=relevance');
-      setLibraryItems(data.items);
-    } catch {
-      // access might be denied or silent fail
-    }
-  }, [request]);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!didInitSelectedAthletes.current) return;
@@ -666,8 +647,7 @@ export default function CoachCalendarPage() {
 
   useEffect(() => {
     loadAthletes();
-    loadLibraryItems();
-  }, [loadAthletes, loadLibraryItems]);
+  }, [loadAthletes]);
 
   useEffect(() => {
     loadCalendar();
@@ -798,55 +778,8 @@ export default function CoachCalendarPage() {
          setLoading(false);
       }
 
-    } else if (action === 'library-insert' && type === 'day') {
-       setLibraryTargetDate(contextData.date);
-       setLibraryTargetAthleteId(contextData.athleteId || effectiveAthleteId);
-       setLibraryOpen(true);
-    } else if (action === 'library-insert-item') {
-        const item = payload as LibraryListItem;
-        const targetDate = contextData.date;
-        const targetAthleteId = contextData.athleteId || effectiveAthleteId || singleAthleteId;
-
-        if (!targetDate || !targetAthleteId) {
-            setError('Missing date or athlete for library insert.');
-            return;
-        }
-
-        try {
-           setLoading(true);
-           const res = await request<{ session: LibraryDetailSession }>(`/api/coach/workout-library/${item.id}`);
-           const postPayload = buildCalendarItemCreatePayload(res.session, targetAthleteId, targetDate);
-           await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
-           await loadCalendar();
-        } catch(e) {
-           setError('Failed to add session from library');
-        } finally {
-            setLoading(false);
-        }
-    }
+    } 
   }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
-
-  const handleLibraryTemplateUse = useCallback(async (item: LibraryDetailSession) => {
-      if (!libraryTargetDate) return;
-      const targetAthleteId = libraryTargetAthleteId || effectiveAthleteId || singleAthleteId;
-       if (!targetAthleteId) {
-        setError('Select an athlete.');
-        return;
-      }
-
-      try {
-        const payload = buildCalendarItemCreatePayload(item, targetAthleteId, libraryTargetDate);
-
-        setLoading(true);
-        await request('/api/coach/calendar-items', { method: 'POST', data: payload });
-        setLibraryOpen(false);
-        await loadCalendar();
-      } catch(e) {
-         setError('Couldn’t add session. Try again.');
-      } finally {
-         setLoading(false);
-      }
-  }, [libraryTargetDate, libraryTargetAthleteId, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
 
   const openCreateDrawerForAthlete = (athleteId: string, date: string) => {
     setDrawerAthleteId(athleteId);
@@ -1846,26 +1779,7 @@ export default function CoachCalendarPage() {
         canPaste={!!clipboard}
         onClose={closeContextMenu}
         onAction={handleMenuAction}
-        libraryItems={libraryItems}
       />
-
-      {/* Library Panel Drawer */}
-      {libraryOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/25 backdrop-blur-sm transition-all" onClick={() => setLibraryOpen(false)} />
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl sm:max-w-2xl flex flex-col transition-transform duration-300">
-            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
-               <h2 className="text-lg font-semibold">Library</h2>
-               <Button type="button" variant="ghost" onClick={() => setLibraryOpen(false)}>
-                 <Icon name="close" size="sm" />
-               </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-[var(--bg-card)]">
-               <WorkoutLibraryPanel onUseTemplate={handleLibraryTemplateUse} mode="library" insertMode={true} />
-            </div>
-          </div>
-        </>
-      )}
 
       
       {/* Global Error Toast */}
