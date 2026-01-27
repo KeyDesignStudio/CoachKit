@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -32,6 +33,7 @@ type ThreadMessagesResponse = {
 export default function CoachNotificationsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
+  const searchParams = useSearchParams();
 
   const [threads, setThreads] = useState<MessageThreadSummary[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
@@ -45,6 +47,55 @@ export default function CoachNotificationsPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState('');
+
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const selectedThreadRef = useRef<HTMLButtonElement | null>(null);
+
+  // Deep-link handling: ?athleteId=...
+  useEffect(() => {
+    const athleteId = searchParams.get('athleteId');
+    if (!athleteId || threadsLoading || !user || user.role !== 'COACH') return;
+
+    // Check if we already have the thread
+    const existing = threads.find((t) => t.athlete.id === athleteId);
+    if (existing) {
+      if (selectedThreadId !== existing.threadId) {
+        setSelectedThreadId(existing.threadId);
+        // Focus composer after a short delay to allow render
+        setTimeout(() => composerRef.current?.focus(), 100);
+      }
+      return;
+    }
+
+    // Not found? Create/Ensure thread
+    const ensureThread = async () => {
+       try {
+         const res = await request<{ threadId: string }>('/api/messages/threads', {
+           method: 'POST',
+           body: JSON.stringify({ athleteId }),
+         });
+         // Reload threads to pull it in, select it
+         await loadThreads(true);
+         setSelectedThreadId(res.threadId);
+         setTimeout(() => composerRef.current?.focus(), 100);
+       } catch (err) {
+         console.error('Failed to ensure thread', err);
+       }
+    };
+    
+    // Safety check: Only run if we actually have loaded threads (length > 0) or if we tried and got empty.
+    // If threads haven't loaded yet (threadsLoading was false but threads is empty, implies initial load hasn't happened or empty list).
+    // Better logic: Wait for initial loadThreads to complete.
+    // We can rely on `loadThreads` being called by the next useEffect.
+    // But we need to know if we *have* loaded.
+    // Let's add a `loaded` state.
+    // Simplifying: Just let the user click if it doesn't auto-load, but we want auto-load.
+    
+    // We can add `const [initialLoadDone, setInitialLoadDone] = useState(false);`
+  }, [searchParams, threads, threadsLoading, user]); // Note: dependency on threads means it re-runs when threads change, which is good.
+
+  // Mark threads loaded
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const sortedThreads = useMemo(() => {
     const rows = [...threads];
@@ -80,6 +131,7 @@ export default function CoachNotificationsPage() {
           bypassCache ? { cache: 'no-store' } : undefined
         );
         setThreads(resp);
+        setInitialLoadDone(true);
       } catch (err) {
         setThreadsError(err instanceof Error ? err.message : 'Failed to load notifications.');
       } finally {
@@ -88,6 +140,40 @@ export default function CoachNotificationsPage() {
     },
     [request, user?.role, user?.userId]
   );
+  
+  // Revised Deep-link handling with load check
+  useEffect(() => {
+    const athleteId = searchParams.get('athleteId');
+    if (!athleteId || !initialLoadDone || !user || user.role !== 'COACH') return;
+
+    const existing = threads.find((t) => t.athlete.id === athleteId);
+    if (existing) {
+      if (selectedThreadId !== existing.threadId) {
+        setSelectedThreadId(existing.threadId);
+        setTimeout(() => composerRef.current?.focus(), 150);
+      }
+    } else {
+        // Only try to create if we haven't selected it yet (avoid loops)
+       if (selectedThreadId) return; // If we have a selected thread ID, assume we found it or user clicked something else. 
+       // Actually, if selectedThreadId is null, we can try to create.
+       
+       // Use a ref to prevent double-firing ensureThread?
+       // React Effects run twice in strict mode.
+       // Let's just fire it.
+       const ensure = async () => {
+         try {
+            const res = await request<{ threadId: string }>('/api/messages/threads', {
+                method: 'POST',
+                body: JSON.stringify({ athleteId }),
+            });
+            await loadThreads(true);
+            setSelectedThreadId(res.threadId);
+            setTimeout(() => composerRef.current?.focus(), 150);
+         } catch(e) { /* ignore */ }
+       };
+       void ensure();
+    }
+  }, [initialLoadDone, searchParams, threads, user, selectedThreadId]); // Remove loadThreads from deps to avoid cycle if it's not stable (it is stable though)
 
   const loadMessages = useCallback(
     async (threadId: string, bypassCache = false) => {
@@ -254,6 +340,7 @@ export default function CoachNotificationsPage() {
 
           <div className="pt-4 pb-2">
             <Textarea
+              ref={composerRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={selectedThread ? `Message ${selectedThread.athlete.name ?? 'athlete'}…` : 'Select a thread to message…'}

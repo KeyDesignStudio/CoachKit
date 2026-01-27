@@ -118,3 +118,37 @@ export async function GET(request: NextRequest) {
     return handleError(error);
   }
 }
+
+const ensureThreadSchema = z.object({
+  athleteId: z.string().min(1),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const { user } = await requireAuth();
+    if (user.role !== 'COACH') throw new Error('Only coaches can create threads explicitly');
+
+    const body = await request.json();
+    const { athleteId } = ensureThreadSchema.parse(body);
+
+    const owned = await prisma.athleteProfile.findUnique({
+      where: { userId: athleteId },
+      select: { coachId: true },
+    });
+
+    if (!owned || owned.coachId !== user.id) {
+       throw new Error('Athlete not found or not assigned to you');
+    }
+
+    const thread = await prisma.messageThread.upsert({
+      where: { coachId_athleteId: { coachId: user.id, athleteId } },
+      create: { coachId: user.id, athleteId },
+      update: {},
+      select: { id: true },
+    });
+
+    return success({ threadId: thread.id });
+  } catch (error) {
+    return handleError(error);
+  }
+}

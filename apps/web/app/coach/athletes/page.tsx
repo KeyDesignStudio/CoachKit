@@ -165,26 +165,47 @@ export default function CoachAthletesPage() {
         )}
 
         {!loading && athletes.length > 0 && (
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {athletes.map((athlete) => (
-              <button
-                type="button"
+              <div
                 key={athlete.userId}
-                onClick={() => handleAthleteClick(athlete.userId)}
-                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-pointer text-left min-w-0 min-h-[44px] h-full flex flex-col"
+                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-default text-left min-w-0 min-h-[44px] h-full flex flex-col relative group"
               >
-                {/* Top: Name + email (+ optional DOB) */}
+                {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{athlete.user.name || 'Unnamed Athlete'}</div>
+                  <div className="flex items-start justify-between gap-2">
+                     <button 
+                        type="button" 
+                        onClick={() => handleAthleteClick(athlete.userId)}
+                        className="font-medium truncate hover:underlinetext-left"
+                      >
+                       {athlete.user.name || 'Unnamed Athlete'}
+                     </button>
+                    <a
+                      href={`/coach/notifications?athleteId=${athlete.userId}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                      title="Send Message"
+                    >
+                      <Icon name="chat" size="sm" />
+                    </a>
+                  </div>
                   <div className="text-sm text-[var(--muted)] truncate">{athlete.user.email}</div>
                   <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
                   {athlete.dateOfBirth ? (
                     <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
                   ) : null}
+                  {athlete.goalsText ? (
+                     <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                        <span className="font-medium">Goals:</span> {athlete.goalsText}
+                     </div>
+                  ) : null}
                 </div>
 
                 {/* Footer: disciplines */}
-                <div className="mt-3 flex items-end justify-end gap-2 flex-wrap justify-end flex-1">
+                <div 
+                   className="mt-3 flex items-end justify-end gap-2 flex-wrap justify-end flex-1 cursor-pointer"
+                   onClick={() => handleAthleteClick(athlete.userId)}
+                >
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     {athlete.disciplines.map((discipline) => {
                       const theme = getDisciplineTheme(discipline);
@@ -200,7 +221,7 @@ export default function CoachAthletesPage() {
                     })}
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}

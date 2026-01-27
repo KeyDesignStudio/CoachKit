@@ -576,10 +576,10 @@ export default function CoachDashboardConsolePage() {
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-4">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-6">
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Athlete</div>
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Athlete</div>
                   <Select
                     className="min-h-[44px]"
                     style={{ border: '1px solid rgba(0,0,0,.15)' }}
@@ -596,7 +596,7 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 <div className="md:col-start-2 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline</div>
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
                   <Select
                     className="min-h-[44px]"
                     style={{ border: '1px solid rgba(0,0,0,.15)' }}
@@ -614,7 +614,7 @@ export default function CoachDashboardConsolePage() {
 
                 {/* Row 2 */}
                 <div className="md:col-start-1 md:row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
                   <Select
                     className="min-h-[44px]"
                     style={{ border: '1px solid rgba(0,0,0,.15)' }}
@@ -630,7 +630,7 @@ export default function CoachDashboardConsolePage() {
                   {timeRange === 'CUSTOM' ? (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">From</div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">From</div>
                         <input
                           type="date"
                           className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
@@ -639,7 +639,7 @@ export default function CoachDashboardConsolePage() {
                         />
                       </div>
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">To</div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">To</div>
                         <input
                           type="date"
                           className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
@@ -652,8 +652,8 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 <div className="md:col-start-2 md:row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3">
+                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
+                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)] px-3">
                     <div className="text-sm font-medium text-[var(--muted)]">
                       {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                     </div>
@@ -760,10 +760,10 @@ export default function CoachDashboardConsolePage() {
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
 
-        {/* Review Inbox + Notifications split (desktop/tablet); stacked on mobile */}
-        <div className="mt-10 grid grid-cols-1 gap-6 items-start md:grid-cols-2">
-          {/* LEFT: Review inbox */}
-          <div className="min-w-0" ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
+        {/* Review Inbox + Notifications split (desktop/tablet); centered on page */}
+        <div className="mt-10 mx-auto max-w-[50%] min-w-[340px] w-full">
+          {/* Review inbox */}
+          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             {/* Preserve vertical rhythm from the prior layout (title used to sit above the card). */}
             <div className="mb-2" aria-hidden="true">
               <div className="h-4" />

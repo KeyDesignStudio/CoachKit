@@ -51,6 +51,7 @@ export const ICON_NAMES = [
   'info',
   'warning',
   'idea',
+  'chat',
 
   // Common UI
   'favorite',
@@ -115,8 +116,7 @@ export const ICONS: Record<IconName, string> = {
   logout: 'logout',
   info: 'info',
   warning: 'warning_amber',
-  idea: 'lightbulb',
-
+  idea: 'lightbulb',  chat: 'chat',
   // Common UI
   favorite: 'star',
 

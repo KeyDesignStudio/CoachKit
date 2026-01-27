@@ -246,10 +246,10 @@ export default function AthleteDashboardConsolePage() {
                     <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6 min-w-0">
                     {/* Row 1 */}
                     <div className="min-w-0 col-start-1 row-start-1">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline</div>
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
                       <Select
                         className="min-h-[44px] w-full"
                         style={{ border: '1px solid rgba(0,0,0,.15)' }}
@@ -267,7 +267,7 @@ export default function AthleteDashboardConsolePage() {
 
                     {/* Row 2 */}
                     <div className="min-w-0 col-start-1 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
                       <Select
                         className="min-h-[44px] w-full"
                         style={{ border: '1px solid rgba(0,0,0,.15)' }}
@@ -281,8 +281,8 @@ export default function AthleteDashboardConsolePage() {
                     </div>
 
                     <div className="min-w-0 col-start-2 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                      <div className="min-h-[44px] flex items-center min-w-0">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
+                      <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)] px-3 min-w-0">
                         <div className="text-sm font-semibold text-[var(--text)] truncate">
                           {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                         </div>
