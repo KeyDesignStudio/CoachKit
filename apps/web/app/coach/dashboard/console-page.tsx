@@ -683,12 +683,15 @@ export default function CoachDashboardConsolePage() {
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
           <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-            <Block
-              title="At a glance"
-              className="flex flex-col"
+            <div
+              className={cn("rounded-2xl bg-[var(--bg-card)] min-h-0 flex flex-col", tokens.spacing.containerPadding)}
               style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
               data-testid="coach-dashboard-at-a-glance"
             >
+              <div className="flex items-end justify-between gap-3 mb-2">
+                <BlockTitle>At a glance</BlockTitle>
+              </div>
+
               <div
                 className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
                 data-testid="coach-dashboard-at-a-glance-grid"
@@ -762,7 +765,7 @@ export default function CoachDashboardConsolePage() {
                   </div>
                 </div>
               </div>
-            </Block>
+            </div>
           </div>
         </div>
 
