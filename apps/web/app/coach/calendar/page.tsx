@@ -32,6 +32,7 @@ import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
+import { WorkoutDetail } from '@/components/workouts/WorkoutDetail';
 import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import type { WeatherSummary } from '@/lib/weather-model';
@@ -219,7 +220,7 @@ export default function CoachCalendarPage() {
   });
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
-  const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit'>('closed');
+  const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit' | 'view_completed'>('closed');
   const [sessionForm, setSessionForm] = useState(() => emptyForm(weekStartKey));
   const [editItemId, setEditItemId] = useState('');
   const [drawerAthleteId, setDrawerAthleteId] = useState('');
@@ -840,6 +841,12 @@ export default function CoachCalendarPage() {
     setDrawerMode('create');
     setError('');
     setTitleMessage('');
+  };
+
+  const openCompletedView = (item: CalendarItem) => {
+    setEditingItem(item);
+    setDrawerAthleteId(item.athleteId || singleAthleteId);
+    setDrawerMode('view_completed');
   };
 
   const openEditDrawer = (item: CalendarItem) => {
@@ -1537,7 +1544,11 @@ export default function CoachCalendarPage() {
                         onItemClick={(itemId) => {
                           const found = itemsById.get(itemId);
                           if (found) {
-                            openEditDrawer(found);
+                            if (found.status?.startsWith('COMPLETED')) {
+                              openCompletedView(found);
+                            } else {
+                              openEditDrawer(found);
+                            }
                           }
                         }}
                       />
@@ -1590,13 +1601,13 @@ export default function CoachCalendarPage() {
       <SessionDrawer
         isOpen={drawerMode !== 'closed'}
         onClose={closeDrawer}
-        title={drawerMode === 'create' ? 'Add Workout' : 'Edit Workout'}
-        onSubmit={onSaveSession}
-        submitLabel={drawerMode === 'create' ? 'Add Workout' : 'Save Changes'}
-        submitDisabled={!effectiveAthleteId}
-        onDelete={drawerMode === 'edit' ? onDelete : undefined}
+        title={drawerMode === 'view_completed' ? 'Workout Detail' : (drawerMode === 'create' ? 'Add Workout' : 'Edit Workout')}
+        onSubmit={drawerMode === 'view_completed' ? (e) => { e.preventDefault(); closeDrawer(); } : onSaveSession}
+        submitLabel={drawerMode === 'view_completed' ? 'Done' : (drawerMode === 'create' ? 'Add Workout' : 'Save Changes')}
+        submitDisabled={drawerMode !== 'view_completed' && !effectiveAthleteId}
+        onDelete={(drawerMode === 'edit' || drawerMode === 'view_completed') ? onDelete : undefined}
       >
-        <div className="space-y-4">
+        {drawerMode === 'view_completed' && editingItem ? (<div className="p-1"><WorkoutDetail item={editingItem} isDrawer athleteTimezone={editingItem.athleteTimezone} /></div>) : (<div className="space-y-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
             Date
             <Input type="date" value={sessionForm.date} onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })} required />
@@ -1821,6 +1832,7 @@ export default function CoachCalendarPage() {
           {titleMessage ? <p className="text-xs text-emerald-600">{titleMessage}</p> : null}
           {error && drawerMode !== 'closed' ? <p className="text-xs text-rose-500">{error}</p> : null}
         </div>
+      )}
       </SessionDrawer>
 
       {/* Context Menu */}
