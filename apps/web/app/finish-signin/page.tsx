@@ -23,7 +23,7 @@ export default function FinishSignIn() {
           if (data.data && data.data.user) {
             const user = data.data.user;
             if (user.role === 'ADMIN') {
-              router.replace('/admin/workout-library' as any);
+              router.replace('/' as any);
             } else if (user.role === 'COACH') {
               router.replace('/coach/dashboard' as any);
             } else if (user.role === 'ATHLETE') {

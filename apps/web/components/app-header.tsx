@@ -8,7 +8,6 @@ import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
-import { AdminHeader } from '@/components/admin/AdminHeader';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
@@ -23,7 +22,6 @@ const allNavLinks: NavLink[] = [
   { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
-  { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/notifications', label: 'Notifications', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
@@ -126,11 +124,6 @@ export async function AppHeader() {
   );
   const desktopNotificationsLink = navLinks.find((link) => link.href.endsWith('/notifications'));
   const desktopSettingsLink = navLinks.find((link) => link.href.endsWith('/settings'));
-
-  // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
-  if (userRole === 'ADMIN') {
-    return <AdminHeader />;
-  }
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
