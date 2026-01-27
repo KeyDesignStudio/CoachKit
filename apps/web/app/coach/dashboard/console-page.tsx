@@ -571,12 +571,12 @@ export default function CoachDashboardConsolePage() {
               className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <div className="flex items-end justify-between gap-3 mb-4">
+              <div className="flex items-end justify-between gap-3 mb-2">
                 <BlockTitle>Make your selection</BlockTitle>
                 <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-6">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-2">
                 {/* Row 1 */}
                 <div className="md:col-start-1 md:row-start-1">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Athlete</div>

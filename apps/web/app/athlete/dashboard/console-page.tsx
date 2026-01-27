@@ -241,12 +241,12 @@ export default function AthleteDashboardConsolePage() {
                   className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 >
-                  <div className="flex items-end justify-between gap-3 mb-4">
+                  <div className="flex items-end justify-between gap-3 mb-2">
                     <BlockTitle>Make your selection</BlockTitle>
                     <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-6 min-w-0">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
                     {/* Row 1 */}
                     <div className="min-w-0 col-start-1 row-start-1">
                       <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
