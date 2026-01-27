@@ -283,7 +283,7 @@ export default function AthleteDashboardConsolePage() {
 
                       <div className="min-w-0 col-start-2 row-start-2">
                         <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                        <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3 min-w-0">
+                        <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75 px-3 min-w-0">
                           <div className="text-sm font-medium text-[var(--text)] truncate">
                             {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                           </div>
