@@ -653,7 +653,7 @@ export default function CoachDashboardConsolePage() {
 
                 <div className="md:col-start-2 md:row-start-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)] px-3">
+                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3">
                     <div className="text-sm font-medium text-[var(--muted)]">
                       {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                     </div>
@@ -661,7 +661,7 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 {/* Row 4 */}
-                <div className="md:col-span-2 flex items-center justify-end gap-3 mt-1">
+                <div className="md:col-span-2 flex items-center justify-end gap-3 -mt-2">
                   <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
                     <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                     Refresh
