@@ -22,20 +22,20 @@ export function WeekSummaryColumn({
 }: Props) {
   return (
     <div 
-       className={cn("hidden md:flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden border border-[var(--border-subtle)]", className)}
+       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/50 overflow-hidden border border-[var(--border-subtle)]", className)}
        style={style}
     >
-      <div className="bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1.5">
+      <div className="border-b border-[var(--border-subtle)] px-3 py-1.5">
         <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
         <p className="text-sm font-medium truncate">Selected athletes</p>
       </div>
       <div className="flex flex-col gap-2 p-2">
-        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+        <div className="rounded border border-[var(--border-subtle)] p-2">
           <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Athletes</div>
           <div className="text-sm font-semibold text-[var(--text)]">{selectedAthleteIds.size}</div>
         </div>
 
-        <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+        <div className="rounded border border-[var(--border-subtle)] p-2">
           <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
           <div className="text-sm font-semibold text-[var(--text)]">
             {items.filter((item) => {
@@ -61,7 +61,7 @@ export function WeekSummaryColumn({
 
           return (
             <>
-              <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+              <div className="rounded border border-[var(--border-subtle)] p-2">
                 <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
                 <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
                   {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
@@ -69,7 +69,7 @@ export function WeekSummaryColumn({
                 <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
               </div>
 
-              <div className="rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-2">
+              <div className="rounded border border-[var(--border-subtle)] p-2">
                 <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
                 {top.length === 0 ? (
                   <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
