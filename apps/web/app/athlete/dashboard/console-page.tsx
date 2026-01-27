@@ -58,15 +58,16 @@ function NeedsAttentionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl text-left min-h-[56px]',
+        tokens.spacing.containerPadding,
         'transition-colors',
         tone === 'neutral' ? 'hover:bg-white/60' : '',
         toneClasses
       )}
     >
       <div className={cn("flex items-center justify-between", tokens.spacing.blockRowGap)}>
-        <div className={tokens.typography.h3}>{label}</div>
-        <div className={cn(tokens.typography.h1, 'tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
+        <div className={cn("font-medium", tokens.typography.body)}>{label}</div>
+        <div className={cn("font-semibold tabular-nums", tokens.typography.h1, tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
       </div>
     </button>
   );
