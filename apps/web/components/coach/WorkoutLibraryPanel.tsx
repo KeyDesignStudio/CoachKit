@@ -6,6 +6,7 @@ import { useApi } from '@/components/api-client';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Input } from '@/components/ui/Input';
 import { LibraryListItem } from './types';
 
 export type { LibraryListItem };
