@@ -245,7 +245,6 @@ export default function CoachGroupSessionsPage() {
             />
           )}
 
-      </div>
 
       {/* Modal for Creating */}
       <CreateSessionModal
