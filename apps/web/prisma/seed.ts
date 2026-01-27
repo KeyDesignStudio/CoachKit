@@ -252,6 +252,11 @@ async function main() {
     skipDuplicates: true,
   });
 
+  const athleteUsers = await Promise.all(
+    athleteUsersSeed.map((seed, index) =>
+      prisma.user.upsert({
+        where: { email: seed.email },
+        update: {
           name: index === 0 ? 'First Athlete' : 'Second Athlete',
           role: 'ATHLETE',
           timezone: 'Australia/Brisbane',
