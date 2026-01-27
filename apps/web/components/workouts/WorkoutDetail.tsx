@@ -19,7 +19,7 @@ import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView
 
 export type CompletedActivity = {
   id: string;
-  durationMinutes: number;
+  durationMinutes: number | null;
   distanceKm: number | null;
   rpe: number | null;
   notes: string | null;
@@ -83,7 +83,8 @@ type WorkoutDetailProps = {
 
 // ... existing code ...
 
-export function WorkoutDetail({ item, weather, athleteTimezone = 'Australia/Brisbane', className, isDrawer = false, uncompletedActionSlot }: WorkoutDetailProps) {
+
+const formatDurationHm = (seconds: number | undefined) => {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
   const totalMinutes = Math.round(seconds / 60);
   if (totalMinutes < 60) return `${totalMinutes} min`;
@@ -91,6 +92,7 @@ export function WorkoutDetail({ item, weather, athleteTimezone = 'Australia/Bris
   const minutes = totalMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
+
 
 const formatDurationHms = (seconds: number | undefined) => {
   if (seconds === undefined || seconds === null || !Number.isFinite(seconds) || seconds <= 0) return null;
@@ -130,22 +132,31 @@ const formatIntUnit = (value: number | undefined, unit: string) => {
 const FieldRow = ({
   label,
   value,
+  className,
   valueClassName,
 }: {
   label: string;
   value: React.ReactNode;
+  className?: string;
   valueClassName?: string;
 }) => {
   if (value === undefined || value === null || value === '') return null;
   return (
-    <div>
+    <div className={className}>
       <FieldLabel className="mb-1">{label}</FieldLabel>
       <div className={cn(tokens.typography.body, valueClassName)}>{value}</div>
     </div>
   );
 };
 
-export function WorkoutDetail({ item, weather, athleteTimezone = 'Australia/Brisbane', className, isDrawer = false }: WorkoutDetailProps) {
+export function WorkoutDetail({
+  item,
+  weather,
+  athleteTimezone = 'Australia/Brisbane',
+  className,
+  isDrawer = false,
+  uncompletedActionSlot,
+}: WorkoutDetailProps) {
   // Normalize latest completion
   // Some versions of item have 'completedActivities' array, others 'latestCompletedActivity' object
   let latestCompletion: CompletedActivity | undefined;
@@ -247,7 +258,7 @@ export function WorkoutDetail({ item, weather, athleteTimezone = 'Australia/Bris
            <div className="flex items-center gap-2">
             {statusIndicator ? (
               <Icon 
-                name={statusIndicator.icon} 
+                name={statusIndicator.iconName} 
                 className={statusIndicator.colorClass} 
                 size="md" 
               />
@@ -312,12 +323,12 @@ export function WorkoutDetail({ item, weather, athleteTimezone = 'Australia/Bris
                )}
 
                {/* Structure */}
-               {item.workoutStructure && (
+               {item.workoutStructure ? (
                   <div className="pt-4 border-t border-[var(--border-subtle)]">
                     <FieldLabel className="mb-2">Structure</FieldLabel>
                     <WorkoutStructureView structure={item.workoutStructure} />
                   </div>
-               )}
+               ) : null}
 
                 {item.notes && (
                   <div className="pt-4 border-t border-[var(--border-subtle)]">

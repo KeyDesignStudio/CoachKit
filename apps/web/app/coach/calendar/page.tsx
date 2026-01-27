@@ -328,7 +328,7 @@ export default function CoachCalendarPage() {
   }, [items]);
 
   const editingItem = useMemo(() => {
-    if (drawerMode !== 'edit' || !editItemId) return null;
+    if ((drawerMode !== 'edit' && drawerMode !== 'view_completed') || !editItemId) return null;
     return itemsById.get(editItemId) ?? null;
   }, [drawerMode, editItemId, itemsById]);
 
@@ -844,7 +844,7 @@ export default function CoachCalendarPage() {
   };
 
   const openCompletedView = (item: CalendarItem) => {
-    setEditingItem(item);
+    setEditItemId(item.id);
     setDrawerAthleteId(item.athleteId || singleAthleteId);
     setDrawerMode('view_completed');
   };

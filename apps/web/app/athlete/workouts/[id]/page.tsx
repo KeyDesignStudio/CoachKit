@@ -638,6 +638,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       {showSkeleton ? (
         <FullScreenLogoLoader />
       ) : item ? (
+        <>
         <WorkoutDetail
           item={item}
           weather={weather}
@@ -668,6 +669,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               </Button>
            </div>
         )}
+        </>
       ) : null}
 
       <ConfirmModal
