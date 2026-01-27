@@ -26,8 +26,9 @@ export const tokens = {
     sm: 'rounded',
   },
   typography: {
-    blockTitle: 'text-lg font-semibold text-[var(--text)] tracking-tight',
-    sectionLabel: 'text-xs font-medium text-[var(--muted)] uppercase tracking-wider',
+    blockTitle: 'text-sm font-bold text-[var(--text)] uppercase tracking-wide',
+    sectionLabel: 'text-[10px] sm:text-xs font-bold text-[var(--muted)] uppercase tracking-wider',
+    navLink: 'text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] uppercase tracking-wide transition-colors',
     body: 'text-sm text-[var(--text)] leading-relaxed',
     bodySemi: 'text-sm font-semibold text-[var(--text)] leading-relaxed',
     bodyLarge: 'text-base text-[var(--text)] leading-relaxed',

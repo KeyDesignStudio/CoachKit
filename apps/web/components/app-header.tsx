@@ -9,11 +9,15 @@ import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
+import { tokens } from '@/components/ui/tokens';
+import { cn } from '@/lib/cn';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
-const DESKTOP_NAV_LINK_CLASS =
-  'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
+const DESKTOP_NAV_LINK_CLASS = cn(
+  'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+  tokens.typography.navLink
+);
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
@@ -232,9 +236,9 @@ export async function AppHeader() {
           {/* Right block: Nav + user (desktop) (row 1, col 3) */}
           <div className="col-start-3 row-start-1 flex items-center justify-end gap-3 md:gap-4">
             {navLinks.length > 0 ? (
-              <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
+              <nav className="hidden md:flex flex-wrap gap-2">
                 {desktopTextLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}>
+                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "whitespace-nowrap")}>
                     {link.label}
                   </Link>
                 ))}
@@ -244,9 +248,9 @@ export async function AppHeader() {
                     key={desktopNotificationsLink.href}
                     href={desktopNotificationsLink.href}
                     aria-label="Notifications"
-                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
                   >
-                    <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                    <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
                     <span className="sr-only">Notifications</span>
                   </Link>
                 ) : null}
@@ -256,9 +260,9 @@ export async function AppHeader() {
                     key={desktopSettingsLink.href}
                     href={desktopSettingsLink.href}
                     aria-label="Settings"
-                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
                   >
-                    <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                    <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
                     <span className="sr-only">Settings</span>
                   </Link>
                 ) : null}
