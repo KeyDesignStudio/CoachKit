@@ -568,105 +568,107 @@ export default function CoachDashboardConsolePage() {
           {/* Column 2: Filters/selectors */}
           <div className="min-w-0 order-1 md:order-1">
             <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
+              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 flex flex-col justify-between"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <BlockTitle>Make your selection</BlockTitle>
-                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-2">
-                {/* Row 1 */}
-                <div className="md:col-start-1 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Athlete</div>
-                  <Select
-                    className="min-h-[44px]"
-                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
-                    value={athleteId ?? ''}
-                    onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}
-                  >
-                    <option value="">All athletes</option>
-                    {(data?.athletes ?? []).map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name ?? 'Unnamed athlete'}
-                      </option>
-                    ))}
-                  </Select>
+              <div>
+                <div className="flex items-end justify-between gap-3 mb-2">
+                  <BlockTitle>Make your selection</BlockTitle>
+                  <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                 </div>
 
-                <div className="md:col-start-2 md:row-start-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
-                  <Select
-                    className="min-h-[44px]"
-                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
-                    value={discipline ?? ''}
-                    onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
-                  >
-                    <option value="">All disciplines</option>
-                    {disciplineOptions.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-6">
+                  {/* Row 1 */}
+                  <div className="md:col-start-1 md:row-start-1">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Athlete</div>
+                    <Select
+                      className="min-h-[44px]"
+                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                      value={athleteId ?? ''}
+                      onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}
+                    >
+                      <option value="">All athletes</option>
+                      {(data?.athletes ?? []).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name ?? 'Unnamed athlete'}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
 
-                {/* Row 2 */}
-                <div className="md:col-start-1 md:row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
-                  <Select
-                    className="min-h-[44px]"
-                    style={{ border: '1px solid rgba(0,0,0,.15)' }}
-                    value={timeRange}
-                    onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
-                  >
-                    <option value="LAST_7">Last 7 days</option>
-                    <option value="LAST_14">Last 14 days</option>
-                    <option value="LAST_30">Last 30 days</option>
-                    <option value="CUSTOM">Custom</option>
-                  </Select>
+                  <div className="md:col-start-2 md:row-start-1">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
+                    <Select
+                      className="min-h-[44px]"
+                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                      value={discipline ?? ''}
+                      onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
+                    >
+                      <option value="">All disciplines</option>
+                      {disciplineOptions.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
 
-                  {timeRange === 'CUSTOM' ? (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">From</div>
-                        <input
-                          type="date"
-                          className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                          value={customFrom}
-                          onChange={(e) => setCustomFrom(e.target.value)}
-                        />
+                  {/* Row 2 */}
+                  <div className="md:col-start-1 md:row-start-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
+                    <Select
+                      className="min-h-[44px]"
+                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                    >
+                      <option value="LAST_7">Last 7 days</option>
+                      <option value="LAST_14">Last 14 days</option>
+                      <option value="LAST_30">Last 30 days</option>
+                      <option value="CUSTOM">Custom</option>
+                    </Select>
+
+                    {timeRange === 'CUSTOM' ? (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">From</div>
+                          <input
+                            type="date"
+                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            value={customFrom}
+                            onChange={(e) => setCustomFrom(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">To</div>
+                          <input
+                            type="date"
+                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            value={customTo}
+                            onChange={(e) => setCustomTo(e.target.value)}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">To</div>
-                        <input
-                          type="date"
-                          className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
-                          value={customTo}
-                          onChange={(e) => setCustomTo(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+                  </div>
 
-                <div className="md:col-start-2 md:row-start-2">
-                  <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                  <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3">
-                    <div className="text-sm font-medium text-[var(--muted)]">
-                      {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                  <div className="md:col-start-2 md:row-start-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
+                    <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3">
+                      <div className="text-sm font-medium text-[var(--muted)]">
+                        {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                      </div>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Row 4 */}
-                <div className="md:col-span-2 flex items-center justify-end gap-3 -mt-2">
-                  <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                    <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                    Refresh
-                  </Button>
-                </div>
+              {/* Row 4 */}
+              <div className="flex items-center justify-end gap-3 mt-4">
+                <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
+                  <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
+                  Refresh
+                </Button>
               </div>
             </div>
           </div>

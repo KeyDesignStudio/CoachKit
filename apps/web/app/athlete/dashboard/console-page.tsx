@@ -238,64 +238,66 @@ export default function AthleteDashboardConsolePage() {
               {/* Column 2: Filters/selectors */}
               <div className="min-w-0 order-1 md:order-1">
                 <div
-                  className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
+                  className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 flex flex-col justify-between"
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 >
-                  <div className="flex items-end justify-between gap-3 mb-2">
-                    <BlockTitle>Make your selection</BlockTitle>
-                    <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
-                    {/* Row 1 */}
-                    <div className="min-w-0 col-start-1 row-start-1">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
-                      <Select
-                        className="min-h-[44px] w-full"
-                        style={{ border: '1px solid rgba(0,0,0,.15)' }}
-                        value={discipline ?? ''}
-                        onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
-                      >
-                        <option value="">All disciplines</option>
-                        <option value="BIKE">Bike</option>
-                        <option value="RUN">Run</option>
-                        <option value="SWIM">Swim</option>
-                        <option value="OTHER">Other</option>
-                      </Select>
-                    </div>
-                    <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
-
-                    {/* Row 2 */}
-                    <div className="min-w-0 col-start-1 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
-                      <Select
-                        className="min-h-[44px] w-full"
-                        style={{ border: '1px solid rgba(0,0,0,.15)' }}
-                        value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
-                      >
-                        <option value="LAST_7">Last 7 days</option>
-                        <option value="LAST_14">Last 14 days</option>
-                        <option value="LAST_30">Last 30 days</option>
-                      </Select>
+                  <div>
+                    <div className="flex items-end justify-between gap-3 mb-2">
+                      <BlockTitle>Make your selection</BlockTitle>
+                      <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                     </div>
 
-                    <div className="min-w-0 col-start-2 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                      <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3 min-w-0">
-                        <div className="text-sm font-medium text-[var(--text)] truncate">
-                          {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-6 min-w-0">
+                      {/* Row 1 */}
+                      <div className="min-w-0 col-start-1 row-start-1">
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
+                        <Select
+                          className="min-h-[44px] w-full"
+                          style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                          value={discipline ?? ''}
+                          onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
+                        >
+                          <option value="">All disciplines</option>
+                          <option value="BIKE">Bike</option>
+                          <option value="RUN">Run</option>
+                          <option value="SWIM">Swim</option>
+                          <option value="OTHER">Other</option>
+                        </Select>
+                      </div>
+                      <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
+
+                      {/* Row 2 */}
+                      <div className="min-w-0 col-start-1 row-start-2">
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
+                        <Select
+                          className="min-h-[44px] w-full"
+                          style={{ border: '1px solid rgba(0,0,0,.15)' }}
+                          value={timeRange}
+                          onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                        >
+                          <option value="LAST_7">Last 7 days</option>
+                          <option value="LAST_14">Last 14 days</option>
+                          <option value="LAST_30">Last 30 days</option>
+                        </Select>
+                      </div>
+
+                      <div className="min-w-0 col-start-2 row-start-2">
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
+                        <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/50 px-3 min-w-0">
+                          <div className="text-sm font-medium text-[var(--text)] truncate">
+                            {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                          </div>
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Refresh (bottom-right, spans both columns) */}
-                    <div className="col-span-2 flex items-center justify-end gap-3 -mt-2">
-                      <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                        <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                        Refresh
-                      </Button>
-                    </div>
+                  {/* Refresh (bottom-right, spans both columns) */}
+                  <div className="flex items-center justify-end gap-3 mt-4">
+                    <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
+                      <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
+                      Refresh
+                    </Button>
                   </div>
                 </div>
               </div>
