@@ -7,9 +7,12 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
-import { Select } from '@/components/ui/Select';
+import { SelectField } from '@/components/ui/SelectField';
 import { uiH1 } from '@/components/ui/typography';
+import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
@@ -61,9 +64,9 @@ function NeedsAttentionItem({
         toneClasses
       )}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm font-medium">{label}</div>
-        <div className={cn('text-2xl font-semibold tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
+      <div className={cn("flex items-center justify-between", tokens.spacing.blockRowGap)}>
+        <div className={tokens.typography.h3}>{label}</div>
+        <div className={cn(tokens.typography.h1, 'tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
       </div>
     </button>
   );
@@ -184,76 +187,71 @@ export default function AthleteDashboardConsolePage() {
 
   if (!user || user.role !== 'ATHLETE') {
     return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Athlete access required.</p>
+      <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
+        <p className={tokens.typography.bodyMuted}>Athlete access required.</p>
       </div>
     );
   }
 
   return (
     <>
-      <section className="px-4 pb-10 md:px-6">
+      <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className="pt-3 md:pt-6">
-          <h1 className={cn(uiH1, 'font-semibold')}>Athlete Console</h1>
+          <h1 className={tokens.typography.h1}>Athlete Console</h1>
         </div>
 
         <div className="mt-4">
           {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-          <div className="grid grid-cols-1 gap-4 min-w-0 items-start md:gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className={cn("grid grid-cols-1 min-w-0 items-start md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
               {/* Column 1: Needs your attention */}
               <div className="min-w-0 order-2 md:order-2">
-                <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-                  <div className="flex items-end justify-between gap-3 mb-2">
-                    <BlockTitle>Needs your attention</BlockTitle>
-                    <div className="text-xs text-[var(--muted)]">Tap to open calendar</div>
-                  </div>
+                <div ref={needsCardRef}>
+                  <Block
+                    title="Needs your attention"
+                    rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
+                  >
+                    <div className={cn("grid", tokens.spacing.widgetGap)}>
+                      {typeof data?.attention.painFlagWorkouts === 'number' ? (
+                        <NeedsAttentionItem
+                          label="Workouts with pain flagged"
+                          count={data.attention.painFlagWorkouts}
+                          tone="danger"
+                          onClick={() => (window.location.href = '/athlete/calendar')}
+                        />
+                      ) : null}
 
-                  <div className="grid gap-2">
-                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
                       <NeedsAttentionItem
-                        label="Workouts with pain flagged"
-                        count={data.attention.painFlagWorkouts}
-                        tone="danger"
+                        label="Workouts pending your confirmation"
+                        count={data?.attention.pendingConfirmation ?? 0}
+                        tone="primary"
                         onClick={() => (window.location.href = '/athlete/calendar')}
                       />
-                    ) : null}
 
-                    <NeedsAttentionItem
-                      label="Workouts pending your confirmation"
-                      count={data?.attention.pendingConfirmation ?? 0}
-                      tone="primary"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-
-                    <NeedsAttentionItem
-                      label="Workouts missed"
-                      count={data?.attention.workoutsMissed ?? 0}
-                      tone="neutral"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-                  </div>
+                      <NeedsAttentionItem
+                        label="Workouts missed"
+                        count={data?.attention.workoutsMissed ?? 0}
+                        tone="neutral"
+                        onClick={() => (window.location.href = '/athlete/calendar')}
+                      />
+                    </div>
+                  </Block>
                 </div>
               </div>
 
               {/* Column 2: Filters/selectors */}
               <div className="min-w-0 order-1 md:order-1">
-                <div
-                  className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 flex flex-col justify-between"
+                <Block
+                  title="Make your selection"
+                  className="flex flex-col justify-between"
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 >
                   <div>
-                    <div className="flex items-end justify-between gap-3 mb-2">
-                      <BlockTitle>Make your selection</BlockTitle>
-                      <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-6 min-w-0">
+                    <div className={cn("grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4", tokens.spacing.gridGap)}>
                       {/* Row 1 */}
                       <div className="min-w-0 col-start-1 row-start-1">
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
-                        <Select
+                        <FieldLabel className="pl-1">Discipline</FieldLabel>
+                        <SelectField
                           className="min-h-[44px] w-full"
-                          style={{ border: '1px solid rgba(0,0,0,.15)' }}
                           value={discipline ?? ''}
                           onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
                         >
@@ -262,29 +260,28 @@ export default function AthleteDashboardConsolePage() {
                           <option value="RUN">Run</option>
                           <option value="SWIM">Swim</option>
                           <option value="OTHER">Other</option>
-                        </Select>
+                        </SelectField>
                       </div>
                       <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
 
                       {/* Row 2 */}
                       <div className="min-w-0 col-start-1 row-start-2">
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
-                        <Select
+                        <FieldLabel className="pl-1">Time range</FieldLabel>
+                        <SelectField
                           className="min-h-[44px] w-full"
-                          style={{ border: '1px solid rgba(0,0,0,.15)' }}
                           value={timeRange}
                           onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
                         >
                           <option value="LAST_7">Last 7 days</option>
                           <option value="LAST_14">Last 14 days</option>
                           <option value="LAST_30">Last 30 days</option>
-                        </Select>
+                        </SelectField>
                       </div>
 
                       <div className="min-w-0 col-start-2 row-start-2">
-                        <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                        <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75 px-3 min-w-0">
-                          <div className="text-sm font-medium text-[var(--text)] truncate">
+                        <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                        <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75")}>
+                          <div className={cn("truncate", tokens.typography.body)}>
                             {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                           </div>
                         </div>
@@ -299,7 +296,7 @@ export default function AthleteDashboardConsolePage() {
                       Refresh
                     </Button>
                   </div>
-                </div>
+                </Block>
               </div>
 
               {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
@@ -315,12 +312,12 @@ export default function AthleteDashboardConsolePage() {
                   </div>
 
                   <div
-                    className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
+                    className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
                     data-testid="athlete-dashboard-at-a-glance-grid"
                   >
                     {/* Left: stats */}
-                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-at-a-glance-stats">
-                      <div className="grid gap-1">
+                    <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-at-a-glance-stats">
+                      <div className={cn("grid", tokens.spacing.widgetGap)}>
                         {[
                           { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
                           { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
@@ -330,15 +327,16 @@ export default function AthleteDashboardConsolePage() {
                           <div
                             key={row.label}
                             className={cn(
-                              'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
+                              'min-w-0 flex items-baseline justify-between py-2',
+                              tokens.spacing.widgetGap,
                               idx < 3 ? 'border-b border-black/5' : ''
                             )}
                             data-testid="athlete-dashboard-at-a-glance-stat-row"
                           >
-                            <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
+                            <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
                               {row.label}
                             </div>
-                            <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                            <div className={cn('flex-shrink-0 leading-[1.05] font-semibold tabular-nums', tokens.typography.body, 'sm:text-base')}>
                               {row.value}
                             </div>
                           </div>
@@ -347,8 +345,8 @@ export default function AthleteDashboardConsolePage() {
                     </div>
 
                     {/* Right: discipline load */}
-                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-discipline-load">
-                      <div className="flex flex-col gap-2">
+                    <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-discipline-load">
+                      <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
                         {(() => {
                           const rows = data?.disciplineLoad ?? [];
                           const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
@@ -359,10 +357,10 @@ export default function AthleteDashboardConsolePage() {
                                 const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
                                 const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
                                 return (
-                                  <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
-                                    <div className="flex items-center gap-2 min-w-[64px]">
+                                  <div key={r.discipline} className={cn("grid grid-cols-[auto,1fr,auto] items-center min-w-0", tokens.spacing.widgetGap)}>
+                                    <div className={cn("flex items-center min-w-[64px]", tokens.spacing.widgetGap)}>
                                       <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                      <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                      <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
                                     </div>
 
                                     <div className="h-2 rounded-full bg-black/10 overflow-hidden">
@@ -370,7 +368,7 @@ export default function AthleteDashboardConsolePage() {
                                     </div>
 
                                     <div
-                                      className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
+                                      className={cn("tabular-nums text-right whitespace-nowrap truncate max-w-[120px]", tokens.typography.meta)}
                                       title={rightValue}
                                     >
                                       {rightValue}

@@ -8,12 +8,15 @@ import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { SelectField } from '@/components/ui/SelectField';
+import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
+import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
@@ -139,15 +142,16 @@ function AttentionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl text-left min-h-[56px]',
+        tokens.spacing.containerPadding,
         'transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60',
         toneClasses
       )}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm font-medium">{label}</div>
-        <div className={cn('text-2xl font-semibold tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
+      <div className={cn('flex items-center justify-between', tokens.spacing.blockRowGap)}>
+        <div className={cn('font-medium', tokens.typography.body)}>{label}</div>
+        <div className={cn('font-semibold tabular-nums', tokens.typography.h1, tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
       </div>
     </button>
   );
@@ -169,14 +173,15 @@ function AlertStripItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-3 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl text-left min-h-[56px]',
+        tokens.spacing.containerPadding,
         'bg-[var(--bg-card)] border border-black/15 transition-colors',
         active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60'
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-[var(--text)]">{label}</div>
-        <div className="text-2xl font-semibold tabular-nums text-[var(--text)]">{count}</div>
+      <div className={cn('flex items-center justify-between', tokens.spacing.widgetGap)}>
+        <div className={cn('font-medium', tokens.typography.body)}>{label}</div>
+        <div className={cn('font-semibold tabular-nums', tokens.typography.h1)}>{count}</div>
       </div>
     </button>
   );
@@ -249,7 +254,7 @@ function ReviewInboxRow({
     .trim();
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 min-w-0">
+    <div className={cn("flex items-center min-w-0", tokens.spacing.widgetGap, tokens.spacing.elementPadding)}>
       <label className="h-11 w-11 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
@@ -267,25 +272,27 @@ function ReviewInboxRow({
         type="button"
         onClick={() => onOpen(item)}
         className={cn(
-          'flex items-center gap-2 min-w-0 flex-1 text-left justify-start min-h-[44px]',
-          painFlag ? 'bg-rose-500/10 rounded-xl px-2 py-2 -mx-2' : ''
+          'flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
+          tokens.spacing.widgetGap,
+          painFlag ? 'bg-rose-500/10 rounded-xl -mx-2' : ''
         )}
+        style={painFlag ? { padding: '8px' } : undefined}
       >
-        <span className="block min-w-0 max-w-[30%] truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
-        {dateLabel ? <span className="flex-shrink-0 text-xs text-[var(--muted)] whitespace-nowrap">{dateLabel}</span> : null}
-        <span className="block min-w-0 flex-1 truncate text-sm text-[var(--text)]">{item.title}</span>
+        <span className={cn("block min-w-0 max-w-[30%] truncate font-medium", tokens.typography.body)}>{athleteName}</span>
+        {dateLabel ? <span className={cn("flex-shrink-0 whitespace-nowrap", tokens.typography.meta)}>{dateLabel}</span> : null}
+        <span className={cn("block min-w-0 flex-1 truncate", tokens.typography.body)}>{item.title}</span>
 
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+        <div className={cn("flex items-center flex-shrink-0 whitespace-nowrap", tokens.spacing.tinyGap)}>
           <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-          <span className={cn('text-xs uppercase text-[var(--muted)] font-medium', theme.textClass)}>{disciplineLabel}</span>
+          <span className={cn('uppercase font-medium', tokens.typography.meta, theme.textClass)}>{disciplineLabel}</span>
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
-          <span className={cn('text-xs uppercase', painFlag ? 'text-rose-700 font-medium' : 'text-[var(--muted)]')}>{statusText}</span>
-          <div className="flex items-center gap-1">
+        <div className={cn("flex items-center flex-shrink-0 whitespace-nowrap", tokens.spacing.tinyGap)}>
+          <span className={cn('uppercase', painFlag ? 'text-rose-700 font-medium' : tokens.typography.meta)}>{statusText}</span>
+          <div className={cn("flex items-center", tokens.spacing.tinyGap)}>
             {item.hasAthleteComment ? <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} /> : null}
             {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
-            {isSkipped ? <Icon name="skipped" size="xs" className="text-[var(--muted)]" aria-label="Missed" aria-hidden={false} /> : null}
+            {isSkipped ? <Icon name="skipped" size="xs" className={tokens.typography.meta} aria-label="Missed" aria-hidden={false} /> : null}
           </div>
         </div>
       </button>
@@ -500,90 +507,85 @@ export default function CoachDashboardConsolePage() {
 
   if (userLoading) {
     return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Loading...</p>
+      <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
+        <p className={cn(tokens.typography.bodyMuted)}>Loading...</p>
       </div>
     );
   }
 
   if (!user || user.role !== 'COACH') {
     return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Coach access required.</p>
+      <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
+        <p className={tokens.typography.bodyMuted}>Coach access required.</p>
       </div>
     );
   }
 
   return (
     <>
-      <section className="px-4 pb-10 md:px-6">
-        <div className="pt-3 md:pt-6">
-          <h1 className={cn(uiH1, 'font-semibold')}>Coach Console</h1>
+      <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
+        <div className={cn("pt-3 md:pt-6")}>
+          <h1 className={tokens.typography.h1}>Coach Console</h1>
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-        <div className="mt-3 grid grid-cols-1 gap-4 min-w-0 items-start md:mt-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start md:mt-4 md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
           {/* Column 1: Needs your attention */}
           <div className="min-w-0 order-2 md:order-2">
-            <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <BlockTitle>Needs your attention</BlockTitle>
-                <div className="text-xs text-[var(--muted)]">Tap to focus inbox</div>
-              </div>
+            <div ref={needsCardRef}>
+              <Block
+                title="Needs your attention"
+                rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>}
+              >
+                <div className={cn("grid", tokens.spacing.widgetGap)}>
+                  <AttentionItem
+                    label="Workouts with pain flags"
+                    count={data?.attention.painFlagWorkouts ?? 0}
+                    tone="danger"
+                    active={inboxPreset === 'PAIN'}
+                    onClick={() => toggleInboxPreset('PAIN')}
+                  />
+                  <AttentionItem
+                    label="Workouts with athlete comments"
+                    count={data?.attention.athleteCommentWorkouts ?? 0}
+                    tone="primary"
+                    active={inboxPreset === 'COMMENTS'}
+                    onClick={() => toggleInboxPreset('COMMENTS')}
+                  />
+                </div>
 
-              <div className="grid gap-2">
-                <AttentionItem
-                  label="Workouts with pain flags"
-                  count={data?.attention.painFlagWorkouts ?? 0}
-                  tone="danger"
-                  active={inboxPreset === 'PAIN'}
-                  onClick={() => toggleInboxPreset('PAIN')}
-                />
-                <AttentionItem
-                  label="Workouts with athlete comments"
-                  count={data?.attention.athleteCommentWorkouts ?? 0}
-                  tone="primary"
-                  active={inboxPreset === 'COMMENTS'}
-                  onClick={() => toggleInboxPreset('COMMENTS')}
-                />
-              </div>
-
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <AlertStripItem
-                  label="Missed workouts"
-                  count={data?.attention.skippedWorkouts ?? 0}
-                  active={inboxPreset === 'SKIPPED'}
-                  onClick={() => toggleInboxPreset('SKIPPED')}
-                />
-                <AlertStripItem
-                  label="Awaiting coach review"
-                  count={data?.attention.awaitingCoachReview ?? 0}
-                  active={inboxPreset === 'AWAITING_REVIEW'}
-                  onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
-                />
-              </div>
+                <div className={cn("mt-2 grid md:grid-cols-2", tokens.spacing.widgetGap)}>
+                  <AlertStripItem
+                    label="Missed workouts"
+                    count={data?.attention.skippedWorkouts ?? 0}
+                    active={inboxPreset === 'SKIPPED'}
+                    onClick={() => toggleInboxPreset('SKIPPED')}
+                  />
+                  <AlertStripItem
+                    label="Awaiting coach review"
+                    count={data?.attention.awaitingCoachReview ?? 0}
+                    active={inboxPreset === 'AWAITING_REVIEW'}
+                    onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
+                  />
+                </div>
+              </Block>
             </div>
           </div>
 
           {/* Column 2: Filters/selectors */}
           <div className="min-w-0 order-1 md:order-1">
-            <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4 flex flex-col justify-between"
+            <Block
+              title="Make your selection"
+              className="flex flex-col justify-between"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
             >
               <div>
-                <div className="flex items-end justify-between gap-3 mb-2">
-                  <BlockTitle>Make your selection</BlockTitle>
-                  <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-x-4 md:gap-y-6">
+                <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
                   {/* Row 1 */}
                   <div className="md:col-start-1 md:row-start-1">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Athlete</div>
-                    <Select
+                    <FieldLabel className="pl-1">Athlete</FieldLabel>
+                    <SelectField
                       className="min-h-[44px]"
-                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
                       value={athleteId ?? ''}
                       onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}
                     >
@@ -593,14 +595,13 @@ export default function CoachDashboardConsolePage() {
                           {a.name ?? 'Unnamed athlete'}
                         </option>
                       ))}
-                    </Select>
+                    </SelectField>
                   </div>
 
                   <div className="md:col-start-2 md:row-start-1">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Discipline</div>
-                    <Select
+                    <FieldLabel className="pl-1">Discipline</FieldLabel>
+                    <SelectField
                       className="min-h-[44px]"
-                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
                       value={discipline ?? ''}
                       onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
                     >
@@ -610,15 +611,14 @@ export default function CoachDashboardConsolePage() {
                           {d}
                         </option>
                       ))}
-                    </Select>
+                    </SelectField>
                   </div>
 
                   {/* Row 2 */}
                   <div className="md:col-start-1 md:row-start-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">Time range</div>
-                    <Select
+                    <FieldLabel className="pl-1">Time range</FieldLabel>
+                    <SelectField
                       className="min-h-[44px]"
-                      style={{ border: '1px solid rgba(0,0,0,.15)' }}
                       value={timeRange}
                       onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
                     >
@@ -626,24 +626,32 @@ export default function CoachDashboardConsolePage() {
                       <option value="LAST_14">Last 14 days</option>
                       <option value="LAST_30">Last 30 days</option>
                       <option value="CUSTOM">Custom</option>
-                    </Select>
+                    </SelectField>
 
                     {timeRange === 'CUSTOM' ? (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className={cn("mt-2 grid grid-cols-2", tokens.spacing.widgetGap)}>
                         <div>
-                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">From</div>
+                          <FieldLabel className="pl-1">From</FieldLabel>
                           <input
                             type="date"
-                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            className={cn(
+                              "w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]",
+                              tokens.spacing.elementPadding,
+                              tokens.typography.body
+                            )}
                             value={customFrom}
                             onChange={(e) => setCustomFrom(e.target.value)}
                           />
                         </div>
                         <div>
-                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">To</div>
+                          <FieldLabel className="pl-1">To</FieldLabel>
                           <input
                             type="date"
-                            className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)]"
+                            className={cn(
+                              "w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]",
+                              tokens.spacing.elementPadding,
+                              tokens.typography.body
+                            )}
                             value={customTo}
                             onChange={(e) => setCustomTo(e.target.value)}
                           />
@@ -653,9 +661,9 @@ export default function CoachDashboardConsolePage() {
                   </div>
 
                   <div className="md:col-start-2 md:row-start-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none pl-1">&nbsp;</div>
-                    <div className="min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75 px-3">
-                      <div className="text-sm font-medium text-[var(--muted)]">
+                    <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                    <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
+                      <div className={cn("font-medium text-[var(--muted)]", tokens.typography.body)}>
                         {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                       </div>
                     </div>
@@ -664,34 +672,30 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               {/* Row 4 */}
-              <div className="flex items-center justify-end gap-3 mt-4">
+              <div className={cn("flex items-center justify-end mt-4", tokens.spacing.widgetGap)}>
                 <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
                   <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
                   Refresh
                 </Button>
               </div>
-            </div>
+            </Block>
           </div>
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
-          <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
-            <div
-              className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
-              data-testid="coach-dashboard-at-a-glance"
+          <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
+            <Block
+              title="At a glance"
+              className="flex flex-col"
               style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
+              data-testid="coach-dashboard-at-a-glance"
             >
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <BlockTitle>At a glance</BlockTitle>
-                <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-              </div>
-
               <div
-                className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
+                className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
                 data-testid="coach-dashboard-at-a-glance-grid"
               >
                 {/* Left: stats */}
-                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="coach-dashboard-at-a-glance-stats">
-                  <div className="grid gap-1">
+                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-at-a-glance-stats">
+                  <div className={cn("grid", tokens.spacing.widgetGap)}>
                     {[
                       { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
                       { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
@@ -701,15 +705,17 @@ export default function CoachDashboardConsolePage() {
                       <div
                         key={row.label}
                         className={cn(
-                          'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
+                          'min-w-0 flex items-baseline justify-between',
+                          tokens.spacing.elementPadding,
+                          tokens.spacing.widgetGap,
                           idx < 3 ? 'border-b border-black/5' : ''
                         )}
                         data-testid="coach-dashboard-at-a-glance-stat-row"
                       >
-                        <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
+                        <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
                           {row.label}
                         </div>
-                        <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                        <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums', tokens.typography.statValue)}>
                           {row.value}
                         </div>
                       </div>
@@ -718,8 +724,8 @@ export default function CoachDashboardConsolePage() {
                 </div>
 
                 {/* Right: discipline load */}
-                <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="coach-dashboard-discipline-load">
-                  <div className="flex flex-col gap-2">
+                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-discipline-load">
+                  <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
                     {(() => {
                       const rows = data?.disciplineLoad ?? [];
                       const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
@@ -730,10 +736,10 @@ export default function CoachDashboardConsolePage() {
                             const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
                             const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
                             return (
-                              <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
-                                <div className="flex items-center gap-2 min-w-[64px]">
+                              <div key={r.discipline} className={cn("grid grid-cols-[auto,1fr,auto] items-center min-w-0", tokens.spacing.widgetGap)}>
+                                <div className={cn("flex items-center min-w-[64px]", tokens.spacing.widgetGap)}>
                                   <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                  <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                  <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
                                 </div>
 
                                 <div className="h-2 rounded-full bg-black/10 overflow-hidden">
@@ -741,7 +747,7 @@ export default function CoachDashboardConsolePage() {
                                 </div>
 
                                 <div
-                                  className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
+                                  className={cn("tabular-nums text-right whitespace-nowrap truncate max-w-[120px]", tokens.typography.meta)}
                                   title={rightValue}
                                 >
                                   {rightValue}
@@ -749,18 +755,18 @@ export default function CoachDashboardConsolePage() {
                               </div>
                             );
                           })}
-                          {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+                          {rows.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.typography.meta, tokens.spacing.elementPadding)}>No data for this range.</div> : null}
                         </>
                       );
                     })()}
                   </div>
                 </div>
               </div>
-            </div>
+            </Block>
           </div>
         </div>
 
-        {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
+        {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
         {/* Review Inbox + Notifications split (desktop/tablet); centered on page */}
         <div className="mt-10 mx-auto max-w-[50%] min-w-[340px] w-full">
@@ -771,17 +777,13 @@ export default function CoachDashboardConsolePage() {
               <div className="h-4" />
             </div>
 
-            <div className="rounded-2xl bg-[var(--bg-card)] overflow-hidden">
-              <div className="px-3 pt-3 pb-2">
-                <BlockTitle>Review inbox</BlockTitle>
-              </div>
-
-              <div className="px-3 py-2 flex items-center justify-between gap-3 border-b border-black/5">
-                <div className="text-xs text-[var(--muted)]">
+            <Block title="Review inbox" padding={false}>
+              <div className={cn("flex items-center justify-between border-b border-black/5", tokens.spacing.elementPadding, tokens.spacing.widgetGap)}>
+                <div className={cn("text-[var(--muted)]", tokens.typography.meta)}>
                   Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
                   {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className={cn("flex items-center", tokens.spacing.widgetGap)}>
                   <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
                     {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
                   </Button>
@@ -791,8 +793,8 @@ export default function CoachDashboardConsolePage() {
                 </div>
               </div>
 
-              {loading ? <div className="px-3 py-6 text-sm text-[var(--muted)]">Loading…</div> : null}
-              {!loading && inboxItems.length === 0 ? <div className="px-3 py-6 text-sm text-[var(--muted)]">Nothing to review for this range.</div> : null}
+              {loading ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Loading…</div> : null}
+              {!loading && inboxItems.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Nothing to review for this range.</div> : null}
 
               <div className="divide-y divide-black/5">
                 {inboxItems.map((item) => (
@@ -806,7 +808,7 @@ export default function CoachDashboardConsolePage() {
                   />
                 ))}
               </div>
-            </div>
+            </Block>
           </div>
         </div>
       </section>

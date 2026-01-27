@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
+import { tokens } from '@/components/ui/tokens';
 
 type AthleteThreadSummary = {
   threadId: string;
@@ -147,42 +148,45 @@ export default function AthleteNotificationsPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
-        <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Notifications</p>
-        <h1 className="text-2xl md:text-3xl font-semibold">Messages</h1>
-        <p className="text-xs md:text-sm text-[var(--muted)]">A place to message your coach.</p>
-      </header>
+    <section className={cn("flex flex-col", tokens.spacing.dashboardSectionGap)}>
+      <Block>
+        <p className={tokens.typography.sectionLabel}>Notifications</p>
+        <h1 className={tokens.typography.h1}>Messages</h1>
+        <p className={tokens.typography.bodyMuted}>
+          A place to message your coach or leave notes for yourself.
+        </p>
+      </Block>
 
-      <Card className="min-w-0">
-        <div className="flex items-center justify-between gap-3">
+      <Block className="min-w-0">
+        <div className="flex items-center justify-between gap-3 mb-6">
           <div className="min-w-0">
-            <BlockTitle>Thread</BlockTitle>
+            <BlockTitle>Discussion Thread</BlockTitle>
           </div>
           <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadThread(true)} disabled={threadLoading}>
             Refresh
           </Button>
         </div>
 
-        {threadLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading…</p> : null}
-        {threadError ? <p className="mt-3 text-sm text-red-700">{threadError}</p> : null}
+        {threadLoading ? <p className={cn("mt-3", tokens.typography.bodyMuted)}>Loading…</p> : null}
+        {threadError ? <p className={cn("mt-3 text-red-700", tokens.typography.body)}>{threadError}</p> : null}
 
-        <div className="pt-4 pb-2">
+        <div className="pb-6">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message your coach…"
+            placeholder="Type a message…"
             disabled={sending}
             rows={3}
+            className="mb-3"
           />
-          <div className="mt-3 flex justify-end">
+          <div className="flex justify-end">
             <Button type="button" onClick={() => void handleSend()} disabled={sending || !draft.trim()}>
               {sending ? 'Sending…' : 'Send'}
             </Button>
           </div>
         </div>
 
-        <div className="mt-2 text-sm text-[var(--muted)] border-t border-[var(--border-subtle)] pt-4">Messages</div>
+        <div className="mt-2 text-sm text-[var(--muted)] border-t border-[var(--border-subtle)] pt-4">History</div>
 
         <div className="mt-4 flex flex-col gap-3 max-h-[55vh] overflow-y-auto pr-1">
           {messagesLoading ? <p className="text-sm text-[var(--muted)]">Loading messages…</p> : null}
@@ -190,7 +194,7 @@ export default function AthleteNotificationsPage() {
           {status ? <p className="text-sm text-emerald-700">{status}</p> : null}
 
           {!messagesLoading && threadId && displayMessages.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No messages yet. Say hi!</p>
+            <p className="text-sm text-[var(--muted)]">No messages yet.</p>
           ) : null}
 
           {displayMessages.map((m) => {
@@ -199,12 +203,12 @@ export default function AthleteNotificationsPage() {
               <div key={m.id} className={cn('flex', isAthlete ? 'justify-end' : 'justify-start')}>
                 <div
                   className={cn(
-                    'max-w-[min(520px,90%)] rounded-3xl px-4 py-3 text-sm whitespace-pre-wrap break-words',
-                    isAthlete ? 'bg-blue-600/10 text-[var(--text)]' : 'bg-[var(--bg-structure)] text-[var(--text)]'
+                    'max-w-[min(520px,90%)] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap break-words',
+                    isAthlete ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
                   )}
                 >
                   {m.body}
-                  <div className="mt-2 text-[11px] text-[var(--muted)] tabular-nums">
+                  <div className={cn("mt-1 text-[10px] tabular-nums opacity-70", isAthlete ? "text-indigo-100" : "text-slate-500 dark:text-slate-400")}>
                     {new Date(m.createdAt).toLocaleString()}
                   </div>
                 </div>
@@ -216,7 +220,7 @@ export default function AthleteNotificationsPage() {
         <div className="mt-5 border-t border-[var(--border-subtle)] pt-4 hidden">
           {/* Moved to top */}
         </div>
-      </Card>
+      </Block>
     </section>
   );
 }
