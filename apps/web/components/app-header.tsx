@@ -186,7 +186,7 @@ export async function AppHeader() {
           </div>
 
         {/* Desktop: keep existing multi-brand header */}
-        <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:p-5">
+        <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:px-6 md:py-2">
           {/* Center block: true-centered CoachKit branding */}
           <div className="col-start-2 justify-self-center pointer-events-none z-10 flex items-center">
             <Link
@@ -200,7 +200,7 @@ export async function AppHeader() {
                 <img
                   src="/brand/coachkit-logo.png"
                   alt="CoachKit"
-                  className="h-[44px] w-[44px] object-contain"
+                  className="h-8 w-8 object-contain"
                 />
               </picture>
             </Link>
@@ -217,7 +217,7 @@ export async function AppHeader() {
                 <img
                   src={headerClubBranding.logoUrl}
                   alt={`${headerClubBranding.name} logo`}
-                  className="h-12 w-auto object-contain sm:h-14"
+                  className="h-10 w-auto object-contain sm:h-12"
                 />
               </picture>
             ) : (

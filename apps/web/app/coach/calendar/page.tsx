@@ -249,6 +249,28 @@ export default function CoachCalendarPage() {
     data: any;
   }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'session', data: null });
 
+  // Recurring sessions (for library insert)
+  const [groupSessions, setGroupSessions] = useState<{ id: string; title: string; discipline: string; durationMinutes: number; description: string | null; startTimeLocal: string }[]>([]);
+
+  useEffect(() => {
+     if (user?.role === 'COACH') {
+       request<{ groupSessions: any[] }>('/api/coach/group-sessions')
+         .then((data) => {
+           setGroupSessions(
+             data.groupSessions.map((gs) => ({
+               id: gs.id,
+               title: gs.title,
+               discipline: gs.discipline,
+               durationMinutes: gs.durationMinutes,
+               description: gs.description,
+               startTimeLocal: gs.startTimeLocal,
+             }))
+           );
+         })
+         .catch((err) => console.error('Failed to load group sessions for menu', err));
+     }
+  }, [user?.role, request]);
+
   const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
 
   const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
@@ -778,8 +800,38 @@ export default function CoachCalendarPage() {
          setLoading(false);
       }
 
-    } 
-  }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar]);
+    } else if (action === 'library-insert-item' && type === 'day') {
+      // payload is the full item object passed from context menu
+      const sessionId = payload?.id; 
+      const session = groupSessions.find((gs) => gs.id === sessionId);
+      const targetAthleteId = contextData.athleteId || effectiveAthleteId || singleAthleteId;
+      
+      if (!session || !targetAthleteId || !contextData.date) return;
+
+      const postPayload = {
+        athleteId: targetAthleteId,
+        date: contextData.date,
+        // Clone from session
+        title: session.title,
+        discipline: session.discipline,
+        plannedDurationMinutes: session.durationMinutes,
+        plannedStartTimeLocal: session.startTimeLocal, // optional
+        workoutDetail: session.description ?? '',
+        tags: [],
+        equipment: [],
+      };
+
+      try {
+        setLoading(true);
+        await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
+        await loadCalendar();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to library insert.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar, groupSessions]);
 
   const openCreateDrawerForAthlete = (athleteId: string, date: string) => {
     setDrawerAthleteId(athleteId);
@@ -1779,6 +1831,7 @@ export default function CoachCalendarPage() {
         canPaste={!!clipboard}
         onClose={closeContextMenu}
         onAction={handleMenuAction}
+        libraryItems={groupSessions}
       />
 
       
