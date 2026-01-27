@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     const statusLabel =
       item.status === 'SKIPPED'
-        ? 'SKIPPED'
+        ? 'MISSED'
         : isCompleted
           ? 'COMPLETED'
           : item.status === 'MODIFIED'

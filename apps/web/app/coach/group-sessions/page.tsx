@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/Input';
 import { SessionCard } from '@/components/coach/SessionCard';
 import { GroupSessionDrawer } from '@/components/coach/GroupSessionDrawer';
 import { CreateSessionModal } from '@/components/coach/CreateSessionModal';
-import { WorkoutLibraryPanel } from '@/components/coach/WorkoutLibraryPanel';
 
 type GroupVisibility = 'ALL' | 'SQUAD' | 'SELECTED';
 
@@ -56,29 +55,6 @@ type ApplyResult = {
   createdIds: string[];
 };
 
-type LibraryDetailSession = {
-  id: string;
-  title: string;
-  discipline: string;
-  tags: string[];
-  description: string;
-  durationSec: number;
-  intensityTarget: string;
-  distanceMeters: number | null;
-  elevationGainMeters: number | null;
-  notes: string | null;
-  equipment: string[];
-  workoutStructure: unknown | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-function buildSessionDescriptionFromLibrary(session: LibraryDetailSession): string {
-  // Keep the instruction text as-is. Structured fields (tags/equipment/intensity/notes/structure)
-  // are persisted separately on the resulting scheduled workouts.
-  return session.description?.trim() ? session.description.trim() : '';
-}
-
 export default function CoachGroupSessionsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -90,7 +66,6 @@ export default function CoachGroupSessionsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'sessions' | 'library' | 'favorites'>('sessions');
   const [createInitialValues, setCreateInitialValues] = useState<any>(null);
 
   const isCoach = user?.role === 'COACH';
@@ -186,25 +161,6 @@ export default function CoachGroupSessionsPage() {
     return newSessionId;
   };
 
-  const handleUseLibraryTemplate = async (librarySession: LibraryDetailSession) => {
-    const minutes = Math.max(1, Math.round((librarySession.durationSec ?? 0) / 60));
-
-    setCreateInitialValues({
-      title: librarySession.title,
-      discipline: librarySession.discipline,
-      durationMinutes: String(minutes),
-      description: buildSessionDescriptionFromLibrary(librarySession),
-      distanceMeters: librarySession.distanceMeters,
-      intensityTarget: librarySession.intensityTarget,
-      tags: librarySession.tags ?? [],
-      equipment: librarySession.equipment ?? [],
-      notes: librarySession.notes,
-      workoutStructure: librarySession.workoutStructure,
-    });
-    setIsCreateModalOpen(true);
-    setActiveTab('sessions');
-  };
-
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || null;
 
   const filteredSessions = sessions.filter((session) => {
@@ -229,8 +185,8 @@ export default function CoachGroupSessionsPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Coaching</p>
-              <h1 className="text-2xl md:text-3xl font-semibold">Session Builder</h1>
-              <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring sessions to apply to athlete calendars</p>
+              <h1 className="text-2xl md:text-3xl font-semibold">Recurring Group Sessions</h1>
+              <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring templates to apply to athlete calendars</p>
             </div>
             <Button type="button" onClick={() => setIsCreateModalOpen(true)} variant="primary" className="min-h-[44px] w-full md:w-auto">
               <Icon name="add" size="sm" className="md:mr-1" />
@@ -240,45 +196,16 @@ export default function CoachGroupSessionsPage() {
 
           {/* Search Bar */}
           <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant={activeTab === 'sessions' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setActiveTab('sessions')}
-              >
-                My Sessions
-              </Button>
-              <Button
-                type="button"
-                variant={activeTab === 'library' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setActiveTab('library')}
-              >
-                Library
-              </Button>
-              <Button
-                type="button"
-                variant={activeTab === 'favorites' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setActiveTab('favorites')}
-              >
-                Favorites
-              </Button>
+            <div className="relative">
+              <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <Input
+                type="text"
+                placeholder="Search..."
+                className="pl-10 min-h-[44px]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-
-            {activeTab === 'sessions' && (
-              <div className="relative">
-                <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-                <Input
-                  type="text"
-                  placeholder="Search by title or discipline..."
-                  className="min-h-[44px] pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -287,12 +214,10 @@ export default function CoachGroupSessionsPage() {
         {loadingSessions && <p className="mt-3 text-sm text-[var(--muted)]">Loading sessions...</p>}
       </header>
 
-      {activeTab === 'sessions' ? (
-        <>
-          {/* Sessions List */}
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
-              <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+      {/* Sessions List */}
+      <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
+          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
                 <p className="text-[var(--muted)]">No group sessions yet. Create one to get started.</p>
               </div>
             )}
@@ -319,10 +244,7 @@ export default function CoachGroupSessionsPage() {
               onApply={handleApply}
             />
           )}
-        </>
-      ) : (
-        <WorkoutLibraryPanel mode={activeTab === 'favorites' ? 'favorites' : 'library'} onUseTemplate={handleUseLibraryTemplate} />
-      )}
+
 
       {/* Modal for Creating */}
       <CreateSessionModal

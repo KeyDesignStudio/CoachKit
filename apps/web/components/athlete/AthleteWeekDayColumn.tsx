@@ -20,6 +20,7 @@ type AthleteWeekDayColumnProps = {
   addButtonTestId?: string;
   density?: 'default' | 'compact';
   children: ReactNode;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
 export function AthleteWeekDayColumn({
@@ -35,7 +36,10 @@ export function AthleteWeekDayColumn({
   addButtonTestId,
   density = 'default',
   children,
-}: AthleteWeekDayColumnProps) {
+  onContextMenu,
+  useSubgrid = false,
+  style,
+}: AthleteWeekDayColumnProps & { useSubgrid?: boolean; style?: React.CSSProperties }) {
   const headerClassName =
     density === 'compact'
       ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1 md:py-1.5'
@@ -71,8 +75,11 @@ export function AthleteWeekDayColumn({
   return (
     <div
       data-athlete-week-day-card="v2"
+      onContextMenu={onContextMenu}
+      style={useSubgrid ? { ...style, gridTemplateRows: 'subgrid' } : style}
       className={cn(
-        'flex flex-col min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden',
+        'min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden',
+        useSubgrid ? 'grid' : 'flex flex-col',
         isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
       )}
     >
@@ -104,7 +111,7 @@ export function AthleteWeekDayColumn({
         </div>
       </WeatherTooltip>
 
-      <div className={bodyClassName}>
+      <div className={useSubgrid ? 'contents' : bodyClassName}>
         {children}
         {isEmpty ? (
           onEmptyClick ? (

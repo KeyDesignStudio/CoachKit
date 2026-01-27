@@ -8,7 +8,6 @@ import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
-import { AdminHeader } from '@/components/admin/AdminHeader';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
@@ -23,7 +22,6 @@ const allNavLinks: NavLink[] = [
   { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
-  { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
   { href: '/athlete/notifications', label: 'Notifications', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
@@ -127,11 +125,6 @@ export async function AppHeader() {
   const desktopNotificationsLink = navLinks.find((link) => link.href.endsWith('/notifications'));
   const desktopSettingsLink = navLinks.find((link) => link.href.endsWith('/settings'));
 
-  // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
-  if (userRole === 'ADMIN') {
-    return <AdminHeader />;
-  }
-
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
@@ -193,28 +186,9 @@ export async function AppHeader() {
           </div>
 
         {/* Desktop: keep existing multi-brand header */}
-        <div className="relative hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4 md:p-5">
-          {/* Center block: true-centered CoachKit branding (independent of nav width) */}
-          <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
-            <Link
-              href="/" 
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
-            >
-              <span className="hidden text-base sm:inline">CoachKit</span>
-              <picture>
-                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/brand/coachkit-logo.png"
-                  alt="CoachKit"
-                  className="h-[44px] w-[44px] object-contain"
-                />
-              </picture>
-            </Link>
-          </div>
-
-          {/* Left block: Club branding (logo-only else text fallback) */}
-          <div className="flex min-w-0 items-center">
+        <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:px-6 md:py-2">
+          {/* Left block: Club branding (row 1, col 1) */}
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (
               <picture>
                 {headerClubBranding.darkLogoUrl ? (
@@ -236,8 +210,27 @@ export async function AppHeader() {
             )}
           </div>
 
-          {/* Right block: Nav + user (desktop) */}
-          <div className="flex items-center gap-3 md:gap-4">
+          {/* Center block: true-centered CoachKit branding */}
+          <div className="col-start-2 row-start-1 justify-self-center pointer-events-none z-10 flex items-center">
+            <Link
+              href="/" 
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+            >
+              <span className="hidden text-base sm:inline">CoachKit</span>
+              <picture>
+                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/brand/coachkit-logo.png"
+                  alt="CoachKit"
+                  className="h-[44px] w-[44px] object-contain"
+                />
+              </picture>
+            </Link>
+          </div>
+
+          {/* Right block: Nav + user (desktop) (row 1, col 3) */}
+          <div className="col-start-3 row-start-1 flex items-center justify-end gap-3 md:gap-4">
             {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
                 {desktopTextLinks.map((link) => (

@@ -5,6 +5,8 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Block } from '@/components/ui/Block';
+import { BlockTitle } from '@/components/ui/BlockTitle';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { AthleteDetailDrawer } from '@/components/coach/AthleteDetailDrawer';
 import { CreateAthleteModal } from '@/components/coach/CreateAthleteModal';
@@ -134,18 +136,18 @@ export default function CoachAthletesPage() {
 
   return (
     <>
-      <section className="space-y-4 px-4 py-4 md:px-6 md:pt-6">
+      <section className="flex flex-col gap-6">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <Block className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className={`${uiH2} mb-1 font-semibold`}>Athlete Profiles</h1>
-            <p className={`${uiMuted} text-xs md:text-sm`}>Manage your athlete roster</p>
+            <h1 className="text-2xl md:text-3xl font-semibold mb-1">Athlete Profiles</h1>
+            <p className="text-sm text-[var(--muted)]">Manage your athlete roster</p>
           </div>
           <Button onClick={() => setModalOpen(true)} className="min-h-[44px]">
             <Icon name="add" size="sm" />
             <span className="ml-2">New Athlete</span>
           </Button>
-        </div>
+        </Block>
 
         {/* Error Message */}
         {error && (
@@ -159,48 +161,69 @@ export default function CoachAthletesPage() {
 
         {/* Athletes List */}
         {!loading && athletes.length === 0 && (
-          <div className="rounded-3xl border border-white/30 bg-white/40 p-8 text-center backdrop-blur-xl">
+          <Block className="text-center py-12">
             <p className="text-[var(--muted)]">No athletes yet. Click &quot;New Athlete&quot; to add your first athlete.</p>
-          </div>
+          </Block>
         )}
 
         {!loading && athletes.length > 0 && (
-          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {athletes.map((athlete) => (
-              <button
-                type="button"
+              <Block
                 key={athlete.userId}
-                onClick={() => handleAthleteClick(athlete.userId)}
-                className="rounded-2xl border border-white/30 bg-white/50 hover:bg-white/70 transition-colors p-4 cursor-pointer text-left min-w-0 min-h-[44px] h-full flex flex-col"
+                className="h-full flex flex-col relative group transition-colors hover:border-[var(--ring)]"
               >
-                {/* Top: Name + email (+ optional DOB) */}
+                {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{athlete.user.name || 'Unnamed Athlete'}</div>
-                  <div className="text-sm text-[var(--muted)] truncate">{athlete.user.email}</div>
+                  <div className="flex items-start justify-between gap-2">
+                     <button 
+                        type="button" 
+                        onClick={() => handleAthleteClick(athlete.userId)}
+                        className="font-medium truncate hover:underline text-left"
+                      >
+                       {athlete.user.name || 'Unnamed Athlete'}
+                     </button>
+                    <a
+                      href={`/coach/notifications?athleteId=${athlete.userId}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                      title="Send Message"
+                    >
+                      <Icon name="chat" size="sm" />
+                    </a>
+                  </div>
+                  <div className="text-xs text-[var(--muted)] truncate mt-1">{athlete.user.email}</div>
                   <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
                   {athlete.dateOfBirth ? (
                     <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
                   ) : null}
+                  {athlete.goalsText ? (
+                     <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                        <span className="font-medium">Goals:</span> {athlete.goalsText}
+                     </div>
+                  ) : null}
                 </div>
 
                 {/* Footer: disciplines */}
-                <div className="mt-3 flex items-end justify-end gap-2 flex-wrap justify-end flex-1">
+                <div 
+                   className="mt-4 flex items-end justify-end gap-2 flex-wrap flex-1 cursor-pointer"
+                   onClick={() => handleAthleteClick(athlete.userId)}
+                >
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     {athlete.disciplines.map((discipline) => {
                       const theme = getDisciplineTheme(discipline);
                       return (
                         <div
                           key={discipline}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-white/40"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-structure)]"
                           title={discipline}
                         >
-                          <Icon name={theme.iconName} size="md" className={theme.textClass} />
+                          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              </button>
+              </Block>
             ))}
           </div>
         )}

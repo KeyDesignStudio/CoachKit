@@ -7,10 +7,9 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { BlockTitle } from '@/components/ui/BlockTitle';
+import { Block } from '@/components/ui/Block';
+import { SelectField } from '@/components/ui/SelectField';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { WeatherLocationSelect } from '@/components/WeatherLocationSelect';
@@ -232,42 +231,37 @@ export default function AthleteSettingsPage() {
       </header>
 
       {resultMessage ? (
-        <Card className="flex items-center justify-between gap-4">
+        <Block className="flex items-center justify-between gap-4">
           <p className="text-sm text-[var(--text)]">{resultMessage}</p>
           <Badge>{searchParams.get('strava') || ''}</Badge>
-        </Card>
+        </Block>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div className="min-w-0">
-          <Card className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 flex-col gap-1">
-                <BlockTitle>Timezone</BlockTitle>
-                <p className="text-sm text-[var(--muted)]">Times and day-boundaries (missed) use this timezone.</p>
-              </div>
-              <Badge className="text-[var(--muted)]">{getTimezoneLabel(timezone)}</Badge>
-            </div>
-
+          <Block
+            title="Timezone"
+            rightAction={<Badge className="text-[var(--muted)]">{getTimezoneLabel(timezone)}</Badge>}
+          >
+            <p className="text-sm text-[var(--muted)] mb-3">Times and day-boundaries (missed) use this timezone.</p>
             <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
-            {timezoneMessage ? <p className="text-sm text-emerald-700">{timezoneMessage}</p> : null}
-            {timezoneError ? <p className="text-sm text-red-700">{timezoneError}</p> : null}
-          </Card>
+            {timezoneMessage ? <p className="text-sm text-emerald-700 mt-2">{timezoneMessage}</p> : null}
+            {timezoneError ? <p className="text-sm text-red-700 mt-2">{timezoneError}</p> : null}
+          </Block>
         </div>
 
         <div className="min-w-0">
-          <Card className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 flex-col gap-1">
-                <BlockTitle>Appearance</BlockTitle>
-                <p className="text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
-              </div>
+          <Block
+            title="Appearance"
+            rightAction={
               <Badge className="text-[var(--muted)]">
                 {themePreference === 'system' ? 'System' : themePreference === 'dark' ? 'Dark' : 'Light'}
               </Badge>
-            </div>
+            }
+          >
+            <p className="text-sm text-[var(--muted)] mb-3">Choose light, dark, or follow your system setting.</p>
 
-            <Select
+            <SelectField
               value={themePreference}
               onChange={(e) => setThemePreference(e.target.value as any)}
               aria-label="Theme"
@@ -275,29 +269,22 @@ export default function AthleteSettingsPage() {
               <option value="system">System</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
-            </Select>
-          </Card>
+            </SelectField>
+          </Block>
         </div>
 
         <div className="min-w-0">
-          <Card className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <BlockTitle>Weather location</BlockTitle>
-              <p className="text-sm text-[var(--muted)]">Used for weather. Search by place name or use your current location.</p>
-            </div>
-
+          <Block title="Weather location">
+            <p className="text-sm text-[var(--muted)] mb-3">Used for weather. Search by place name or use your current location.</p>
             <WeatherLocationSelect />
-          </Card>
+          </Block>
         </div>
 
         <div className="min-w-0">
-          <Card className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <BlockTitle>Calendar Sync</BlockTitle>
-              <p className="text-sm text-[var(--muted)]">
-                Subscribe to your CoachKit workouts via a private iCal link (read-only). If you share the link, anyone with it can view your calendar.
-              </p>
-            </div>
+          <Block title="Calendar Sync">
+            <p className="text-sm text-[var(--muted)] mb-3">
+              Subscribe to your CoachKit workouts via a private iCal link (read-only). If you share the link, anyone with it can view your calendar.
+            </p>
 
             {loadingIcal ? <p className="text-sm text-[var(--muted)]">Loading calendar sync link…</p> : null}
             {icalError ? <p className="text-sm text-red-700">{icalError}</p> : null}
@@ -321,73 +308,72 @@ export default function AthleteSettingsPage() {
 
               {icalMessage ? <p className="text-sm text-emerald-700">{icalMessage}</p> : null}
             </div>
-          </Card>
+          </Block>
         </div>
 
         <div className="min-w-0">
-          <Card className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="flex min-w-0 flex-col gap-1">
-                <div className="flex items-center gap-3">
-                    <BlockTitle>Strava</BlockTitle>
-                  <Badge className={connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>{connected ? 'Connected' : 'Not connected'}</Badge>
-                </div>
+          <Block
+            title="Strava"
+            rightAction={<Badge className={connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>{connected ? 'Connected' : 'Not connected'}</Badge>}
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <p className="text-sm text-[var(--muted)]">Connect Strava to sync completed activities into CoachKit.</p>
-              </div>
 
-              <div className="flex flex-wrap gap-3">
-                {connected ? (
-                  <>
-                    <Button onClick={handleSyncNow} disabled={working || syncing || loadingStatus}>
-                      {syncing ? 'Syncing…' : 'Sync now'}
+                <div className="flex flex-wrap gap-3">
+                  {connected ? (
+                    <>
+                      <Button onClick={handleSyncNow} disabled={working || syncing || loadingStatus}>
+                        {syncing ? 'Syncing…' : 'Sync now'}
+                      </Button>
+                      <Button variant="secondary" onClick={handleDisconnect} disabled={working || syncing}>
+                        {working ? 'Disconnecting…' : 'Disconnect'}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={handleConnect} disabled={working}>
+                      Connect
                     </Button>
-                    <Button variant="secondary" onClick={handleDisconnect} disabled={working || syncing}>
-                      {working ? 'Disconnecting…' : 'Disconnect'}
-                    </Button>
-                  </>
-                ) : (
-                  <Button onClick={handleConnect} disabled={working}>
-                    Connect
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {loadingStatus ? <p className="text-sm text-[var(--muted)]">Loading status…</p> : null}
-            {error ? <p className="text-sm text-red-700">{error}</p> : null}
-
-            {lastSync ? (
-              <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-4 text-sm text-emerald-900">
-                <p className="font-medium">Strava sync complete</p>
-                <p className="text-emerald-900/80">{new Date(lastSync.at).toLocaleString()}</p>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-emerald-900/90">
-                  <p>Fetched: <span className="font-medium">{lastSync.summary.fetched}</span></p>
-                  <p>Matched: <span className="font-medium">{lastSync.summary.matched}</span></p>
-                  <p>Created: <span className="font-medium">{lastSync.summary.created}</span></p>
-                  <p>Updated: <span className="font-medium">{lastSync.summary.updated}</span></p>
-                  <p>Skipped: <span className="font-medium">{lastSync.summary.skippedExisting}</span></p>
-                  <p>Errors: <span className="font-medium">{lastSync.summary.errors.length}</span></p>
+                  )}
                 </div>
-                {lastSync.summary.errors.length ? (
-                  <div className="mt-3 rounded-xl border border-red-200/60 bg-white/50 p-3 text-sm text-red-800">
-                    <p className="font-medium">Some activities failed to sync</p>
-                    <ul className="mt-2 list-disc pl-5">
-                      {lastSync.summary.errors.slice(0, 3).map((e, idx) => (
-                        <li key={idx}>{e.message}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
               </div>
-            ) : null}
 
-            {connected && status?.connection ? (
-              <div className="rounded-2xl border border-white/25 bg-white/30 p-4 text-sm text-[var(--muted)]">
-                <p>Strava athlete ID: <span className="text-[var(--text)]">{status.connection.stravaAthleteId}</span></p>
-                {status.connection.scope ? <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p> : null}
-              </div>
-            ) : null}
-          </Card>
+              {loadingStatus ? <p className="text-sm text-[var(--muted)]">Loading status…</p> : null}
+              {error ? <p className="text-sm text-red-700">{error}</p> : null}
+
+              {lastSync ? (
+                <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-4 text-sm text-emerald-900">
+                  <p className="font-medium">Strava sync complete</p>
+                  <p className="text-emerald-900/80">{new Date(lastSync.at).toLocaleString()}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-emerald-900/90">
+                    <p>Fetched: <span className="font-medium">{lastSync.summary.fetched}</span></p>
+                    <p>Matched: <span className="font-medium">{lastSync.summary.matched}</span></p>
+                    <p>Created: <span className="font-medium">{lastSync.summary.created}</span></p>
+                    <p>Updated: <span className="font-medium">{lastSync.summary.updated}</span></p>
+                    <p>Skipped: <span className="font-medium">{lastSync.summary.skippedExisting}</span></p>
+                    <p>Errors: <span className="font-medium">{lastSync.summary.errors.length}</span></p>
+                  </div>
+                  {lastSync.summary.errors.length ? (
+                    <div className="mt-3 rounded-xl border border-red-200/60 bg-white/50 p-3 text-sm text-red-800">
+                      <p className="font-medium">Some activities failed to sync</p>
+                      <ul className="mt-2 list-disc pl-5">
+                        {lastSync.summary.errors.slice(0, 3).map((e, idx) => (
+                          <li key={idx}>{e.message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {connected && status?.connection ? (
+                <div className="rounded-2xl border border-white/25 bg-white/30 p-4 text-sm text-[var(--muted)]">
+                  <p>Strava athlete ID: <span className="text-[var(--text)]">{status.connection.stravaAthleteId}</span></p>
+                  {status.connection.scope ? <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p> : null}
+                </div>
+              ) : null}
+            </div>
+          </Block>
         </div>
       </div>
     </section>

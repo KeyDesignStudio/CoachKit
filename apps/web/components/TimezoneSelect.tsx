@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { SelectField } from '@/components/ui/SelectField';
 import { cn } from '@/lib/cn';
 import { TIMEZONE_OPTIONS } from '@/lib/timezones';
 
@@ -39,13 +39,13 @@ export function TimezoneSelect({ value, onChange, disabled, className }: Timezon
         disabled={disabled}
         aria-label="Search timezones"
       />
-      <Select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label="Select timezone">
+      <SelectField value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label="Select timezone">
         {selectOptions.map((tz) => (
           <option key={tz.value} value={tz.value}>
             {tz.label}
           </option>
         ))}
-      </Select>
+      </SelectField>
     </div>
   );
 }

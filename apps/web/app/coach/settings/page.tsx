@@ -9,10 +9,13 @@ import { useBranding } from '@/components/branding-context';
 import { DEFAULT_BRAND_NAME } from '@/lib/branding';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
-import { Card } from '@/components/ui/Card';
+import { Block } from '@/components/ui/Block';
+import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Select } from '@/components/ui/Select';
+import { SelectField } from '@/components/ui/SelectField';
 import { BlockTitle } from '@/components/ui/BlockTitle';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { Input } from '@/components/ui/Input';
 import { useThemePreference } from '@/components/theme-preference';
 
 type SaveState =
@@ -361,28 +364,31 @@ export default function CoachSettingsPage() {
     return (
       <div>
         <div className="text-sm font-medium text-[var(--text)]">{label}</div>
-        <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 max-w-full truncate text-sm text-[var(--text)]" title={filename || 'No file uploaded'}>
             {filename || 'No file uploaded'}
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
-            <button
+            <Button
               type="button"
               onClick={() => openPicker(variant)}
               disabled={isSaving}
-              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+              variant="secondary"
+              size="sm"
             >
               {isSaving ? 'Saving…' : hasFile ? 'Replace' : 'Upload'}
-            </button>
+            </Button>
 
             {hasFile ? (
-              <button
+              <Button
                 type="button"
                 onClick={() => void handleRemove(variant)}
                 disabled={isSaving}
                 aria-label={variant === 'light' ? 'Remove logo' : 'Remove dark logo'}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] text-red-600 hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:bg-red-50 hover:text-red-700"
               >
                 <Icon
                   name={isSaving ? 'refresh' : 'delete'}
@@ -390,7 +396,7 @@ export default function CoachSettingsPage() {
                   className={isSaving ? 'animate-spin' : ''}
                   aria-hidden
                 />
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -427,15 +433,15 @@ export default function CoachSettingsPage() {
   }
 
   return (
-    <section className="px-4 py-6 md:px-6 flex flex-col gap-6">
-      <header>
-        <h1 className="m-0 text-lg font-semibold text-[var(--text)]">Coach Settings</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Manage program branding and timezone.</p>
-      </header>
+    <section className="flex flex-col gap-6">
+      <Block>
+        <h1 className="text-2xl md:text-3xl font-semibold mb-1">Coach Settings</h1>
+        <p className="text-sm text-[var(--muted)]">Manage program branding and timezone.</p>
+      </Block>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="w-full">
-          <div className="flex items-start justify-between gap-3">
+        <Block className="w-full">
+          <div className="flex items-start justify-between gap-3 mb-6">
             <div>
               <BlockTitle>Branding</BlockTitle>
               <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
@@ -443,25 +449,22 @@ export default function CoachSettingsPage() {
             {brandingLoading ? <span className="text-xs text-[var(--muted)]">Loading…</span> : null}
           </div>
 
-          {brandingError ? <p className="mt-3 text-sm text-red-600">{brandingError}</p> : null}
+          {brandingError ? <p className="mb-4 text-sm text-red-600">{brandingError}</p> : null}
 
           {/* Display name (autosave) */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-[var(--text)]" htmlFor="coach-branding-display-name">
-              Display name
-            </label>
-            <div className="mt-2 flex items-start gap-3">
-              <input
+          <div className="mb-6">
+            <FieldLabel htmlFor="coach-branding-display-name">Display name</FieldLabel>
+            <div className="mt-2">
+              <Input
                 id="coach-branding-display-name"
                 type="text"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 onBlur={() => void saveDisplayName(displayName)}
-                className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
                 required
               />
             </div>
-            <div className="mt-1 text-xs">
+            <div className="mt-1 text-xs h-4">
               {nameSave.kind === 'saving' ? <span className="text-[var(--muted)]">Saving…</span> : null}
               {nameSave.kind === 'saved' ? <span className="text-emerald-600">Saved</span> : null}
               {nameSave.kind === 'error' ? (
@@ -484,50 +487,56 @@ export default function CoachSettingsPage() {
           <input ref={darkInputRef} type="file" accept="image/*" className="sr-only" onChange={handleDarkFilePicked} />
 
           {/* Logo rows */}
-          <div className="mt-5 flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             <LogoRow label="Logo image" filename={lightFilename} variant="light" saveState={lightSave} />
             <LogoRow label="Dark mode logo image" filename={darkFilename} variant="dark" saveState={darkSave} />
           </div>
 
           {showDevBrandingSampleButton ? (
-            <div className="mt-5">
-              <button
+            <div className="mt-6 pt-6 border-t border-[var(--border-subtle)]">
+              <Button
                 type="button"
                 onClick={() => void handleUseSampleLogo()}
                 disabled={lightSave.kind === 'saving' || darkSave.kind === 'saving'}
-                className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-60"
+                variant="secondary"
+                size="sm"
               >
                 Use sample club logo (dev)
-              </button>
+              </Button>
             </div>
           ) : null}
-        </Card>
+        </Block>
 
-        <Card className="w-full">
-          <BlockTitle>Timezone</BlockTitle>
-          <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
-          <p className="mt-3 text-sm text-[var(--muted)]">
-            Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
-          </p>
-          <div className="mt-3">
-            <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
-          </div>
-          {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
-          {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
-        </Card>
+        <div className="flex flex-col gap-6">
+          <Block className="w-full">
+            <BlockTitle>Timezone</BlockTitle>
+            <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
+            </p>
+            <div className="mt-3">
+              <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
+            </div>
+            {timezoneMessage ? <p className="mt-3 text-sm text-emerald-600">{timezoneMessage}</p> : null}
+            {timezoneError ? <p className="mt-3 text-sm text-red-600">{timezoneError}</p> : null}
+          </Block>
 
-        <Card className="w-full">
-          <h2 className="m-0 text-base font-semibold text-[var(--text)]">Appearance</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
+          <Block className="w-full">
+            <BlockTitle>Appearance</BlockTitle>
+            <p className="mt-1 text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
 
-          <div className="mt-3">
-            <Select value={themePreference} onChange={(e) => setThemePreference(e.target.value as any)} aria-label="Theme">
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </Select>
-          </div>
-        </Card>
+            <div className="mt-3">
+              <SelectField
+                value={themePreference}
+                onChange={(e) => setThemePreference(e.target.value as any)}
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </SelectField>
+            </div>
+          </Block>
+        </div>
       </div>
     </section>
   );

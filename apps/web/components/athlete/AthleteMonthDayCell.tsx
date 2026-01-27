@@ -30,6 +30,7 @@ type AthleteMonthDayCellProps = {
   onItemClick: (itemId: string) => void;
   onAddClick?: (dateStr: string) => void;
   canAdd?: boolean;
+  onContextMenu?: (e: React.MouseEvent, type: 'session' | 'day', data: any) => void;
 };
 
 const MAX_VISIBLE_ROWS = 3;
@@ -46,6 +47,7 @@ export function AthleteMonthDayCell({
   onItemClick,
   onAddClick,
   canAdd = true,
+  onContextMenu,
 }: AthleteMonthDayCellProps) {
   const dayNumber = Number(dateStr.slice(8, 10));
   const sortedItems = sortSessionsForDay(items, athleteTimezone);
@@ -79,6 +81,12 @@ export function AthleteMonthDayCell({
           e.preventDefault();
           onDayClick(dateStr);
         }
+      }}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e, 'day', { date: dateStr });
       }}
     >
       {/* Mobile month (scan-only): day number + icons + +N */}
@@ -185,6 +193,12 @@ export function AthleteMonthDayCell({
                   e.preventDefault();
                   e.stopPropagation();
                   onItemClick(item.id);
+                }}
+                onContextMenu={(e) => {
+                  if (!onContextMenu) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onContextMenu(e, 'session', item);
                 }}
                 className={cn(
                   'w-full flex items-center min-w-0 rounded-md text-left min-h-[44px]',

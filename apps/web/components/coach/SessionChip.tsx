@@ -49,7 +49,7 @@ export function SessionChip({
         ) : status === 'COMPLETED_SYNCED_DRAFT' ? (
           <Icon name="needsReview" size="xs" className={`text-amber-600 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Strava detected" aria-hidden={false} />
         ) : status === 'SKIPPED' ? (
-          <Icon name="skipped" size="xs" className={`text-gray-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Skipped" aria-hidden={false} />
+          <Icon name="skipped" size="xs" className={`text-gray-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Missed" aria-hidden={false} />
         ) : null}
       </div>
     </button>

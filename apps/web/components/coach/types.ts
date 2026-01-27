@@ -1,0 +1,32 @@
+export type CalendarItem = {
+  id: string;
+  date: string;
+  plannedStartTimeLocal: string | null;
+  displayTimeLocal?: string | null;
+  discipline: string;
+  status: string;
+  title: string;
+  athleteId?: string;
+  athleteName?: string | null;
+  athleteTimezone?: string;
+  workoutDetail?: string | null;
+  template?: { id: string; title: string } | null;
+  plannedDurationMinutes?: number | null;
+  plannedDistanceKm?: number | null;
+  distanceMeters?: number | null;
+  intensityTarget?: string | null;
+  tags?: string[];
+  equipment?: string[];
+  workoutStructure?: unknown | null;
+  notes?: string | null;
+  latestCompletedActivity?: {
+    painFlag: boolean;
+    source?: 'MANUAL' | 'STRAVA';
+    effectiveStartTimeUtc?: string;
+    startTime?: string;
+    confirmedAt?: string | null;
+    durationMinutes?: number | null;
+    distanceKm?: number | null;
+    caloriesKcal?: number | null;
+  } | null;
+};

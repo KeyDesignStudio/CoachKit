@@ -43,7 +43,7 @@ export async function POST(
       }
 
       if (item.status === CalendarItemStatus.COMPLETED_MANUAL || item.status === CalendarItemStatus.COMPLETED_SYNCED) {
-        throw new ApiError(409, 'ALREADY_COMPLETED', 'Completed workouts cannot be skipped.');
+        throw new ApiError(409, 'ALREADY_COMPLETED', 'Completed workouts cannot be marked missed.');
       }
 
       if (item.status !== CalendarItemStatus.SKIPPED) {
