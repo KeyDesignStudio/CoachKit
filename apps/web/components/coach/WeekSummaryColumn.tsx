@@ -22,7 +22,7 @@ export function WeekSummaryColumn({
 }: Props) {
   return (
     <div 
-       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/50 overflow-hidden border border-[var(--border-subtle)]", className)}
+       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border border-[var(--border-subtle)]", className)}
        style={style}
     >
       <div className="border-b border-[var(--border-subtle)] px-3 py-1.5">

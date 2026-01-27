@@ -529,7 +529,7 @@ export default function AthleteCalendarPage() {
               })}
 
               {/* Weekly summary column (desktop: right of Sunday) */}
-              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/50 overflow-hidden border border-[var(--border-subtle)]">
+              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border border-[var(--border-subtle)]">
                 <div className="border-b border-[var(--border-subtle)] px-3 py-1.5">
                   <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
                   <p className="text-sm font-medium truncate">This week</p>
