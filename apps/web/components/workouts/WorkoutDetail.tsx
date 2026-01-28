@@ -312,6 +312,19 @@ export function WorkoutDetail({
                       </div>
                     </div>
                  )}
+
+                 {(item.equipment && item.equipment.length > 0) && (
+                    <div className={cn('col-span-2 flex flex-col', tokens.spacing.tinyGap)}>
+                      <FieldLabel>Equipment</FieldLabel>
+                      <div className={cn('flex flex-wrap', tokens.spacing.widgetGap)}>
+                        {item.equipment.map(t => (
+                          <span key={t} className={cn('inline-flex items-center', tokens.borders.default, tokens.colors.bg.surface, tokens.spacing.pill, tokens.typography.small)}>
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                 )}
               </div>
 
                {/* Description / Detail */}
