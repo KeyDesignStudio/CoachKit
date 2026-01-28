@@ -671,13 +671,8 @@ export default function CoachDashboardConsolePage() {
                 </div>
               </div>
 
-              {/* Row 4 */}
-              <div className={cn("flex items-center justify-end mt-4", tokens.spacing.widgetGap)}>
-                <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                  <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                  Refresh
-                </Button>
-              </div>
+              {/* Row 4: Refresh removed as data auto-reloads */}
+
             </Block>
           </div>
 

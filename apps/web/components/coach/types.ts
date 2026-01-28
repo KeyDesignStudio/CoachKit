@@ -28,5 +28,6 @@ export type CalendarItem = {
     durationMinutes?: number | null;
     distanceKm?: number | null;
     caloriesKcal?: number | null;
+    metricsJson?: any;
   } | null;
 };
