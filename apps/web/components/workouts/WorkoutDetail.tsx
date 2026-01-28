@@ -411,9 +411,9 @@ export function WorkoutDetail({
                       {stravaName && <div className={tokens.typography.h3}>{stravaName}</div>}
                       
                       <div className={cn('grid grid-cols-2 sm:grid-cols-3', tokens.spacing.gridGap)}>
-                        <FieldRow label="Time" value={actualTimeLabel} />
+                        <FieldRow label="Starting Time" value={actualTimeLabel} />
                         <FieldRow label="Moving Time" value={movingTimeLabel} />
-                        <FieldRow label="Distance" value={formatKm(strava.distance)} />
+                        <FieldRow label="Distance" value={formatKm(strava.distance) ?? (latestCompletion?.distanceKm ? `${latestCompletion.distanceKm} km` : null)} />
                         
                         <FieldRow label="Avg HR" value={formatIntUnit(activityAverageHeartrate, 'bpm')} />
                         <FieldRow label="Max HR" value={formatIntUnit(activityMaxHeartrate, 'bpm')} />
