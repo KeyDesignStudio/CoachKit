@@ -138,15 +138,17 @@ export default function CoachAthletesPage() {
     <>
       <section className="flex flex-col gap-6">
         {/* Header */}
-        <Block className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold mb-1">Athlete Profiles</h1>
-            <p className="text-sm text-[var(--muted)]">Manage your athlete roster</p>
+        <Block>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl md:text-3xl font-semibold">Athlete Profiles</h1>
+              <p className="text-sm text-[var(--muted)]">Manage your athlete roster</p>
+            </div>
+            <Button onClick={() => setModalOpen(true)} className="min-h-[44px]">
+              <Icon name="add" size="sm" />
+              <span className="ml-2">New Athlete</span>
+            </Button>
           </div>
-          <Button onClick={() => setModalOpen(true)} className="min-h-[44px]">
-            <Icon name="add" size="sm" />
-            <span className="ml-2">New Athlete</span>
-          </Button>
         </Block>
 
         {/* Error Message */}

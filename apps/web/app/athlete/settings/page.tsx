@@ -231,9 +231,11 @@ export default function AthleteSettingsPage() {
       </header>
 
       {resultMessage ? (
-        <Block className="flex items-center justify-between gap-4">
-          <p className="text-sm text-[var(--text)]">{resultMessage}</p>
-          <Badge>{searchParams.get('strava') || ''}</Badge>
+        <Block>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-[var(--text)]">{resultMessage}</p>
+            <Badge>{searchParams.get('strava') || ''}</Badge>
+          </div>
         </Block>
       ) : null}
 
