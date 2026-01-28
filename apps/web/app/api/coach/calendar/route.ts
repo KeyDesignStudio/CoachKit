@@ -161,6 +161,7 @@ export async function GET(request: NextRequest) {
             effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
             durationMinutes: metricsCompletion.durationMinutes ?? null,
             distanceKm: metricsCompletion.distanceKm ?? null,
+            metricsJson: metricsCompletion.metricsJson, // Ensure full metrics are passed to UI
             caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
             // DEV-ONLY DEBUG — Strava time diagnostics
             // Never enabled in production. Do not rely on this data.
