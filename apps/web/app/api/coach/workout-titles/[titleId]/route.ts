@@ -8,8 +8,10 @@ import { ApiError, notFound } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
+const idSchema = z.string().cuid().or(z.string().cuid2());
+
 const paramsSchema = z.object({
-  titleId: z.string().cuid(),
+  titleId: idSchema,
 });
 
 export async function DELETE(

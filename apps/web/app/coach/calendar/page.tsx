@@ -941,6 +941,7 @@ export default function CoachCalendarPage() {
       const workoutDetailTrimmed = sessionForm.workoutDetail.trim();
       const intensityTargetTrimmed = sessionForm.intensityTarget.trim();
       const notesTrimmed = sessionForm.notes.trim();
+      const templateIdTrimmed = sessionForm.templateId.trim();
 
       const structureText = sessionForm.workoutStructureText.trim();
       let workoutStructure: unknown | null | undefined = undefined;
@@ -961,7 +962,7 @@ export default function CoachCalendarPage() {
         plannedStartTimeLocal: sessionForm.plannedStartTimeLocal || undefined,
         title: sessionForm.title,
         discipline: normalizedDiscipline,
-        templateId: sessionForm.templateId || undefined,
+        templateId: templateIdTrimmed ? templateIdTrimmed : isCreate ? undefined : null,
         plannedDurationMinutes: isCreate ? (durationMinutes ?? undefined) : durationMinutes,
         plannedDistanceKm: isCreate ? (distanceKm ?? undefined) : distanceKm,
         distanceMeters: isCreate ? (distanceMeters ?? undefined) : distanceMeters,

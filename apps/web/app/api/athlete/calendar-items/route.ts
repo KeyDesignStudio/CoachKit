@@ -18,7 +18,7 @@ const localTime = z
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'plannedStartTimeLocal must be HH:MM (24h).' })
   .optional()
   .or(z.literal(''));
-const cuid = z.string().cuid();
+const idSchema = z.string().cuid().or(z.string().cuid2());
 
 const createCalendarItemSchema = z.object({
   date: isoDate,
@@ -32,7 +32,7 @@ const createCalendarItemSchema = z.object({
   intensityTargetJson: z.unknown().optional(),
   workoutDetail: z.string().trim().max(4000).optional(),
   attachmentsJson: z.unknown().optional(),
-  templateId: cuid.optional(),
+  templateId: idSchema.optional(),
 });
 
 export async function POST(request: NextRequest) {
