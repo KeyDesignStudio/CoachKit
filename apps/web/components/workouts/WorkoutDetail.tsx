@@ -253,25 +253,25 @@ export function WorkoutDetail({
   return (
     <div className={cn(tokens.spacing.dashboardSectionGap, className)}>
       {/* Header Info (Title, Status, Weather) if not in Drawer, or specialized header */}
-      {!isDrawer && (
-        <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
-           <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
-            {statusIndicator ? (
-              <Icon 
-                name={statusIndicator.iconName} 
-                className={statusIndicator.colorClass} 
-                size="md" 
-              />
-            ) : null}
-            <h1 className={tokens.typography.h2}>{item.title}</h1>
+      <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
+           <div className={cn('flex flex-wrap items-baseline', tokens.spacing.widgetGap)}>
+            <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
+              {statusIndicator ? (
+                <Icon 
+                  name={statusIndicator.iconName} 
+                  className={statusIndicator.colorClass} 
+                  size="md" 
+                />
+              ) : null}
+              <h1 className={tokens.typography.h2}>{item.title}</h1>
+            </div>
+             <div className={cn(tokens.typography.bodyMuted, 'flex items-center', tokens.spacing.widgetGap)}>
+               <span>{formatDisplay(item.date)}</span>
+               <span>·</span>
+               <span>{headerTimeLabel}</span>
+             </div>
            </div>
-           <div className={cn(tokens.typography.bodyMuted, 'flex items-center', tokens.spacing.widgetGap)}>
-             <span>{formatDisplay(item.date)}</span>
-             <span>·</span>
-             <span>{headerTimeLabel}</span>
-           </div>
-        </div>
-      )}
+      </div>
 
       <div className={cn('grid grid-cols-1', tokens.spacing.gridGap, isDrawer ? '' : 'lg:grid-cols-2')}>
         {/* LEFT COLUMN: Planned */}
