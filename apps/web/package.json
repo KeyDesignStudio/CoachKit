@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/build.mjs",
+    "ds:audit": "node scripts/design-system-audit.mjs",
     "vercel-build": "node scripts/build.mjs",
     "start": "next start",
     "test:mobile": "playwright test",

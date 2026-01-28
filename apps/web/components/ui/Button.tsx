@@ -10,12 +10,16 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
 };
 
+import { tokens } from './tokens';
+
+// ... existing code ...
+
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--primary)] text-white shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)]',
+    'bg-[var(--primary)] text-white shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0',
   secondary:
-    'bg-white/70 text-[var(--text)] border border-white/40 hover:bg-white/80 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] backdrop-blur-xl',
-  ghost: 'text-[var(--text)] hover:bg-white/30 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)]',
+    'bg-white/70 text-[var(--text)] border border-white/40 hover:bg-white/80 backdrop-blur-xl',
+  ghost: 'text-[var(--text)] hover:bg-white/30',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -32,7 +36,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex min-h-[44px] items-center justify-center rounded-full font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0',
+        'inline-flex items-center justify-center font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0',
+        tokens.spacing.touchTarget,
+        tokens.borders.focus,
+        tokens.radius.button,
+        tokens.transition.default,
         variantClasses[variant],
         sizeClasses[size],
         className

@@ -10,9 +10,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ c
     <input
       ref={ref}
       className={cn(
-        'w-full bg-[var(--bg-card)] px-4 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:opacity-50',
+        'w-full bg-[var(--bg-card)] px-4 py-2 placeholder:text-[var(--muted)]',
+        tokens.typography.body,
         tokens.borders.input,
         tokens.radius.input,
+        tokens.transition.default,
+        tokens.opacity.disabled,
         className
       )}
       {...props}

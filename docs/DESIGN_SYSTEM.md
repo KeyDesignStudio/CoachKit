@@ -1,99 +1,133 @@
-# CoachKit Design System
+# CoachKit Design System v2
 
-This is the authoritative documentation for the CoachKit Design System. All development must adhere to the principles and constraints defined here.
+**Status**: Enforced
+**Last Updated**: 2026-01-28
+**Scope**: All UI/UX across Athlete and Coach apps.
 
-## A) Design System Philosophy
+---
 
-*   **Single Source of Truth**: `components/ui/tokens.ts` is the single source of truth for all styling values (spacing, typography, borders, radius, colors).
-*   **Primitives over Tweaking**: Pages must compose high-level primitives (`Block`, `BlockTitle`, `Input`) rather than building custom UI from scratch.
-*   **No Hard-Coding**: Hard-coded Tailwind utility classes (e.g., `text-[13px]`, `gap-3`) are strictly forbidden outside of the core primitives. Pages consume tokens; primitives consume tokens.
+## 1. Core Philosophy
 
-## B) Tokens Layer (`components/ui/tokens.ts`)
+1.  **Strict Token Usage**: No arbitrary values. If it's not in `tokens.ts`, it doesn't exist.
+2.  **Primitives First**: Build using `Block`, `Button`, `Input`. Do not style `div`s manually.
+3.  **Predictable Rhythm**: Spacing is mathematical (4px grid), not optical.
+4.  **Enforced Consistency**: Components that look the same must *be* the same.
 
-The `tokens` object is the canonical definition for:
+---
+
+## 2. Visual Foundations
 
 ### Typography
-*   **`tokens.typography.h1`**: Page headings (24px/bold).
-*   **`tokens.typography.h2`**: Section headings (20px/semibold).
-*   **`tokens.typography.blockTitle`**: Block/Panel headers (18px/semibold).
-*   **`tokens.typography.sectionLabel`**: Data labels (12px/uppercase/tracking-wider/muted).
-*   **`tokens.typography.body`**: Standard reading text (14px).
-*   **`tokens.typography.bodyMuted`**: Secondary text (14px).
-*   **`tokens.typography.meta`**: Small metadata text (12px).
+Regulated by `tokens.typography`. All fonts use the system font stack (San Francisco, Segoe UI, etc.).
 
-### Spacing
-*   **`tokens.spacing.screenPadding`**: Global screen gutters.
-*   **`tokens.spacing.dashboardSectionGap`**: Vertical rhythm between major page sections.
-*   **`tokens.spacing.gridGap`**: Horizontal/Vertical gaps in grids.
-*   **`tokens.spacing.blockGapY`**: Vertical stacking within a Block.
-*   **`tokens.spacing.widgetGap`**: Smaller gap (8px) for widgets/lists.
-*   **`tokens.spacing.tight`**: Tight stacking for data pairs (label + value).
+| Logical Role | Token | Style | Usage |
+| :--- | :--- | :--- | :--- |
+| **Page Title** | `typography.h1` | 24px Bold Tight | Main page headers (`<h1>`) |
+| **Section** | `typography.h2` | 20px Semibold Tight | Major page sections (`<h2>`) |
+| **Subsection** | `typography.h3` | 18px Medium Tight | Card groups / modal titles |
+| **Block Title** | `typography.blockTitle` | 14px Bold Uppercase | Headers inside Blocks |
+| **Body** | `typography.body` | 14px Regular | Default text |
+| **Muted** | `typography.bodyMuted` | 14px Regular Muted | Helper text, secondary descriptions |
+| **Meta** | `typography.meta` | 12px Regular Muted | Timestamps, IDs, footer info |
+| **Label** | `typography.sectionLabel` | 10px Bold Uppercase | Field labels, graph axes |
+
+### Spacing & Layout
+Regulated by `tokens.spacing`. Based on a 4px grid.
+
+- **Screen Padding**: `spacing.screenPadding` (Mobile: 16px, Desktop: 24px).
+- **Section Gap**: `spacing.dashboardSectionGap` (24px). Separates major vertical zones.
+- **Grid Gap**: `spacing.gridGap` (16px -> 24px). Standard grid separation.
+- **Block Gap**: `spacing.blockGapY` (16px). Vertical spacing between elements inside a Block.
+- **Tight Gap**: `spacing.tight` (6px). Spacing between a Label and its Input.
+
+### Colors
+Regulated by CSS Variables mapped to `tokens.colors`.
+
+- **Primary**: `var(--primary)` (Action Blue).
+- **Text**: `var(--text)` (Dark Grey/Black).
+- **Muted**: `var(--muted)` (Slate Grey).
+- **Surfaces**:
+    - Page: `var(--bg-page)` (Off-white/Dark bg).
+    - Card: `var(--bg-card)` (White/Panel bg).
+    - Structure: `var(--bg-structure)` (Grouped areas).
 
 ### Borders & Radius
-*   **`tokens.borders.default`**: Standard subtle border for Blocks.
-*   **`tokens.borders.input`**: Input field borders.
-*   **`tokens.radius.card`**: Standard curvature for Blocks (12px/xl).
+- **Radius**:
+    - Cards/Inputs/Buttons: `rounded-xl` (12px) or `rounded-2xl` (16px) depending on size. Defined in `tokens.radius`.
+    - Pills: `rounded-full` (9999px).
+- **Borders**:
+    - Default: `1px solid var(--border-subtle)`.
+    - Focus: `Ring` using `var(--ring)`.
 
-### Colour Intent
-*   **Text**: `[var(--text)]` (Primary), `[var(--muted)]` (Secondary).
-*   **Surfaces**: `[var(--bg-card)]` (Blocks), `[var(--bg-page)]` (Backgrounds).
+---
 
-### Design Problem Solution
-Tokens solve the issue of "drift". By referencing `tokens.spacing.gridGap` instead of `gap-4`, we ensure that if we update the design spacing system later, we update it in one place, and every dashboard updates simultaneously.
+## 3. Component Taxonomy
 
-## C) Core UI Primitives (Authoritative)
+### Primitives (Low Level)
+These components wrap HTML elements and apply tokens.
 
-### `Block`
-*   **Purpose**: The fundamental container for content. Replaces `Card` or `div` with border/shadow.
-*   **Ownership**: Owns border, background, radius, shadow, and internal padding.
-*   **Usage**: Wrap any grouped content in `<Block>`.
+*   **`Block`**: The fundamental container. Owns `bg-card`, `border`, `shadow`, `padding`.
+*   **`BlockTitle`**: Standard header for Blocks.
+*   **`Button`**: Interactive element. Owns `height` (44px min), `padding`, `radius`, `transition`.
+*   **`Input` / `SelectField`**: Form controls. Owns `height` (44px min), `border`, `radius`.
+*   **`FieldLabel`**: Standard label for inputs. Upper-case, bold, tiny.
+*   **`Icon`**: Unified SVG wrapper.
 
-### `BlockTitle`
-*   **Purpose**: Standard section heading within a Block.
-*   **Ownership**: Font size, weight, color, letter spacing.
-*   **Usage**: `<BlockTitle>Workout Plan</BlockTitle>`
+### Compounds (High Level)
+These compose primitives for specific domain tasks.
 
-### `FieldLabel`
-*   **Purpose**: Standard label for a data point or form field.
-*   **Ownership**: Uppercase transformation, tracking, font size, mute color.
-*   **Usage**: `<FieldLabel>Start Time</FieldLabel>`
+*   **`StatRow`**: Key/Value pair (Label + StatValue).
+*   **`EmptyState`**: Icon + Title + Description centered in a Block.
+*   **`PageHeader`**: H1 + Actions.
 
-### `Input` / `SelectField`
-*   **Purpose**: Standardized user input controls.
-*   **Ownership**: Borders, focus states, internal padding, font size.
+---
 
-### `Button`
-*   **Purpose**: Interactive actions.
-*   **Ownership**: Variants (primary, ghost, secondary), sizes.
+## 4. States & Variants
 
-## D) Forbidden Patterns (Explicit)
+### Loading
+- **Skeleton**: Use `FullScreenLogoLoader` for pages, or skeleton primitives for blocks.
+- **Opacity**: Loading states should use `tokens.opacity.disabled` (0.5).
 
-The following patterns are **Strictly Forbidden** in page files (`app/**/*.tsx`):
+### Empty
+- Always describe *what* is missing and *how* to fix it (e.g., "No workouts found. Create one?").
 
-*   ❌ `text-[13px]` or random font sizes. (Use `tokens.typography.*`)
-*   ❌ `gap-3` or `gap-5`. (Use `tokens.spacing.*`)
-*   ❌ `px-4 py-6`. (Use `tokens.spacing.screenPadding` or rely on `Block` defaults)
-*   ❌ `border-gray-200`. (Use `tokens.borders.default`)
-*   ❌ `rounded-lg` on structural containers. (Use `tokens.radius.card` or `Block`)
-*   ❌ `uppercase tracking-wider` inline. (Use `FieldLabel` or `tokens.typography.sectionLabel`)
-*   ❌ `font-bold` ad-hoc usage. (Use `tokens.typography.h*`)
+### Disabled
+- Interactive elements must set `disabled={true}` and apply `tokens.opacity.disabled`.
 
-### Correct Refactoring Example
+---
 
-**BAD:**
-```tsx
-<div className="p-4 border rounded-xl gap-4 flex flex-col">
-  <h2 className="text-lg font-bold">Details</h2>
-  <div className="text-[13px] uppercase text-gray-500">Name</div>
-</div>
+## 5. Enforcement & Auditing
+
+### Forbidden Patterns
+❌ **Arbitrary Values**: `mt-[13px]`, `p-[7px]`.
+❌ **Manual Borders**: `border-gray-200` (Use `tokens.borders.default`).
+❌ **Manual Text Sizes**: `text-lg` (Use `tokens.typography.h3`).
+❌ **Hardcoded Colors**: `text-[#333]` (Use `tokens.colors.text.main`).
+
+### Audit Commands
+
+Run these to find violations:
+
+**Find arbitrary spacing:**
+```bash
+grep -r "p-\[" apps/web/app
+grep -r "m-\[" apps/web/app
+grep -r "gap-\[" apps/web/app
 ```
 
-**GOOD:**
-```tsx
-<Block>
-  <BlockTitle>Details</BlockTitle>
-  <div>
-    <FieldLabel>Name</FieldLabel>
-  </div>
-</Block>
+**Find arbitrary text sizes:**
+```bash
+grep -r "text-\[" apps/web/app
 ```
+
+**Find hardcoded colors:**
+```bash
+grep -r "bg-\[" apps/web/app
+grep -r "text-\[" apps/web/app
+```
+
+**Find manual borders:**
+```bash
+grep -r "border-gray" apps/web/app
+```
+
