@@ -142,8 +142,8 @@ const FieldRow = ({
 }) => {
   if (value === undefined || value === null || value === '') return null;
   return (
-    <div className={className}>
-      <FieldLabel className="mb-1">{label}</FieldLabel>
+    <div className={cn('flex flex-col', tokens.spacing.tinyGap, className)}>
+      <FieldLabel>{label}</FieldLabel>
       <div className={cn(tokens.typography.body, valueClassName)}>{value}</div>
     </div>
   );
@@ -251,11 +251,11 @@ export function WorkoutDetail({
   const plannedDistance = item.plannedDistanceKm ? `${item.plannedDistanceKm} km` : item.distanceMeters ? `${(item.distanceMeters/1000).toFixed(2)} km` : null;
 
   return (
-    <div className={cn('space-y-6', className)}>
+    <div className={cn(tokens.spacing.dashboardSectionGap, className)}>
       {/* Header Info (Title, Status, Weather) if not in Drawer, or specialized header */}
       {!isDrawer && (
-        <div className="flex flex-col gap-2">
-           <div className="flex items-center gap-2">
+        <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
+           <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
             {statusIndicator ? (
               <Icon 
                 name={statusIndicator.iconName} 
@@ -265,7 +265,7 @@ export function WorkoutDetail({
             ) : null}
             <h1 className={tokens.typography.h2}>{item.title}</h1>
            </div>
-           <div className={cn(tokens.typography.bodyMuted, 'flex items-center gap-2')}>
+           <div className={cn(tokens.typography.bodyMuted, 'flex items-center', tokens.spacing.widgetGap)}>
              <span>{formatDisplay(item.date)}</span>
              <span>·</span>
              <span>{headerTimeLabel}</span>
@@ -273,20 +273,20 @@ export function WorkoutDetail({
         </div>
       )}
 
-      <div className={cn('grid grid-cols-1 gap-6', isDrawer ? '' : 'lg:grid-cols-2')}>
+      <div className={cn('grid grid-cols-1', tokens.spacing.gridGap, isDrawer ? '' : 'lg:grid-cols-2')}>
         {/* LEFT COLUMN: Planned */}
-        <div className="space-y-6">
+        <div className={tokens.spacing.dashboardSectionGap}>
           <Block title="Workout Plan">
-            <div className="space-y-4">
+            <div className={tokens.spacing.blockGapY}>
               {/* Header */}
-              <div className="flex items-center gap-3">
+              <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
                  {(() => {
                     const theme = getDisciplineTheme(item.discipline);
                     return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
                  })()}
                  <div>
-                   <div className="text-sm font-medium">{item.discipline}</div>
-                   <div className="text-xs text-[var(--muted)]">
+                   <div className={tokens.typography.bodySemi}>{item.discipline}</div>
+                   <div className={tokens.typography.meta}>
                       {plannedDuration && <span>{plannedDuration}</span>}
                       {plannedDuration && plannedDistance && <span> · </span>}
                       {plannedDistance && <span>{plannedDistance}</span>}
@@ -295,17 +295,17 @@ export function WorkoutDetail({
               </div>
               
               {/* Fields */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={cn('grid grid-cols-2', tokens.spacing.gridGap)}>
                  <FieldRow label="Duration" value={plannedDuration} />
                  <FieldRow label="Distance" value={plannedDistance} />
                  <FieldRow label="Intensity" value={item.intensityTarget} className="col-span-2" />
                  
                  {(item.tags && item.tags.length > 0) && (
-                    <div className="col-span-2">
-                      <FieldLabel className="mb-1">Tags</FieldLabel>
-                      <div className="flex flex-wrap gap-2">
+                    <div className={cn('col-span-2 flex flex-col', tokens.spacing.tinyGap)}>
+                      <FieldLabel>Tags</FieldLabel>
+                      <div className={cn('flex flex-wrap', tokens.spacing.widgetGap)}>
                         {item.tags.map(t => (
-                          <span key={t} className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-0.5 text-xs">
+                          <span key={t} className={cn('inline-flex items-center', tokens.borders.default, tokens.colors.bg.surface, tokens.spacing.pill, tokens.typography.small)}>
                             {t}
                           </span>
                         ))}
@@ -316,23 +316,23 @@ export function WorkoutDetail({
 
                {/* Description / Detail */}
                {item.workoutDetail && (
-                 <div className="pt-4 border-t border-[var(--border-subtle)]">
-                    <FieldLabel className="mb-2">Description</FieldLabel>
+                 <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
+                    <FieldLabel>Description</FieldLabel>
                     <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{item.workoutDetail}</div>
                  </div>
                )}
 
                {/* Structure */}
                {item.workoutStructure ? (
-                  <div className="pt-4 border-t border-[var(--border-subtle)]">
-                    <FieldLabel className="mb-2">Structure</FieldLabel>
+                  <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
+                    <FieldLabel>Structure</FieldLabel>
                     <WorkoutStructureView structure={item.workoutStructure} />
                   </div>
                ) : null}
 
                 {item.notes && (
-                  <div className="pt-4 border-t border-[var(--border-subtle)]">
-                    <FieldLabel className="mb-2">Coach Notes</FieldLabel>
+                  <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
+                    <FieldLabel>Coach Notes</FieldLabel>
                     <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{item.notes}</div>
                   </div>
                 )}
@@ -341,13 +341,13 @@ export function WorkoutDetail({
 
            {weather && weather.enabled && (
              <Block title="Weather Conditions">
-                <div className="flex items-center gap-4">
-                   <Icon name={WEATHER_ICON_NAME[weather.icon] || 'sunny'} size="lg" className="text-[var(--text)]" />
+                <div className={cn('flex items-center', tokens.spacing.blockRowGap)}>
+                   <Icon name={WEATHER_ICON_NAME[weather.icon] || 'sunny'} size="lg" className={tokens.colors.text.main} />
                    <div>
-                      <div className="text-2xl font-bold">{Math.round(weather.maxTempC)}°C</div>
-                      <div className="text-xs text-[var(--muted)]">Forecast for {formatDisplay(weather.date)}</div>
+                      <div className={tokens.typography.h1}>{Math.round(weather.maxTempC)}°C</div>
+                      <div className={tokens.typography.meta}>Forecast for {formatDisplay(weather.date)}</div>
                    </div>
-                   <div className="ml-auto text-right text-xs text-[var(--muted)]">
+                   <div className={cn('ml-auto text-right', tokens.typography.meta)}>
                      <div>Sunrise: {weather.sunriseLocal}</div>
                      <div>Sunset: {weather.sunsetLocal}</div>
                    </div>
@@ -357,15 +357,18 @@ export function WorkoutDetail({
         </div>
 
         {/* RIGHT COLUMN: Actual */}
-        <div className="space-y-6">
+        <div className={tokens.spacing.dashboardSectionGap}>
            {latestCompletion && (
              <Block title={isStravaCompletion ? "Strava Activity" : "Completed Activity"}>
-                <div className="space-y-4">
+                <div 
+                  className={tokens.spacing.blockGapY}
+                  {...(isStravaCompletion ? { 'data-athlete-workout-quadrant': 'strava' } : {})}
+                >
                   {isStravaCompletion && (
-                    <div className="flex items-center gap-2 mb-4">
-                       <span className="text-[#fc4c02] font-bold text-xs uppercase tracking-wide">Strava Synced</span>
+                    <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
+                       <span className={cn(tokens.typography.label, tokens.colors.brand.strava)}>Strava Synced</span>
                        {latestCompletion.confirmedAt && (
-                         <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+                         <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.success, tokens.colors.text.success)}>
                            Confirmed
                          </span>
                        )}
@@ -373,11 +376,11 @@ export function WorkoutDetail({
                   )}
 
                   {!isStravaCompletion && (
-                     <div className="grid grid-cols-2 gap-4">
+                     <div className={cn('grid grid-cols-2', tokens.spacing.gridGap)}>
                         <FieldRow label="Duration" value={`${latestCompletion.durationMinutes} min`} />
                         <FieldRow label="Distance" value={latestCompletion.distanceKm ? `${latestCompletion.distanceKm} km` : null} />
                         <FieldRow label="RPE" value={latestCompletion.rpe ? `${latestCompletion.rpe}/10` : null} />
-                        <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? 'text-rose-500 font-bold' : ''} />
+                        <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? cn(tokens.typography.bodyBold, tokens.colors.text.danger) : ''} />
                      </div>
                   )}
 
@@ -385,7 +388,7 @@ export function WorkoutDetail({
                     <>
                       {stravaName && <div className={tokens.typography.h3}>{stravaName}</div>}
                       
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div className={cn('grid grid-cols-2 sm:grid-cols-3', tokens.spacing.gridGap)}>
                         <FieldRow label="Time" value={actualTimeLabel} />
                         <FieldRow label="Moving Time" value={movingTimeLabel} />
                         <FieldRow label="Distance" value={formatKm(strava.distance)} />
@@ -401,9 +404,9 @@ export function WorkoutDetail({
                       </div>
 
                       {stravaDescription && (
-                        <div className="pt-4 border-t border-[var(--border-subtle)]">
+                        <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY)}>
                           <FieldLabel className="mb-1">Activity Description</FieldLabel>
-                           <div className={cn("whitespace-pre-wrap text-sm")}>{stravaDescription}</div>
+                           <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{stravaDescription}</div>
                         </div>
                       )}
                     </>
@@ -411,18 +414,18 @@ export function WorkoutDetail({
 
                    {/* Map */}
                    {stravaSummaryPolyline && (
-                      <div className="mt-4 overflow-hidden rounded-lg border border-[var(--border-subtle)] h-48">
+                      <div className={cn("overflow-hidden h-48", tokens.radius.sm, tokens.borders.default)}>
                          <PolylineRouteMap polyline={stravaSummaryPolyline} />
                       </div>
                    )}
 
                   {/* Notes / Feedback */}
                   {(latestCompletion.notes || latestCompletion.rpe) && !hasStravaMetrics && (
-                     <div className="pt-4 border-t border-[var(--border-subtle)] mt-4">
+                     <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY)}>
                        {latestCompletion.notes && (
-                         <div className="mb-4">
-                            <FieldLabel className="mb-1">Feedback</FieldLabel>
-                            <div className="whitespace-pre-wrap text-sm">{latestCompletion.notes}</div>
+                         <div className={cn('flex flex-col', tokens.spacing.tinyGap)}>
+                            <FieldLabel>Feedback</FieldLabel>
+                            <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{latestCompletion.notes}</div>
                          </div>
                        )}
                      </div>
@@ -430,9 +433,9 @@ export function WorkoutDetail({
                   
                   {/* RPE/Pain for Strava too if set manually confirm */}
                   {hasStravaMetrics && (latestCompletion.rpe || latestCompletion.painFlag) && (
-                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[var(--border-subtle)]">
+                     <div className={cn('grid grid-cols-2', tokens.spacing.gridGap, tokens.borders.divider, tokens.spacing.blockPaddingY)}>
                         <FieldRow label="RPE" value={latestCompletion.rpe ? `${latestCompletion.rpe}/10` : '-'} />
-                        <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? 'text-rose-500 font-bold' : ''} />
+                        <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? cn(tokens.typography.bodyBold, tokens.colors.text.danger) : ''} />
                      </div>
                   )}
 
@@ -446,7 +449,7 @@ export function WorkoutDetail({
 
            {!latestCompletion && !isDrawer && !uncompletedActionSlot && (
              <Block>
-               <div className="p-8 text-center text-[var(--muted)]">
+               <div className={cn(tokens.spacing.screenPadding, "text-center", tokens.colors.text.muted)}>
                  No activity recorded yet.
                </div>
              </Block>
