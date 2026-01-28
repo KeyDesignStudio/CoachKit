@@ -875,6 +875,14 @@ export default function CoachCalendarPage() {
     setTitleMessage('');
   };
 
+  const handleSessionClick = (item: CalendarItem) => {
+    if (item.status?.startsWith('COMPLETED')) {
+      openCompletedView(item);
+    } else {
+      openEditDrawer(item);
+    }
+  };
+
   const closeDrawer = () => {
     setDrawerMode('closed');
     setEditItemId('');
@@ -1372,7 +1380,7 @@ export default function CoachCalendarPage() {
                                       title: `${item.title || item.discipline || 'Workout'}`,
                                     }}
                                     timeZone={tz}
-                                    onClick={() => openEditDrawer(item)}
+                                    onClick={() => handleSessionClick(item)}
                                     onContextMenu={(e) => handleContextMenu(e, 'session', item)}
                                     showTimeOnMobile={false}
                                     statusIndicatorVariant="bar"
@@ -1469,7 +1477,7 @@ export default function CoachCalendarPage() {
                                     title: `${item.title || item.discipline || 'Workout'}`,
                                   }}
                                   timeZone={tz}
-                                  onClick={() => openEditDrawer(item)}
+                                  onClick={() => handleSessionClick(item)}
                                   onContextMenu={(e) => handleContextMenu(e, 'session', item)}
                                   showTimeOnMobile={false}
                                   statusIndicatorVariant="bar"
@@ -1902,7 +1910,7 @@ export default function CoachCalendarPage() {
                         data-day-workout-item="true"
                         onClick={() => {
                           closeMobileDaySheet();
-                          openEditDrawer(item);
+                          handleSessionClick(item);
                         }}
                         className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-left hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                       >
