@@ -93,31 +93,32 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
 
+  const itemId = item?.id ?? null;
+
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState('');
 
   const handleMarkReviewed = useCallback(async () => {
-    if (!item) return;
+    if (!itemId) return;
     setMarking(true);
     try {
-      await onMarkReviewed(item.id);
+      await onMarkReviewed(itemId);
       onClose();
     } catch (err) {
       console.error('Failed to mark reviewed:', err);
     } finally {
       setMarking(false);
     }
-  }, [item, onMarkReviewed, onClose]);
-
-  if (!item) return null;
+  }, [itemId, onMarkReviewed, onClose]);
 
   const loadDetail = useCallback(
     async (bypassCache = false) => {
+      if (!itemId) return;
       setDetailLoading(true);
       setDetailError('');
       try {
-        const url = bypassCache ? `/api/coach/calendar-items/${item.id}?t=${Date.now()}` : `/api/coach/calendar-items/${item.id}`;
+        const url = bypassCache ? `/api/coach/calendar-items/${itemId}?t=${Date.now()}` : `/api/coach/calendar-items/${itemId}`;
         const resp = await request<{ item: CalendarItemDetail }>(url, bypassCache ? { cache: 'no-store' } : undefined);
         setDetail(resp.item);
       } catch (err) {
@@ -127,15 +128,16 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
         setDetailLoading(false);
       }
     },
-    [item.id, request]
+    [itemId, request]
   );
 
   const loadWeather = useCallback(
     async (bypassCache = false) => {
+      if (!itemId) return;
       setWeatherLoading(true);
       setWeatherError('');
       try {
-        const url = bypassCache ? `/api/athlete/workouts/${item.id}/weather?t=${Date.now()}` : `/api/athlete/workouts/${item.id}/weather`;
+        const url = bypassCache ? `/api/athlete/workouts/${itemId}/weather?t=${Date.now()}` : `/api/athlete/workouts/${itemId}/weather`;
         const resp = await request<WeatherResponse>(url, bypassCache ? { cache: 'no-store' } : undefined);
         setWeather(resp);
       } catch (err) {
@@ -145,14 +147,24 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
         setWeatherLoading(false);
       }
     },
-    [item.id, request]
+    [itemId, request]
   );
 
   useEffect(() => {
+    if (!itemId) {
+      setDetail(null);
+      setDetailError('');
+      setWeather(null);
+      setWeatherError('');
+      return;
+    }
+
     void loadDetail(true);
     void loadWeather(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id]);
+  }, [itemId]);
+
+  if (!item) return null;
 
   const latestCompletion = detail?.completedActivities?.[0] ?? null;
   const isDraftSynced = detail?.status === 'COMPLETED_SYNCED_DRAFT';
