@@ -164,8 +164,6 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId]);
 
-  if (!item) return null;
-
   const latestCompletion = detail?.completedActivities?.[0] ?? null;
   const isDraftSynced = detail?.status === 'COMPLETED_SYNCED_DRAFT';
   const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
@@ -207,6 +205,8 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
     },
     [timeZone]
   );
+
+  if (!item) return null;
 
   const formatSpeedKmh = (mps: number | undefined) => {
     if (!mps || !Number.isFinite(mps) || mps <= 0) return null;
