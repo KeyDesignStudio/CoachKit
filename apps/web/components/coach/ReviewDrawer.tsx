@@ -399,13 +399,13 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
 
                     {weatherLoading ? (
                       <div className="mt-2 animate-pulse">
-                        <div className="h-4 w-40 rounded bg-black/10" />
-                        <div className="mt-2 h-4 w-52 rounded bg-black/10" />
-                        <div className="mt-2 h-4 w-48 rounded bg-black/10" />
+                        <div className="h-4 w-40 rounded bg-[var(--bg-structure)]" />
+                        <div className="mt-2 h-4 w-52 rounded bg-[var(--bg-structure)]" />
+                        <div className="mt-2 h-4 w-48 rounded bg-[var(--bg-structure)]" />
                       </div>
                     ) : weather?.enabled ? (
                       <div className="mt-2 flex items-center gap-4">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/30">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)]">
                           <Icon name={WEATHER_ICON_NAME[weather.icon]} size="lg" className="text-[var(--text)]" />
                         </div>
                         <div className="min-w-0">
@@ -426,7 +426,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
                   {weather?.enabled === false ? null : (
                     <button
                       type="button"
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/30 text-[var(--text)] hover:bg-white/40 disabled:opacity-50"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)] hover:bg-[var(--bg-surface)] disabled:opacity-50"
                       onClick={() => void loadWeather(true)}
                       disabled={weatherLoading}
                       aria-label="Refresh weather"

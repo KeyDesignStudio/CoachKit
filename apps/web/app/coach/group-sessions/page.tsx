@@ -180,7 +180,7 @@ export default function CoachGroupSessionsPage() {
   return (
     <section className="flex flex-col gap-6">
       {/* Header */}
-      <header className="rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
+      <header className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5 shadow-inner">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
@@ -217,13 +217,13 @@ export default function CoachGroupSessionsPage() {
       {/* Sessions List */}
       <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {!loadingSessions && filteredSessions.length === 0 && !searchQuery && (
-          <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+          <div className="col-span-full rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
                 <p className="text-[var(--muted)]">No group sessions yet. Create one to get started.</p>
               </div>
             )}
 
             {!loadingSessions && filteredSessions.length === 0 && searchQuery && (
-              <div className="col-span-full rounded-3xl border border-white/20 bg-white/40 p-8 text-center backdrop-blur-3xl">
+              <div className="col-span-full rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">
                 <p className="text-[var(--muted)]">No sessions match your search.</p>
               </div>
             )}

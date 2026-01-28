@@ -50,7 +50,7 @@ function NeedsAttentionItem({
       ? 'bg-rose-500/15 text-rose-700'
       : tone === 'primary'
         ? 'bg-blue-600/10 text-blue-700'
-        : 'bg-[var(--bg-card)] border border-black/15 text-[var(--text)]';
+        : 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text)]';
 
   return (
     <button
@@ -60,7 +60,7 @@ function NeedsAttentionItem({
         'w-full rounded-2xl text-left min-h-[56px]',
         tokens.spacing.containerPadding,
         'transition-colors',
-        tone === 'neutral' ? 'hover:bg-white/60' : '',
+        tone === 'neutral' ? 'hover:bg-[var(--bg-surface)]' : '',
         toneClasses
       )}
     >
@@ -323,7 +323,7 @@ export default function AthleteDashboardConsolePage() {
                             className={cn(
                               'min-w-0 flex items-baseline justify-between py-2',
                               tokens.spacing.widgetGap,
-                              idx < 3 ? 'border-b border-black/5' : ''
+                              idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
                             )}
                             data-testid="athlete-dashboard-at-a-glance-stat-row"
                           >
@@ -357,8 +357,8 @@ export default function AthleteDashboardConsolePage() {
                                       <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
                                     </div>
 
-                                    <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                                      <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                                    <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                                      <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
                                     </div>
 
                                     <div

@@ -18,5 +18,16 @@ const variantClasses: Record<CardVariant, string> = {
 };
 
 export function Card({ className, variant = 'default', ...props }: CardProps) {
-  return <div className={cn(tokens.radius.card, tokens.spacing.blockPadding, variantClasses[variant], className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        'min-w-0 max-w-full',
+        tokens.radius.card,
+        tokens.spacing.blockPadding,
+        variantClasses[variant],
+        className
+      )}
+      {...props}
+    />
+  );
 }

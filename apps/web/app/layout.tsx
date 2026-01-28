@@ -52,12 +52,36 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     }
 
     // system
-    root.classList.remove('dark');
-    root.style.colorScheme = '';
+    const isSystemDark = (() => {
+      try {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch {
+        return false;
+      }
+    })();
+
+    root.classList.toggle('dark', isSystemDark);
+    root.style.colorScheme = isSystemDark ? 'dark' : '';
     try {
       delete root.dataset.theme;
     } catch {
       root.removeAttribute('data-theme');
+    }
+
+    // Keep in sync if OS theme changes while the app is open.
+    try {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = (e) => {
+        // Only react in system mode.
+        const prefNow = localStorage.getItem(key);
+        if (prefNow === 'dark' || prefNow === 'light') return;
+        root.classList.toggle('dark', !!e.matches);
+        root.style.colorScheme = e.matches ? 'dark' : '';
+      };
+      if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
+      else if (typeof mql.addListener === 'function') mql.addListener(onChange);
+    } catch {
+      // ignore
     }
   } catch {
     // ignore

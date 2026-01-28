@@ -71,15 +71,18 @@ export function DevAppHeader() {
             aria-label="CoachKit"
           >
             <span className="text-sm">CoachKit</span>
-            <picture>
-              <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/coachkit-logo.png"
-                alt="CoachKit"
-                className="h-[29px] w-[29px] object-contain"
-              />
-            </picture>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/coachkit-logo.png"
+              alt="CoachKit"
+              className="h-[29px] w-[29px] object-contain dark:hidden"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/CoachKit_Dark.png"
+              alt="CoachKit"
+              className="hidden h-[29px] w-[29px] object-contain dark:block"
+            />
           </Link>
         </div>
       </div>

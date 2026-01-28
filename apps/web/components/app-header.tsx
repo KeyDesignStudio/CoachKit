@@ -140,17 +140,31 @@ export async function AppHeader() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {headerClubBranding.type === 'logo' ? (
-              <picture>
+              <>
                 {headerClubBranding.darkLogoUrl ? (
-                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
-                ) : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={headerClubBranding.logoUrl}
-                  alt={`${headerClubBranding.name} logo`}
-                  className="h-8 w-auto object-contain"
-                />
-              </picture>
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.logoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="h-8 w-auto object-contain dark:hidden"
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.darkLogoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="hidden h-8 w-auto object-contain dark:block"
+                    />
+                  </>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerClubBranding.logoUrl}
+                    alt={`${headerClubBranding.name} logo`}
+                    className="h-8 w-auto object-contain"
+                  />
+                )}
+              </>
             ) : (
               <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">
                 {headerClubBranding.name}
@@ -164,15 +178,18 @@ export async function AppHeader() {
             aria-label="CoachKit"
           >
             <span className="text-sm">CoachKit</span>
-            <picture>
-              <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/coachkit-logo.png"
-                alt="CoachKit"
-                  className="h-[29px] w-[29px] object-contain"
-              />
-            </picture>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/coachkit-logo.png"
+              alt="CoachKit"
+              className="h-[29px] w-[29px] object-contain dark:hidden"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/CoachKit_Dark.png"
+              alt="CoachKit"
+              className="hidden h-[29px] w-[29px] object-contain dark:block"
+            />
           </Link>
         </div>
       </div>
@@ -194,17 +211,31 @@ export async function AppHeader() {
           {/* Left block: Club branding (row 1, col 1) */}
           <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (
-              <picture>
+              <>
                 {headerClubBranding.darkLogoUrl ? (
-                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
-                ) : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={headerClubBranding.logoUrl}
-                  alt={`${headerClubBranding.name} logo`}
-                  className="h-12 w-auto object-contain sm:h-14"
-                />
-              </picture>
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.logoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="h-12 w-auto object-contain sm:h-14 dark:hidden"
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.darkLogoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="hidden h-12 w-auto object-contain sm:h-14 dark:block"
+                    />
+                  </>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerClubBranding.logoUrl}
+                    alt={`${headerClubBranding.name} logo`}
+                    className="h-12 w-auto object-contain sm:h-14"
+                  />
+                )}
+              </>
             ) : (
               <span
                 className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
@@ -221,15 +252,18 @@ export async function AppHeader() {
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
             >
               <span className="hidden text-base sm:inline">CoachKit</span>
-              <picture>
-                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/brand/coachkit-logo.png"
-                  alt="CoachKit"
-                  className="h-[44px] w-[44px] object-contain"
-                />
-              </picture>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/coachkit-logo.png"
+                alt="CoachKit"
+                className="h-[44px] w-[44px] object-contain dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/CoachKit_Dark.png"
+                alt="CoachKit"
+                className="hidden h-[44px] w-[44px] object-contain dark:block"
+              />
             </Link>
           </div>
 

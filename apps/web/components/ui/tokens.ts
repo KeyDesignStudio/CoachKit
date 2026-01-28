@@ -56,7 +56,7 @@ export const tokens = {
       muted: 'text-[var(--muted)]',
       primary: 'text-[var(--primary)]',
       danger: 'text-rose-500',
-      success: 'text-emerald-600',
+      success: 'text-[var(--text-success)]',
       onPrimary: 'text-white',
     },
     bg: {
@@ -67,7 +67,7 @@ export const tokens = {
       transparent: 'bg-transparent',
       primary: 'bg-[var(--primary)]',
       danger: 'bg-rose-500',
-      success: 'bg-emerald-100 dark:bg-emerald-900/30',
+      success: 'bg-[var(--bg-success)]',
     },
     border: {
       subtle: 'border-[var(--border-subtle)]',

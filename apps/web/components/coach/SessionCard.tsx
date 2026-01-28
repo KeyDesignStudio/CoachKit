@@ -100,7 +100,7 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-2xl border border-white/30 bg-white/60 p-4 text-left shadow-sm backdrop-blur-xl transition-all hover:border-white/50 hover:bg-white/70 hover:shadow-md min-w-0 h-full"
+      className="group w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-left shadow-sm transition-all hover:bg-[var(--bg-surface)] hover:shadow-md min-w-0 h-full"
     >
       <div className="flex items-start gap-3">
         {/* Discipline Icon */}

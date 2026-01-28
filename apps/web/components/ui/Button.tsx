@@ -16,10 +16,10 @@ import { tokens } from './tokens';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--primary)] text-white shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0',
+    'bg-[var(--primary)] text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0',
   secondary:
-    'bg-white/70 text-[var(--text)] border border-white/40 hover:bg-white/80 backdrop-blur-xl',
-  ghost: 'text-[var(--text)] hover:bg-white/30',
+    'bg-[var(--bg-card)] text-[var(--text)] border border-[var(--border-subtle)] hover:bg-[var(--bg-structure)]',
+  ghost: 'text-[var(--text)] hover:bg-[var(--bg-structure)]',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

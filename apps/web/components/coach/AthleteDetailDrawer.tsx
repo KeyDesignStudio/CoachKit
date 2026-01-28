@@ -331,14 +331,14 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       {/* Drawer */}
       <div
         className={cn(
-          'fixed right-0 top-0 z-50 h-full overflow-y-auto border-l border-white/20 bg-white/90 backdrop-blur-3xl shadow-2xl transition-transform',
+          'fixed right-0 top-0 z-50 h-full overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl transition-transform',
           'w-full',
           'lg:w-[50vw] lg:max-w-[840px]',
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/20 bg-white/60 px-6 py-4 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
           <h2 className={`${uiH2} md:text-xl font-semibold`}>{name || 'Athlete Profile'}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
             ✕
@@ -356,7 +356,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
               {/* Left Column: Profile */}
               <div className="space-y-6">
                 {/* Profile Section */}
-                <section className="space-y-4 rounded-2xl border border-white/30 bg-white/40 p-4">
+                <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                 <h3 className="text-lg font-semibold">Profile</h3>
                 <div className="space-y-3">
                   <div>
@@ -365,7 +365,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Email</label>
-                    <Input value={email} disabled className="bg-slate-100/50" />
+                    <Input value={email} disabled className="bg-[var(--bg-structure)]" />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Athlete timezone</label>
@@ -465,8 +465,8 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                             className={cn(
                               'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
                               isSelected
-                                ? 'border-blue-400 bg-blue-50 text-blue-700'
-                                : 'border-white/30 bg-white/40 text-[var(--muted)] hover:bg-white/60'
+                                ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
                             )}
                           >
                             <Icon name={theme.iconName} size="sm" className={isSelected ? theme.textClass : ''} />
@@ -492,7 +492,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
               {/* Right Column: Coach Notes, Pain History, Journal */}
               <div className="space-y-6">
                 {/* Coach Notes Section */}
-                <section className="space-y-4 rounded-2xl border border-white/30 bg-white/40 p-4">
+                <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                 <h3 className="text-lg font-semibold">Coach Notes</h3>
                 <Textarea
                   value={coachNotes}
@@ -503,7 +503,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
               </section>
 
               {/* Pain History Section */}
-              <section className="space-y-4 rounded-2xl border border-white/30 bg-white/40 p-4">
+              <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                 <h3 className="text-lg font-semibold">Pain History</h3>
                 {painHistory.length === 0 ? (
                   <p className="text-sm text-[var(--muted)]">No pain flags recorded.</p>
@@ -514,7 +514,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                       return (
                         <div
                           key={item.calendarItemId}
-                          className="flex items-start gap-3 rounded-xl border border-white/30 bg-white/30 p-3 text-sm"
+                          className="flex items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm"
                         >
                           <div className="flex items-center gap-2">
                             <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} />
@@ -534,7 +534,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
               </section>
 
               {/* Coach Journal Section */}
-              <section className="space-y-4 rounded-2xl border border-white/30 bg-white/40 p-4">
+              <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between text-left"
@@ -551,7 +551,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                 {journalOpen && (
                   <div className="space-y-4">
                     {/* Add Entry Form */}
-                    <div className="space-y-2 rounded-xl border border-white/30 bg-white/30 p-3">
+                    <div className="space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
                       <div>
                         <label className="mb-1 block text-xs font-medium">Entry Date</label>
                         <Input
@@ -595,7 +595,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                         {journalEntries.map((entry) => (
                           <div
                             key={entry.id}
-                            className="rounded-xl border border-white/30 bg-white/30 p-3 text-sm"
+                            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm"
                           >
                             <div className="mb-1 flex items-center justify-between">
                               <span className="text-xs font-medium text-[var(--muted)]">
@@ -622,7 +622,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
           )}
 
           {/* Footer Actions */}
-          <div className="flex flex-wrap gap-3 border-t border-white/20 pt-6 mt-6">
+          <div className="flex flex-wrap gap-3 border-t border-[var(--border-subtle)] pt-6 mt-6">
             <Button type="submit" disabled={saving || loading}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>

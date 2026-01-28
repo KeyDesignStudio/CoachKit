@@ -145,7 +145,7 @@ function AttentionItem({
         'w-full rounded-2xl text-left min-h-[56px]',
         tokens.spacing.containerPadding,
         'transition-colors',
-        active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60',
+        active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-[var(--bg-surface)]',
         toneClasses
       )}
     >
@@ -175,8 +175,8 @@ function AlertStripItem({
       className={cn(
         'w-full rounded-2xl text-left min-h-[56px]',
         tokens.spacing.containerPadding,
-        'bg-[var(--bg-card)] border border-black/15 transition-colors',
-        active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-white/60'
+        'bg-[var(--bg-card)] border border-[var(--border-subtle)] transition-colors',
+        active ? 'ring-2 ring-[var(--ring)]' : 'hover:bg-[var(--bg-surface)]'
       )}
     >
       <div className={cn('flex items-center justify-between', tokens.spacing.widgetGap)}>
@@ -706,7 +706,7 @@ export default function CoachDashboardConsolePage() {
                           'min-w-0 flex items-baseline justify-between',
                           tokens.spacing.elementPadding,
                           tokens.spacing.widgetGap,
-                          idx < 3 ? 'border-b border-black/5' : ''
+                          idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
                         )}
                         data-testid="coach-dashboard-at-a-glance-stat-row"
                       >
@@ -740,8 +740,8 @@ export default function CoachDashboardConsolePage() {
                                   <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
                                 </div>
 
-                                <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                                  <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                                <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                                  <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
                                 </div>
 
                                 <div
@@ -767,7 +767,7 @@ export default function CoachDashboardConsolePage() {
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
         {/* Review Inbox + Notifications split (desktop/tablet); centered on page */}
-        <div className="mt-10 mx-auto max-w-[50%] min-w-[340px] w-full">
+        <div className="mt-10 mx-auto w-full px-4 md:px-0 md:max-w-[50%] md:min-w-[340px]">
           {/* Review inbox */}
           <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             {/* Preserve vertical rhythm from the prior layout (title used to sit above the card). */}
@@ -776,7 +776,13 @@ export default function CoachDashboardConsolePage() {
             </div>
 
             <Block title="Review inbox" padding={false}>
-              <div className={cn("flex items-center justify-between border-b border-black/5", tokens.spacing.elementPadding, tokens.spacing.widgetGap)}>
+              <div
+                className={cn(
+                  "flex items-center justify-between border-b border-[var(--border-subtle)]",
+                  tokens.spacing.elementPadding,
+                  tokens.spacing.widgetGap
+                )}
+              >
                 <div className={cn("text-[var(--muted)]", tokens.typography.meta)}>
                   Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
                   {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
@@ -794,7 +800,7 @@ export default function CoachDashboardConsolePage() {
               {loading ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Loading…</div> : null}
               {!loading && inboxItems.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Nothing to review for this range.</div> : null}
 
-              <div className="divide-y divide-black/5">
+              <div className="divide-y divide-[var(--border-subtle)]">
                 {inboxItems.map((item) => (
                   <ReviewInboxRow
                     key={item.id}

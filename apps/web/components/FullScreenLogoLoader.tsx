@@ -99,20 +99,28 @@ export function FullScreenLogoLoader() {
           : `opacity-0 pointer-events-none duration-[${FADE_OUT_DURATION_MS}ms] ease-in`)
       }
     >
-      <picture>
-        <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/coachkit-logo.png"
-          alt=""
-          className={
-            'h-[300px] w-auto max-w-[75vw] select-none object-contain ' +
-            (reduceMotion
-              ? 'opacity-25'
-              : 'opacity-25 animate-[coachkit-loader-breathe_4.5s_ease-in-out_infinite]')
-          }
-        />
-      </picture>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/coachkit-logo.png"
+        alt=""
+        className={
+          'h-[300px] w-auto max-w-[75vw] select-none object-contain dark:hidden ' +
+          (reduceMotion
+            ? 'opacity-25'
+            : 'opacity-25 animate-[coachkit-loader-breathe_4.5s_ease-in-out_infinite]')
+        }
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/CoachKit_Dark.png"
+        alt=""
+        className={
+          'hidden h-[300px] w-auto max-w-[75vw] select-none object-contain dark:block ' +
+          (reduceMotion
+            ? 'opacity-25'
+            : 'opacity-25 animate-[coachkit-loader-breathe_4.5s_ease-in-out_infinite]')
+        }
+      />
     </div>
   );
 }

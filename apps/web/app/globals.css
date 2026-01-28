@@ -8,7 +8,20 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
-  --border-subtle: #fff;
+  /* Subtle, visible borders on light surfaces */
+  --border-subtle: rgba(12, 18, 34, 0.10);
+
+  /* Inverse surface (used for tooltips/popovers that sit over content) */
+  --bg-inverse: #0c1222;
+  --text-inverse: #f8fbff;
+
+  /* Semantic feedback surfaces */
+  --bg-success: rgba(16, 185, 129, 0.14);
+  --text-success: #047857;
+
+  /* Data viz / meters */
+  --bar-track: rgba(12, 18, 34, 0.10);
+  --bar-fill: rgba(12, 18, 34, 0.22);
 
   /* Interaction tokens */
   --today-border: rgba(59, 130, 246, 0.40);
@@ -29,7 +42,16 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
-  --border-subtle: #fff;
+  --border-subtle: rgba(12, 18, 34, 0.10);
+
+  --bg-inverse: #0c1222;
+  --text-inverse: #f8fbff;
+
+  --bg-success: rgba(16, 185, 129, 0.14);
+  --text-success: #047857;
+
+  --bar-track: rgba(12, 18, 34, 0.10);
+  --bar-fill: rgba(12, 18, 34, 0.22);
 
   --today-border: rgba(59, 130, 246, 0.40);
 
@@ -47,7 +69,17 @@
   --bg-surface: rgba(13, 17, 35, 0.75);
   --bg-structure: rgba(18, 24, 45, 0.65);
   --bg-card: rgba(18, 24, 45, 0.85);
-  --border-subtle: #fff;
+  /* Avoid harsh white borders on dark surfaces */
+  --border-subtle: rgba(248, 251, 255, 0.14);
+
+  --bg-inverse: rgba(248, 251, 255, 0.92);
+  --text-inverse: #05060e;
+
+  --bg-success: rgba(16, 185, 129, 0.22);
+  --text-success: #34d399;
+
+  --bar-track: rgba(248, 251, 255, 0.12);
+  --bar-fill: rgba(248, 251, 255, 0.24);
 
   --today-border: rgba(158, 193, 255, 0.50);
 
@@ -67,7 +99,16 @@
     --bg-surface: rgba(13, 17, 35, 0.75);
     --bg-structure: rgba(18, 24, 45, 0.65);
     --bg-card: rgba(18, 24, 45, 0.85);
-    --border-subtle: #fff;
+    --border-subtle: rgba(248, 251, 255, 0.14);
+
+    --bg-inverse: rgba(248, 251, 255, 0.92);
+    --text-inverse: #05060e;
+
+    --bg-success: rgba(16, 185, 129, 0.22);
+    --text-success: #34d399;
+
+    --bar-track: rgba(248, 251, 255, 0.12);
+    --bar-fill: rgba(248, 251, 255, 0.24);
 
     /* Interaction tokens */
     --today-border: rgba(158, 193, 255, 0.50);
@@ -92,6 +133,8 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
   font-family: 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-page);
   color: var(--text);

@@ -224,7 +224,7 @@ export default function AthleteSettingsPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="rounded-3xl border border-white/20 bg-white/40 px-4 py-4 md:px-6 md:py-5 backdrop-blur-3xl shadow-inner">
+      <header className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5 shadow-inner">
         <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Settings</p>
         <h1 className="text-2xl md:text-3xl font-semibold">Integrations</h1>
         <p className="text-xs md:text-sm text-[var(--muted)]">Manage connections to external services.</p>
@@ -245,8 +245,8 @@ export default function AthleteSettingsPage() {
           >
             <p className="text-sm text-[var(--muted)] mb-3">Times and day-boundaries (missed) use this timezone.</p>
             <TimezoneSelect value={timezone} onChange={handleTimezoneChange} disabled={savingTimezone} />
-            {timezoneMessage ? <p className="text-sm text-emerald-700 mt-2">{timezoneMessage}</p> : null}
-            {timezoneError ? <p className="text-sm text-red-700 mt-2">{timezoneError}</p> : null}
+            {timezoneMessage ? <p className="text-sm text-[var(--text-success)] mt-2">{timezoneMessage}</p> : null}
+            {timezoneError ? <p className="text-sm text-rose-700 dark:text-rose-300 mt-2">{timezoneError}</p> : null}
           </Block>
         </div>
 
@@ -306,7 +306,7 @@ export default function AthleteSettingsPage() {
                 </Button>
               </div>
 
-              {icalMessage ? <p className="text-sm text-emerald-700">{icalMessage}</p> : null}
+              {icalMessage ? <p className="text-sm text-[var(--text-success)]">{icalMessage}</p> : null}
             </div>
           </Block>
         </div>
@@ -342,10 +342,10 @@ export default function AthleteSettingsPage() {
               {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
               {lastSync ? (
-                <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-4 text-sm text-emerald-900">
+                <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-success)] p-4 text-sm text-[var(--text-success)]">
                   <p className="font-medium">Strava sync complete</p>
-                  <p className="text-emerald-900/80">{new Date(lastSync.at).toLocaleString()}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-emerald-900/90">
+                  <p className="opacity-80">{new Date(lastSync.at).toLocaleString()}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     <p>Fetched: <span className="font-medium">{lastSync.summary.fetched}</span></p>
                     <p>Matched: <span className="font-medium">{lastSync.summary.matched}</span></p>
                     <p>Created: <span className="font-medium">{lastSync.summary.created}</span></p>
@@ -354,7 +354,7 @@ export default function AthleteSettingsPage() {
                     <p>Errors: <span className="font-medium">{lastSync.summary.errors.length}</span></p>
                   </div>
                   {lastSync.summary.errors.length ? (
-                    <div className="mt-3 rounded-xl border border-red-200/60 bg-white/50 p-3 text-sm text-red-800">
+                    <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-rose-700 dark:text-rose-300">
                       <p className="font-medium">Some activities failed to sync</p>
                       <ul className="mt-2 list-disc pl-5">
                         {lastSync.summary.errors.slice(0, 3).map((e, idx) => (
@@ -367,7 +367,7 @@ export default function AthleteSettingsPage() {
               ) : null}
 
               {connected && status?.connection ? (
-                <div className="rounded-2xl border border-white/25 bg-white/30 p-4 text-sm text-[var(--muted)]">
+                <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[var(--muted)]">
                   <p>Strava athlete ID: <span className="text-[var(--text)]">{status.connection.stravaAthleteId}</span></p>
                   {status.connection.scope ? <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p> : null}
                 </div>

@@ -69,7 +69,7 @@ export function CoachCalendarHelp() {
 
       {/* First Time Tooltip - Shows until dismissed */}
       {showFirstTimeTip && !helpOpen && (
-        <div className="absolute top-12 right-0 z-40 max-w-[200px] p-3 bg-[var(--bg-inverse)] text-[var(--bg-surface)] rounded-lg shadow-lg text-xs leading-relaxed animate-in slide-in-from-top-2 fade-in duration-300">
+        <div className="absolute top-12 right-0 z-40 max-w-[200px] p-3 bg-[var(--bg-inverse)] text-[var(--text-inverse)] rounded-lg shadow-lg text-xs leading-relaxed animate-in slide-in-from-top-2 fade-in duration-300">
           <div className="flex gap-2 items-start">
              <div className="flex-1">
                <span className="font-bold block mb-1">Coach Tip</span>
