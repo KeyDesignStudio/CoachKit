@@ -358,24 +358,45 @@ export function WorkoutDetail({
 
         {/* RIGHT COLUMN: Actual */}
         <div className={tokens.spacing.dashboardSectionGap}>
-           {latestCompletion && (
-             <Block title={isStravaCompletion ? "Strava Activity" : "Completed Activity"}>
+           {(latestCompletion || item.status === 'SKIPPED') && (
+             <Block title="Workout Status">
                 <div 
                   className={tokens.spacing.blockGapY}
                   {...(isStravaCompletion ? { 'data-athlete-workout-quadrant': 'strava' } : {})}
                 >
-                  {isStravaCompletion && (
-                    <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
-                       <span className={cn(tokens.typography.label, tokens.colors.brand.strava)}>Strava Synced</span>
-                       {latestCompletion.confirmedAt && (
-                         <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.success, tokens.colors.text.success)}>
-                           Confirmed
-                         </span>
-                       )}
-                    </div>
-                  )}
+                  <div className={cn('flex flex-wrap items-center', tokens.spacing.widgetGap)}>
+                    {/* Status Badges */}
+                    {item.status === 'SKIPPED' && (
+                       <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.surface, tokens.colors.text.muted, tokens.borders.default)}>
+                         Skipped
+                       </span>
+                    )}
 
-                  {!isStravaCompletion && (
+                    {!latestCompletion && !isDraftSynced && item.status !== 'SKIPPED' && (
+                       <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.surface, tokens.colors.text.muted)}>
+                         Pending
+                       </span>
+                    )}
+
+                    {latestCompletion && !isStravaCompletion && (
+                       <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.surface, tokens.colors.text.main, tokens.borders.default)}>
+                         Manual Log
+                       </span>
+                    )}
+
+                    {isStravaCompletion && (
+                       <span className={cn(tokens.typography.label, tokens.colors.brand.strava)}>Strava Synced</span>
+                    )}
+
+                    {latestCompletion?.confirmedAt && (
+                       <span className={cn('inline-flex items-center', tokens.spacing.pill, tokens.typography.small, tokens.radius.pill, tokens.colors.bg.success, tokens.colors.text.success)}>
+                         Confirmed
+                       </span>
+                    )}
+                  </div>
+
+                  {/* Manual / General Completion Data */}
+                  {latestCompletion && !isStravaCompletion && (
                      <div className={cn('grid grid-cols-2', tokens.spacing.gridGap)}>
                         <FieldRow label="Duration" value={`${latestCompletion.durationMinutes} min`} />
                         <FieldRow label="Distance" value={latestCompletion.distanceKm ? `${latestCompletion.distanceKm} km` : null} />
@@ -384,6 +405,7 @@ export function WorkoutDetail({
                      </div>
                   )}
 
+                  {/* Strava Data */}
                   {hasStravaMetrics && (
                     <>
                       {stravaName && <div className={tokens.typography.h3}>{stravaName}</div>}
@@ -419,23 +441,39 @@ export function WorkoutDetail({
                       </div>
                    )}
 
-                  {/* Notes / Feedback */}
-                  {(latestCompletion.notes || latestCompletion.rpe) && !hasStravaMetrics && (
-                     <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY)}>
-                       {latestCompletion.notes && (
+                  {/* Notes Section (Self + Coach + Pain) */}
+                  {(latestCompletion?.notes || (item.comments && item.comments.length > 0) || (hasStravaMetrics && (latestCompletion?.rpe || latestCompletion?.painFlag))) && (
+                     <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
+                       
+                       {/* Notes to Self (Feedback) */}
+                       {latestCompletion?.notes && (
                          <div className={cn('flex flex-col', tokens.spacing.tinyGap)}>
-                            <FieldLabel>Feedback</FieldLabel>
+                            <FieldLabel>Notes to Self</FieldLabel>
                             <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{latestCompletion.notes}</div>
                          </div>
                        )}
-                     </div>
-                  )}
-                  
-                  {/* RPE/Pain for Strava too if set manually confirm */}
-                  {hasStravaMetrics && (latestCompletion.rpe || latestCompletion.painFlag) && (
-                     <div className={cn('grid grid-cols-2', tokens.spacing.gridGap, tokens.borders.divider, tokens.spacing.blockPaddingY)}>
-                        <FieldRow label="RPE" value={latestCompletion.rpe ? `${latestCompletion.rpe}/10` : '-'} />
-                        <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? cn(tokens.typography.bodyBold, tokens.colors.text.danger) : ''} />
+
+                       {/* Notes to Coach (Comments) */}
+                       {item.comments && item.comments.length > 0 && (
+                          <div className={cn('flex flex-col', tokens.spacing.tinyGap)}>
+                             <FieldLabel>Notes to Coach</FieldLabel>
+                             <div className={cn("flex flex-col", tokens.spacing.tinyGap)}>
+                                {item.comments.map(comment => (
+                                  <div key={comment.id} className={cn(tokens.typography.body, tokens.spacing.containerPadding, tokens.radius.sm, tokens.colors.bg.surface, tokens.borders.default)}>
+                                     {comment.body}
+                                  </div>
+                                ))}
+                             </div>
+                          </div>
+                       )}
+
+                       {/* Strava Extra Fields (RPE/Pain) if separate */}
+                       {hasStravaMetrics && (latestCompletion?.rpe || latestCompletion?.painFlag) && (
+                         <div className={cn('grid grid-cols-2', tokens.spacing.gridGap)}>
+                            <FieldRow label="RPE" value={latestCompletion.rpe ? `${latestCompletion.rpe}/10` : '-'} />
+                            <FieldRow label="Pain?" value={latestCompletion.painFlag ? 'Yes' : 'No'} valueClassName={latestCompletion.painFlag ? cn(tokens.typography.bodyBold, tokens.colors.text.danger) : ''} />
+                         </div>
+                       )}
                      </div>
                   )}
 
