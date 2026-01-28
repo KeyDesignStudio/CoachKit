@@ -876,10 +876,13 @@ export default function CoachCalendarPage() {
   };
 
   const handleSessionClick = (item: CalendarItem) => {
-    if (item.status?.startsWith('COMPLETED')) {
-      openCompletedView(item);
+    // Ensure we have the latest item state
+    const freshItem = itemsById.get(item.id) || item;
+
+    if (freshItem.status?.startsWith('COMPLETED')) {
+      openCompletedView(freshItem);
     } else {
-      openEditDrawer(item);
+      openEditDrawer(freshItem);
     }
   };
 
@@ -1552,11 +1555,7 @@ export default function CoachCalendarPage() {
                         onItemClick={(itemId) => {
                           const found = itemsById.get(itemId);
                           if (found) {
-                            if (found.status?.startsWith('COMPLETED')) {
-                              openCompletedView(found);
-                            } else {
-                              openEditDrawer(found);
-                            }
+                            handleSessionClick(found);
                           }
                         }}
                       />
