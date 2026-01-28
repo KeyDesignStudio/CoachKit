@@ -1610,9 +1610,10 @@ export default function CoachCalendarPage() {
         onClose={closeDrawer}
         title={drawerMode === 'view_completed' ? 'Workout Detail' : (drawerMode === 'create' ? 'Add Workout' : 'Edit Workout')}
         onSubmit={drawerMode === 'view_completed' ? (e) => { e.preventDefault(); closeDrawer(); } : onSaveSession}
-        submitLabel={drawerMode === 'view_completed' ? 'Done' : (drawerMode === 'create' ? 'Add Workout' : 'Save Changes')}
+        submitLabel={drawerMode === 'create' ? 'Add Workout' : 'Save Changes'}
         submitDisabled={drawerMode !== 'view_completed' && !effectiveAthleteId}
-        onDelete={(drawerMode === 'edit' || drawerMode === 'view_completed') ? onDelete : undefined}
+        onDelete={(drawerMode === 'edit') ? onDelete : undefined}
+        hideFooter={drawerMode === 'view_completed'}
       >
         {drawerMode === 'view_completed' && editingItem ? (<div className="p-1"><WorkoutDetail item={editingItem} isDrawer athleteTimezone={editingItem.athleteTimezone} /></div>) : (<div className="space-y-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">

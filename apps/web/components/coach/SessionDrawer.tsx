@@ -13,6 +13,7 @@ type SessionDrawerProps = {
   submitLabel?: string;
   submitDisabled?: boolean;
   onDelete?: () => void;
+  hideFooter?: boolean;
 };
 
 export function SessionDrawer({
@@ -24,6 +25,7 @@ export function SessionDrawer({
   submitLabel = 'Save',
   submitDisabled = false,
   onDelete,
+  hideFooter = false,
 }: SessionDrawerProps) {
   if (!isOpen) return null;
 
@@ -51,6 +53,7 @@ export function SessionDrawer({
             {children}
           </div>
 
+          {!hideFooter && (
           <div className="sticky bottom-0 -mx-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:static md:mx-0 md:bg-transparent md:px-0 md:pt-6 md:pb-0">
             <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={submitDisabled}>
@@ -66,6 +69,7 @@ export function SessionDrawer({
               </Button>
             </div>
           </div>
+          )}
         </form>
       </div>
     </>
