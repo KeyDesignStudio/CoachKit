@@ -37,13 +37,13 @@ export function RouteBrandingBar() {
               <img
                 src={resolveLogoUrl(branding.logoUrl)}
                 alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
-                className="h-14 w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:hidden"
+                className="h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:hidden"
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={branding.darkLogoUrl}
                 alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
-                className="hidden h-14 w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:block"
+                className="hidden h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:block"
               />
             </>
           ) : (
@@ -51,7 +51,7 @@ export function RouteBrandingBar() {
             <img
               src={resolveLogoUrl(branding.logoUrl)}
               alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
-              className="h-14 w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover"
+              className="h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover"
             />
           )}
         </div>

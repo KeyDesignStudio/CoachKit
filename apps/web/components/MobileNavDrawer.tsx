@@ -45,12 +45,51 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
   const effectiveLinks = useMemo(() => {
     // Defensive: avoid empty/duplicate labels in drawer.
     const seen = new Set<string>();
-    return links.filter((link) => {
-      const key = `${link.href}::${link.label}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+    const dedupedWithIndex = links
+      .map((link, index) => ({ link, index }))
+      .filter(({ link }) => {
+        const key = `${link.href}::${link.label}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    const hasCoachLinks = dedupedWithIndex.some(({ link }) => String(link.href).startsWith('/coach/'));
+    if (!hasCoachLinks) {
+      return dedupedWithIndex.map(({ link }) => link);
+    }
+
+    // Mobile-only coach menu rules:
+    // - Order: Dashboard, Athletes, Scheduling, Session Builder, Notifications, Settings
+    // - Label: "SESSION BUILDER" -> "Session Builder"
+    const coachOrder: Array<string> = [
+      '/coach/dashboard',
+      '/coach/athletes',
+      '/coach/calendar',
+      '/coach/group-sessions',
+      '/coach/notifications',
+      '/coach/settings',
+    ];
+    const coachRank = new Map<string, number>(coachOrder.map((href, idx) => [href, idx]));
+
+    const normalized = dedupedWithIndex.map(({ link, index }) => {
+      const href = String(link.href);
+      const label = href === '/coach/group-sessions' ? 'Session Builder' : link.label;
+      return { link: { ...link, label }, href, index };
     });
+
+    normalized.sort((a, b) => {
+      const ra = coachRank.get(a.href);
+      const rb = coachRank.get(b.href);
+      const aKnown = typeof ra === 'number';
+      const bKnown = typeof rb === 'number';
+      if (aKnown && bKnown) return ra! - rb!;
+      if (aKnown) return -1;
+      if (bKnown) return 1;
+      return a.index - b.index;
+    });
+
+    return normalized.map(({ link }) => link);
   }, [links]);
 
   return (

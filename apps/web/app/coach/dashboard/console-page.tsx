@@ -268,11 +268,27 @@ function ReviewInboxRow({
         />
       </label>
 
+      {/* Mobile: compact row (checkbox, date, athlete, discipline icon only) */}
       <button
         type="button"
         onClick={() => onOpen(item)}
         className={cn(
-          'flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
+          'md:hidden flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
+          tokens.spacing.tinyGap
+        )}
+      >
+        {dateLabel ? (
+          <span className={cn('flex-shrink-0 whitespace-nowrap tabular-nums', tokens.typography.meta)}>{dateLabel}</span>
+        ) : null}
+        <span className={cn('block min-w-0 flex-1 truncate font-medium', tokens.typography.body)}>{athleteName}</span>
+        <Icon name={theme.iconName} size="sm" className={cn('flex-shrink-0', theme.textClass)} aria-hidden />
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        className={cn(
+          'hidden md:flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
           tokens.spacing.widgetGap,
           painFlag ? 'bg-rose-500/10 rounded-xl -mx-2' : ''
         )}

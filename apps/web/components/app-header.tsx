@@ -147,13 +147,13 @@ export async function AppHeader() {
                     <img
                       src={headerClubBranding.logoUrl}
                       alt={`${headerClubBranding.name} logo`}
-                      className="h-8 w-auto object-contain dark:hidden"
+                      className="h-11 w-auto object-contain dark:hidden"
                     />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={headerClubBranding.darkLogoUrl}
                       alt={`${headerClubBranding.name} logo`}
-                      className="hidden h-8 w-auto object-contain dark:block"
+                      className="hidden h-11 w-auto object-contain dark:block"
                     />
                   </>
                 ) : (
@@ -161,7 +161,7 @@ export async function AppHeader() {
                   <img
                     src={headerClubBranding.logoUrl}
                     alt={`${headerClubBranding.name} logo`}
-                    className="h-8 w-auto object-contain"
+                    className="h-11 w-auto object-contain"
                   />
                 )}
               </>
