@@ -68,7 +68,10 @@ test.describe('Strava calories', () => {
       },
     });
 
+    // Fix for parallel execution: shift weeks by workerIndex away from "current week"
+    // to avoid collision with unshifted tests. (+70 days minimum)
     const weekStart = startOfWeekUtcMonday(new Date());
+    weekStart.setUTCDate(weekStart.getUTCDate() + ((test.info().workerIndex + 1) * 70));
     const monday = weekStart;
     const sunday = new Date(weekStart);
     sunday.setUTCDate(sunday.getUTCDate() + 6);
