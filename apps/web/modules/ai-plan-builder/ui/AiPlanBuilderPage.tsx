@@ -207,7 +207,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
         </div>
         <Link
           className="text-sm underline"
-          href={`/coach/athletes/${athleteId}`}
+          href={{ pathname: '/coach/athletes', query: { athleteId } }}
         >
           Back to athlete
         </Link>
