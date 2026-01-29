@@ -70,7 +70,14 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
     await expect(page.locator('[data-testid="apb-session"]').first()).toBeVisible({ timeout: 30_000 });
 
     // Publish to athlete.
+    const publishOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/publish`) &&
+        res.request().method() === 'POST' &&
+        res.status() === 200
+    );
     await page.getByTestId('apb-publish').click();
+    await publishOk;
     await expect(page.getByTestId('apb-publish-status')).toContainText('Published');
     await expect(page.getByTestId('apb-publish-last-published')).not.toHaveText('—');
 

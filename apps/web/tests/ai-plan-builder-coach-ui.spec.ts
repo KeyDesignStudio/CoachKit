@@ -79,43 +79,62 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await page.getByTestId('apb-tab-plan').click();
     await expect(page.getByTestId('apb-generate-draft')).toBeVisible();
 
+    const generateOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
     await page.getByTestId('apb-generate-draft').click();
-    const firstSession = page.locator('[data-testid="apb-session"]').first();
-    await expect(firstSession).toBeVisible();
+    const generateRes = await generateOk;
+    const generateJson = await generateRes.json();
+    const draftPlan = generateJson.data.draftPlan;
+    expect(String(draftPlan?.id ?? '')).toBeTruthy();
 
-    const sessionId = await firstSession.getAttribute('data-session-id');
+    const sessions = Array.isArray(draftPlan?.sessions) ? draftPlan.sessions : [];
+    expect(sessions.length).toBeGreaterThan(0);
+    const firstSessionFromDraft = sessions[0];
+
+    const sessionId = String(firstSessionFromDraft.id);
     expect(sessionId).toBeTruthy();
+    const sessionKey = {
+      weekIndex: Number(firstSessionFromDraft.weekIndex ?? 0),
+      dayOfWeek: Number(firstSessionFromDraft.dayOfWeek ?? 0),
+      ordinal: Number(firstSessionFromDraft.ordinal ?? 0),
+    };
 
-    const draftBeforeReloadRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
-    expect(draftBeforeReloadRes.ok()).toBeTruthy();
-    const draftBeforeReloadJson = await draftBeforeReloadRes.json();
-    const draftIdBeforeReload = String(draftBeforeReloadJson.data.draftPlan.id);
-    expect(draftIdBeforeReload).toBeTruthy();
+    const firstSession = page.locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`);
+    await expect(firstSession).toBeVisible();
 
     const durationInput = firstSession.locator('[data-testid="apb-session-duration"]');
     const saveButton = firstSession.locator('[data-testid="apb-session-save"]');
 
+    // Draft generation can leave the UI in a transient busy state while background requests settle.
+    await expect(saveButton).toBeEnabled({ timeout: 30_000 });
+    await expect(durationInput).toBeEnabled({ timeout: 30_000 });
+
     await durationInput.fill('42');
-    const saveOk = page.waitForResponse((res) => {
-      if (!res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`)) return false;
-      if (res.request().method() !== 'PATCH') return false;
-      if (res.status() !== 200) return false;
-      const body = res.request().postData() ?? '';
-      return body.includes('sessionEdits') && body.includes(String(sessionId)) && body.includes('"durationMinutes":42');
-    });
+    // Wait for any successful draft-plan PATCH, then validate persistence against the returned draft.
+    const saveResPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 30_000 }
+    );
     await saveButton.click();
-    await saveOk;
-
-    // Reload and verify persistence. (Draft ids may change across reloads if the server rolls drafts
-    // forward; the persisted session value is the invariant we care about.)
-    await page.reload();
-    await page.getByTestId('apb-tab-plan').click();
-
-    const draftAfterReloadRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
-    expect(draftAfterReloadRes.ok()).toBeTruthy();
-    const draftAfterReloadJson = await draftAfterReloadRes.json();
-    const draftIdAfterReload = String(draftAfterReloadJson.data.draftPlan.id);
-    expect(draftIdAfterReload).toBeTruthy();
+    const saveRes = await saveResPromise;
+    const saveJson = await saveRes.json();
+    const savedSessions = Array.isArray(saveJson.data.draftPlan.sessions) ? saveJson.data.draftPlan.sessions : [];
+    const savedSession = savedSessions.find(
+      (s: any) =>
+        Number(s.weekIndex ?? 0) === sessionKey.weekIndex &&
+        Number(s.dayOfWeek ?? 0) === sessionKey.dayOfWeek &&
+        Number(s.ordinal ?? 0) === sessionKey.ordinal
+    );
+    expect(savedSession).toBeTruthy();
+    expect(Number(savedSession.durationMinutes ?? 0)).toBe(42);
 
     const firstSessionAfterReload = page.locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`);
     await expect(firstSessionAfterReload).toBeVisible();
@@ -150,13 +169,16 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await expect(weekLockedError).toBeVisible();
     await expect(weekLockedError).toContainText('Week is locked');
 
-    // Reload: previous saved value should remain.
-    await page.reload();
-    await page.getByTestId('apb-tab-plan').click();
-    const durationAfterWeekLockReload = page
-      .locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`)
-      .locator('[data-testid="apb-session-duration"]');
-    await expect(durationAfterWeekLockReload).toHaveValue('42');
+    // Verify previous saved value still remains.
+    const draftAfterWeekLockRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
+    expect(draftAfterWeekLockRes.ok()).toBeTruthy();
+    const draftAfterWeekLockJson = await draftAfterWeekLockRes.json();
+    const sessionsAfterWeekLock = Array.isArray(draftAfterWeekLockJson.data.draftPlan.sessions)
+      ? draftAfterWeekLockJson.data.draftPlan.sessions
+      : [];
+    const sessionAfterWeekLock = sessionsAfterWeekLock.find((s: any) => String(s.id) === String(sessionId));
+    expect(sessionAfterWeekLock).toBeTruthy();
+    expect(Number(sessionAfterWeekLock.durationMinutes ?? 0)).toBe(42);
 
     // Unlock the week so we can test session-level lock behavior independently.
     const weekLockAfterReload = page.locator(`[data-week-index="${weekIndex}"] [data-testid="apb-week-lock"]`);

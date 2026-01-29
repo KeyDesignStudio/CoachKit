@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
+const APB_MODE = String(process.env.APB_MODE ?? '').trim();
+const isApbFast = APB_MODE === 'fast';
 
 const PLAN_LIBRARY_FIXTURES_BASE = `http://localhost:${PORT}/api/__test__/fixtures/plan-library`;
 
@@ -15,6 +17,8 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
+    screenshot: isApbFast ? 'only-on-failure' : 'off',
+    video: isApbFast ? 'retain-on-failure' : 'off',
   },
   webServer: {
     // IMPORTANT: keep this cross-platform. Do not use `FOO=bar cmd` shell prefixes.

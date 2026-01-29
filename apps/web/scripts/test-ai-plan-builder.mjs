@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import nextEnv from '@next/env';
 
@@ -31,9 +31,35 @@ function toInt(value, fallback) {
 
 const args = parseArgs(process.argv);
 const VERBOSE = String(process.env.APB_VERBOSE ?? args.verbose ?? '').trim() === '1' || args.verbose === true;
-const PW_SHARDS = toInt(process.env.APB_PW_SHARDS ?? args.pwShards, 3);
-const PW_REPEAT_ON = toInt(process.env.APB_PW_REPEAT_ON ?? args.pwRepeatOn, 1);
+const MODE = String(process.env.APB_MODE ?? args.mode ?? 'full').trim();
+if (MODE !== 'fast' && MODE !== 'full') {
+  console.error(`[test-ai-plan-builder] Invalid mode: ${MODE}. Expected fast|full.`);
+  process.exit(1);
+}
+
+const PW_SHARDS = toInt(process.env.APB_PW_SHARDS ?? args.pwShards, MODE === 'fast' ? 1 : 3);
+const PW_REPEAT_ON = toInt(process.env.APB_PW_REPEAT_ON ?? args.pwRepeatOn, MODE === 'fast' ? 1 : 1);
 const BASE_PORT = toInt(process.env.APB_BASE_PORT ?? args.basePort, 3100);
+const CLEAN_NEXT_DIST =
+  String(process.env.APB_CLEAN_NEXT_DIST ?? args.cleanNextDist ?? (MODE === 'full' ? '1' : '0')).trim() === '1' ||
+  args.cleanNextDist === true;
+
+const SKIP_PW_OFF = MODE === 'fast';
+const DB_STRATEGY = MODE === 'fast' ? 'single' : 'per-worker';
+
+function printBanner() {
+  console.log('[test-ai-plan-builder] MODE=%s', MODE);
+  console.log('[test-ai-plan-builder] DB_STRATEGY=%s', DB_STRATEGY);
+  console.log('[test-ai-plan-builder] PLAYWRIGHT flag-on: shards=%s repeats=%s', String(PW_SHARDS), String(PW_REPEAT_ON));
+  console.log('[test-ai-plan-builder] PLAYWRIGHT flag-off: %s', SKIP_PW_OFF ? 'SKIPPED' : 'ENABLED');
+  console.log('[test-ai-plan-builder] NEXT distDir clean: %s', CLEAN_NEXT_DIST ? 'ON' : 'OFF');
+  console.log(
+    '[test-ai-plan-builder] Repro: APB_VERBOSE=1 node scripts/test-ai-plan-builder.mjs --mode=%s --pwShards=%s --pwRepeatOn=%s',
+    MODE,
+    String(PW_SHARDS),
+    String(PW_REPEAT_ON)
+  );
+}
 
 function run(cmd, args, { env, allowFailure = false } = {}) {
   const result = spawnSync(cmd, args, {
@@ -101,7 +127,7 @@ function lastLines(text, n = 50) {
   return lines.slice(Math.max(0, lines.length - n)).join('\n');
 }
 
-function runStep(stepName, cmd, cmdArgs, { env, allowFailure = false, input } = {}) {
+function runStep(stepName, cmd, cmdArgs, { env, allowFailure = false, input, phase } = {}) {
   const started = Date.now();
   const result = spawnSync(cmd, cmdArgs, {
     shell: false,
@@ -121,11 +147,19 @@ function runStep(stepName, cmd, cmdArgs, { env, allowFailure = false, input } = 
 
   if (result.status !== 0 && !allowFailure) {
     const dbName = (env ?? {}).DATABASE_URL ? getDatabaseName((env ?? {}).DATABASE_URL) : null;
+    if (phase) console.error(`\n[test-ai-plan-builder] PHASE=${phase} FAILED`);
     console.error(`\n[test-ai-plan-builder] FAILED step=${stepName} exit=${result.status ?? 'unknown'} elapsedMs=${elapsedMs}`);
     if (dbName) console.error(`[test-ai-plan-builder] db=${dbName}`);
     if ((env ?? {}).DATABASE_URL) {
       console.error(`[test-ai-plan-builder] DATABASE_URL=${redactDatabaseUrl((env ?? {}).DATABASE_URL)}`);
     }
+
+    console.error(
+      '[test-ai-plan-builder] Repro: APB_VERBOSE=1 node scripts/test-ai-plan-builder.mjs --mode=%s --pwShards=%s --pwRepeatOn=%s',
+      MODE,
+      String(PW_SHARDS),
+      String(PW_REPEAT_ON)
+    );
 
     const out = String(result.stdout ?? '');
     const err = String(result.stderr ?? '');
@@ -159,6 +193,35 @@ function cleanNextDistDir(distDir) {
   rmSync(fullPath, { recursive: true, force: true });
 }
 
+function ensureCacheDir() {
+  const cacheDir = path.join(process.cwd(), '.cache');
+  mkdirSync(cacheDir, { recursive: true });
+  return cacheDir;
+}
+
+function getSchemaHash() {
+  const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+  const data = readFileSync(schemaPath);
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function getCachedSchemaHash() {
+  try {
+    const cacheDir = ensureCacheDir();
+    const cachePath = path.join(cacheDir, 'prisma-schema.hash');
+    if (!existsSync(cachePath)) return null;
+    return String(readFileSync(cachePath, 'utf8')).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSchemaHash(hash) {
+  const cacheDir = ensureCacheDir();
+  const cachePath = path.join(cacheDir, 'prisma-schema.hash');
+  writeFileSync(cachePath, `${hash}\n`, 'utf8');
+}
+
 function ensureDockerComposeUp() {
   // Prefer reusing an existing container (common in local dev).
   const exists = runQuiet('docker', ['inspect', 'programassist-postgres'], { allowFailure: true });
@@ -188,17 +251,28 @@ function ensureDockerComposeUp() {
 
 function prismaReset(env) {
   const schemaArgs = ['--schema', 'prisma/schema.prisma'];
-  runStep('prisma:migrate:reset', 'npx', ['prisma', 'migrate', 'reset', '--force', '--skip-seed', ...schemaArgs], { env });
+  runStep('prisma:migrate:reset', 'npx', ['prisma', 'migrate', 'reset', '--force', '--skip-seed', ...schemaArgs], {
+    env,
+    phase: 'prisma',
+  });
 }
 
 function prismaGenerate(env) {
   const schemaArgs = ['--schema', 'prisma/schema.prisma'];
-  runStep('prisma:generate', 'npx', ['prisma', 'generate', ...schemaArgs], { env });
+  runStep('prisma:generate', 'npx', ['prisma', 'generate', ...schemaArgs], { env, phase: 'prisma' });
+}
+
+function prismaDbPush(env) {
+  const schemaArgs = ['--schema', 'prisma/schema.prisma'];
+  runStep('prisma:db:push', 'npx', ['prisma', 'db', 'push', '--accept-data-loss', '--skip-generate', ...schemaArgs], {
+    env,
+    phase: 'prisma',
+  });
 }
 
 function prismaMigrateDeploy(env) {
   const schemaArgs = ['--schema', 'prisma/schema.prisma'];
-  runStep('prisma:migrate:deploy', 'npx', ['prisma', 'migrate', 'deploy', ...schemaArgs], { env });
+  runStep('prisma:migrate:deploy', 'npx', ['prisma', 'migrate', 'deploy', ...schemaArgs], { env, phase: 'prisma' });
 }
 
 function ensureDatabaseExists(dbName) {
@@ -244,7 +318,7 @@ function ensureDatabaseExists(dbName) {
 }
 
 function runVitest(env) {
-  runStep('vitest', 'npx', ['vitest', 'run', '--no-file-parallelism', '--maxWorkers=1'], { env });
+  runStep('vitest', 'npx', ['vitest', 'run', '--no-file-parallelism', '--maxWorkers=1'], { env, phase: 'vitest' });
 }
 
 function runPlaywrightFlagOn(env) {
@@ -259,7 +333,7 @@ function runPlaywrightFlagOn(env) {
       'tests/ai-plan-builder-athlete-publish.spec.ts',
       '--project=iphone16pro',
     ],
-    { env }
+    { env, phase: 'playwright(flag-on)' }
   );
 }
 
@@ -274,7 +348,7 @@ function runPlaywrightFlagOff(env) {
       '--project=iphone16pro',
       `--output=test-results/apb-${env?.TEST_RUN_ID ?? 'pw-off'}`,
     ],
-    { env }
+    { env, phase: 'playwright(flag-off)' }
   );
 }
 
@@ -320,13 +394,14 @@ async function runPlaywrightSharded({ shards, repeat, envBase, specs, suiteLabel
     ensureDatabaseExists(dbName);
     const env = {
       ...envBase,
+      PLAYWRIGHT_PRISMA_MODE: 'skip',
       NEXT_DIST_DIR: `.next-apb-shard-${shardIndex}`,
       PORT: String(port),
       TEST_WORKER_INDEX: String(shardIndex),
       DATABASE_URL: withDatabase(envBase.DATABASE_URL, dbName),
     };
 
-    cleanNextDistDir(env.NEXT_DIST_DIR);
+    if (CLEAN_NEXT_DIST) cleanNextDistDir(env.NEXT_DIST_DIR);
 
     prismaMigrateDeploy(env);
 
@@ -351,7 +426,13 @@ async function runPlaywrightSharded({ shards, repeat, envBase, specs, suiteLabel
   const results = await Promise.all(processes);
   const failed = results.filter((r) => r.code !== 0);
   if (failed.length) {
-    console.error(`\n[test-ai-plan-builder] Playwright ${suiteLabel} failed (${failed.length}/${results.length} shards).`);
+    console.error(`\n[test-ai-plan-builder] PHASE=playwright(${suiteLabel}) failed (${failed.length}/${results.length} shards).`);
+    console.error(
+      '[test-ai-plan-builder] Repro: APB_VERBOSE=1 node scripts/test-ai-plan-builder.mjs --mode=%s --pwShards=%s --pwRepeatOn=%s',
+      MODE,
+      String(PW_SHARDS),
+      String(PW_REPEAT_ON)
+    );
     for (const f of failed) {
       const dbName = f.env?.DATABASE_URL ? getDatabaseName(f.env.DATABASE_URL) : null;
       console.error(`\n[test-ai-plan-builder] FAILED ${f.stepName} exit=${f.code}`);
@@ -372,6 +453,8 @@ async function runPlaywrightSharded({ shards, repeat, envBase, specs, suiteLabel
 
 ensureDockerComposeUp();
 
+printBanner();
+
 const baseEnv = {
   NODE_ENV: 'development',
   DISABLE_AUTH: 'true',
@@ -381,15 +464,28 @@ const baseEnv = {
 const startedAll = Date.now();
 const runIdBase = `${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
 
-// Generate Prisma client once.
-prismaGenerate(baseEnv);
+const schemaHash = getSchemaHash();
+const cachedHash = getCachedSchemaHash();
+const schemaCacheHit = cachedHash === schemaHash;
+console.log('[test-ai-plan-builder] prisma schema hash: %s (%s)', schemaHash.slice(0, 12), schemaCacheHit ? 'cache-hit' : 'cache-miss');
 
-// Run Prisma integration tests with flag ON in a fresh database.
+// Generate Prisma client once (cached by schema hash).
+if (!schemaCacheHit) {
+  prismaGenerate(baseEnv);
+  setCachedSchemaHash(schemaHash);
+} else {
+  console.log('[test-ai-plan-builder] prisma:generate skipped (schema unchanged).');
+}
+
+// Run Prisma integration tests with flag ON.
+// Fast mode reuses a single per-run DB across vitest + playwright.
+const fastDbName = MODE === 'fast' ? `apb_${runIdBase}` : null;
 {
-  const dbName = `vitest_${runIdBase}`;
+  const dbName = MODE === 'fast' ? fastDbName : `vitest_${runIdBase}`;
   ensureDatabaseExists(dbName);
   const env = {
     ...baseEnv,
+    APB_MODE: MODE,
     TEST_RUN_ID: runIdBase,
     TEST_RUN_GROUP: runIdBase,
     TEST_WORKER_INDEX: '0',
@@ -397,7 +493,14 @@ prismaGenerate(baseEnv);
     AI_PLAN_BUILDER_V1: '1',
     NEXT_PUBLIC_AI_PLAN_BUILDER_V1: '1',
   };
-  prismaMigrateDeploy(env);
+
+  // In fast mode, prefer db push when schema is unchanged (faster than migrations).
+  if (MODE === 'fast' && schemaCacheHit) {
+    prismaDbPush(env);
+  } else {
+    prismaMigrateDeploy(env);
+  }
+
   runVitest(env);
 }
 
@@ -406,6 +509,7 @@ for (let repeat = 1; repeat <= PW_REPEAT_ON; repeat++) {
   const runId = PW_REPEAT_ON === 1 ? runIdBase : `${runIdBase}r${repeat}`;
   const env = {
     ...baseEnv,
+    APB_MODE: MODE,
     TEST_RUN_ID: runId,
     TEST_RUN_GROUP: runIdBase,
     AI_PLAN_BUILDER_V1: '1',
@@ -413,26 +517,62 @@ for (let repeat = 1; repeat <= PW_REPEAT_ON; repeat++) {
   };
 
   // eslint-disable-next-line no-await-in-loop
-  await runPlaywrightSharded({
-    shards: Math.max(1, PW_SHARDS),
-    repeat,
-    envBase: env,
-    suiteLabel: 'flag-on',
-    specs: [
-      'tests/ai-plan-builder-flow.spec.ts',
-      'tests/ai-plan-builder-coach-ui.spec.ts',
-      'tests/ai-plan-builder-athlete-publish.spec.ts',
-    ],
-  });
+  // eslint-disable-next-line no-await-in-loop
+  if (MODE === 'fast') {
+    const port = BASE_PORT + 1;
+    const fastDb = fastDbName;
+    if (!fastDb) {
+      throw new Error('fastDbName must be set in fast mode');
+    }
+    const envFast = {
+      ...env,
+      PLAYWRIGHT_PRISMA_MODE: 'skip',
+      NEXT_DIST_DIR: `.next-apb-fast`,
+      PORT: String(port),
+      TEST_WORKER_INDEX: '1',
+      DATABASE_URL: withDatabase(baseEnv.DATABASE_URL, fastDb),
+    };
+    if (CLEAN_NEXT_DIST) cleanNextDistDir(envFast.NEXT_DIST_DIR);
+    // DB already set up for vitest; keep it as-is.
+    runStep(
+      'playwright:flag-on:fast',
+      'npx',
+      [
+        'playwright',
+        'test',
+        'tests/ai-plan-builder-flow.spec.ts',
+        'tests/ai-plan-builder-coach-ui.spec.ts',
+        'tests/ai-plan-builder-athlete-publish.spec.ts',
+        '--project=iphone16pro',
+        '--workers=1',
+        `--output=test-results/apb-${runId}-fast`,
+      ],
+      { env: envFast, phase: 'playwright(flag-on)' }
+    );
+  } else {
+    await runPlaywrightSharded({
+      shards: Math.max(1, PW_SHARDS),
+      repeat,
+      envBase: env,
+      suiteLabel: 'flag-on',
+      specs: [
+        'tests/ai-plan-builder-flow.spec.ts',
+        'tests/ai-plan-builder-coach-ui.spec.ts',
+        'tests/ai-plan-builder-athlete-publish.spec.ts',
+      ],
+    });
+  }
 }
 
-// Run Playwright gating checks with flag OFF (single shard for speed).
-{
+// Run Playwright gating checks with flag OFF (single shard for speed) unless fast mode.
+if (!SKIP_PW_OFF) {
   const runId = `${runIdBase}_off`;
   const dbName = `pw_${runId}_1`;
   ensureDatabaseExists(dbName);
   const env = {
     ...baseEnv,
+    APB_MODE: MODE,
+    PLAYWRIGHT_PRISMA_MODE: 'skip',
     NEXT_DIST_DIR: `.next-apb-shard-off`,
     TEST_RUN_ID: runId,
     TEST_RUN_GROUP: runIdBase,
@@ -443,7 +583,7 @@ for (let repeat = 1; repeat <= PW_REPEAT_ON; repeat++) {
     NEXT_PUBLIC_AI_PLAN_BUILDER_V1: '0',
   };
 
-  cleanNextDistDir(env.NEXT_DIST_DIR);
+  if (CLEAN_NEXT_DIST) cleanNextDistDir(env.NEXT_DIST_DIR);
   prismaMigrateDeploy(env);
   runPlaywrightFlagOff(env);
 }
