@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +34,7 @@ interface AthleteRecord {
 export default function CoachAthletesPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
+  const searchParams = useSearchParams();
   const [athletes, setAthletes] = useState<AthleteRecord[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,17 @@ export default function CoachAthletesPage() {
     loadAthletes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role, user?.userId]);
+
+  useEffect(() => {
+    if (userLoading) return;
+    if (!user || user.role !== 'COACH') return;
+
+    const athleteId = String(searchParams.get('athleteId') ?? '').trim();
+    if (!athleteId) return;
+
+    setSelectedAthleteId(athleteId);
+    setDrawerOpen(true);
+  }, [searchParams, user, userLoading]);
 
   const handleCreateAthlete = async (data: any) => {
     await request('/api/coach/athletes', {
