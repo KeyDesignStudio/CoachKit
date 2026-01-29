@@ -97,7 +97,9 @@ function runPlaywrightFlagOn(env) {
       'test',
       'tests/ai-plan-builder-flow.spec.ts',
       'tests/ai-plan-builder-coach-ui.spec.ts',
+      'tests/ai-plan-builder-athlete-publish.spec.ts',
       '--project=iphone16pro',
+      '--workers=1',
     ],
     { env }
   );
