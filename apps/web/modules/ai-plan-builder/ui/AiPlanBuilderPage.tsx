@@ -16,7 +16,7 @@ import { ApiClientError, useApi } from '@/components/api-client';
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
 
-  const [tab, setTab] = useState<'intake' | 'plan'>('intake');
+  const [tab, setTab] = useState<'intake' | 'plan' | 'adaptations'>('intake');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +25,23 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const [profileLatest, setProfileLatest] = useState<any | null>(null);
   const [draftPlanLatest, setDraftPlanLatest] = useState<any | null>(null);
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({});
+
+  const [feedbackLatest, setFeedbackLatest] = useState<any[]>([]);
+  const [triggersLatest, setTriggersLatest] = useState<any[]>([]);
+  const [proposalsLatest, setProposalsLatest] = useState<any[]>([]);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [lastAppliedAudit, setLastAppliedAudit] = useState<any | null>(null);
+
+  const [feedbackDraftSessionId, setFeedbackDraftSessionId] = useState<string | null>(null);
+  const [feedbackForm, setFeedbackForm] = useState({
+    completedStatus: 'DONE' as 'DONE' | 'PARTIAL' | 'SKIPPED',
+    rpe: '' as string,
+    feel: '' as '' | 'EASY' | 'OK' | 'HARD' | 'TOO_HARD',
+    sorenessFlag: false,
+    sorenessNotes: '' as string,
+    sleepQuality: '' as string,
+  });
 
   const [profileOverrideJson, setProfileOverrideJson] = useState<string>('{}');
 
@@ -41,6 +58,16 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   });
 
   const dayNames = useMemo(() => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], []);
+
+  const startOfWeekSunday = useCallback((date: Date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day);
+    return d;
+  }, []);
+
+  const formatIsoDate = useCallback((d: Date) => d.toISOString().slice(0, 10), []);
 
   const fetchIntakeLatest = useCallback(async () => {
     const data = await request<{ intakeResponse: any | null }>(
@@ -66,6 +93,28 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
     return data.draftPlan;
   }, [athleteId, request]);
 
+  const fetchFeedback = useCallback(
+    async (aiPlanDraftId: string) => {
+      const data = await request<{ feedback: any[] }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/feedback?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
+      );
+      setFeedbackLatest(Array.isArray(data.feedback) ? data.feedback : []);
+      return data.feedback;
+    },
+    [athleteId, request]
+  );
+
+  const fetchProposals = useCallback(
+    async (aiPlanDraftId: string) => {
+      const data = await request<{ proposals: any[] }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
+      );
+      setProposalsLatest(Array.isArray(data.proposals) ? data.proposals : []);
+      return data.proposals;
+    },
+    [athleteId, request]
+  );
+
   const fetchEvidence = useCallback(
     async (intakeResponseId: string) => {
       const data = await request<{ evidence: any[] }>(
@@ -89,7 +138,10 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
           setIntakeEvidence(null);
         }
         await fetchProfileLatest();
-        await fetchDraftPlanLatest();
+        const draft = await fetchDraftPlanLatest();
+        if (!cancelled && draft?.id) {
+          await Promise.all([fetchFeedback(String(draft.id)), fetchProposals(String(draft.id))]);
+        }
       } catch (e) {
         if (cancelled) return;
         const message = e instanceof Error ? e.message : 'Failed to load.';
@@ -99,7 +151,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [fetchDraftPlanLatest, fetchEvidence, fetchIntakeLatest, fetchProfileLatest]);
+  }, [fetchDraftPlanLatest, fetchEvidence, fetchFeedback, fetchIntakeLatest, fetchProfileLatest, fetchProposals]);
 
   const runAction = useCallback(
     async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
@@ -180,6 +232,15 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
         >
           Plan
         </Button>
+        <Button
+          type="button"
+          variant={tab === 'adaptations' ? 'primary' : 'secondary'}
+          size="sm"
+          data-testid="apb-tab-adaptations"
+          onClick={() => setTab('adaptations')}
+        >
+          Adaptations
+        </Button>
         <div className="ml-auto flex items-center gap-2">
           <Button
             type="button"
@@ -191,7 +252,10 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                 const intake = await fetchIntakeLatest();
                 if (intake?.id) await fetchEvidence(String(intake.id));
                 await fetchProfileLatest();
-                await fetchDraftPlanLatest();
+                const draft = await fetchDraftPlanLatest();
+                if (draft?.id) {
+                  await Promise.all([fetchFeedback(String(draft.id)), fetchProposals(String(draft.id))]);
+                }
               })
             }
           >
@@ -794,6 +858,421 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                     {JSON.stringify(draftPlanLatest, null, 2)}
                   </pre>
                 </details>
+              </div>
+            )}
+          </Block>
+        </div>
+      )}
+
+      {tab === 'adaptations' && (
+        <div className="mt-6 space-y-4">
+          <Block title="Feedback (Draft-only)">
+            {!draftPlanLatest?.id ? (
+              <div className="text-sm text-[var(--fg-muted)]">Generate or load a draft plan first.</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-[var(--fg-muted)]">
+                  Feedback is stored in AI-local tables and only affects AiPlanDraft.
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm font-medium">Upcoming sessions (next 7 days)</div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const sessions: any[] = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const week0 = startOfWeekSunday(today);
+                      const end = new Date(today);
+                      end.setDate(end.getDate() + 7);
+
+                      const upcoming = sessions
+                        .map((s) => {
+                          const date = new Date(week0);
+                          date.setDate(date.getDate() + Number(s.weekIndex) * 7 + Number(s.dayOfWeek));
+                          return { ...s, _date: date };
+                        })
+                        .filter((s) => s._date >= today && s._date <= end)
+                        .sort((a, b) => a._date.getTime() - b._date.getTime() || a.ordinal - b.ordinal);
+
+                      if (!upcoming.length) {
+                        return <div className="text-sm text-[var(--fg-muted)]">No sessions in the next 7 days.</div>;
+                      }
+
+                      return upcoming.map((s) => (
+                        <div
+                          key={String(s.id)}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3"
+                          data-testid="apb-feedback-session"
+                          data-session-id={String(s.id)}
+                        >
+                          <div className="text-sm">
+                            <span className="font-medium">{formatIsoDate(s._date)}</span> · Week {Number(s.weekIndex) + 1} · {dayNames[Number(s.dayOfWeek) % 7]} · {String(s.type)} · {Number(s.durationMinutes)}m
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            data-testid="apb-feedback-log"
+                            disabled={busy !== null}
+                            onClick={() => {
+                              setProposalError(null);
+                              setFeedbackDraftSessionId(String(s.id));
+                              setFeedbackForm({
+                                completedStatus: 'DONE',
+                                rpe: '',
+                                feel: '',
+                                sorenessFlag: false,
+                                sorenessNotes: '',
+                                sleepQuality: '',
+                              });
+                            }}
+                          >
+                            Log feedback
+                          </Button>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                {feedbackDraftSessionId && (
+                  <div
+                    className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3"
+                    data-testid="apb-feedback-form"
+                  >
+                    <div className="mb-2 text-sm font-medium">Log feedback</div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div>
+                        <div className="mb-1 text-sm font-medium">Status</div>
+                        <Select
+                          value={feedbackForm.completedStatus}
+                          onChange={(e) => setFeedbackForm((f) => ({ ...f, completedStatus: e.target.value as any }))}
+                        >
+                          <option value="DONE">Done</option>
+                          <option value="PARTIAL">Partial</option>
+                          <option value="SKIPPED">Skipped</option>
+                        </Select>
+                      </div>
+                      <div>
+                        <div className="mb-1 text-sm font-medium">RPE (0-10)</div>
+                        <Input
+                          type="number"
+                          value={feedbackForm.rpe}
+                          min={0}
+                          max={10}
+                          onChange={(e) => setFeedbackForm((f) => ({ ...f, rpe: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-1 text-sm font-medium">Feel</div>
+                        <Select
+                          value={feedbackForm.feel}
+                          onChange={(e) => setFeedbackForm((f) => ({ ...f, feel: e.target.value as any }))}
+                        >
+                          <option value="">(none)</option>
+                          <option value="EASY">Easy</option>
+                          <option value="OK">OK</option>
+                          <option value="HARD">Hard</option>
+                          <option value="TOO_HARD">Too hard</option>
+                        </Select>
+                      </div>
+                      <div>
+                        <div className="mb-1 text-sm font-medium">Sleep quality (0-10)</div>
+                        <Input
+                          type="number"
+                          value={feedbackForm.sleepQuality}
+                          min={0}
+                          max={10}
+                          onChange={(e) => setFeedbackForm((f) => ({ ...f, sleepQuality: e.target.value }))}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={feedbackForm.sorenessFlag}
+                            onChange={(e) => setFeedbackForm((f) => ({ ...f, sorenessFlag: e.target.checked }))}
+                          />
+                          Soreness flag
+                        </label>
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="mb-1 text-sm font-medium">Soreness notes</div>
+                        <Textarea
+                          rows={3}
+                          value={feedbackForm.sorenessNotes}
+                          onChange={(e) => setFeedbackForm((f) => ({ ...f, sorenessNotes: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy !== null}
+                        data-testid="apb-feedback-save"
+                        onClick={() =>
+                          runAction('save-feedback', async () => {
+                            setProposalError(null);
+                            const aiPlanDraftId = String(draftPlanLatest.id);
+                            const draftSessionId = String(feedbackDraftSessionId);
+
+                            await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/feedback`, {
+                              method: 'POST',
+                              data: {
+                                aiPlanDraftId,
+                                draftSessionId,
+                                completedStatus: feedbackForm.completedStatus,
+                                rpe: feedbackForm.rpe === '' ? null : Number(feedbackForm.rpe),
+                                feel: feedbackForm.feel === '' ? null : feedbackForm.feel,
+                                sorenessFlag: Boolean(feedbackForm.sorenessFlag),
+                                sorenessNotes: feedbackForm.sorenessNotes ? String(feedbackForm.sorenessNotes) : null,
+                                sleepQuality: feedbackForm.sleepQuality === '' ? null : Number(feedbackForm.sleepQuality),
+                              },
+                            });
+
+                            await fetchFeedback(aiPlanDraftId);
+                            setFeedbackDraftSessionId(null);
+                          })
+                        }
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy !== null}
+                        onClick={() => setFeedbackDraftSessionId(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-medium">Latest feedback (raw)</summary>
+                  <pre className="mt-3 max-h-64 overflow-auto text-xs">{JSON.stringify(feedbackLatest, null, 2)}</pre>
+                </details>
+              </div>
+            )}
+          </Block>
+
+          <Block title="Evaluate Triggers + Proposals">
+            {!draftPlanLatest?.id ? (
+              <div className="text-sm text-[var(--fg-muted)]">Generate or load a draft plan first.</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy !== null}
+                    data-testid="apb-evaluate-triggers"
+                    onClick={() =>
+                      runAction('evaluate-triggers', async () => {
+                        setProposalError(null);
+                        const res = await request<{ triggers: any[] }>(
+                          `/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/evaluate`,
+                          {
+                            method: 'POST',
+                            data: { aiPlanDraftId: String(draftPlanLatest.id), windowDays: 10 },
+                          }
+                        );
+                        setTriggersLatest(Array.isArray((res as any).triggers) ? (res as any).triggers : []);
+                      })
+                    }
+                  >
+                    Evaluate
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy !== null}
+                    data-testid="apb-generate-proposal"
+                    onClick={() =>
+                      runAction('generate-proposal', async () => {
+                        setProposalError(null);
+                        const res = await request<{ proposal: any }>(
+                          `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/generate`,
+                          {
+                            method: 'POST',
+                            data: { aiPlanDraftId: String(draftPlanLatest.id) },
+                          }
+                        );
+                        if ((res as any)?.proposal?.id) {
+                          setSelectedProposalId(String((res as any).proposal.id));
+                        }
+                        await fetchProposals(String(draftPlanLatest.id));
+                      })
+                    }
+                  >
+                    Generate proposal
+                  </Button>
+                </div>
+
+                {proposalError && (
+                  <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="apb-proposal-error">
+                    {proposalError}
+                  </div>
+                )}
+
+                {lastAppliedAudit?.id && (
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3 text-sm" data-testid="apb-last-audit">
+                    Applied (audit {String(lastAppliedAudit.id)}).
+                  </div>
+                )}
+
+                <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-medium">Latest triggers (raw)</summary>
+                  <pre className="mt-3 max-h-64 overflow-auto text-xs">{JSON.stringify(triggersLatest, null, 2)}</pre>
+                </details>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
+                    <div className="text-sm font-medium">Proposals</div>
+                    <div className="mt-2 space-y-2">
+                      {proposalsLatest.filter((p) => p?.status === 'PROPOSED').length === 0 ? (
+                        <div className="text-sm text-[var(--fg-muted)]">No proposed items.</div>
+                      ) : (
+                        proposalsLatest
+                          .filter((p) => p?.status === 'PROPOSED')
+                          .map((p) => (
+                            <button
+                              key={String(p.id)}
+                              type="button"
+                              data-testid="apb-proposal-item"
+                              data-proposal-id={String(p.id)}
+                              className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                                selectedProposalId === String(p.id)
+                                  ? 'border-[var(--border-strong)] bg-[var(--bg-card)]'
+                                  : 'border-[var(--border-subtle)] bg-[var(--bg-card)]'
+                              }`}
+                              onClick={() => {
+                                setProposalError(null);
+                                setSelectedProposalId(String(p.id));
+                              }}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="font-medium">{String(p.status)}</div>
+                                <div className="text-xs text-[var(--fg-muted)]">
+                                  {p.respectsLocks ? 'respectsLocks' : 'blockedByLocks'}
+                                </div>
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-xs text-[var(--fg-muted)]">
+                                {String(p.rationaleText ?? '').split('\n')[0]}
+                              </div>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
+                    <div className="text-sm font-medium">Proposal detail</div>
+                    {(() => {
+                      const proposal = proposalsLatest.find((p) => String(p.id) === String(selectedProposalId ?? ''));
+                      if (!proposal) {
+                        return <div className="mt-2 text-sm text-[var(--fg-muted)]">Select a proposal.</div>;
+                      }
+
+                      const diff: any[] = Array.isArray(proposal.diffJson) ? proposal.diffJson : [];
+
+                      return (
+                        <div className="mt-2 space-y-3" data-testid="apb-proposal-detail">
+                          <div className="text-xs text-[var(--fg-muted)]">ID: {String(proposal.id)}</div>
+                          <div className="text-sm">{String(proposal.rationaleText ?? '').split('\n')[0]}</div>
+
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                            <div className="text-xs font-medium">Diff preview</div>
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                              {diff.length === 0 ? (
+                                <li>No ops.</li>
+                              ) : (
+                                diff.map((op, idx) => (
+                                  <li key={idx} data-testid="apb-proposal-op">
+                                    {String(op.op)}{' '}
+                                    {op.draftSessionId ? `session=${String(op.draftSessionId)}` : ''}{' '}
+                                    {op.weekIndex !== undefined ? `week=${String(op.weekIndex)}` : ''}{' '}
+                                    {op.pctDelta !== undefined ? `pctDelta=${String(op.pctDelta)}` : ''}
+                                  </li>
+                                ))
+                              )}
+                            </ul>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={busy !== null || proposal.status !== 'PROPOSED'}
+                              data-testid="apb-proposal-approve"
+                              onClick={() =>
+                                runAction('approve-proposal', async () => {
+                                  setProposalError(null);
+                                  try {
+                                    const res = await request<{ draft: any; audit: any; proposal: any }>(
+                                      `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(
+                                        String(proposal.id)
+                                      )}/approve`,
+                                      { method: 'POST' }
+                                    );
+                                    if ((res as any)?.draft) {
+                                      setDraftPlanLatest((res as any).draft);
+                                    }
+                                    if ((res as any)?.audit) {
+                                      setLastAppliedAudit((res as any).audit);
+                                    }
+                                    await fetchProposals(String(draftPlanLatest.id));
+                                  } catch (e) {
+                                    if (e instanceof ApiClientError && (e.code === 'SESSION_LOCKED' || e.code === 'WEEK_LOCKED')) {
+                                      setProposalError(`${e.code}: ${e.message}`);
+                                      return;
+                                    }
+                                    throw e;
+                                  }
+                                })
+                              }
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy !== null || proposal.status !== 'PROPOSED'}
+                              data-testid="apb-proposal-reject"
+                              onClick={() =>
+                                runAction('reject-proposal', async () => {
+                                  setProposalError(null);
+                                  await request(
+                                    `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(
+                                      String(proposal.id)
+                                    )}/reject`,
+                                    { method: 'POST' }
+                                  );
+                                  await fetchProposals(String(draftPlanLatest.id));
+                                  setSelectedProposalId(null);
+                                })
+                              }
+                            >
+                              Reject
+                            </Button>
+                          </div>
+
+                          <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                            <summary className="cursor-pointer text-xs font-medium">Raw proposal JSON</summary>
+                            <pre className="mt-2 max-h-48 overflow-auto text-xs">{JSON.stringify(proposal, null, 2)}</pre>
+                          </details>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
             )}
           </Block>

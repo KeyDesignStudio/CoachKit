@@ -86,6 +86,36 @@ enum AiPlanDraftStatus {
 
 enum PlanChangeProposalStatus {
   DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+  APPLIED
+  EXPIRED
+}
+
+enum AthleteSessionFeedbackCompletedStatus {
+  DONE
+  PARTIAL
+  SKIPPED
+}
+
+enum AthleteSessionFeedbackFeel {
+  EASY
+  OK
+  HARD
+  TOO_HARD
+}
+
+enum AdaptationTriggerType {
+  MISSED_KEY
+  SORENESS
+  TOO_HARD
+  HIGH_COMPLIANCE
+}
+
+enum PlanChangeAuditActorType {
+  COACH
+  AI_SYSTEM
 }
 
 model User {
@@ -124,6 +154,8 @@ model User {
   aiPlanBuilderDraftPlans      AiPlanDraft[]
   aiPlanBuilderProposals       PlanChangeProposal[]
   aiPlanBuilderAudits          PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback AthleteSessionFeedback[]
+  aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
 
   @@index([role])
 }
@@ -173,6 +205,8 @@ model AthleteProfile {
   aiPlanBuilderDraftPlans      AiPlanDraft[]
   aiPlanBuilderProposals       PlanChangeProposal[]
   aiPlanBuilderAudits          PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback AthleteSessionFeedback[]
+  aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
 
   @@index([coachId])
 }
@@ -714,13 +748,65 @@ model AiPlanDraft {
   coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
 
   proposals PlanChangeProposal[]
+  audits    PlanChangeAudit[]
 
   weeks    AiPlanDraftWeek[]
   sessions AiPlanDraftSession[]
 
+  feedback AthleteSessionFeedback[]
+  triggers AdaptationTrigger[]
+
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
   @@index([status, createdAt])
+}
+
+model AthleteSessionFeedback {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+  draftId   String
+  sessionId String
+
+  completedStatus AthleteSessionFeedbackCompletedStatus
+  rpe             Int?
+  feel            AthleteSessionFeedbackFeel?
+  sorenessFlag    Boolean @default(false)
+  sorenessNotes   String?
+  sleepQuality    Int?
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile   @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User            @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft      @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  session AiPlanDraftSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, createdAt])
+  @@index([draftId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model AdaptationTrigger {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+  draftId   String
+
+  triggerType AdaptationTriggerType
+  windowStart DateTime
+  windowEnd   DateTime
+  evidenceJson Json
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft   @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, triggerType, windowStart, windowEnd])
+  @@index([athleteId, createdAt])
+  @@index([draftId, createdAt])
 }
 
 model AiPlanDraftWeek {
@@ -762,6 +848,8 @@ model AiPlanDraftSession {
 
   draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
 
+  feedback AthleteSessionFeedback[]
+
   @@unique([draftId, weekIndex, ordinal])
   @@index([draftId, weekIndex])
 }
@@ -775,6 +863,14 @@ model PlanChangeProposal {
 
   // Optional linkage to an AI draft plan. No linkage is required to propose a change.
   draftPlanId String?
+
+  // Tranche 3: deterministic proposal execution against AiPlanDraft only.
+  rationaleText String?
+  diffJson       Json?
+  triggerIds     String[] @default([])
+  respectsLocks  Boolean @default(true)
+  coachDecisionAt DateTime?
+  appliedAt      DateTime?
 
   // Optional opaque reference to an existing plan (string-only to avoid FK coupling).
   targetPlanRef String?
@@ -807,13 +903,21 @@ model PlanChangeAudit {
   eventType String
   diffJson  Json?
 
+  // Tranche 3: explicit change records for AiPlanDraft-only application.
+  actorType         PlanChangeAuditActorType @default(COACH)
+  changeSummaryText String?
+  draftPlanId       String?
+
   createdAt DateTime @default(now())
 
   athlete  AthleteProfile     @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
   coach    User              @relation(fields: [coachId], references: [id], onDelete: Restrict)
   proposal PlanChangeProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
 
+  draftPlan AiPlanDraft? @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)
+
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
   @@index([proposalId, createdAt])
+  @@index([draftPlanId, createdAt])
 }
