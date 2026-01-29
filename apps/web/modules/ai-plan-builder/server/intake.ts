@@ -15,6 +15,20 @@ export const intakeSubmitSchema = z.object({
   intakeResponseId: z.string().min(1),
 });
 
+export async function getLatestSubmittedIntake(params: { coachId: string; athleteId: string }) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  return prisma.athleteIntakeResponse.findFirst({
+    where: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      status: 'SUBMITTED',
+    },
+    orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+  });
+}
+
 export async function createIntakeDraft(params: { coachId: string; athleteId: string }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);

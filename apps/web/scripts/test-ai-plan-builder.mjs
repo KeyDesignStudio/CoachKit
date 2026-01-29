@@ -90,7 +90,17 @@ function runVitest(env) {
 }
 
 function runPlaywrightFlagOn(env) {
-  run('npx', ['playwright', 'test', 'tests/ai-plan-builder-flow.spec.ts', '--project=iphone16pro'], { env });
+  run(
+    'npx',
+    [
+      'playwright',
+      'test',
+      'tests/ai-plan-builder-flow.spec.ts',
+      'tests/ai-plan-builder-coach-ui.spec.ts',
+      '--project=iphone16pro',
+    ],
+    { env }
+  );
 }
 
 function runPlaywrightFlagOff(env) {

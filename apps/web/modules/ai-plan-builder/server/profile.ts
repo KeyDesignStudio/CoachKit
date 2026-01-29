@@ -127,3 +127,13 @@ export async function approveAiProfile(params: { coachId: string; athleteId: str
     },
   });
 }
+
+export async function getLatestAiProfile(params: { coachId: string; athleteId: string }) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  return prisma.athleteProfileAI.findFirst({
+    where: { athleteId: params.athleteId, coachId: params.coachId },
+    orderBy: [{ createdAt: 'desc' }],
+  });
+}

@@ -703,6 +703,10 @@ model AiPlanDraft {
   // Uses existing plan primitives by reference in JSON, but does not create/modify any live plan records.
   planJson Json
 
+  // Draft-local inputs used to generate the draft deterministically.
+  setupJson Json?
+  setupHash String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -711,9 +715,55 @@ model AiPlanDraft {
 
   proposals PlanChangeProposal[]
 
+  weeks    AiPlanDraftWeek[]
+  sessions AiPlanDraftSession[]
+
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
   @@index([status, createdAt])
+}
+
+model AiPlanDraftWeek {
+  id        String @id @default(cuid())
+  draftId   String
+  weekIndex Int
+
+  locked Boolean @default(false)
+
+  // Cached summaries for quick UI rendering.
+  sessionsCount Int @default(0)
+  totalMinutes  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, weekIndex])
+  @@index([draftId, weekIndex])
+}
+
+model AiPlanDraftSession {
+  id        String @id @default(cuid())
+  draftId   String
+  weekIndex Int
+  ordinal   Int
+
+  dayOfWeek Int
+  discipline String
+  type       String
+  durationMinutes Int
+  notes      String?
+
+  locked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, weekIndex, ordinal])
+  @@index([draftId, weekIndex])
 }
 
 model PlanChangeProposal {
