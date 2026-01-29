@@ -37,8 +37,7 @@ export default async function AthleteAiPlanViewPage(props: { params: { aiPlanDra
 
       <PublishUpdateBanner
         aiPlanDraftId={String(draft.id)}
-        publishedAtIso={draft.publishedAt ? new Date(draft.publishedAt).toISOString() : null}
-        summaryText={draft.lastPublishedSummaryText ?? null}
+        initialLastPublishedSummaryText={draft.lastPublishedSummaryText ?? null}
       />
 
       <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3">

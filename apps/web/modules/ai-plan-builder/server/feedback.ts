@@ -71,6 +71,8 @@ export async function listAthleteSessionFeedback(params: {
   coachId: string;
   athleteId: string;
   aiPlanDraftId: string;
+  limit?: number;
+  offset?: number;
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -84,9 +86,14 @@ export async function listAthleteSessionFeedback(params: {
     throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
   }
 
+  const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+  const offset = Math.max(0, params.offset ?? 0);
+
   return prisma.athleteSessionFeedback.findMany({
     where: { athleteId: params.athleteId, coachId: params.coachId, draftId: draft.id },
     orderBy: [{ createdAt: 'desc' }],
+    take: limit,
+    skip: offset,
   });
 }
 
@@ -138,7 +145,12 @@ export async function createAthleteSessionFeedbackAsAthlete(params: {
   });
 }
 
-export async function listAthleteSessionFeedbackAsAthlete(params: { athleteId: string; aiPlanDraftId: string }) {
+export async function listAthleteSessionFeedbackAsAthlete(params: {
+  athleteId: string;
+  aiPlanDraftId: string;
+  limit?: number;
+  offset?: number;
+}) {
   requireAiPlanBuilderV1Enabled();
 
   const draft = await prisma.aiPlanDraft.findUnique({
@@ -150,8 +162,13 @@ export async function listAthleteSessionFeedbackAsAthlete(params: { athleteId: s
     throw new ApiError(404, 'NOT_FOUND', 'Published plan not found.');
   }
 
+  const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+  const offset = Math.max(0, params.offset ?? 0);
+
   return prisma.athleteSessionFeedback.findMany({
     where: { athleteId: params.athleteId, coachId: draft.coachId, draftId: draft.id },
     orderBy: [{ createdAt: 'desc' }],
+    take: limit,
+    skip: offset,
   });
 }

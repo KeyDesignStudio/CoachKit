@@ -42,6 +42,8 @@ export async function GET(request: Request, context: { params: { athleteId: stri
 
     const url = new URL(request.url);
     const aiPlanDraftId = String(url.searchParams.get('aiPlanDraftId') ?? '').trim();
+    const limit = Number(url.searchParams.get('limit') ?? '');
+    const offset = Number(url.searchParams.get('offset') ?? '');
 
     if (!aiPlanDraftId) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'aiPlanDraftId is required.');
@@ -51,6 +53,8 @@ export async function GET(request: Request, context: { params: { athleteId: stri
       coachId: user.id,
       athleteId: context.params.athleteId,
       aiPlanDraftId,
+      limit: Number.isFinite(limit) ? limit : undefined,
+      offset: Number.isFinite(offset) ? offset : undefined,
     });
 
     return success({ feedback });

@@ -18,6 +18,16 @@ export const approveRejectSchema = z.object({
   // no body today; reserved for later
 });
 
+export const batchApproveSchema = z.object({
+  aiPlanDraftId: z.string().min(1),
+  proposalIds: z.array(z.string().min(1)).optional(),
+  maxHours: z.number().int().min(1).max(168).optional(),
+});
+
+export const updateProposalDiffSchema = z.object({
+  diffJson: planDiffSchema,
+});
+
 function stableSortSessions<T extends { weekIndex: number; dayOfWeek: number; ordinal: number }>(sessions: T[]) {
   return sessions.slice().sort((a, b) => a.weekIndex - b.weekIndex || a.dayOfWeek - b.dayOfWeek || a.ordinal - b.ordinal);
 }
@@ -280,9 +290,14 @@ export async function listPlanChangeProposals(params: {
   coachId: string;
   athleteId: string;
   aiPlanDraftId: string;
+  limit?: number;
+  offset?: number;
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+  const offset = Math.max(0, params.offset ?? 0);
 
   return prisma.planChangeProposal.findMany({
     where: {
@@ -291,6 +306,8 @@ export async function listPlanChangeProposals(params: {
       draftPlanId: params.aiPlanDraftId,
     },
     orderBy: [{ createdAt: 'desc' }],
+    take: limit,
+    skip: offset,
   });
 }
 
@@ -405,4 +422,177 @@ export async function approvePlanChangeProposal(params: {
   });
 
   return result;
+}
+
+async function diffTouchesLockedEntities(params: {
+  aiPlanDraftId: string;
+  diff: PlanDiffOp[];
+}): Promise<{ ok: true } | { ok: false; code: 'WEEK_LOCKED' | 'SESSION_LOCKED' | 'NOT_FOUND'; message: string }>
+{
+  const weekIndicesToTouch = new Set<number>();
+  const sessionIdsToTouch = new Set<string>();
+
+  for (const op of params.diff) {
+    if (op.op === 'ADJUST_WEEK_VOLUME' || (op.op === 'ADD_NOTE' && op.target === 'week')) {
+      weekIndicesToTouch.add(op.weekIndex);
+    }
+    if (op.op === 'UPDATE_SESSION' || op.op === 'SWAP_SESSION_TYPE') {
+      sessionIdsToTouch.add(op.draftSessionId);
+    }
+    if (op.op === 'ADD_NOTE' && op.target === 'session') {
+      sessionIdsToTouch.add(op.draftSessionId);
+    }
+  }
+
+  if (weekIndicesToTouch.size) {
+    const lockedWeek = await prisma.aiPlanDraftWeek.findFirst({
+      where: { draftId: params.aiPlanDraftId, weekIndex: { in: Array.from(weekIndicesToTouch) }, locked: true },
+      select: { weekIndex: true },
+    });
+    if (lockedWeek) {
+      return { ok: false, code: 'WEEK_LOCKED', message: `weekIndex=${lockedWeek.weekIndex} is locked.` };
+    }
+  }
+
+  if (sessionIdsToTouch.size) {
+    const sessions = await prisma.aiPlanDraftSession.findMany({
+      where: { id: { in: Array.from(sessionIdsToTouch) }, draftId: params.aiPlanDraftId },
+      select: { id: true, weekIndex: true, locked: true },
+    });
+
+    if (sessions.length !== sessionIdsToTouch.size) {
+      return { ok: false, code: 'NOT_FOUND', message: 'One or more draft sessions were not found.' };
+    }
+
+    const lockedSession = sessions.find((s) => s.locked);
+    if (lockedSession) {
+      return { ok: false, code: 'SESSION_LOCKED', message: `sessionId=${lockedSession.id} is locked.` };
+    }
+
+    const weekIndices = Array.from(new Set(sessions.map((s) => s.weekIndex)));
+    const lockedWeek = await prisma.aiPlanDraftWeek.findFirst({
+      where: { draftId: params.aiPlanDraftId, weekIndex: { in: weekIndices }, locked: true },
+      select: { weekIndex: true },
+    });
+    if (lockedWeek) {
+      return { ok: false, code: 'WEEK_LOCKED', message: `weekIndex=${lockedWeek.weekIndex} is locked.` };
+    }
+  }
+
+  return { ok: true };
+}
+
+export async function batchApproveSafeProposals(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  proposalIds?: string[];
+  maxHours?: number;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const now = new Date();
+  const since = params.maxHours ? new Date(now.getTime() - params.maxHours * 60 * 60 * 1000) : null;
+
+  const proposals = await prisma.planChangeProposal.findMany({
+    where: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      draftPlanId: params.aiPlanDraftId,
+      status: 'PROPOSED',
+      respectsLocks: true,
+      ...(params.proposalIds?.length ? { id: { in: params.proposalIds } } : {}),
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  });
+
+  const results: Array<{
+    proposalId: string;
+    ok: boolean;
+    code?: string;
+    message?: string;
+    auditId?: string;
+  }> = [];
+
+  let lastDraft: any | null = null;
+
+  for (const proposal of proposals) {
+    const parsed = planDiffSchema.safeParse(proposal.diffJson ?? null);
+    if (!parsed.success) {
+      results.push({ proposalId: String(proposal.id), ok: false, code: 'INVALID_DIFF', message: 'Proposal diffJson is invalid.' });
+      continue;
+    }
+
+    const diff = parsed.data;
+
+    const safety = await diffTouchesLockedEntities({ aiPlanDraftId: params.aiPlanDraftId, diff });
+    if (!safety.ok) {
+      results.push({ proposalId: String(proposal.id), ok: false, code: safety.code, message: safety.message });
+      continue;
+    }
+
+    try {
+      const approved = await approvePlanChangeProposal({
+        coachId: params.coachId,
+        athleteId: params.athleteId,
+        proposalId: String(proposal.id),
+      });
+      lastDraft = approved.updatedDraft;
+      results.push({ proposalId: String(proposal.id), ok: true, auditId: String(approved.audit.id) });
+    } catch (e) {
+      if (e instanceof ApiError) {
+        results.push({ proposalId: String(proposal.id), ok: false, code: e.code, message: e.message });
+        continue;
+      }
+      results.push({ proposalId: String(proposal.id), ok: false, code: 'UNKNOWN', message: e instanceof Error ? e.message : 'Unknown error' });
+    }
+  }
+
+  const approvedCount = results.filter((r) => r.ok).length;
+  const failedCount = results.length - approvedCount;
+
+  return { results, approvedCount, failedCount, draft: lastDraft };
+}
+
+export async function updatePlanChangeProposalDiff(params: {
+  coachId: string;
+  athleteId: string;
+  proposalId: string;
+  diffJson: PlanDiffOp[];
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const proposal = await prisma.planChangeProposal.findFirst({
+    where: { id: params.proposalId, athleteId: params.athleteId, coachId: params.coachId },
+    select: { id: true, status: true, draftPlanId: true, proposalJson: true },
+  });
+
+  if (!proposal) throw new ApiError(404, 'NOT_FOUND', 'Proposal not found.');
+  if (proposal.status !== 'PROPOSED') {
+    throw new ApiError(409, 'INVALID_STATUS', `Proposal must be PROPOSED to edit (current=${proposal.status}).`);
+  }
+  if (!proposal.draftPlanId) {
+    throw new ApiError(400, 'INVALID_PROPOSAL', 'Proposal is missing draftPlanId.');
+  }
+
+  // Recompute respectsLocks based on current lock state.
+  const safety = await diffTouchesLockedEntities({ aiPlanDraftId: proposal.draftPlanId, diff: params.diffJson });
+  const respectsLocks = safety.ok;
+
+  const nextProposalJson = {
+    ...(proposal.proposalJson as any),
+    diffJson: params.diffJson,
+  } as Prisma.InputJsonValue;
+
+  return prisma.planChangeProposal.update({
+    where: { id: proposal.id },
+    data: {
+      diffJson: params.diffJson as unknown as Prisma.InputJsonValue,
+      proposalJson: nextProposalJson,
+      respectsLocks,
+    },
+  });
 }

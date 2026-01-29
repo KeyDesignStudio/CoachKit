@@ -47,26 +47,22 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const athleteId = 'dev-athlete';
 
     // Ensure intake exists + submitted so Intake Review tab has data.
-    const createDraftRes = await page.request.post(
-      `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
-      {
-        data: {
-          draftJson: {
-            goals: 'Build aerobic base',
-            availability: { daysPerWeek: 4 },
-            injuries: [],
-          },
+    const createDraftRes = await page.request.post(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
+      data: {
+        draftJson: {
+          goals: 'Build aerobic base',
+          availability: { daysPerWeek: 4 },
+          injuries: [],
         },
-      }
-    );
+      },
+    });
     expect(createDraftRes.ok()).toBeTruthy();
     const createDraftJson = await createDraftRes.json();
     const intakeResponseId = createDraftJson.data.intakeResponse.id as string;
 
-    const submitRes = await page.request.post(
-      `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`,
-      { data: { intakeResponseId } }
-    );
+    const submitRes = await page.request.post(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
+      data: { intakeResponseId },
+    });
     expect(submitRes.ok()).toBeTruthy();
 
     const extractRes = await page.request.post(
@@ -84,46 +80,54 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await expect(page.getByTestId('apb-generate-draft')).toBeVisible();
 
     await page.getByTestId('apb-generate-draft').click();
-
-    // Wait for sessions to render.
     const firstSession = page.locator('[data-testid="apb-session"]').first();
     await expect(firstSession).toBeVisible();
 
-    const sessionId = (await firstSession.getAttribute('data-session-id')) as string;
-    expect(sessionId).toBeTruthy();
+    const draftBeforeReloadRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
+    expect(draftBeforeReloadRes.ok()).toBeTruthy();
+    const draftBeforeReloadJson = await draftBeforeReloadRes.json();
+    const draftIdBeforeReload = String(draftBeforeReloadJson.data.draftPlan.id);
+    expect(draftIdBeforeReload).toBeTruthy();
 
-    const durationInput = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-duration"]`);
-    const saveButton = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-save"]`);
-    const lockCheckbox = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-lock"]`);
+    const durationInput = firstSession.locator('[data-testid="apb-session-duration"]');
+    const saveButton = firstSession.locator('[data-testid="apb-session-save"]');
 
     await durationInput.fill('42');
     await saveButton.click();
 
-    // Reload and verify persistence.
+    // Reload and verify persistence. (Draft ids may change across reloads if the server rolls drafts
+    // forward; the persisted session value is the invariant we care about.)
     await page.reload();
     await page.getByTestId('apb-tab-plan').click();
 
-    const durationInputAfter = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-duration"]`);
+    const draftAfterReloadRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
+    expect(draftAfterReloadRes.ok()).toBeTruthy();
+    const draftAfterReloadJson = await draftAfterReloadRes.json();
+    const draftIdAfterReload = String(draftAfterReloadJson.data.draftPlan.id);
+    expect(draftIdAfterReload).toBeTruthy();
+
+    const firstSessionAfterReload = page.locator('[data-testid="apb-session"]').first();
+    await expect(firstSessionAfterReload).toBeVisible();
+    const durationInputAfter = firstSessionAfterReload.locator('[data-testid="apb-session-duration"]');
     await expect(durationInputAfter).toHaveValue('42');
 
     // Lock the week and verify week-locked edit is blocked.
-    const weekIndexAttr = await firstSession.getAttribute('data-week-index');
+    const weekIndexAttr = await firstSessionAfterReload.getAttribute('data-week-index');
     const weekIndex = weekIndexAttr ?? '0';
     const weekLock = page.locator(`[data-week-index="${weekIndex}"] [data-testid="apb-week-lock"]`);
     await weekLock.check();
 
     await durationInputAfter.fill('41');
-    await saveButton.click();
-    const weekLockedError = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-error"]`);
+    await firstSessionAfterReload.locator('[data-testid="apb-session-save"]').click();
+
+    const weekLockedError = firstSessionAfterReload.locator('[data-testid="apb-session-error"]');
     await expect(weekLockedError).toBeVisible();
     await expect(weekLockedError).toContainText('Week is locked');
 
     // Reload: previous saved value should remain.
     await page.reload();
     await page.getByTestId('apb-tab-plan').click();
-    const durationAfterWeekLockReload = page.locator(
-      `[data-session-id="${sessionId}"] [data-testid="apb-session-duration"]`
-    );
+    const durationAfterWeekLockReload = page.locator('[data-testid="apb-session"]').first().locator('[data-testid="apb-session-duration"]');
     await expect(durationAfterWeekLockReload).toHaveValue('42');
 
     // Unlock the week so we can test session-level lock behavior independently.
@@ -131,12 +135,12 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await weekLockAfterReload.uncheck();
 
     // Lock and verify locked edit is blocked with a visible error message.
-    await lockCheckbox.check();
+    const firstSessionForLock = page.locator('[data-testid="apb-session"]').first();
+    await firstSessionForLock.locator('[data-testid="apb-session-lock"]').check();
+    await firstSessionForLock.locator('[data-testid="apb-session-duration"]').fill('43');
+    await firstSessionForLock.locator('[data-testid="apb-session-save"]').click();
 
-    await durationInputAfter.fill('43');
-    await saveButton.click();
-
-    const sessionError = page.locator(`[data-session-id="${sessionId}"] [data-testid="apb-session-error"]`);
+    const sessionError = firstSessionForLock.locator('[data-testid="apb-session-error"]');
     await expect(sessionError).toBeVisible();
     await expect(sessionError).toContainText('Session is locked');
 
@@ -167,15 +171,21 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
 
     await page.getByTestId('apb-tab-adaptations').click();
     await expect(page.getByTestId('apb-evaluate-triggers')).toBeVisible();
+    await expect(page.getByTestId('apb-evaluate-generate')).toBeVisible();
 
-    await page.getByTestId('apb-evaluate-triggers').click();
-    await page.getByTestId('apb-generate-proposal').click();
+    // Prefer the combined action for productivity.
+    await page.getByTestId('apb-evaluate-generate').click();
 
     const firstProposal = page.getByTestId('apb-proposal-item').first();
     await expect(firstProposal).toBeVisible();
 
-    await page.getByTestId('apb-proposal-approve').click();
-    await expect(page.getByTestId('apb-last-audit')).toBeVisible();
+    // Batch approve should exist and produce a summary.
+    await expect(page.getByTestId('apb-batch-approve')).toBeVisible();
+    await page.getByTestId('apb-batch-approve').click();
+    await expect(page.getByTestId('apb-batch-approve-summary')).toBeVisible();
+
+    // Batch approve should clear PROPOSED items.
+    await expect(page.getByText('No proposed items.')).toBeVisible();
 
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);

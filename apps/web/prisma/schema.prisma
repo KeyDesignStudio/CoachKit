@@ -133,39 +133,37 @@ model User {
   createdAt      DateTime @default(now())
 
   // Relations
-  athleteProfile                  AthleteProfile?
-  coachedAthletes                 AthleteProfile[]         @relation("CoachToAthletes")
-  comments                        Comment[]
-  messageThreadsAsCoach           MessageThread[]          @relation("CoachThreads")
-  messageThreadsAsAthlete         MessageThread[]          @relation("AthleteThreads")
-  messages                        Message[]
-  squads                          Squad[]
-  workoutTemplates                WorkoutTemplate[]
-  groupSessions                   GroupSession[]
-  calendarItemsCoached            CalendarItem[]
-  branding                        CoachBranding?
-  workoutTitles                   WorkoutTitle[]
-  planWeeks                       PlanWeek[]
-  coachJournalEntries             CoachJournalEntry[]
-  oauthStates                     OAuthState[]
+  athleteProfile            AthleteProfile?
+  coachedAthletes           AthleteProfile[]      @relation("CoachToAthletes")
+  comments                  Comment[]
+  messageThreadsAsCoach     MessageThread[]       @relation("CoachThreads")
+  messageThreadsAsAthlete   MessageThread[]       @relation("AthleteThreads")
+  messages                  Message[]
+  squads                    Squad[]
+  workoutTemplates          WorkoutTemplate[]
+  groupSessions             GroupSession[]
+  calendarItemsCoached      CalendarItem[]
+  branding                  CoachBranding?
+  workoutTitles             WorkoutTitle[]
+  planWeeks                 PlanWeek[]
+  coachJournalEntries       CoachJournalEntry[]
+  oauthStates               OAuthState[]
   athletePlanInstances      AthletePlanInstance[] @relation("AthletePlanInstances")
   coachCreatedPlanInstances AthletePlanInstance[] @relation("CoachCreatedPlanInstances")
 
   // AI Plan Builder (v1)
-  aiPlanBuilderIntakeResponses AthleteIntakeResponse[]
-  aiPlanBuilderEvidence        IntakeEvidence[]
-  aiPlanBuilderProfiles        AthleteProfileAI[]
-  aiPlanBuilderIntents         CoachIntent[]
-  aiPlanBuilderDraftPlans      AiPlanDraft[]
-  aiPlanBuilderProposals       PlanChangeProposal[]
-  aiPlanBuilderAudits          PlanChangeAudit[]
-  aiPlanBuilderSessionFeedback AthleteSessionFeedback[]
+  aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
+  aiPlanBuilderEvidence           IntakeEvidence[]
+  aiPlanBuilderProfiles           AthleteProfileAI[]
+  aiPlanBuilderIntents            CoachIntent[]
+  aiPlanBuilderDraftPlans         AiPlanDraft[]
+  aiPlanBuilderProposals          PlanChangeProposal[]
+  aiPlanBuilderAudits             PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
 
   @@index([role])
 }
-
-
 
 model AthleteProfile {
   userId                  String                @id
@@ -203,15 +201,16 @@ model AthleteProfile {
   stravaSyncIntents   StravaSyncIntent[]
 
   // AI Plan Builder (v1)
-  aiPlanBuilderIntakeResponses AthleteIntakeResponse[]
-  aiPlanBuilderEvidence        IntakeEvidence[]
-  aiPlanBuilderProfiles        AthleteProfileAI[]
-  aiPlanBuilderIntents         CoachIntent[]
-  aiPlanBuilderDraftPlans      AiPlanDraft[]
-  aiPlanBuilderProposals       PlanChangeProposal[]
-  aiPlanBuilderAudits          PlanChangeAudit[]
-  aiPlanBuilderSessionFeedback AthleteSessionFeedback[]
+  aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
+  aiPlanBuilderEvidence           IntakeEvidence[]
+  aiPlanBuilderProfiles           AthleteProfileAI[]
+  aiPlanBuilderIntents            CoachIntent[]
+  aiPlanBuilderDraftPlans         AiPlanDraft[]
+  aiPlanBuilderProposals          PlanChangeProposal[]
+  aiPlanBuilderAudits             PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
+  aiPlanBuilderPublishAcks        AiPlanPublishAck[]
 
   @@index([coachId])
 }
@@ -295,17 +294,17 @@ model PlanTemplate {
 }
 
 model PlanTemplateScheduleRow {
-  id                      String   @id @default(cuid())
-  planTemplateId          String
-  weekIndex               Int
-  dayIndex                Int
-  dayOfWeek               Int
-  ordinal                 Int      @default(0)
-  isOptional              Boolean  @default(false)
-  isOff                   Boolean  @default(false)
-  rawText                 String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id             String   @id @default(cuid())
+  planTemplateId String
+  weekIndex      Int
+  dayIndex       Int
+  dayOfWeek      Int
+  ordinal        Int      @default(0)
+  isOptional     Boolean  @default(false)
+  isOff          Boolean  @default(false)
+  rawText        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   planTemplate             PlanTemplate              @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
   athletePlanInstanceItems AthletePlanInstanceItem[]
@@ -658,8 +657,8 @@ model AthleteIntakeResponse {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  athlete  AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach    User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  athlete  AthleteProfile   @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach    User             @relation(fields: [coachId], references: [id], onDelete: Restrict)
   evidence IntakeEvidence[]
 
   @@index([athleteId, createdAt])
@@ -668,7 +667,7 @@ model AthleteIntakeResponse {
 }
 
 model IntakeEvidence {
-  id              String @id @default(cuid())
+  id               String @id @default(cuid())
   athleteId        String // AthleteProfile.userId
   coachId          String // User.id
   intakeResponseId String
@@ -679,8 +678,8 @@ model IntakeEvidence {
   // Append-only evidence. Records should never be updated or deleted by application logic.
   createdAt DateTime @default(now())
 
-  athlete       AthleteProfile        @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach         User                 @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  athlete        AthleteProfile        @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach          User                  @relation(fields: [coachId], references: [id], onDelete: Restrict)
   intakeResponse AthleteIntakeResponse @relation(fields: [intakeResponseId], references: [id], onDelete: Restrict)
 
   @@index([intakeResponseId])
@@ -709,7 +708,7 @@ model AthleteProfileAI {
   updatedAt DateTime @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
 
   @@unique([athleteId, evidenceHash])
   @@index([athleteId, createdAt])
@@ -725,7 +724,7 @@ model CoachIntent {
   createdAt  DateTime @default(now())
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
 
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
@@ -747,17 +746,17 @@ model AiPlanDraft {
   setupHash String?
 
   // Tranche 4: publish visibility (AI-domain only; no coupling to existing plan tables).
-  visibilityStatus AiPlanDraftVisibilityStatus @default(DRAFT)
-  publishedAt DateTime?
-  publishedByCoachId String?
-  lastPublishedHash String?
+  visibilityStatus         AiPlanDraftVisibilityStatus @default(DRAFT)
+  publishedAt              DateTime?
+  publishedByCoachId       String?
+  lastPublishedHash        String?
   lastPublishedSummaryText String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
 
   proposals PlanChangeProposal[]
   audits    PlanChangeAudit[]
@@ -766,6 +765,8 @@ model AiPlanDraft {
   sessions AiPlanDraftSession[]
 
   publishSnapshots AiPlanDraftPublishSnapshot[]
+
+  publishAcks AiPlanPublishAck[]
 
   feedback AthleteSessionFeedback[]
   triggers AdaptationTrigger[]
@@ -782,11 +783,11 @@ model AiPlanDraftPublishSnapshot {
   athleteId String // denormalized for query convenience
   coachId   String // denormalized for query convenience
 
-  hash String
-  planJson Json
+  hash        String
+  planJson    Json
   summaryText String
 
-  publishedAt DateTime @default(now())
+  publishedAt        DateTime @default(now())
   publishedByCoachId String?
 
   draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
@@ -794,6 +795,24 @@ model AiPlanDraftPublishSnapshot {
   @@unique([draftId, hash])
   @@index([draftId, publishedAt])
   @@index([athleteId, publishedAt])
+}
+
+model AiPlanPublishAck {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  draftId   String
+
+  lastSeenPublishedHash String
+  lastSeenAt            DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  draft   AiPlanDraft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, draftId])
+  @@index([athleteId, draftId])
 }
 
 model AthleteSessionFeedback {
@@ -806,15 +825,15 @@ model AthleteSessionFeedback {
   completedStatus AthleteSessionFeedbackCompletedStatus
   rpe             Int?
   feel            AthleteSessionFeedbackFeel?
-  sorenessFlag    Boolean @default(false)
+  sorenessFlag    Boolean                               @default(false)
   sorenessNotes   String?
   sleepQuality    Int?
 
   createdAt DateTime @default(now())
 
-  athlete AthleteProfile   @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach   User            @relation(fields: [coachId], references: [id], onDelete: Restrict)
-  draft   AiPlanDraft      @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  athlete AthleteProfile     @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User               @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
   session AiPlanDraftSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([athleteId, createdAt])
@@ -828,20 +847,21 @@ model AdaptationTrigger {
   coachId   String // User.id
   draftId   String
 
-  triggerType AdaptationTriggerType
-  windowStart DateTime
-  windowEnd   DateTime
+  triggerType  AdaptationTriggerType
+  windowStart  DateTime
+  windowEnd    DateTime
   evidenceJson Json
 
   createdAt DateTime @default(now())
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach   User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
-  draft   AiPlanDraft   @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
 
   @@unique([draftId, triggerType, windowStart, windowEnd])
   @@index([athleteId, createdAt])
   @@index([draftId, createdAt])
+  @@index([draftId, triggerType, createdAt])
 }
 
 model AiPlanDraftWeek {
@@ -870,11 +890,11 @@ model AiPlanDraftSession {
   weekIndex Int
   ordinal   Int
 
-  dayOfWeek Int
-  discipline String
-  type       String
+  dayOfWeek       Int
+  discipline      String
+  type            String
   durationMinutes Int
-  notes      String?
+  notes           String?
 
   locked Boolean @default(false)
 
@@ -900,12 +920,12 @@ model PlanChangeProposal {
   draftPlanId String?
 
   // Tranche 3: deterministic proposal execution against AiPlanDraft only.
-  rationaleText String?
-  diffJson       Json?
-  triggerIds     String[] @default([])
-  respectsLocks  Boolean @default(true)
+  rationaleText   String?
+  diffJson        Json?
+  triggerIds      String[]  @default([])
+  respectsLocks   Boolean   @default(true)
   coachDecisionAt DateTime?
-  appliedAt      DateTime?
+  appliedAt       DateTime?
 
   // Optional opaque reference to an existing plan (string-only to avoid FK coupling).
   targetPlanRef String?
@@ -917,14 +937,15 @@ model PlanChangeProposal {
   updatedAt DateTime @updatedAt
 
   athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach     User          @relation(fields: [coachId], references: [id], onDelete: Restrict)
-  draftPlan AiPlanDraft?  @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)
+  coach     User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draftPlan AiPlanDraft?   @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)
 
   audits PlanChangeAudit[]
 
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
   @@index([status, createdAt])
+  @@index([draftPlanId, status, createdAt])
 }
 
 model PlanChangeAudit {
@@ -945,8 +966,8 @@ model PlanChangeAudit {
 
   createdAt DateTime @default(now())
 
-  athlete  AthleteProfile     @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
-  coach    User              @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  athlete  AthleteProfile      @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach    User                @relation(fields: [coachId], references: [id], onDelete: Restrict)
   proposal PlanChangeProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
 
   draftPlan AiPlanDraft? @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)

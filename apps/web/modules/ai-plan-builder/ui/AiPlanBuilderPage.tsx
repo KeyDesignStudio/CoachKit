@@ -32,6 +32,8 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const [proposalsLatest, setProposalsLatest] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
+  const [proposalDiffDraft, setProposalDiffDraft] = useState<Record<string, string>>({});
+  const [batchApproveSummary, setBatchApproveSummary] = useState<string | null>(null);
   const [lastAppliedAudit, setLastAppliedAudit] = useState<any | null>(null);
 
   const [feedbackDraftSessionId, setFeedbackDraftSessionId] = useState<string | null>(null);
@@ -136,7 +138,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const fetchProposals = useCallback(
     async (aiPlanDraftId: string) => {
       const data = await request<{ proposals: any[] }>(
-        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}&limit=200`
       );
       setProposalsLatest(Array.isArray(data.proposals) ? data.proposals : []);
       return data.proposals;
@@ -558,7 +560,9 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                     );
                     setDraftPlanLatest(created.draftPlan);
                     if (created.draftPlan?.id) {
-                      await fetchPublishStatus(String(created.draftPlan.id));
+                      void fetchPublishStatus(String(created.draftPlan.id)).catch(() => {
+                        setPublishStatus(null);
+                      });
                     } else {
                       setPublishStatus(null);
                     }
@@ -1183,6 +1187,43 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                     size="sm"
                     variant="secondary"
                     disabled={busy !== null}
+                    data-testid="apb-evaluate-generate"
+                    onClick={() =>
+                      runAction('evaluate+generate', async () => {
+                        setProposalError(null);
+                        const evalRes = await request<{ triggers: any[] }>(
+                          `/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/evaluate`,
+                          {
+                            method: 'POST',
+                            data: { aiPlanDraftId: String(draftPlanLatest.id), windowDays: 10 },
+                          }
+                        );
+                        setTriggersLatest(Array.isArray((evalRes as any).triggers) ? (evalRes as any).triggers : []);
+
+                        const genRes = await request<{ proposal: any }>(
+                          `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/generate`,
+                          {
+                            method: 'POST',
+                            data: { aiPlanDraftId: String(draftPlanLatest.id) },
+                          }
+                        );
+
+                        if ((genRes as any)?.proposal?.id) {
+                          setSelectedProposalId(String((genRes as any).proposal.id));
+                        }
+
+                        await fetchProposals(String(draftPlanLatest.id));
+                      })
+                    }
+                  >
+                    Evaluate + Generate
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy !== null}
                     data-testid="apb-generate-proposal"
                     onClick={() =>
                       runAction('generate-proposal', async () => {
@@ -1211,6 +1252,12 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                   </div>
                 )}
 
+                {batchApproveSummary && (
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3 text-sm" data-testid="apb-batch-approve-summary">
+                    {batchApproveSummary}
+                  </div>
+                )}
+
                 {lastAppliedAudit?.id && (
                   <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3 text-sm" data-testid="apb-last-audit">
                     Applied (audit {String(lastAppliedAudit.id)}).
@@ -1226,6 +1273,39 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                   <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
                     <div className="text-sm font-medium">Proposals</div>
                     <div className="mt-2 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy !== null || !draftPlanLatest?.id}
+                          data-testid="apb-batch-approve"
+                          onClick={() =>
+                            runAction('batch-approve', async () => {
+                              setProposalError(null);
+                              setBatchApproveSummary(null);
+                              const res = await request<{ batch: { approvedCount: number; failedCount: number; results: any[]; draft: any | null } }>(
+                                `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/batch-approve`,
+                                {
+                                  method: 'POST',
+                                  data: { aiPlanDraftId: String(draftPlanLatest.id), maxHours: 72 },
+                                }
+                              );
+                              const approvedCount = Number((res as any)?.batch?.approvedCount ?? 0);
+                              const failedCount = Number((res as any)?.batch?.failedCount ?? 0);
+                              setBatchApproveSummary(`Batch approve: ${approvedCount} approved, ${failedCount} failed.`);
+
+                              if ((res as any)?.batch?.draft) {
+                                setDraftPlanLatest((res as any).batch.draft);
+                              }
+
+                              await fetchProposals(String(draftPlanLatest.id));
+                            })
+                          }
+                        >
+                          Batch approve safe (72h)
+                        </Button>
+                      </div>
                       {proposalsLatest.filter((p) => p?.status === 'PROPOSED').length === 0 ? (
                         <div className="text-sm text-[var(--fg-muted)]">No proposed items.</div>
                       ) : (
@@ -1244,7 +1324,16 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                               }`}
                               onClick={() => {
                                 setProposalError(null);
+                                setBatchApproveSummary(null);
                                 setSelectedProposalId(String(p.id));
+                                setProposalDiffDraft((prev) => {
+                                  const key = String(p.id);
+                                  if (prev[key]) return prev;
+                                  return {
+                                    ...prev,
+                                    [key]: JSON.stringify(Array.isArray((p as any)?.diffJson) ? (p as any).diffJson : [], null, 2),
+                                  };
+                                });
                               }}
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1271,6 +1360,8 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                       }
 
                       const diff: any[] = Array.isArray(proposal.diffJson) ? proposal.diffJson : [];
+                      const draftKey = String(proposal.id);
+                      const draftText = proposalDiffDraft[draftKey] ?? JSON.stringify(diff, null, 2);
 
                       return (
                         <div className="mt-2 space-y-3" data-testid="apb-proposal-detail">
@@ -1294,6 +1385,57 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                               )}
                             </ul>
                           </div>
+
+                          <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                            <summary className="cursor-pointer text-xs font-medium">Quick tweak (edit diffJson)</summary>
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                className="min-h-40 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2 font-mono text-xs"
+                                value={draftText}
+                                onChange={(e) => {
+                                  const value = e.currentTarget.value;
+                                  setProposalDiffDraft((prev) => ({ ...prev, [draftKey]: value }));
+                                }}
+                              />
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={busy !== null || proposal.status !== 'PROPOSED'}
+                                  data-testid="apb-proposal-save-diff"
+                                  onClick={() =>
+                                    runAction('save-proposal-diff', async () => {
+                                      setProposalError(null);
+                                      setBatchApproveSummary(null);
+                                      let parsed: any;
+                                      try {
+                                        parsed = JSON.parse(draftText);
+                                      } catch {
+                                        setProposalError('Invalid JSON in diffJson editor.');
+                                        return;
+                                      }
+
+                                      await request(
+                                        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(
+                                          String(proposal.id)
+                                        )}/diff`,
+                                        {
+                                          method: 'PATCH',
+                                          data: { diffJson: parsed },
+                                        }
+                                      );
+                                      await fetchProposals(String(draftPlanLatest.id));
+                                    })
+                                  }
+                                >
+                                  Save diff
+                                </Button>
+                              </div>
+                              <div className="text-xs text-[var(--fg-muted)]">
+                                Edits update the proposal only; approval still enforces current locks.
+                              </div>
+                            </div>
+                          </details>
 
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
