@@ -5,6 +5,12 @@ const DISABLE_AUTH =
   process.env.NODE_ENV === 'development' &&
   (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
+const AI_PLAN_BUILDER_V1 =
+  process.env.AI_PLAN_BUILDER_V1 === '1' ||
+  process.env.AI_PLAN_BUILDER_V1 === 'true' ||
+  process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === '1' ||
+  process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === 'true';
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
@@ -28,12 +34,34 @@ const middleware = DISABLE_AUTH
         return new NextResponse('Not Found', { status: 404 });
       }
 
+      // Feature-flagged module routes must not be reachable when disabled.
+      const pathname = new URL(request.url).pathname;
+      if (!AI_PLAN_BUILDER_V1) {
+        if (pathname.startsWith('/coach/athletes/') && pathname.includes('/ai-plan-builder')) {
+          return new NextResponse('Not Found', { status: 404 });
+        }
+        if (pathname.startsWith('/api/coach/athletes/') && pathname.includes('/ai-plan-builder/')) {
+          return new NextResponse('Not Found', { status: 404 });
+        }
+      }
+
       return NextResponse.next();
     }
   : clerkMiddleware(async (auth, request) => {
       // Guardrail: dev pages never exist in production.
       if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/dev')) {
         return new NextResponse('Not Found', { status: 404 });
+      }
+
+      // Feature-flagged module routes must not be reachable when disabled.
+      if (!AI_PLAN_BUILDER_V1) {
+        const pathname = request.nextUrl.pathname;
+        if (pathname.startsWith('/coach/athletes/') && pathname.includes('/ai-plan-builder')) {
+          return new NextResponse('Not Found', { status: 404 });
+        }
+        if (pathname.startsWith('/api/coach/athletes/') && pathname.includes('/ai-plan-builder/')) {
+          return new NextResponse('Not Found', { status: 404 });
+        }
       }
 
       const { userId } = await auth();
