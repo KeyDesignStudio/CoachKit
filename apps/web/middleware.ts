@@ -11,6 +11,23 @@ const AI_PLAN_BUILDER_V1 =
   process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === '1' ||
   process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === 'true';
 
+function isAiPlanBuilderPathSegment(pathname: string) {
+  // Ensure we only match the real segment name, not a substring.
+  // Examples matched: /.../ai-plan-builder, /.../ai-plan-builder/...
+  // Examples NOT matched: /.../ai-plan-builderish
+  return /(^|\/)(ai-plan-builder)(\/|$)/.test(pathname);
+}
+
+function shouldBlockAiPlanBuilderRoute(pathname: string) {
+  if (AI_PLAN_BUILDER_V1) return false;
+
+  // Only block AI Plan Builder module routes (pages + API). Never block anything else.
+  if (pathname.startsWith('/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
+  if (pathname.startsWith('/api/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
+
+  return false;
+}
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
@@ -36,14 +53,7 @@ const middleware = DISABLE_AUTH
 
       // Feature-flagged module routes must not be reachable when disabled.
       const pathname = new URL(request.url).pathname;
-      if (!AI_PLAN_BUILDER_V1) {
-        if (pathname.startsWith('/coach/athletes/') && pathname.includes('/ai-plan-builder')) {
-          return new NextResponse('Not Found', { status: 404 });
-        }
-        if (pathname.startsWith('/api/coach/athletes/') && pathname.includes('/ai-plan-builder/')) {
-          return new NextResponse('Not Found', { status: 404 });
-        }
-      }
+      if (shouldBlockAiPlanBuilderRoute(pathname)) return new NextResponse('Not Found', { status: 404 });
 
       return NextResponse.next();
     }
@@ -54,15 +64,7 @@ const middleware = DISABLE_AUTH
       }
 
       // Feature-flagged module routes must not be reachable when disabled.
-      if (!AI_PLAN_BUILDER_V1) {
-        const pathname = request.nextUrl.pathname;
-        if (pathname.startsWith('/coach/athletes/') && pathname.includes('/ai-plan-builder')) {
-          return new NextResponse('Not Found', { status: 404 });
-        }
-        if (pathname.startsWith('/api/coach/athletes/') && pathname.includes('/ai-plan-builder/')) {
-          return new NextResponse('Not Found', { status: 404 });
-        }
-      }
+      if (shouldBlockAiPlanBuilderRoute(request.nextUrl.pathname)) return new NextResponse('Not Found', { status: 404 });
 
       const { userId } = await auth();
       const { pathname } = request.nextUrl;

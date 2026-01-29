@@ -12,6 +12,13 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
 }
 
 test.describe('AI Plan Builder v1: flag OFF gating', () => {
+  test('unrelated route is unaffected when disabled', async ({ page }) => {
+    const res = await page.request.get('/api/health/db');
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
   test('coach route is 404 when disabled', async ({ page }) => {
     await setRoleCookie(page, 'COACH');
 

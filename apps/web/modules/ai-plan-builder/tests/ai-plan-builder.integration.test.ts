@@ -8,6 +8,48 @@ import { createAiDraftPlan } from '@/modules/ai-plan-builder/server/draft-plan';
 import { createPlanChangeProposal } from '@/modules/ai-plan-builder/server/proposal';
 import { createPlanChangeAudit } from '@/modules/ai-plan-builder/server/audit';
 
+async function getActivePlanTableCounts() {
+  const [
+    planTemplate,
+    planTemplateScheduleRow,
+    athletePlanInstance,
+    athletePlanInstanceItem,
+    planWeek,
+    calendarItem,
+  ] = await Promise.all([
+    prisma.planTemplate.count(),
+    prisma.planTemplateScheduleRow.count(),
+    prisma.athletePlanInstance.count(),
+    prisma.athletePlanInstanceItem.count(),
+    prisma.planWeek.count(),
+    prisma.calendarItem.count(),
+  ]);
+
+  return {
+    planTemplate,
+    planTemplateScheduleRow,
+    athletePlanInstance,
+    athletePlanInstanceItem,
+    planWeek,
+    calendarItem,
+  };
+}
+
+async function getEvidenceSnapshot(intakeResponseId: string) {
+  const rows = await prisma.intakeEvidence.findMany({
+    where: { intakeResponseId },
+    orderBy: [{ questionKey: 'asc' }, { createdAt: 'asc' }],
+    select: { questionKey: true, answerJson: true, createdAt: true },
+  });
+
+  // Serialize to a deterministic shape for equality checks.
+  return rows.map((row) => ({
+    questionKey: row.questionKey,
+    answerJson: row.answerJson,
+    createdAt: row.createdAt.toISOString(),
+  }));
+}
+
 describe('AI Plan Builder v1 (Prisma integration)', () => {
   const coachId = 'it-coach';
   const athleteId = 'it-athlete';
@@ -89,33 +131,55 @@ describe('AI Plan Builder v1 (Prisma integration)', () => {
     await prisma.$disconnect();
   });
 
-  it('intake → evidence → deterministic extract (idempotent) → draft → proposal → audit', async () => {
-    const created = await createIntakeDraft({ coachId, athleteId });
+  it('enforces invariants (append-only evidence, idempotent extract, draft isolation, proposal/audit non-mutation)', async () => {
+    const countsBefore = await getActivePlanTableCounts();
 
-    const updated = await updateIntakeDraft({
+    // 1) IntakeEvidence is append-only: multiple submissions add rows; earlier evidence is not overwritten.
+    const intake1 = await createIntakeDraft({ coachId, athleteId });
+    await updateIntakeDraft({
       coachId,
       athleteId,
-      intakeResponseId: created.id,
+      intakeResponseId: intake1.id,
       draftJson: {
         goals: 'Build aerobic base',
         availability: { daysPerWeek: 4 },
         notes: 'Prefer mornings',
       },
     });
+    const submit1 = await submitIntake({ coachId, athleteId, intakeResponseId: intake1.id });
+    expect(submit1.evidenceCreatedCount).toBeGreaterThan(0);
 
-    expect(updated.status).toBe('DRAFT');
+    const evidence1 = await getEvidenceSnapshot(intake1.id);
+    expect(evidence1.length).toBeGreaterThan(0);
 
-    const submitted = await submitIntake({ coachId, athleteId, intakeResponseId: created.id });
-    expect(submitted.evidenceCreatedCount).toBeGreaterThan(0);
+    const intake2 = await createIntakeDraft({ coachId, athleteId });
+    await updateIntakeDraft({
+      coachId,
+      athleteId,
+      intakeResponseId: intake2.id,
+      draftJson: {
+        goals: 'Return to training',
+        availability: { daysPerWeek: 3 },
+        notes: 'Prefer evenings',
+      },
+    });
+    const submit2 = await submitIntake({ coachId, athleteId, intakeResponseId: intake2.id });
+    expect(submit2.evidenceCreatedCount).toBeGreaterThan(0);
 
-    const extract1 = await extractAiProfileFromIntake({ coachId, athleteId, intakeResponseId: created.id });
-    expect(extract1.wasCreated).toBe(true);
-    expect(extract1.profile.athleteId).toBe(athleteId);
+    const evidence1AfterSecondSubmit = await getEvidenceSnapshot(intake1.id);
+    expect(evidence1AfterSecondSubmit).toEqual(evidence1);
 
-    const extract2 = await extractAiProfileFromIntake({ coachId, athleteId, intakeResponseId: created.id });
-    expect(extract2.wasCreated).toBe(false);
-    expect(extract2.profile.id).toBe(extract1.profile.id);
+    // 2) Extract is idempotent: same evidenceHash -> same profileJson + summary.
+    const extract1a = await extractAiProfileFromIntake({ coachId, athleteId, intakeResponseId: intake1.id });
+    const extract1b = await extractAiProfileFromIntake({ coachId, athleteId, intakeResponseId: intake1.id });
 
+    expect(extract1a.profile.athleteId).toBe(athleteId);
+    expect(extract1b.profile.id).toBe(extract1a.profile.id);
+    expect(extract1b.profile.evidenceHash).toBe(extract1a.profile.evidenceHash);
+    expect(extract1b.profile.extractedProfileJson).toEqual(extract1a.profile.extractedProfileJson);
+    expect(extract1b.profile.extractedSummaryText).toBe(extract1a.profile.extractedSummaryText);
+
+    // 3) Draft plan isolation: draft exists for athlete; no active plan tables are modified.
     const draft = await createAiDraftPlan({
       coachId,
       athleteId,
@@ -124,12 +188,24 @@ describe('AI Plan Builder v1 (Prisma integration)', () => {
       },
     });
 
+    expect(draft.athleteId).toBe(athleteId);
+
+    const countsAfterDraft = await getActivePlanTableCounts();
+    expect(countsAfterDraft).toEqual(countsBefore);
+
+    const draftBeforeProposal = await prisma.aiPlanDraft.findUniqueOrThrow({
+      where: { id: draft.id },
+      select: { id: true, updatedAt: true },
+    });
+
+    // 4) Proposal and audit only write to their own tables and do not mutate plan sessions.
     const proposal = await createPlanChangeProposal({
       coachId,
       athleteId,
       draftPlanId: draft.id,
       proposalJson: { changes: [{ op: 'add', path: '/week1/0', value: { day: 'Mon', workout: 'Easy Run 30min' } }] },
     });
+    expect(proposal.id).toBeTruthy();
 
     const audit = await createPlanChangeAudit({
       coachId,
@@ -138,7 +214,15 @@ describe('AI Plan Builder v1 (Prisma integration)', () => {
       proposalId: proposal.id,
       diffJson: { note: 'integration-test' },
     });
-
     expect(audit.id).toBeTruthy();
+
+    const countsAfterProposalAudit = await getActivePlanTableCounts();
+    expect(countsAfterProposalAudit).toEqual(countsBefore);
+
+    const draftAfterProposal = await prisma.aiPlanDraft.findUniqueOrThrow({
+      where: { id: draft.id },
+      select: { id: true, updatedAt: true },
+    });
+    expect(draftAfterProposal.updatedAt.getTime()).toBe(draftBeforeProposal.updatedAt.getTime());
   });
 });
