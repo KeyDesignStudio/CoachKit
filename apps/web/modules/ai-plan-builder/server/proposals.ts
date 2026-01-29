@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/errors';
 import { requireAiPlanBuilderV1Enabled } from './flag';
 import { planDiffSchema, type PlanDiffOp } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
+import { publishAiDraftPlan } from './publish';
 
 export const generateProposalSchema = z.object({
   aiPlanDraftId: z.string().min(1),
@@ -22,6 +23,7 @@ export const batchApproveSchema = z.object({
   aiPlanDraftId: z.string().min(1),
   proposalIds: z.array(z.string().min(1)).optional(),
   maxHours: z.number().int().min(1).max(168).optional(),
+  mode: z.enum(['approve', 'approve_and_publish']).optional(),
 });
 
 export const updateProposalDiffSchema = z.object({
@@ -554,6 +556,52 @@ export async function batchApproveSafeProposals(params: {
   const failedCount = results.length - approvedCount;
 
   return { results, approvedCount, failedCount, draft: lastDraft };
+}
+
+export async function batchApproveSafeProposalsWithMode(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  proposalIds?: string[];
+  maxHours?: number;
+  mode?: 'approve' | 'approve_and_publish';
+}) {
+  const batch = await batchApproveSafeProposals({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    aiPlanDraftId: params.aiPlanDraftId,
+    proposalIds: params.proposalIds,
+    maxHours: params.maxHours,
+  });
+
+  if ((params.mode ?? 'approve') !== 'approve_and_publish') {
+    return { batch };
+  }
+
+  if (Number(batch.approvedCount ?? 0) <= 0) {
+    return { batch, publish: { ok: true as const, published: false, hash: null as string | null, lastPublishedSummaryText: null as string | null, skipped: true as const } };
+  }
+
+  try {
+    const publish = await publishAiDraftPlan({
+      coachId: params.coachId,
+      athleteId: params.athleteId,
+      aiPlanDraftId: params.aiPlanDraftId,
+    });
+
+    return {
+      batch,
+      publish: {
+        ok: true as const,
+        published: publish.published,
+        hash: publish.hash,
+        lastPublishedSummaryText: publish.summaryText,
+      },
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Publish failed.';
+    return { batch, publish: { ok: false as const, code: 'PUBLISH_FAILED', message } };
+  }
 }
 
 export async function updatePlanChangeProposalDiff(params: {

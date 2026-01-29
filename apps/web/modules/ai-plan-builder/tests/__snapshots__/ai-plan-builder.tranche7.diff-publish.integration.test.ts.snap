@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish) > T7A.1 diff renderer is deterministic (snapshot) 1`] = `
+{
+  "summary": {
+    "intensitySessionsDelta": 0,
+    "sessionsChangedCount": 0,
+    "totalMinutesDelta": 0,
+  },
+  "weeks": [
+    {
+      "afterTotalMinutes": 420,
+      "beforeTotalMinutes": 420,
+      "items": [],
+      "weekIndex": 0,
+    },
+    {
+      "afterTotalMinutes": 438,
+      "beforeTotalMinutes": 438,
+      "items": [],
+      "weekIndex": 1,
+    },
+    {
+      "afterTotalMinutes": 420,
+      "beforeTotalMinutes": 420,
+      "items": [],
+      "weekIndex": 2,
+    },
+    {
+      "afterTotalMinutes": 438,
+      "beforeTotalMinutes": 438,
+      "items": [],
+      "weekIndex": 3,
+    },
+    {
+      "afterTotalMinutes": 336,
+      "beforeTotalMinutes": 336,
+      "items": [],
+      "weekIndex": 4,
+    },
+    {
+      "afterTotalMinutes": 307,
+      "beforeTotalMinutes": 307,
+      "items": [],
+      "weekIndex": 5,
+    },
+  ],
+}
+`;

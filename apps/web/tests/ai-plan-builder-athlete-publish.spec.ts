@@ -87,6 +87,11 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
     await page.goto('/athlete/ai-plan');
     await expect(page.getByText('AI Plan')).toBeVisible();
 
+    // The publish update banner should include a "View changes" affordance.
+    await expect(page.getByTestId('athlete-view-changes')).toBeVisible();
+    await page.getByTestId('athlete-view-changes').click();
+    await expect(page.getByTestId('athlete-changes-panel')).toBeVisible();
+
     // Derive draft id from the redirected URL to avoid any cross-test dependency.
     const athleteUrl = new URL(page.url());
     const parts = athleteUrl.pathname.split('/').filter(Boolean);

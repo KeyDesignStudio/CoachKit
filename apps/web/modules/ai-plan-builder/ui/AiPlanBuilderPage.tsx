@@ -36,6 +36,12 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const [batchApproveSummary, setBatchApproveSummary] = useState<string | null>(null);
   const [lastAppliedAudit, setLastAppliedAudit] = useState<any | null>(null);
 
+  const [proposalPreview, setProposalPreview] = useState<any | null>(null);
+  const [proposalPreviewSafety, setProposalPreviewSafety] = useState<any | null>(null);
+  const [proposalPreviewLoading, setProposalPreviewLoading] = useState(false);
+  const [proposalPreviewError, setProposalPreviewError] = useState<string | null>(null);
+  const [publishAfterApproveDraftId, setPublishAfterApproveDraftId] = useState<string | null>(null);
+
   const [feedbackDraftSessionId, setFeedbackDraftSessionId] = useState<string | null>(null);
   const [feedbackForm, setFeedbackForm] = useState({
     completedStatus: 'DONE' as 'DONE' | 'PARTIAL' | 'SKIPPED',
@@ -188,7 +194,49 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [fetchDraftPlanLatest, fetchEvidence, fetchFeedback, fetchIntakeLatest, fetchProfileLatest, fetchProposals]);
+  }, [fetchDraftPlanLatest, fetchEvidence, fetchFeedback, fetchIntakeLatest, fetchProfileLatest, fetchProposals, fetchPublishStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!selectedProposalId || !draftPlanLatest?.id) {
+        setProposalPreview(null);
+        setProposalPreviewSafety(null);
+        setProposalPreviewError(null);
+        return;
+      }
+
+      try {
+        setProposalPreviewLoading(true);
+        setProposalPreviewError(null);
+
+        const res = await request<{ preview: any; applySafety: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(
+            String(selectedProposalId)
+          )}/preview?aiPlanDraftId=${encodeURIComponent(String(draftPlanLatest.id))}`
+        );
+
+        if (cancelled) return;
+        setProposalPreview(res.preview ?? null);
+        setProposalPreviewSafety((res as any).applySafety ?? null);
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof ApiClientError) {
+          setProposalPreviewError(`${e.code}: ${e.message}`);
+        } else {
+          setProposalPreviewError(e instanceof Error ? e.message : 'Failed to load preview.');
+        }
+        setProposalPreview(null);
+        setProposalPreviewSafety(null);
+      } finally {
+        if (!cancelled) setProposalPreviewLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, draftPlanLatest?.id, request, selectedProposalId]);
 
   const runAction = useCallback(
     async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
@@ -1305,6 +1353,50 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                         >
                           Batch approve safe (72h)
                         </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={busy !== null || !draftPlanLatest?.id}
+                          data-testid="apb-batch-approve-publish"
+                          onClick={() =>
+                            runAction('batch-approve-and-publish', async () => {
+                              setProposalError(null);
+                              setBatchApproveSummary(null);
+                              setPublishAfterApproveDraftId(null);
+
+                              const res = await request<any>(
+                                `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/batch-approve`,
+                                {
+                                  method: 'POST',
+                                  data: { aiPlanDraftId: String(draftPlanLatest.id), maxHours: 72, mode: 'approve_and_publish' },
+                                }
+                              );
+
+                              const approvedCount = Number((res as any)?.batch?.approvedCount ?? 0);
+                              const failedCount = Number((res as any)?.batch?.failedCount ?? 0);
+                              const publish = (res as any)?.publish;
+
+                              let publishText = '';
+                              if (publish?.ok === true && publish?.skipped) publishText = ' publish skipped';
+                              else if (publish?.ok === true) publishText = ` publish=${publish?.published ? 'published' : 'no-changes'}`;
+                              else if (publish?.ok === false) publishText = ` publish failed (${publish?.code ?? 'PUBLISH_FAILED'})`;
+
+                              setBatchApproveSummary(`Batch approve: ${approvedCount} approved, ${failedCount} failed.${publishText}`);
+
+                              if ((res as any)?.batch?.draft) {
+                                setDraftPlanLatest((res as any).batch.draft);
+                              }
+                              if (publish?.ok === true && (publish?.hash || publish?.published)) {
+                                await fetchPublishStatus(String(draftPlanLatest.id));
+                              }
+
+                              await fetchProposals(String(draftPlanLatest.id));
+                            })
+                          }
+                        >
+                          Batch approve & publish
+                        </Button>
                       </div>
                       {proposalsLatest.filter((p) => p?.status === 'PROPOSED').length === 0 ? (
                         <div className="text-sm text-[var(--fg-muted)]">No proposed items.</div>
@@ -1370,20 +1462,83 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
                           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
                             <div className="text-xs font-medium">Diff preview</div>
-                            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-                              {diff.length === 0 ? (
-                                <li>No ops.</li>
-                              ) : (
-                                diff.map((op, idx) => (
-                                  <li key={idx} data-testid="apb-proposal-op">
-                                    {String(op.op)}{' '}
-                                    {op.draftSessionId ? `session=${String(op.draftSessionId)}` : ''}{' '}
-                                    {op.weekIndex !== undefined ? `week=${String(op.weekIndex)}` : ''}{' '}
-                                    {op.pctDelta !== undefined ? `pctDelta=${String(op.pctDelta)}` : ''}
-                                  </li>
-                                ))
-                              )}
-                            </ul>
+
+                            {proposalPreviewLoading ? (
+                              <div className="mt-2 text-xs text-[var(--fg-muted)]">Loading preview…</div>
+                            ) : proposalPreviewError ? (
+                              <div className="mt-2 text-xs text-red-700" data-testid="apb-proposal-preview-error">
+                                {proposalPreviewError}
+                              </div>
+                            ) : proposalPreview ? (
+                              <div className="mt-2 space-y-2" data-testid="apb-proposal-preview">
+                                <div className="flex flex-wrap items-center gap-3 text-xs">
+                                  <div>
+                                    Sessions changed: <span className="font-medium">{Number(proposalPreview?.summary?.sessionsChangedCount ?? 0)}</span>
+                                  </div>
+                                  <div>
+                                    Minutes delta:{' '}
+                                    <span className="font-medium">
+                                      {(() => {
+                                        const d = Number(proposalPreview?.summary?.totalMinutesDelta ?? 0);
+                                        return d > 0 ? `+${d}` : String(d);
+                                      })()}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Intensity delta:{' '}
+                                    <span className="font-medium">
+                                      {(() => {
+                                        const d = proposalPreview?.summary?.intensitySessionsDelta;
+                                        if (d === null || d === undefined) return '—';
+                                        const n = Number(d);
+                                        return n > 0 ? `+${n}` : String(n);
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {proposalPreviewSafety?.wouldFailDueToLocks ? (
+                                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs" data-testid="apb-proposal-lock-warning">
+                                    <div className="font-medium">Would fail due to locks</div>
+                                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                                      {(proposalPreviewSafety?.reasons ?? []).map((r: any, idx: number) => (
+                                        <li key={idx}>
+                                          {String(r.code)}: {String(r.message)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+
+                                <div className="space-y-2">
+                                  {(proposalPreview?.weeks ?? []).map((w: any) => (
+                                    <div key={String(w.weekIndex)} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
+                                      <div className="flex items-center justify-between gap-2 text-xs">
+                                        <div className="font-medium">Week {Number(w.weekIndex ?? 0) + 1}</div>
+                                        <div className="text-[var(--fg-muted)]">
+                                          {Number(w.beforeTotalMinutes ?? 0)} → {Number(w.afterTotalMinutes ?? 0)} min
+                                        </div>
+                                      </div>
+                                      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                                        {(w.items ?? []).length === 0 ? (
+                                          <li className="text-[var(--fg-muted)]">No changes.</li>
+                                        ) : (
+                                          (w.items ?? []).map((it: any, idx: number) => (
+                                            <li key={idx} data-testid="apb-proposal-preview-item">
+                                              {String(it.text)}
+                                            </li>
+                                          ))
+                                        )}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[var(--fg-muted)]">
+                                {diff.length === 0 ? <li>No ops.</li> : <li>Preview unavailable.</li>}
+                              </ul>
+                            )}
                           </div>
 
                           <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
@@ -1472,6 +1627,51 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                             >
                               Approve
                             </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={busy !== null || proposal.status !== 'PROPOSED' || !draftPlanLatest?.id}
+                              data-testid="apb-proposal-approve-publish"
+                              onClick={() =>
+                                runAction('approve-proposal-and-publish', async () => {
+                                  setProposalError(null);
+                                  setPublishAfterApproveDraftId(null);
+                                  try {
+                                    const res = await request<any>(
+                                      `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(
+                                        String(proposal.id)
+                                      )}/approve-and-publish`,
+                                      { method: 'POST', data: { aiPlanDraftId: String(draftPlanLatest.id) } }
+                                    );
+
+                                    const approval = (res as any)?.approval;
+                                    const publish = (res as any)?.publish;
+
+                                    if (approval?.draft) setDraftPlanLatest(approval.draft);
+                                    if (approval?.audit) setLastAppliedAudit(approval.audit);
+
+                                    if (publish?.ok === true) {
+                                      await fetchPublishStatus(String(draftPlanLatest.id));
+                                    } else if (publish?.ok === false) {
+                                      setProposalError(`PUBLISH_FAILED: ${publish?.message ?? 'Publish failed.'}`);
+                                      setPublishAfterApproveDraftId(String(draftPlanLatest.id));
+                                    }
+
+                                    await fetchProposals(String(draftPlanLatest.id));
+                                  } catch (e) {
+                                    if (e instanceof ApiClientError && (e.code === 'SESSION_LOCKED' || e.code === 'WEEK_LOCKED')) {
+                                      setProposalError(`${e.code}: ${e.message}`);
+                                      return;
+                                    }
+                                    throw e;
+                                  }
+                                })
+                              }
+                            >
+                              Approve & Publish
+                            </Button>
+
                             <Button
                               type="button"
                               size="sm"
@@ -1494,6 +1694,24 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                             >
                               Reject
                             </Button>
+
+                            {publishAfterApproveDraftId ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={busy !== null}
+                                data-testid="apb-publish-now"
+                                onClick={() =>
+                                  runAction('publish-now', async () => {
+                                    await publishDraftPlan(String(publishAfterApproveDraftId));
+                                    setPublishAfterApproveDraftId(null);
+                                  })
+                                }
+                              >
+                                Publish now
+                              </Button>
+                            ) : null}
                           </div>
 
                           <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">

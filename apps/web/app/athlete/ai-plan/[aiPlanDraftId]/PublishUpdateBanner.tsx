@@ -11,6 +11,13 @@ type PublishStatus = {
   athleteLastSeenHash: string | null;
 };
 
+type ChangesPayload = {
+  lastPublishedAt: string | null;
+  lastPublishedSummaryText: string | null;
+  athleteLastSeenPublishedHash: string | null;
+  audits: Array<{ createdAt: string; changeSummaryText: string }>;
+};
+
 export function PublishUpdateBanner(props: {
   aiPlanDraftId: string;
   initialLastPublishedSummaryText: string | null;
@@ -20,6 +27,9 @@ export function PublishUpdateBanner(props: {
   const [loading, setLoading] = useState(true);
   const [ackBusy, setAckBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [changes, setChanges] = useState<ChangesPayload | null>(null);
+  const [changesLoading, setChangesLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +75,35 @@ export function PublishUpdateBanner(props: {
             {status?.lastPublishedSummaryText ?? props.initialLastPublishedSummaryText ?? 'No changes'}
           </div>
           {error && <div className="mt-1 text-xs text-red-700">{error}</div>}
+          <button
+            type="button"
+            className="mt-2 text-xs text-[var(--fg-muted)] underline hover:text-[var(--fg)]"
+            data-testid="athlete-view-changes"
+            onClick={async () => {
+              const nextOpen = !changesOpen;
+              setChangesOpen(nextOpen);
+              if (!nextOpen) return;
+              if (changes) return;
+              setChangesLoading(true);
+              setError(null);
+              try {
+                const res = await request<{ changes: ChangesPayload }>(
+                  `/api/athlete/ai-plan/changes?aiPlanDraftId=${encodeURIComponent(props.aiPlanDraftId)}&limit=10`
+                );
+                setChanges(res.changes);
+              } catch (e) {
+                if (e instanceof ApiClientError) {
+                  setError(`${e.code}: ${e.message}`);
+                } else {
+                  setError(e instanceof Error ? e.message : 'Failed to load changes.');
+                }
+              } finally {
+                setChangesLoading(false);
+              }
+            }}
+          >
+            View changes
+          </button>
         </div>
 
         <button
@@ -102,6 +141,36 @@ export function PublishUpdateBanner(props: {
           Got it
         </button>
       </div>
+
+      {changesOpen && (
+        <div
+          className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2"
+          data-testid="athlete-changes-panel"
+        >
+          <div className="text-xs font-medium">What changed</div>
+
+          {changesLoading ? (
+            <div className="mt-2 text-xs text-[var(--fg-muted)]">Loading…</div>
+          ) : (
+            <>
+              <div className="mt-2 text-xs text-[var(--fg-muted)]">{changes?.lastPublishedSummaryText ?? '—'}</div>
+
+              <div className="mt-3 text-xs font-medium">Recent updates</div>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-[var(--fg-muted)]">
+                {(changes?.audits ?? []).length === 0 ? (
+                  <li>No updates since you last acknowledged.</li>
+                ) : (
+                  (changes?.audits ?? []).map((a, idx) => (
+                    <li key={idx} data-testid="athlete-change-audit">
+                      {a.changeSummaryText}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
