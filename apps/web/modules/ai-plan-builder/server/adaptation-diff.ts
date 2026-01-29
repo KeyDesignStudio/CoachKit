@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
+import { buildDraftPlanJsonV1 } from '../rules/plan-json';
+
 export const draftSessionPatchSchema = z
   .object({
     type: z.string().min(1).optional(),
@@ -236,6 +238,34 @@ export async function applyPlanDiffToDraft(params: {
       data: {
         sessionsCount: w._count._all,
         totalMinutes: w._sum.durationMinutes ?? 0,
+      },
+    });
+  }
+
+  // Keep planJson in sync with canonical week/session rows.
+  const [draftSetup, weeks, sessions] = await Promise.all([
+    params.tx.aiPlanDraft.findUnique({ where: { id: params.draftId }, select: { setupJson: true } }),
+    params.tx.aiPlanDraftWeek.findMany({ where: { draftId: params.draftId }, select: { weekIndex: true, locked: true } }),
+    params.tx.aiPlanDraftSession.findMany({
+      where: { draftId: params.draftId },
+      select: {
+        weekIndex: true,
+        ordinal: true,
+        dayOfWeek: true,
+        discipline: true,
+        type: true,
+        durationMinutes: true,
+        notes: true,
+        locked: true,
+      },
+    }),
+  ]);
+
+  if (draftSetup?.setupJson) {
+    await params.tx.aiPlanDraft.update({
+      where: { id: params.draftId },
+      data: {
+        planJson: buildDraftPlanJsonV1({ setupJson: draftSetup.setupJson, weeks, sessions }),
       },
     });
   }

@@ -24,6 +24,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const [intakeEvidence, setIntakeEvidence] = useState<any[] | null>(null);
   const [profileLatest, setProfileLatest] = useState<any | null>(null);
   const [draftPlanLatest, setDraftPlanLatest] = useState<any | null>(null);
+  const [publishStatus, setPublishStatus] = useState<any | null>(null);
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({});
 
   const [feedbackLatest, setFeedbackLatest] = useState<any[]>([]);
@@ -93,6 +94,34 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
     return data.draftPlan;
   }, [athleteId, request]);
 
+  const fetchPublishStatus = useCallback(
+    async (aiPlanDraftId: string) => {
+      const data = await request<{ publishStatus: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/publish-status?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
+      );
+      setPublishStatus(data.publishStatus ?? null);
+      return data.publishStatus;
+    },
+    [athleteId, request]
+  );
+
+  const publishDraftPlan = useCallback(
+    async (aiPlanDraftId: string) => {
+      const data = await request<{ draftPlan: any; publish: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/publish`,
+        {
+          method: 'POST',
+          data: { aiPlanDraftId },
+        }
+      );
+
+      setDraftPlanLatest(data.draftPlan);
+      await fetchPublishStatus(aiPlanDraftId);
+      return data;
+    },
+    [athleteId, fetchPublishStatus, request]
+  );
+
   const fetchFeedback = useCallback(
     async (aiPlanDraftId: string) => {
       const data = await request<{ feedback: any[] }>(
@@ -140,7 +169,13 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
         await fetchProfileLatest();
         const draft = await fetchDraftPlanLatest();
         if (!cancelled && draft?.id) {
-          await Promise.all([fetchFeedback(String(draft.id)), fetchProposals(String(draft.id))]);
+          await Promise.all([
+            fetchFeedback(String(draft.id)),
+            fetchProposals(String(draft.id)),
+            fetchPublishStatus(String(draft.id)),
+          ]);
+        } else if (!cancelled) {
+          setPublishStatus(null);
         }
       } catch (e) {
         if (cancelled) return;
@@ -454,6 +489,56 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
       {tab === 'plan' && (
         <div className="mt-6 space-y-4">
           <Block
+            title="Publish"
+            rightAction={
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy !== null || !draftPlanLatest?.id}
+                data-testid="apb-publish"
+                onClick={() =>
+                  runAction('publish', async () => {
+                    const id = String(draftPlanLatest?.id || '');
+                    if (!id) return;
+                    await publishDraftPlan(id);
+                  })
+                }
+              >
+                Publish to athlete
+              </Button>
+            }
+          >
+            {!draftPlanLatest?.id ? (
+              <div className="text-sm text-[var(--fg-muted)]">Generate a draft plan to enable publishing.</div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span
+                    className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1 text-xs"
+                    data-testid="apb-publish-status"
+                  >
+                    {publishStatus?.visibilityStatus === 'PUBLISHED' ? 'Published' : 'Draft'}
+                  </span>
+                  <span className="text-[var(--fg-muted)]">Draft ID: {String(draftPlanLatest.id)}</span>
+                </div>
+                <div className="text-xs text-[var(--fg-muted)]">
+                  Last published:{' '}
+                  <span data-testid="apb-publish-last-published">
+                    {publishStatus?.publishedAt ? new Date(publishStatus.publishedAt).toLocaleString() : '—'}
+                  </span>
+                </div>
+                <div className="text-xs text-[var(--fg-muted)]">Summary:</div>
+                <pre className="whitespace-pre-wrap text-xs text-[var(--fg-muted)]" data-testid="apb-publish-summary">
+                  {publishStatus?.lastPublishedSummaryText ?? '—'}
+                </pre>
+                <div className="text-xs text-[var(--fg-muted)]">
+                  Athlete view: <span className="font-mono">/athlete/ai-plan/{String(draftPlanLatest.id)}</span>
+                </div>
+              </div>
+            )}
+          </Block>
+
+          <Block
             title="Draft Setup"
             rightAction={
               <Button
@@ -472,6 +557,11 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                       }
                     );
                     setDraftPlanLatest(created.draftPlan);
+                    if (created.draftPlan?.id) {
+                      await fetchPublishStatus(String(created.draftPlan.id));
+                    } else {
+                      setPublishStatus(null);
+                    }
                   })
                 }
               >

@@ -84,6 +84,11 @@ enum AiPlanDraftStatus {
   DRAFT
 }
 
+enum AiPlanDraftVisibilityStatus {
+  DRAFT
+  PUBLISHED
+}
+
 enum PlanChangeProposalStatus {
   DRAFT
   PROPOSED
@@ -741,6 +746,13 @@ model AiPlanDraft {
   setupJson Json?
   setupHash String?
 
+  // Tranche 4: publish visibility (AI-domain only; no coupling to existing plan tables).
+  visibilityStatus AiPlanDraftVisibilityStatus @default(DRAFT)
+  publishedAt DateTime?
+  publishedByCoachId String?
+  lastPublishedHash String?
+  lastPublishedSummaryText String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -753,12 +765,35 @@ model AiPlanDraft {
   weeks    AiPlanDraftWeek[]
   sessions AiPlanDraftSession[]
 
+  publishSnapshots AiPlanDraftPublishSnapshot[]
+
   feedback AthleteSessionFeedback[]
   triggers AdaptationTrigger[]
 
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
   @@index([status, createdAt])
+  @@index([visibilityStatus, publishedAt])
+}
+
+model AiPlanDraftPublishSnapshot {
+  id        String @id @default(cuid())
+  draftId   String
+  athleteId String // denormalized for query convenience
+  coachId   String // denormalized for query convenience
+
+  hash String
+  planJson Json
+  summaryText String
+
+  publishedAt DateTime @default(now())
+  publishedByCoachId String?
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, hash])
+  @@index([draftId, publishedAt])
+  @@index([athleteId, publishedAt])
 }
 
 model AthleteSessionFeedback {

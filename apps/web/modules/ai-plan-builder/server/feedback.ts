@@ -89,3 +89,69 @@ export async function listAthleteSessionFeedback(params: {
     orderBy: [{ createdAt: 'desc' }],
   });
 }
+
+export async function createAthleteSessionFeedbackAsAthlete(params: {
+  athleteId: string;
+  aiPlanDraftId: string;
+  draftSessionId: string;
+  completedStatus: 'DONE' | 'PARTIAL' | 'SKIPPED';
+  rpe?: number | null;
+  feel?: 'EASY' | 'OK' | 'HARD' | 'TOO_HARD' | null;
+  sorenessFlag: boolean;
+  sorenessNotes?: string | null;
+  sleepQuality?: number | null;
+}) {
+  requireAiPlanBuilderV1Enabled();
+
+  const [draft, session] = await Promise.all([
+    prisma.aiPlanDraft.findUnique({
+      where: { id: params.aiPlanDraftId },
+      select: { id: true, athleteId: true, coachId: true, visibilityStatus: true },
+    }),
+    prisma.aiPlanDraftSession.findUnique({
+      where: { id: params.draftSessionId },
+      select: { id: true, draftId: true },
+    }),
+  ]);
+
+  if (!draft || draft.athleteId !== params.athleteId || draft.visibilityStatus !== 'PUBLISHED') {
+    throw new ApiError(404, 'NOT_FOUND', 'Published plan not found.');
+  }
+
+  if (!session || session.draftId !== draft.id) {
+    throw new ApiError(400, 'INVALID_DRAFT_SESSION', 'draftSessionId must belong to aiPlanDraftId.');
+  }
+
+  return prisma.athleteSessionFeedback.create({
+    data: {
+      athleteId: params.athleteId,
+      coachId: draft.coachId,
+      draftId: draft.id,
+      sessionId: session.id,
+      completedStatus: params.completedStatus,
+      rpe: params.rpe ?? null,
+      feel: params.feel ?? null,
+      sorenessFlag: params.sorenessFlag,
+      sorenessNotes: params.sorenessNotes ?? null,
+      sleepQuality: params.sleepQuality ?? null,
+    },
+  });
+}
+
+export async function listAthleteSessionFeedbackAsAthlete(params: { athleteId: string; aiPlanDraftId: string }) {
+  requireAiPlanBuilderV1Enabled();
+
+  const draft = await prisma.aiPlanDraft.findUnique({
+    where: { id: params.aiPlanDraftId },
+    select: { id: true, athleteId: true, coachId: true, visibilityStatus: true },
+  });
+
+  if (!draft || draft.athleteId !== params.athleteId || draft.visibilityStatus !== 'PUBLISHED') {
+    throw new ApiError(404, 'NOT_FOUND', 'Published plan not found.');
+  }
+
+  return prisma.athleteSessionFeedback.findMany({
+    where: { athleteId: params.athleteId, coachId: draft.coachId, draftId: draft.id },
+    orderBy: [{ createdAt: 'desc' }],
+  });
+}

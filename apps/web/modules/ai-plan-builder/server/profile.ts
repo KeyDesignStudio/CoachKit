@@ -1,3 +1,4 @@
+import { Prisma as PrismaRuntime } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
@@ -61,19 +62,33 @@ export async function extractAiProfileFromIntake(params: {
 
   const extracted = extractProfileDeterministic(evidence);
 
-  const created = await prisma.athleteProfileAI.create({
-    data: {
-      athleteId: params.athleteId,
-      coachId: params.coachId,
-      evidenceHash,
-      extractedProfileJson: extracted.profileJson as Prisma.InputJsonValue,
-      extractedSummaryText: extracted.summaryText,
-      extractedFlagsJson: extracted.flags as unknown as Prisma.InputJsonValue,
-      status: 'DRAFT',
-    },
-  });
+  try {
+    const created = await prisma.athleteProfileAI.create({
+      data: {
+        athleteId: params.athleteId,
+        coachId: params.coachId,
+        evidenceHash,
+        extractedProfileJson: extracted.profileJson as Prisma.InputJsonValue,
+        extractedSummaryText: extracted.summaryText,
+        extractedFlagsJson: extracted.flags as unknown as Prisma.InputJsonValue,
+        status: 'DRAFT',
+      },
+    });
 
-  return { profile: created, evidenceHash, wasCreated: true };
+    return { profile: created, evidenceHash, wasCreated: true };
+  } catch (error) {
+    // Concurrency safety: if another request created the same (athleteId,evidenceHash)
+    // row between our read and create, return the existing row.
+    if (error instanceof PrismaRuntime.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const raced = await prisma.athleteProfileAI.findUnique({
+        where: { athleteId_evidenceHash: { athleteId: params.athleteId, evidenceHash } },
+      });
+      if (raced) {
+        return { profile: raced, evidenceHash, wasCreated: false };
+      }
+    }
+    throw error;
+  }
 }
 
 export async function updateAiProfileCoachOverrides(params: {

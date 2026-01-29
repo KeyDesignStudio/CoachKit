@@ -9,6 +9,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 
 import { generateDraftPlanDeterministicV1 } from '../rules/draft-generator';
 import { computeStableSha256 } from '../rules/stable-hash';
+import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -251,6 +252,34 @@ export async function updateAiDraftPlan(params: {
         data: {
           sessionsCount: w._count._all,
           totalMinutes: w._sum.durationMinutes ?? 0,
+        },
+      });
+    }
+
+    // Keep planJson in sync with canonical week/session rows.
+    const [draftSetup, weeks, sessions] = await Promise.all([
+      tx.aiPlanDraft.findUnique({ where: { id: draft.id }, select: { setupJson: true } }),
+      tx.aiPlanDraftWeek.findMany({ where: { draftId: draft.id }, select: { weekIndex: true, locked: true } }),
+      tx.aiPlanDraftSession.findMany({
+        where: { draftId: draft.id },
+        select: {
+          weekIndex: true,
+          ordinal: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          notes: true,
+          locked: true,
+        },
+      }),
+    ]);
+
+    if (draftSetup?.setupJson) {
+      await tx.aiPlanDraft.update({
+        where: { id: draft.id },
+        data: {
+          planJson: buildDraftPlanJsonV1({ setupJson: draftSetup.setupJson, weeks, sessions }),
         },
       });
     }
