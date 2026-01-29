@@ -140,6 +140,43 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await expect(sessionError).toBeVisible();
     await expect(sessionError).toContainText('Session is locked');
 
+    // Start a fresh draft for adaptations flow so we don't depend on lock state.
+    await page.getByTestId('apb-generate-draft').click();
+    await expect(page.locator('[data-testid="apb-session"]').first()).toBeVisible();
+
+    // Create a single feedback entry via API for determinism.
+    const latestDraftRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
+    expect(latestDraftRes.ok()).toBeTruthy();
+    const latestDraftJson = await latestDraftRes.json();
+    const aiPlanDraftId = latestDraftJson.data.draftPlan.id as string;
+    const draftSessions = latestDraftJson.data.draftPlan.sessions as Array<{ id: string }>;
+    expect(aiPlanDraftId).toBeTruthy();
+    expect(draftSessions.length).toBeGreaterThan(0);
+
+    const feedbackRes = await page.request.post(`/api/coach/athletes/${athleteId}/ai-plan-builder/feedback`, {
+      data: {
+        aiPlanDraftId,
+        draftSessionId: draftSessions[0].id,
+        completedStatus: 'DONE',
+        feel: 'OK',
+        sorenessFlag: true,
+        sorenessNotes: 'leg tightness',
+      },
+    });
+    expect(feedbackRes.ok()).toBeTruthy();
+
+    await page.getByTestId('apb-tab-adaptations').click();
+    await expect(page.getByTestId('apb-evaluate-triggers')).toBeVisible();
+
+    await page.getByTestId('apb-evaluate-triggers').click();
+    await page.getByTestId('apb-generate-proposal').click();
+
+    const firstProposal = page.getByTestId('apb-proposal-item').first();
+    await expect(firstProposal).toBeVisible();
+
+    await page.getByTestId('apb-proposal-approve').click();
+    await expect(page.getByTestId('apb-last-audit')).toBeVisible();
+
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   });
