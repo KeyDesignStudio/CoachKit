@@ -53,4 +53,10 @@ if (process.env.DATABASE_URL) {
   console.warn('[playwright-webserver] DATABASE_URL not set; skipping prisma migrate deploy.');
 }
 
-run('npx', ['next', 'dev', '-p', String(port)]);
+const nextMode = String(process.env.PLAYWRIGHT_NEXT_MODE ?? 'dev');
+
+if (nextMode === 'start') {
+  run('npx', ['next', 'start', '-p', String(port)]);
+} else {
+  run('npx', ['next', 'dev', '-p', String(port)]);
+}

@@ -10,8 +10,12 @@ const globalForPrisma = globalThis as unknown as {
 // Never log the full URL.
 const datasourceUrl = getDatabaseUrl();
 
+// In local dev we cache PrismaClient on globalThis to avoid exhausting connections during hot reload.
+// In test harness runs we intentionally avoid caching, because the harness swaps DATABASE_URL per suite/shard.
+const canUseGlobalCache = process.env.NODE_ENV !== 'production' && !process.env.TEST_RUN_ID;
+
 const basePrisma =
-  (globalForPrisma.prisma as PrismaClient | undefined) ??
+  (canUseGlobalCache ? (globalForPrisma.prisma as PrismaClient | undefined) : undefined) ??
   new PrismaClient(
     datasourceUrl
       ? {
@@ -24,4 +28,4 @@ const basePrisma =
 
 export const prisma = basePrisma;
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
+if (canUseGlobalCache) globalForPrisma.prisma = basePrisma;

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
+
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   await page.context().addCookies([
     {
@@ -40,9 +42,7 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
 
     await setRoleCookie(page, 'COACH');
 
-    // Ensure dev fixtures exist (coach+athlete+athleteProfile).
-    const fixtures = await page.request.post('/api/dev/strava/test-fixtures');
-    expect(fixtures.ok()).toBeTruthy();
+    await seedDevCoachAndAthlete();
 
     const athleteId = 'dev-athlete';
 
@@ -83,6 +83,9 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const firstSession = page.locator('[data-testid="apb-session"]').first();
     await expect(firstSession).toBeVisible();
 
+    const sessionId = await firstSession.getAttribute('data-session-id');
+    expect(sessionId).toBeTruthy();
+
     const draftBeforeReloadRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
     expect(draftBeforeReloadRes.ok()).toBeTruthy();
     const draftBeforeReloadJson = await draftBeforeReloadRes.json();
@@ -93,7 +96,15 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const saveButton = firstSession.locator('[data-testid="apb-session-save"]');
 
     await durationInput.fill('42');
+    const saveOk = page.waitForResponse((res) => {
+      if (!res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`)) return false;
+      if (res.request().method() !== 'PATCH') return false;
+      if (res.status() !== 200) return false;
+      const body = res.request().postData() ?? '';
+      return body.includes('sessionEdits') && body.includes(String(sessionId)) && body.includes('"durationMinutes":42');
+    });
     await saveButton.click();
+    await saveOk;
 
     // Reload and verify persistence. (Draft ids may change across reloads if the server rolls drafts
     // forward; the persisted session value is the invariant we care about.)
@@ -106,7 +117,7 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const draftIdAfterReload = String(draftAfterReloadJson.data.draftPlan.id);
     expect(draftIdAfterReload).toBeTruthy();
 
-    const firstSessionAfterReload = page.locator('[data-testid="apb-session"]').first();
+    const firstSessionAfterReload = page.locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`);
     await expect(firstSessionAfterReload).toBeVisible();
     const durationInputAfter = firstSessionAfterReload.locator('[data-testid="apb-session-duration"]');
     await expect(durationInputAfter).toHaveValue('42');
@@ -115,10 +126,25 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const weekIndexAttr = await firstSessionAfterReload.getAttribute('data-week-index');
     const weekIndex = weekIndexAttr ?? '0';
     const weekLock = page.locator(`[data-week-index="${weekIndex}"] [data-testid="apb-week-lock"]`);
+
+    const lockWeekOk = page.waitForResponse((res) => {
+      if (!res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`)) return false;
+      if (res.request().method() !== 'PATCH') return false;
+      const body = res.request().postData() ?? '';
+      return res.status() === 200 && body.includes('weekLocks');
+    });
     await weekLock.check();
+    await lockWeekOk;
 
     await durationInputAfter.fill('41');
+    const saveLocked = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 409
+    );
     await firstSessionAfterReload.locator('[data-testid="apb-session-save"]').click();
+    await saveLocked;
 
     const weekLockedError = firstSessionAfterReload.locator('[data-testid="apb-session-error"]');
     await expect(weekLockedError).toBeVisible();
@@ -127,18 +153,43 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     // Reload: previous saved value should remain.
     await page.reload();
     await page.getByTestId('apb-tab-plan').click();
-    const durationAfterWeekLockReload = page.locator('[data-testid="apb-session"]').first().locator('[data-testid="apb-session-duration"]');
+    const durationAfterWeekLockReload = page
+      .locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`)
+      .locator('[data-testid="apb-session-duration"]');
     await expect(durationAfterWeekLockReload).toHaveValue('42');
 
     // Unlock the week so we can test session-level lock behavior independently.
     const weekLockAfterReload = page.locator(`[data-week-index="${weekIndex}"] [data-testid="apb-week-lock"]`);
+
+    const unlockWeekOk = page.waitForResponse((res) => {
+      if (!res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`)) return false;
+      if (res.request().method() !== 'PATCH') return false;
+      const body = res.request().postData() ?? '';
+      return res.status() === 200 && body.includes('weekLocks');
+    });
     await weekLockAfterReload.uncheck();
+    await unlockWeekOk;
 
     // Lock and verify locked edit is blocked with a visible error message.
-    const firstSessionForLock = page.locator('[data-testid="apb-session"]').first();
+    const firstSessionForLock = page.locator(`[data-testid="apb-session"][data-session-id="${sessionId}"]`);
+
+    const lockSessionOk = page.waitForResponse((res) => {
+      if (!res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`)) return false;
+      if (res.request().method() !== 'PATCH') return false;
+      const body = res.request().postData() ?? '';
+      return res.status() === 200 && body.includes('"locked":true');
+    });
     await firstSessionForLock.locator('[data-testid="apb-session-lock"]').check();
+    await lockSessionOk;
     await firstSessionForLock.locator('[data-testid="apb-session-duration"]').fill('43');
+    const saveSessionLocked = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 409
+    );
     await firstSessionForLock.locator('[data-testid="apb-session-save"]').click();
+    await saveSessionLocked;
 
     const sessionError = firstSessionForLock.locator('[data-testid="apb-session-error"]');
     await expect(sessionError).toBeVisible();

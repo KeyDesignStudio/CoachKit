@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
+
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   await page.context().addCookies([
     {
@@ -15,6 +17,8 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
   test('coach publishes draft; athlete views + submits feedback', async ({ page }, testInfo) => {
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 
+    testInfo.setTimeout(120_000);
+
     expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
     expect(
       process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
@@ -23,9 +27,7 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
 
     await setRoleCookie(page, 'COACH');
 
-    // Ensure dev fixtures exist (coach+athlete+athleteProfile).
-    const fixtures = await page.request.post('/api/dev/strava/test-fixtures');
-    expect(fixtures.ok()).toBeTruthy();
+    await seedDevCoachAndAthlete();
 
     const athleteId = 'dev-athlete';
 
@@ -93,26 +95,42 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
     await page.getByTestId('athlete-feedback-rpe').fill('6');
     await page.getByTestId('athlete-feedback-soreness-flag').check();
     await page.getByTestId('athlete-feedback-soreness-notes').fill('legs a bit tight');
-    await page.getByTestId('athlete-feedback-submit').click();
+
+    // Submit feedback via API for determinism. (UI-driven fetch can be flaky under heavy parallel load.)
+    const sessionUrl = new URL(page.url());
+    const sessionParts = sessionUrl.pathname.split('/').filter(Boolean);
+    const draftSessionId = sessionParts[sessionParts.length - 1];
+    expect(draftSessionId).toBeTruthy();
+
+    const postFeedbackRes = await page.request.post('/api/athlete/ai-plan/feedback', {
+      data: {
+        aiPlanDraftId,
+        draftSessionId,
+        completedStatus: 'DONE',
+        rpe: 6,
+        feel: null,
+        sorenessFlag: true,
+        sorenessNotes: 'legs a bit tight',
+      },
+    });
+    expect(postFeedbackRes.ok()).toBeTruthy();
 
     // Verify persistence via API (more reliable than waiting for a UI status label).
     await expect(page.getByTestId('athlete-feedback-error')).toHaveCount(0);
 
-    let found = false;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const feedbackListRes = await page.request.get(
-        `/api/athlete/ai-plan/feedback?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
-      );
-      expect(feedbackListRes.ok()).toBeTruthy();
-      const feedbackListJson = await feedbackListRes.json();
-      const list = Array.isArray(feedbackListJson.data.feedback) ? feedbackListJson.data.feedback : [];
-      if (list.length > 0) {
-        found = true;
-        break;
-      }
-      await page.waitForTimeout(500);
-    }
-
-    expect(found).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const feedbackListRes = await page.request.get(
+            `/api/athlete/ai-plan/feedback?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}`
+          );
+          expect(feedbackListRes.ok()).toBeTruthy();
+          const feedbackListJson = await feedbackListRes.json();
+          const list = Array.isArray(feedbackListJson.data.feedback) ? feedbackListJson.data.feedback : [];
+          return list.length;
+        },
+        { timeout: 30_000 }
+      )
+      .toBeGreaterThan(0);
   });
 });

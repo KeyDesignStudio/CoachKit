@@ -12,6 +12,7 @@ apps/web/playwright-report/
 
 # Next.js
 .next/
+apps/web/.next-apb-*/
 out/
 build
 dist

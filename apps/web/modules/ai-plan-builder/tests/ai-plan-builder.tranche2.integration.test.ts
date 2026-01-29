@@ -6,6 +6,8 @@ import { ApiError } from '@/lib/errors';
 import { generateAiDraftPlanV1, getLatestAiDraftPlan, updateAiDraftPlan } from '@/modules/ai-plan-builder/server/draft-plan';
 import { computeStableSha256 } from '@/modules/ai-plan-builder/rules/stable-hash';
 
+import { createAthlete, createCoach } from './seed';
+
 async function getActivePlanTableCounts() {
   const [planWeek, calendarItem] = await Promise.all([
     prisma.planWeek.count(),
@@ -16,8 +18,8 @@ async function getActivePlanTableCounts() {
 }
 
 describe('AI Plan Builder v1 (Tranche 2: draft generation/edit/lock)', () => {
-  const coachId = 'it2-coach';
-  const athleteId = 'it2-athlete';
+  let coachId = '';
+  let athleteId = '';
 
   beforeAll(async () => {
     expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
@@ -26,57 +28,10 @@ describe('AI Plan Builder v1 (Tranche 2: draft generation/edit/lock)', () => {
       'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
     ).toBe(true);
 
-    await prisma.user.upsert({
-      where: { id: coachId },
-      update: {
-        email: 'it2-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche2 Coach',
-      },
-      create: {
-        id: coachId,
-        email: 'it2-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche2 Coach',
-        authProviderId: coachId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.user.upsert({
-      where: { id: athleteId },
-      update: {
-        email: 'it2-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche2 Athlete',
-      },
-      create: {
-        id: athleteId,
-        email: 'it2-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche2 Athlete',
-        authProviderId: athleteId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.athleteProfile.upsert({
-      where: { userId: athleteId },
-      update: {
-        coachId,
-        disciplines: ['OTHER'],
-      },
-      create: {
-        userId: athleteId,
-        coachId,
-        disciplines: ['OTHER'],
-      },
-      select: { userId: true },
-    });
+    const coach = await createCoach();
+    const athlete = await createAthlete({ coachId: coach.id });
+    coachId = coach.id;
+    athleteId = athlete.athlete.id;
   });
 
   afterAll(async () => {

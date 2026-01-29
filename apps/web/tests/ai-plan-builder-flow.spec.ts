@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
+
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   await page.context().addCookies([
     {
@@ -25,9 +27,7 @@ test.describe('AI Plan Builder v1: core flow', () => {
 
     await setRoleCookie(page, 'COACH');
 
-    // Ensure dev fixtures exist (coach+athlete+athleteProfile).
-    const fixtures = await page.request.post('/api/dev/strava/test-fixtures');
-    expect(fixtures.ok()).toBeTruthy();
+    await seedDevCoachAndAthlete();
 
     const athleteId = 'dev-athlete';
 

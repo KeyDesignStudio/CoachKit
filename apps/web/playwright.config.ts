@@ -6,9 +6,10 @@ const PLAN_LIBRARY_FIXTURES_BASE = `http://localhost:${PORT}/api/__test__/fixtur
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 60_000,
+  // Some suites (especially under sharded parallel runs) can exceed 60s due to dev-server compilation.
+  timeout: 120_000,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -21,7 +22,7 @@ export default defineConfig({
     command: `node scripts/playwright-webserver.mjs ${PORT}`,
     env: {
       ...process.env,
-      NODE_ENV: 'development',
+      NODE_ENV: process.env.PLAYWRIGHT_NODE_ENV ?? 'development',
       DISABLE_AUTH: 'true',
       PLAN_LIBRARY_PLANS_URL: process.env.PLAN_LIBRARY_PLANS_URL ?? `${PLAN_LIBRARY_FIXTURES_BASE}/plans.csv`,
       PLAN_LIBRARY_SESSIONS_URL: process.env.PLAN_LIBRARY_SESSIONS_URL ?? `${PLAN_LIBRARY_FIXTURES_BASE}/sessions.csv`,

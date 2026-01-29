@@ -12,9 +12,11 @@ import {
   updatePlanChangeProposalDiff,
 } from '@/modules/ai-plan-builder/server/proposals';
 
+import { createAthlete, createCoach } from './seed';
+
 describe('AI Plan Builder v1 (Tranche 5: productivity)', () => {
-  const coachId = 'it5-coach';
-  const athleteId = 'it5-athlete';
+  let coachId = '';
+  let athleteId = '';
 
   beforeAll(async () => {
     expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
@@ -23,50 +25,10 @@ describe('AI Plan Builder v1 (Tranche 5: productivity)', () => {
       'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
     ).toBe(true);
 
-    await prisma.user.upsert({
-      where: { id: coachId },
-      update: {
-        email: 'it5-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche5 Coach',
-      },
-      create: {
-        id: coachId,
-        email: 'it5-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche5 Coach',
-        authProviderId: coachId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.user.upsert({
-      where: { id: athleteId },
-      update: {
-        email: 'it5-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche5 Athlete',
-      },
-      create: {
-        id: athleteId,
-        email: 'it5-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche5 Athlete',
-        authProviderId: athleteId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.athleteProfile.upsert({
-      where: { userId: athleteId },
-      update: { coachId, disciplines: ['OTHER'] },
-      create: { userId: athleteId, coachId, disciplines: ['OTHER'] },
-      select: { userId: true },
-    });
+    const coach = await createCoach();
+    const athlete = await createAthlete({ coachId: coach.id });
+    coachId = coach.id;
+    athleteId = athlete.athlete.id;
   });
 
   afterAll(async () => {

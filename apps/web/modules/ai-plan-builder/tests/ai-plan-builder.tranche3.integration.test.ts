@@ -8,6 +8,8 @@ import { evaluateAdaptationTriggers } from '@/modules/ai-plan-builder/server/ada
 import { approvePlanChangeProposal, generatePlanChangeProposal } from '@/modules/ai-plan-builder/server/proposals';
 import { computeStableSha256 } from '@/modules/ai-plan-builder/rules/stable-hash';
 
+import { createAthlete, createCoach, nextTestId } from './seed';
+
 async function getActivePlanTableCounts() {
   const [planWeek, calendarItem] = await Promise.all([
     prisma.planWeek.count(),
@@ -18,8 +20,8 @@ async function getActivePlanTableCounts() {
 }
 
 describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
-  const coachId = 'it3-coach';
-  const athleteId = 'it3-athlete';
+  let coachId = '';
+  let athleteId = '';
   const anyPrisma = prisma as any;
 
   beforeAll(async () => {
@@ -29,50 +31,10 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
       'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
     ).toBe(true);
 
-    await prisma.user.upsert({
-      where: { id: coachId },
-      update: {
-        email: 'it3-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche3 Coach',
-      },
-      create: {
-        id: coachId,
-        email: 'it3-coach@local',
-        role: 'COACH',
-        timezone: 'UTC',
-        name: 'Tranche3 Coach',
-        authProviderId: coachId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.user.upsert({
-      where: { id: athleteId },
-      update: {
-        email: 'it3-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche3 Athlete',
-      },
-      create: {
-        id: athleteId,
-        email: 'it3-athlete@local',
-        role: 'ATHLETE',
-        timezone: 'UTC',
-        name: 'Tranche3 Athlete',
-        authProviderId: athleteId,
-      },
-      select: { id: true },
-    });
-
-    await prisma.athleteProfile.upsert({
-      where: { userId: athleteId },
-      update: { coachId, disciplines: ['OTHER'] },
-      create: { userId: athleteId, coachId, disciplines: ['OTHER'] },
-      select: { userId: true },
-    });
+    const coach = await createCoach();
+    const athlete = await createAthlete({ coachId: coach.id });
+    coachId = coach.id;
+    athleteId = athlete.athlete.id;
   });
 
   afterAll(async () => {
@@ -116,7 +78,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
     await anyPrisma.athleteSessionFeedback.createMany({
       data: [
         {
-          id: 'it3-fb-sore',
+          id: nextTestId('fb_sore'),
           athleteId,
           coachId,
           draftId: draft.id,
@@ -128,7 +90,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
           createdAt: new Date('2026-01-28T12:00:00.000Z'),
         },
         {
-          id: 'it3-fb-th1',
+          id: nextTestId('fb_toohard'),
           athleteId,
           coachId,
           draftId: draft.id,
@@ -139,7 +101,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
           createdAt: new Date('2026-01-27T12:00:00.000Z'),
         },
         {
-          id: 'it3-fb-th2',
+          id: nextTestId('fb_toohard'),
           athleteId,
           coachId,
           draftId: draft.id,
@@ -150,7 +112,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
           createdAt: new Date('2026-01-26T12:00:00.000Z'),
         },
         {
-          id: 'it3-fb-mk1',
+          id: nextTestId('fb_missedkey'),
           athleteId,
           coachId,
           draftId: draft.id,
@@ -161,7 +123,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
           createdAt: new Date('2026-01-25T12:00:00.000Z'),
         },
         {
-          id: 'it3-fb-mk2',
+          id: nextTestId('fb_missedkey'),
           athleteId,
           coachId,
           draftId: draft.id,
