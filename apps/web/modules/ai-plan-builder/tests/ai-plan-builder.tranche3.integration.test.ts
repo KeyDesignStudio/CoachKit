@@ -55,6 +55,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
     const setup = {
       eventDate: '2026-06-01',
       weeksToEvent: 8,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced' as const,
@@ -157,6 +158,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
     const setup = {
       eventDate: '2026-06-15',
       weeksToEvent: 8,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 3, 5, 6],
       weeklyAvailabilityMinutes: 300,
       disciplineEmphasis: 'balanced' as const,
@@ -200,6 +202,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
     const setup = {
       eventDate: '2026-07-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 4, 6],
       weeklyAvailabilityMinutes: 240,
       disciplineEmphasis: 'bike' as const,
@@ -272,6 +275,7 @@ describe('AI Plan Builder v1 (Tranche 3: adaptations + proposals)', () => {
     const setup = {
       eventDate: '2026-08-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 4, 6],
       weeklyAvailabilityMinutes: 240,
       disciplineEmphasis: 'run' as const,

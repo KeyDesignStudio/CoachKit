@@ -53,6 +53,7 @@ describe('AI Plan Builder v1 (Tranche 5: productivity)', () => {
     const setup = {
       eventDate: '2026-08-15',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 4, 6],
       weeklyAvailabilityMinutes: 300,
       disciplineEmphasis: 'balanced' as const,
@@ -105,6 +106,7 @@ describe('AI Plan Builder v1 (Tranche 5: productivity)', () => {
     const setup = {
       eventDate: '2026-09-15',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 3, 5, 6],
       weeklyAvailabilityMinutes: 320,
       disciplineEmphasis: 'run' as const,

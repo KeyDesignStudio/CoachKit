@@ -54,6 +54,7 @@ describe('AI Plan Builder v1 (Tranche 8: LLM seam)', () => {
     const setup = {
       eventDate: '2026-08-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced',

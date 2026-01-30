@@ -46,6 +46,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-08-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced' as const,
@@ -104,6 +105,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-09-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 3, 5, 6],
       weeklyAvailabilityMinutes: 300,
       disciplineEmphasis: 'bike' as const,
@@ -153,6 +155,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-10-01',
       weeksToEvent: 4,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 4, 6],
       weeklyAvailabilityMinutes: 240,
       disciplineEmphasis: 'run' as const,
@@ -190,6 +193,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-11-01',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced' as const,

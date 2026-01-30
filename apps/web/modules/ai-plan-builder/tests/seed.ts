@@ -97,7 +97,7 @@ export async function createDraftPlanForAthlete(params: {
     weeksToEvent: number;
     weekStart: 'monday' | 'sunday';
     weeklyAvailabilityDays: number[];
-    weeklyAvailabilityMinutes: number;
+    weeklyAvailabilityMinutes: number | Record<string, number>;
     disciplineEmphasis: 'balanced' | 'swim' | 'bike' | 'run';
     riskTolerance: 'low' | 'med' | 'high';
     maxIntensityDaysPerWeek: number;
