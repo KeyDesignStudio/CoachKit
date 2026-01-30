@@ -28,6 +28,27 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
   const draftPlanWriteTokenRef = useRef(0);
 
+  const sessionDraftEditsRef = useRef<
+    Record<
+      string,
+      {
+        type?: string;
+        durationMinutes?: number;
+        notes?: string;
+      }
+    >
+  >({});
+
+  const upsertSessionDraftEdit = useCallback(
+    (sessionId: string, patch: { type?: string; durationMinutes?: number; notes?: string }) => {
+      sessionDraftEditsRef.current[sessionId] = {
+        ...(sessionDraftEditsRef.current[sessionId] ?? {}),
+        ...patch,
+      };
+    },
+    []
+  );
+
   const [tab, setTab] = useState<'intake' | 'plan' | 'adaptations'>('intake');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -895,6 +916,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                   value={String(s.type ?? '')}
                                   onChange={(e) => {
                                     const type = e.target.value;
+                                    upsertSessionDraftEdit(String(s.id), { type });
                                     setDraftPlanLatest((prev: any) => {
                                       if (!prev) return prev;
                                       const next = { ...prev };
@@ -916,6 +938,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                   data-testid="apb-session-duration"
                                   onChange={(e) => {
                                     const durationMinutes = Number(e.target.value || 0);
+                                    upsertSessionDraftEdit(String(s.id), { durationMinutes });
                                     setDraftPlanLatest((prev: any) => {
                                       if (!prev) return prev;
                                       const next = { ...prev };
@@ -934,6 +957,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                   value={String(s.notes ?? '')}
                                   onChange={(e) => {
                                     const notes = e.target.value;
+                                    upsertSessionDraftEdit(String(s.id), { notes });
                                     setDraftPlanLatest((prev: any) => {
                                       if (!prev) return prev;
                                       const next = { ...prev };
@@ -957,7 +981,13 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 onClick={() =>
                                   runAction('save-session', async () => {
                                     setSessionError(String(s.id), null);
-                                    const current = (draftPlanLatest?.sessions ?? []).find((x: any) => x.id === s.id) ?? s;
+                                    const sessionId = String(s.id);
+                                    const currentFromState = (draftPlanLatest?.sessions ?? []).find((x: any) => x.id === s.id) ?? s;
+                                    const currentFromRef = sessionDraftEditsRef.current[sessionId] ?? {};
+                                    const current = {
+                                      ...currentFromState,
+                                      ...currentFromRef,
+                                    };
 
                                     try {
                                       const updated = await request<{ draftPlan: any }>(
@@ -968,7 +998,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                             draftPlanId: String(draftPlanLatest.id),
                                             sessionEdits: [
                                               {
-                                                sessionId: String(s.id),
+                                                sessionId,
                                                 type: String(current.type ?? ''),
                                                 durationMinutes: Number(current.durationMinutes ?? 0),
                                                 notes: String(current.notes ?? ''),
@@ -978,6 +1008,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                         }
                                       );
                                       setDraftPlanLatest(updated.draftPlan);
+                                      delete sessionDraftEditsRef.current[sessionId];
                                     } catch (e) {
                                       if (e instanceof ApiClientError && e.code === 'SESSION_LOCKED') {
                                         setSessionError(String(s.id), 'Session is locked.');

@@ -91,9 +91,28 @@ function redactString(text: string): string {
     '[REDACTED_PHONE]'
   );
 
-  // Very simple street-address heuristic
+  // AU phone numbers (conservative; must look like a real AU prefix)
+  // Mobile: 04xx xxx xxx, +61 4xx xxx xxx (common separators/parentheses)
   out = out.replace(
-    /\b\d{1,5}\s+[^\n,]{1,40}\s+(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court)\b/gi,
+    /(?:\+61[\s().-]*4[\s().-]*|\b04)\d{2}[\s.-]*\d{3}[\s.-]*\d{3}\b/g,
+    '[REDACTED_PHONE_AU]'
+  );
+
+  // Landline: (0x) xxxx xxxx, 0x xxxx xxxx, +61 x xxxx xxxx (x in 2,3,7,8)
+  out = out.replace(
+    /(?:\+61[\s().-]*[2378]|\b0[2378])[\s().-]*\d{4}[\s.-]*\d{4}\b/g,
+    '[REDACTED_PHONE_AU]'
+  );
+
+  // AU address heuristic (require both street-like pattern and state abbreviation; keeps false positives low)
+  out = out.replace(
+    /\b(?:\d{1,5}\/)?\d{1,5}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,4}\s+(?:st|street|rd|road|ave|avenue|dr|drive|blvd|boulevard|ln|lane|ct|court|cres|crescent|pde|parade|tce|terrace|pl|place)\.?\b[^\n]{0,60}\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b(?:\s+\d{4})?\b/gi,
+    '[REDACTED_ADDRESS_AU]'
+  );
+
+  // Very simple street-address heuristic (conservative: require comma or postal code)
+  out = out.replace(
+    /\b\d{1,5}\s+[^\n,]{1,40}\s+(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court)\b(?:\s*,|\s+\d{4,5}\b)/gi,
     '[REDACTED_ADDRESS]'
   );
 

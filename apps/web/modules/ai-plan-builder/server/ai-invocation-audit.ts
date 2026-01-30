@@ -31,6 +31,8 @@ export async function recordAiInvocationAudit(meta: AiInvocationAuditMeta, ctx: 
       outputHash: meta.outputHash,
 
       durationMs: Math.max(0, Math.trunc(meta.durationMs)),
+      maxOutputTokens: meta.maxOutputTokens === null ? null : Math.max(0, Math.trunc(meta.maxOutputTokens)),
+      timeoutMs: meta.timeoutMs === null ? null : Math.max(0, Math.trunc(meta.timeoutMs)),
       retryCount: Math.max(0, Math.trunc(meta.retryCount)),
       fallbackUsed: Boolean(meta.fallbackUsed),
       errorCode: meta.errorCode,

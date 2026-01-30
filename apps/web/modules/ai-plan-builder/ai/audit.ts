@@ -22,6 +22,8 @@ export type AiInvocationAuditMeta = {
   outputHash: string;
 
   durationMs: number;
+  maxOutputTokens: number | null;
+  timeoutMs: number | null;
   retryCount: number;
   fallbackUsed: boolean;
   errorCode: string | null;

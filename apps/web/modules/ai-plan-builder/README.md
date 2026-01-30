@@ -79,6 +79,23 @@ Central retry/rate-limit policy (server-side):
 - `AI_PLAN_BUILDER_LLM_RETRY_COUNT` (default `1`, max `2`)
 - `AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR` (default `20`)
 
+Admin audit viewer (Tranche 11A):
+- UI routes:
+	- `/admin/ai-audits` (list + filters + pagination)
+	- `/admin/ai-audits/[id]` (detail)
+- Optional API routes:
+	- `GET /api/admin/ai-audits?range=24h|7d|30d&limit=&offset=&capability=&fallbackUsed=&errorCode=&actorType=`
+	- `GET /api/admin/ai-audits/[id]`
+- Access control:
+	- Allowed if the authenticated user has DB role `ADMIN`, OR their email is listed in `AI_PLAN_BUILDER_ADMIN_EMAILS`.
+	- Non-admins receive `404` (feature remains effectively non-existent).
+	- Admin check runs server-side only; no audit data is exposed to non-admins.
+
+Eval fixtures (Tranche 11B):
+- Stored under `modules/ai-plan-builder/evals/fixtures/`
+- Purpose: lightweight drift detection for schemas/specs/redaction behavior.
+- Run via the standard harness (`npm run test:ai-plan-builder:fast` / `:full`).
+
 Safety guarantees in this repo version:
 - No client-side LLM requests.
 - CI/test forces the mock provider; no external calls and no `OPENAI_API_KEY` required.
@@ -88,6 +105,8 @@ Safety guarantees in this repo version:
 DB ops guarantees:
 - `AiInvocationAudit` stores metadata only (hashes, timing, retry/fallback flags, error codes).
 - `AiLlmRateLimitEvent` stores usage counters only.
+
+No raw prompt or raw model output is persisted anywhere.
 
 ### Enabling LLM mode locally
 

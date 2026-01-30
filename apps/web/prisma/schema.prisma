@@ -1032,6 +1032,8 @@ model AiInvocationAudit {
   outputHash    String
 
   durationMs    Int
+  maxOutputTokens Int?
+  timeoutMs     Int?
   retryCount    Int
   fallbackUsed  Boolean              @default(false)
   errorCode     String?
