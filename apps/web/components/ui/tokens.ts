@@ -86,7 +86,7 @@ export const tokens = {
   },
 
   opacity: {
-    disabled: 'opacity-50 pointer-events-none',
+    disabled: 'disabled:opacity-50 disabled:pointer-events-none',
     muted: 'opacity-70',
     ghost: 'opacity-0',
   },

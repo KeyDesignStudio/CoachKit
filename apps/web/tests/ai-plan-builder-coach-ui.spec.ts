@@ -240,6 +240,12 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await expect(saveButton).toBeEnabled({ timeout: 30_000 });
     await expect(durationInput).toBeEnabled({ timeout: 30_000 });
 
+    // Regression guard: inputs must be truly interactive (not `pointer-events: none`).
+    await expect(durationInput).toHaveCSS('pointer-events', 'auto');
+    await durationInput.click();
+
+    await page.screenshot({ path: testInfo.outputPath('session-inputs-editable.png'), fullPage: true });
+
     await durationInput.fill('42');
     // Wait for any successful draft-plan PATCH, then validate persistence against the returned draft.
     const saveResPromise = page.waitForResponse(
