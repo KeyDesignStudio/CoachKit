@@ -5,6 +5,29 @@ const DISABLE_AUTH =
   process.env.NODE_ENV === 'development' &&
   (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
 
+const AI_PLAN_BUILDER_V1 =
+  process.env.AI_PLAN_BUILDER_V1 === '1' ||
+  process.env.AI_PLAN_BUILDER_V1 === 'true' ||
+  process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === '1' ||
+  process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === 'true';
+
+function isAiPlanBuilderPathSegment(pathname: string) {
+  // Ensure we only match the real segment name, not a substring.
+  // Examples matched: /.../ai-plan-builder, /.../ai-plan-builder/...
+  // Examples NOT matched: /.../ai-plan-builderish
+  return /(^|\/)(ai-plan-builder)(\/|$)/.test(pathname);
+}
+
+function shouldBlockAiPlanBuilderRoute(pathname: string) {
+  if (AI_PLAN_BUILDER_V1) return false;
+
+  // Only block AI Plan Builder module routes (pages + API). Never block anything else.
+  if (pathname.startsWith('/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
+  if (pathname.startsWith('/api/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
+
+  return false;
+}
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
@@ -28,6 +51,10 @@ const middleware = DISABLE_AUTH
         return new NextResponse('Not Found', { status: 404 });
       }
 
+      // Feature-flagged module routes must not be reachable when disabled.
+      const pathname = new URL(request.url).pathname;
+      if (shouldBlockAiPlanBuilderRoute(pathname)) return new NextResponse('Not Found', { status: 404 });
+
       return NextResponse.next();
     }
   : clerkMiddleware(async (auth, request) => {
@@ -35,6 +62,9 @@ const middleware = DISABLE_AUTH
       if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/dev')) {
         return new NextResponse('Not Found', { status: 404 });
       }
+
+      // Feature-flagged module routes must not be reachable when disabled.
+      if (shouldBlockAiPlanBuilderRoute(request.nextUrl.pathname)) return new NextResponse('Not Found', { status: 404 });
 
       const { userId } = await auth();
       const { pathname } = request.nextUrl;

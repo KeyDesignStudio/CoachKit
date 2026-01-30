@@ -63,6 +63,96 @@ enum StravaSyncIntentStatus {
   FAILED
 }
 
+// --- AI Plan Builder (v1) ---
+// Tranche 1: additive models only. No coupling to existing plan workflows.
+
+enum AthleteIntakeResponseStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum AthleteProfileAIStatus {
+  DRAFT
+  APPROVED
+}
+
+enum AiPlanDraftSource {
+  AI_DRAFT
+}
+
+enum AiPlanDraftStatus {
+  DRAFT
+}
+
+enum AiPlanDraftVisibilityStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PlanChangeProposalStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+  APPLIED
+  EXPIRED
+}
+
+enum AthleteSessionFeedbackCompletedStatus {
+  DONE
+  PARTIAL
+  SKIPPED
+}
+
+enum AthleteSessionFeedbackFeel {
+  EASY
+  OK
+  HARD
+  TOO_HARD
+}
+
+enum AdaptationTriggerType {
+  MISSED_KEY
+  SORENESS
+  TOO_HARD
+  HIGH_COMPLIANCE
+}
+
+enum PlanChangeAuditActorType {
+  COACH
+  AI_SYSTEM
+}
+
+enum AiInvocationActorType {
+  COACH
+  ATHLETE
+  SYSTEM
+}
+
+// --- AI Plan Builder (Tranche 12) ---
+// Usage rollups + directional cost estimates + soft alerts.
+
+enum AiUsageAlertSeverity {
+  INFO
+  WARN
+  ERROR
+}
+
+enum AiUsageAlertType {
+  HIGH_CALL_VOLUME
+  HIGH_FALLBACK_RATE
+  HIGH_ERROR_RATE
+  HIGH_RETRY_RATE
+  HIGH_P95_LATENCY
+  HIGH_COST_ESTIMATE
+}
+
+enum AiUsageAlertScope {
+  GLOBAL
+  CAPABILITY
+  COACH
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -73,28 +163,41 @@ model User {
   createdAt      DateTime @default(now())
 
   // Relations
-  athleteProfile                  AthleteProfile?
-  coachedAthletes                 AthleteProfile[]         @relation("CoachToAthletes")
-  comments                        Comment[]
-  messageThreadsAsCoach           MessageThread[]          @relation("CoachThreads")
-  messageThreadsAsAthlete         MessageThread[]          @relation("AthleteThreads")
-  messages                        Message[]
-  squads                          Squad[]
-  workoutTemplates                WorkoutTemplate[]
-  groupSessions                   GroupSession[]
-  calendarItemsCoached            CalendarItem[]
-  branding                        CoachBranding?
-  workoutTitles                   WorkoutTitle[]
-  planWeeks                       PlanWeek[]
-  coachJournalEntries             CoachJournalEntry[]
-  oauthStates                     OAuthState[]
+  athleteProfile            AthleteProfile?
+  coachedAthletes           AthleteProfile[]      @relation("CoachToAthletes")
+  comments                  Comment[]
+  messageThreadsAsCoach     MessageThread[]       @relation("CoachThreads")
+  messageThreadsAsAthlete   MessageThread[]       @relation("AthleteThreads")
+  messages                  Message[]
+  squads                    Squad[]
+  workoutTemplates          WorkoutTemplate[]
+  groupSessions             GroupSession[]
+  calendarItemsCoached      CalendarItem[]
+  branding                  CoachBranding?
+  workoutTitles             WorkoutTitle[]
+  planWeeks                 PlanWeek[]
+  coachJournalEntries       CoachJournalEntry[]
+  oauthStates               OAuthState[]
   athletePlanInstances      AthletePlanInstance[] @relation("AthletePlanInstances")
   coachCreatedPlanInstances AthletePlanInstance[] @relation("CoachCreatedPlanInstances")
 
+  // AI Plan Builder (v1)
+  aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
+  aiPlanBuilderEvidence           IntakeEvidence[]
+  aiPlanBuilderProfiles           AthleteProfileAI[]
+  aiPlanBuilderIntents            CoachIntent[]
+  aiPlanBuilderDraftPlans         AiPlanDraft[]
+  aiPlanBuilderProposals          PlanChangeProposal[]
+  aiPlanBuilderAudits             PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
+  aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
+
+  // AI Plan Builder (Tranche 10)
+  aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
+  aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
+
   @@index([role])
 }
-
-
 
 model AthleteProfile {
   userId                  String                @id
@@ -130,6 +233,22 @@ model AthleteProfile {
   coachJournalEntries CoachJournalEntry[]
   stravaConnection    StravaConnection?
   stravaSyncIntents   StravaSyncIntent[]
+
+  // AI Plan Builder (v1)
+  aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
+  aiPlanBuilderEvidence           IntakeEvidence[]
+  aiPlanBuilderProfiles           AthleteProfileAI[]
+  aiPlanBuilderIntents            CoachIntent[]
+  aiPlanBuilderDraftPlans         AiPlanDraft[]
+  aiPlanBuilderProposals          PlanChangeProposal[]
+  aiPlanBuilderAudits             PlanChangeAudit[]
+  aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
+  aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
+  aiPlanBuilderPublishAcks        AiPlanPublishAck[]
+
+  // AI Plan Builder (Tranche 10)
+  aiInvocationAudits   AiInvocationAudit[]   @relation("AiInvocationAuditAthlete")
+  aiLlmRateLimitEvents AiLlmRateLimitEvent[] @relation("AiLlmRateLimitEventAthlete")
 
   @@index([coachId])
 }
@@ -213,17 +332,17 @@ model PlanTemplate {
 }
 
 model PlanTemplateScheduleRow {
-  id                      String   @id @default(cuid())
-  planTemplateId          String
-  weekIndex               Int
-  dayIndex                Int
-  dayOfWeek               Int
-  ordinal                 Int      @default(0)
-  isOptional              Boolean  @default(false)
-  isOff                   Boolean  @default(false)
-  rawText                 String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id             String   @id @default(cuid())
+  planTemplateId String
+  weekIndex      Int
+  dayIndex       Int
+  dayOfWeek      Int
+  ordinal        Int      @default(0)
+  isOptional     Boolean  @default(false)
+  isOff          Boolean  @default(false)
+  rawText        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   planTemplate             PlanTemplate              @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
   athletePlanInstanceItems AthletePlanInstanceItem[]
@@ -562,4 +681,452 @@ model StravaSyncIntent {
   @@unique([athleteId, stravaActivityId])
   @@index([status, createdAt])
   @@index([athleteId, status])
+}
+
+model AthleteIntakeResponse {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  status      AthleteIntakeResponseStatus @default(DRAFT)
+  draftJson   Json?
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete  AthleteProfile   @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach    User             @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  evidence IntakeEvidence[]
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+  @@index([status, createdAt])
+}
+
+model IntakeEvidence {
+  id               String @id @default(cuid())
+  athleteId        String // AthleteProfile.userId
+  coachId          String // User.id
+  intakeResponseId String
+
+  questionKey String
+  answerJson  Json
+
+  // Append-only evidence. Records should never be updated or deleted by application logic.
+  createdAt DateTime @default(now())
+
+  athlete        AthleteProfile        @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach          User                  @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  intakeResponse AthleteIntakeResponse @relation(fields: [intakeResponseId], references: [id], onDelete: Restrict)
+
+  @@index([intakeResponseId])
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+}
+
+model AthleteProfileAI {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  // Deterministic extraction output (idempotent for a given evidence set)
+  extractedProfileJson Json
+  extractedSummaryText String
+  extractedFlagsJson   Json?
+  evidenceHash         String
+
+  // Coach edits override extracted fields (stored separately).
+  coachOverridesJson Json?
+
+  status     AthleteProfileAIStatus @default(DRAFT)
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@unique([athleteId, evidenceHash])
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+}
+
+model CoachIntent {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  intentText String
+  createdAt  DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+}
+
+model AiPlanDraft {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  source AiPlanDraftSource @default(AI_DRAFT)
+  status AiPlanDraftStatus @default(DRAFT)
+
+  // Uses existing plan primitives by reference in JSON, but does not create/modify any live plan records.
+  planJson Json
+
+  // Draft-local inputs used to generate the draft deterministically.
+  setupJson Json?
+  setupHash String?
+
+  // Tranche 4: publish visibility (AI-domain only; no coupling to existing plan tables).
+  visibilityStatus         AiPlanDraftVisibilityStatus @default(DRAFT)
+  publishedAt              DateTime?
+  publishedByCoachId       String?
+  lastPublishedHash        String?
+  lastPublishedSummaryText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  proposals PlanChangeProposal[]
+  audits    PlanChangeAudit[]
+
+  weeks    AiPlanDraftWeek[]
+  sessions AiPlanDraftSession[]
+
+  publishSnapshots AiPlanDraftPublishSnapshot[]
+
+  publishAcks AiPlanPublishAck[]
+
+  feedback AthleteSessionFeedback[]
+  triggers AdaptationTrigger[]
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+  @@index([status, createdAt])
+  @@index([visibilityStatus, publishedAt])
+}
+
+model AiPlanDraftPublishSnapshot {
+  id        String @id @default(cuid())
+  draftId   String
+  athleteId String // denormalized for query convenience
+  coachId   String // denormalized for query convenience
+
+  hash        String
+  planJson    Json
+  summaryText String
+
+  publishedAt        DateTime @default(now())
+  publishedByCoachId String?
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, hash])
+  @@index([draftId, publishedAt])
+  @@index([athleteId, publishedAt])
+}
+
+model AiPlanPublishAck {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  draftId   String
+
+  lastSeenPublishedHash String
+  lastSeenAt            DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  draft   AiPlanDraft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, draftId])
+  @@index([athleteId, draftId])
+}
+
+model AthleteSessionFeedback {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+  draftId   String
+  sessionId String
+
+  completedStatus AthleteSessionFeedbackCompletedStatus
+  rpe             Int?
+  feel            AthleteSessionFeedbackFeel?
+  sorenessFlag    Boolean                               @default(false)
+  sorenessNotes   String?
+  sleepQuality    Int?
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile     @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User               @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  session AiPlanDraftSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, createdAt])
+  @@index([draftId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model AdaptationTrigger {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+  draftId   String
+
+  triggerType  AdaptationTriggerType
+  windowStart  DateTime
+  windowEnd    DateTime
+  evidenceJson Json
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draft   AiPlanDraft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, triggerType, windowStart, windowEnd])
+  @@index([athleteId, createdAt])
+  @@index([draftId, createdAt])
+  @@index([draftId, triggerType, createdAt])
+}
+
+model AiPlanDraftWeek {
+  id        String @id @default(cuid())
+  draftId   String
+  weekIndex Int
+
+  locked Boolean @default(false)
+
+  // Cached summaries for quick UI rendering.
+  sessionsCount Int @default(0)
+  totalMinutes  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, weekIndex])
+  @@index([draftId, weekIndex])
+}
+
+model AiPlanDraftSession {
+  id        String @id @default(cuid())
+  draftId   String
+  weekIndex Int
+  ordinal   Int
+
+  dayOfWeek       Int
+  discipline      String
+  type            String
+  durationMinutes Int
+  notes           String?
+
+  locked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  draft AiPlanDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  feedback AthleteSessionFeedback[]
+
+  @@unique([draftId, weekIndex, ordinal])
+  @@index([draftId, weekIndex])
+}
+
+model PlanChangeProposal {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  status PlanChangeProposalStatus @default(DRAFT)
+
+  // Optional linkage to an AI draft plan. No linkage is required to propose a change.
+  draftPlanId String?
+
+  // Tranche 3: deterministic proposal execution against AiPlanDraft only.
+  rationaleText   String?
+  diffJson        Json?
+  triggerIds      String[]  @default([])
+  respectsLocks   Boolean   @default(true)
+  coachDecisionAt DateTime?
+  appliedAt       DateTime?
+
+  // Optional opaque reference to an existing plan (string-only to avoid FK coupling).
+  targetPlanRef String?
+
+  // The proposal "shape" only. No execution in Tranche 1.
+  proposalJson Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach     User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  draftPlan AiPlanDraft?   @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)
+
+  audits PlanChangeAudit[]
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+  @@index([status, createdAt])
+  @@index([draftPlanId, status, createdAt])
+}
+
+model PlanChangeAudit {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  proposalId String?
+
+  // Opaque event + diff payloads for auditability.
+  eventType String
+  diffJson  Json?
+
+  // Tranche 3: explicit change records for AiPlanDraft-only application.
+  actorType         PlanChangeAuditActorType @default(COACH)
+  changeSummaryText String?
+  draftPlanId       String?
+
+  createdAt DateTime @default(now())
+
+  athlete  AthleteProfile      @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach    User                @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  proposal PlanChangeProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  draftPlan AiPlanDraft? @relation(fields: [draftPlanId], references: [id], onDelete: SetNull)
+
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+  @@index([proposalId, createdAt])
+  @@index([draftPlanId, createdAt])
+}
+
+// --- AI Plan Builder (Tranche 10) ---
+// DB-backed LLM rate limiting + metadata-only invocation audits.
+
+model AiLlmRateLimitEvent {
+  id         String               @id @default(cuid())
+  actorType  AiInvocationActorType
+  actorId    String
+  capability String
+  createdAt  DateTime             @default(now())
+
+  coachId   String?
+  athleteId String?
+
+  coach   User?           @relation("AiLlmRateLimitEventCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  athlete AthleteProfile? @relation("AiLlmRateLimitEventAthlete", fields: [athleteId], references: [userId], onDelete: SetNull)
+
+  @@index([actorType, actorId, createdAt])
+  @@index([capability, createdAt])
+  @@index([coachId, createdAt])
+  @@index([athleteId, createdAt])
+}
+
+model AiInvocationAudit {
+  id            String               @id @default(cuid())
+  actorType     AiInvocationActorType
+  actorId       String
+  coachId       String?
+  athleteId     String?
+
+  capability    String
+  specVersion   String
+  effectiveMode String
+
+  provider      String
+  model         String?
+
+  inputHash     String
+  outputHash    String
+
+  durationMs    Int
+  maxOutputTokens Int?
+  timeoutMs     Int?
+  retryCount    Int
+  fallbackUsed  Boolean              @default(false)
+  errorCode     String?
+
+  createdAt     DateTime             @default(now())
+
+  coach   User?           @relation("AiInvocationAuditCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  athlete AthleteProfile? @relation("AiInvocationAuditAthlete", fields: [athleteId], references: [userId], onDelete: SetNull)
+
+  @@index([actorType, actorId, createdAt])
+  @@index([capability, createdAt])
+  @@index([coachId, createdAt])
+  @@index([athleteId, createdAt])
+}
+
+model AiInvocationDailyRollup {
+  id              String   @id @default(cuid())
+  date            DateTime // UTC day, stored at midnight UTC
+  provider        String
+  model           String
+  capability      String
+  effectiveMode   String
+
+  callCount       Int
+  fallbackCount   Int
+  errorCount      Int
+  retryCountTotal Int
+
+  avgDurationMs   Int
+  p95DurationMs   Int?
+
+  maxOutputTokensAvg   Int
+  estimatedOutputTokens Int
+  estimatedCostUsd      Float
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date, provider, model, capability, effectiveMode])
+  @@index([date])
+  @@index([capability, date])
+}
+
+model AiUsageAlert {
+  id             String               @id @default(cuid())
+  createdAt      DateTime             @default(now())
+  dateRangeStart DateTime
+  dateRangeEnd   DateTime
+
+  // NOTE: Postgres UNIQUE indexes treat NULLs as distinct, so a composite unique
+  // over nullable columns will not de-dupe alerts where provider/model/capability
+  // are NULL. Use a stable, non-null unique key instead.
+  dedupeKey      String               @unique
+
+  severity       AiUsageAlertSeverity
+  alertType      AiUsageAlertType
+  scope          AiUsageAlertScope
+
+  capability     String?
+  provider       String?
+  model          String?
+
+  observedValue  Float
+  thresholdValue Float
+  message        String
+
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  @@index([createdAt(sort: Desc)])
+  @@index([alertType, createdAt(sort: Desc)])
+  @@index([dateRangeStart])
 }

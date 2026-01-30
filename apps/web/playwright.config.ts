@@ -1,19 +1,24 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
+const APB_MODE = String(process.env.APB_MODE ?? '').trim();
+const isApbFast = APB_MODE === 'fast';
 
 const PLAN_LIBRARY_FIXTURES_BASE = `http://localhost:${PORT}/api/__test__/fixtures/plan-library`;
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 60_000,
+  // Some suites (especially under sharded parallel runs) can exceed 60s due to dev-server compilation.
+  timeout: 120_000,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   use: {
     baseURL: `http://localhost:${PORT}`,
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
+    screenshot: isApbFast ? 'only-on-failure' : 'off',
+    video: isApbFast ? 'retain-on-failure' : 'off',
   },
   webServer: {
     // IMPORTANT: keep this cross-platform. Do not use `FOO=bar cmd` shell prefixes.
@@ -21,7 +26,7 @@ export default defineConfig({
     command: `node scripts/playwright-webserver.mjs ${PORT}`,
     env: {
       ...process.env,
-      NODE_ENV: 'development',
+      NODE_ENV: process.env.PLAYWRIGHT_NODE_ENV ?? 'development',
       DISABLE_AUTH: 'true',
       PLAN_LIBRARY_PLANS_URL: process.env.PLAN_LIBRARY_PLANS_URL ?? `${PLAN_LIBRARY_FIXTURES_BASE}/plans.csv`,
       PLAN_LIBRARY_SESSIONS_URL: process.env.PLAN_LIBRARY_SESSIONS_URL ?? `${PLAN_LIBRARY_FIXTURES_BASE}/sessions.csv`,

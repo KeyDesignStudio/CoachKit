@@ -1,0 +1,55 @@
+{
+  "triggerTypes": ["HIGH_COMPLIANCE", "MISSED_KEY", "SORENESS", "TOO_HARD"],
+  "draft": {
+    "weeks": [
+      { "weekIndex": 0, "locked": false },
+      { "weekIndex": 1, "locked": false }
+    ],
+    "sessions": [
+      {
+        "id": "s1",
+        "weekIndex": 0,
+        "ordinal": 1,
+        "dayOfWeek": 1,
+        "type": "RUN",
+        "durationMinutes": 30,
+        "notes": null,
+        "locked": false
+      },
+      {
+        "id": "s2",
+        "weekIndex": 0,
+        "ordinal": 2,
+        "dayOfWeek": 3,
+        "type": "BIKE",
+        "durationMinutes": 45,
+        "notes": "Easy aerobic",
+        "locked": false
+      },
+      {
+        "id": "s3",
+        "weekIndex": 0,
+        "ordinal": 3,
+        "dayOfWeek": 6,
+        "type": "BRICK",
+        "durationMinutes": 60,
+        "notes": null,
+        "locked": false
+      },
+      {
+        "id": "s4",
+        "weekIndex": 1,
+        "ordinal": 1,
+        "dayOfWeek": 1,
+        "type": "RUN",
+        "durationMinutes": 35,
+        "notes": null,
+        "locked": false
+      }
+    ]
+  },
+  "coachIntent": {
+    "note": "If soreness repeats, reduce intensity first.",
+    "goalTag": "recover"
+  }
+}
