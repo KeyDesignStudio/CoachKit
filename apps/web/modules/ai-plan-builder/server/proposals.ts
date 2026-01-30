@@ -10,7 +10,7 @@ import { planDiffSchema, type PlanDiffOp } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
 import { publishAiDraftPlan } from './publish';
 
-import { getAiPlanBuilderAI } from '../ai/factory';
+import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import type { AiAdaptationTriggerType } from '../ai/types';
 
 export const generateProposalSchema = z.object({
@@ -91,7 +91,7 @@ export async function generatePlanChangeProposal(params: {
 
   const triggerTypes = Array.from(new Set(triggers.map((t) => String(t.triggerType)))).sort() as AiAdaptationTriggerType[];
 
-  const ai = getAiPlanBuilderAI();
+  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const suggestion = await ai.suggestProposalDiffs({
     triggerTypes,
     draft: {

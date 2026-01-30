@@ -16,6 +16,16 @@ import { ApiClientError, useApi } from '@/components/api-client';
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
 
+  const formatApiErrorMessage = useCallback((e: ApiClientError) => {
+    if (e.status === 429 && e.code === 'LLM_RATE_LIMITED') {
+      return 'LLM is temporarily rate limited — using deterministic fallback.';
+    }
+    if (e.code === 'CONFIG_MISSING') {
+      return 'LLM is not configured — using deterministic fallback.';
+    }
+    return `${e.code}: ${e.message}`;
+  }, []);
+
   const draftPlanWriteTokenRef = useRef(0);
 
   const [tab, setTab] = useState<'intake' | 'plan' | 'adaptations'>('intake');
@@ -228,7 +238,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
       } catch (e) {
         if (cancelled) return;
         if (e instanceof ApiClientError) {
-          setProposalPreviewError(`${e.code}: ${e.message}`);
+          setProposalPreviewError(formatApiErrorMessage(e));
         } else {
           setProposalPreviewError(e instanceof Error ? e.message : 'Failed to load preview.');
         }
@@ -252,7 +262,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
         return await fn();
       } catch (e) {
         if (e instanceof ApiClientError) {
-          setError(`${e.code}: ${e.message}`);
+          setError(formatApiErrorMessage(e));
           return null;
         }
         setError(e instanceof Error ? e.message : 'Request failed.');
@@ -261,7 +271,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
         setBusy(null);
       }
     },
-    []
+    [formatApiErrorMessage]
   );
 
   const setSessionError = useCallback((sessionId: string, message: string | null) => {

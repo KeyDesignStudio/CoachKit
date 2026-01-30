@@ -10,6 +10,23 @@ export type AiUsageAudit = {
   outputHash: string;
 };
 
+export type AiInvocationAuditMeta = {
+  capability: AiCapabilityName;
+  specVersion: string;
+  effectiveMode: AiPlanBuilderAIMode;
+
+  provider: 'deterministic' | 'mock' | 'openai' | 'unknown';
+  model: string | null;
+
+  inputHash: string;
+  outputHash: string;
+
+  durationMs: number;
+  retryCount: number;
+  fallbackUsed: boolean;
+  errorCode: string | null;
+};
+
 export function computeAiUsageAudit(params: {
   capability: AiCapabilityName;
   mode: AiPlanBuilderAIMode;

@@ -17,6 +17,12 @@ Tranche 9 adds **real OpenAI provider wiring** behind the seam:
 - Guardrails: timeouts, 1 retry on retryable failures, JSON validation, deterministic fallback.
 - CI/test uses the mock provider (no external calls).
 
+Tranche 10 adds **controlled rollout + cost guardrails + safer ops**:
+- Per-capability overrides (inherit/global, deterministic, llm).
+- Per-capability token limits.
+- DB-backed rate limiting (per actor per hour) with deterministic fallback.
+- Metadata-only DB audit record for every invocation (hashes only; no raw prompts/outputs).
+
 This module is intentionally isolated under `apps/web/modules/ai-plan-builder`.
 
 ## Running tests (1-minute setup)
@@ -59,11 +65,29 @@ LLM provider config (server-side only):
 - `AI_PLAN_BUILDER_LLM_TIMEOUT_MS` (default `20000`)
 - `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS` (default `1200`)
 
+Controlled rollout (per capability, optional):
+- `AI_PLAN_BUILDER_AI_CAP_SUMMARIZE_INTAKE` (`inherit` | `deterministic` | `llm`)
+- `AI_PLAN_BUILDER_AI_CAP_SUGGEST_DRAFT_PLAN` (`inherit` | `deterministic` | `llm`)
+- `AI_PLAN_BUILDER_AI_CAP_SUGGEST_PROPOSAL_DIFFS` (`inherit` | `deterministic` | `llm`)
+
+Per-capability token limits (optional; overrides global max output tokens):
+- `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUMMARIZE_INTAKE`
+- `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUGGEST_DRAFT_PLAN`
+- `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUGGEST_PROPOSAL_DIFFS`
+
+Central retry/rate-limit policy (server-side):
+- `AI_PLAN_BUILDER_LLM_RETRY_COUNT` (default `1`, max `2`)
+- `AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR` (default `20`)
+
 Safety guarantees in this repo version:
 - No client-side LLM requests.
 - CI/test forces the mock provider; no external calls and no `OPENAI_API_KEY` required.
 - Logs never include raw prompts or raw LLM outputs.
 - Audit helpers use stable hashes of input/output only.
+
+DB ops guarantees:
+- `AiInvocationAudit` stores metadata only (hashes, timing, retry/fallback flags, error codes).
+- `AiLlmRateLimitEvent` stores usage counters only.
 
 ### Enabling LLM mode locally
 

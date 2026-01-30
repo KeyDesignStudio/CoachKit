@@ -123,6 +123,12 @@ enum PlanChangeAuditActorType {
   AI_SYSTEM
 }
 
+enum AiInvocationActorType {
+  COACH
+  ATHLETE
+  SYSTEM
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -161,6 +167,10 @@ model User {
   aiPlanBuilderAudits             PlanChangeAudit[]
   aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
+
+  // AI Plan Builder (Tranche 10)
+  aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
+  aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
 
   @@index([role])
 }
@@ -211,6 +221,10 @@ model AthleteProfile {
   aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
   aiPlanBuilderPublishAcks        AiPlanPublishAck[]
+
+  // AI Plan Builder (Tranche 10)
+  aiInvocationAudits   AiInvocationAudit[]   @relation("AiInvocationAuditAthlete")
+  aiLlmRateLimitEvents AiLlmRateLimitEvent[] @relation("AiLlmRateLimitEventAthlete")
 
   @@index([coachId])
 }
@@ -976,4 +990,59 @@ model PlanChangeAudit {
   @@index([coachId, createdAt])
   @@index([proposalId, createdAt])
   @@index([draftPlanId, createdAt])
+}
+
+// --- AI Plan Builder (Tranche 10) ---
+// DB-backed LLM rate limiting + metadata-only invocation audits.
+
+model AiLlmRateLimitEvent {
+  id         String               @id @default(cuid())
+  actorType  AiInvocationActorType
+  actorId    String
+  capability String
+  createdAt  DateTime             @default(now())
+
+  coachId   String?
+  athleteId String?
+
+  coach   User?           @relation("AiLlmRateLimitEventCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  athlete AthleteProfile? @relation("AiLlmRateLimitEventAthlete", fields: [athleteId], references: [userId], onDelete: SetNull)
+
+  @@index([actorType, actorId, createdAt])
+  @@index([capability, createdAt])
+  @@index([coachId, createdAt])
+  @@index([athleteId, createdAt])
+}
+
+model AiInvocationAudit {
+  id            String               @id @default(cuid())
+  actorType     AiInvocationActorType
+  actorId       String
+  coachId       String?
+  athleteId     String?
+
+  capability    String
+  specVersion   String
+  effectiveMode String
+
+  provider      String
+  model         String?
+
+  inputHash     String
+  outputHash    String
+
+  durationMs    Int
+  retryCount    Int
+  fallbackUsed  Boolean              @default(false)
+  errorCode     String?
+
+  createdAt     DateTime             @default(now())
+
+  coach   User?           @relation("AiInvocationAuditCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  athlete AthleteProfile? @relation("AiInvocationAuditAthlete", fields: [athleteId], references: [userId], onDelete: SetNull)
+
+  @@index([actorType, actorId, createdAt])
+  @@index([capability, createdAt])
+  @@index([coachId, createdAt])
+  @@index([athleteId, createdAt])
 }

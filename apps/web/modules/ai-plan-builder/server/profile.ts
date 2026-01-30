@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeEvidenceHash } from '../rules/evidence-hash';
-import { getAiPlanBuilderAI } from '../ai/factory';
+import { getAiPlanBuilderAIForCoachRequest } from './ai';
 
 export const extractProfileSchema = z.object({
   intakeResponseId: z.string().min(1),
@@ -60,7 +60,7 @@ export async function extractAiProfileFromIntake(params: {
     return { profile: existing, evidenceHash, wasCreated: false };
   }
 
-  const ai = getAiPlanBuilderAI();
+  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const extracted = await ai.summarizeIntake({
     evidence: evidence.map((e) => ({ questionKey: e.questionKey, answerJson: e.answerJson as any })),
   });

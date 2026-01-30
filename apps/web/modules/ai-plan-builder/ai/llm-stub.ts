@@ -12,12 +12,17 @@ import type {
 } from './types';
 
 import { DeterministicAiPlanBuilderAI } from './deterministic';
-import { computeAiUsageAudit, recordAiUsageAudit } from './audit';
+import { computeAiUsageAudit, recordAiUsageAudit, type AiInvocationAuditMeta } from './audit';
 import { planDiffSchema } from '../server/adaptation-diff';
 
 import { AiPlanBuilderLlmError } from './providers/errors';
 import { getAiPlanBuilderLlmConfig, getAiPlanBuilderLlmTransport } from './providers/factory';
 import { redactAiJsonValue } from './providers/env';
+import {
+  getAiPlanBuilderCapabilitySpecVersion,
+  getAiPlanBuilderLlmMaxOutputTokensFromEnv,
+  getAiPlanBuilderLlmRetryCountFromEnv,
+} from './config';
 
 const summarizeIntakeResultSchema = z
   .object({
@@ -89,18 +94,28 @@ function logMeta(event: string, params: Record<string, unknown>) {
 export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
   private readonly delegate: AiPlanBuilderAI;
   private readonly transportOverride?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
+  private readonly beforeLlmCall?: (params: {
+    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+  }) => void | Promise<void>;
+  private readonly onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 
   constructor(options?: {
     deterministicFallback?: AiPlanBuilderAI;
     transport?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
+    beforeLlmCall?: (params: {
+      capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+    }) => void | Promise<void>;
+    onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
   }) {
     const fallback = options?.deterministicFallback ?? new DeterministicAiPlanBuilderAI({ recordAudit: false });
     this.delegate = fallback;
     this.transportOverride = options?.transport;
+    this.beforeLlmCall = options?.beforeLlmCall;
+    this.onInvocation = options?.onInvocation;
   }
 
-  private async generateWithRetry<T>(fn: () => Promise<T>): Promise<T> {
-    const attempts = 2;
+  private async generateWithRetry<T>(fn: () => Promise<T>, retryCount: number): Promise<T> {
+    const attempts = Math.max(1, 1 + Math.max(0, retryCount));
     let lastErr: unknown;
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
@@ -114,6 +129,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
     throw lastErr;
   }
 
+  private getErrorCode(err: unknown): string {
+    if (err instanceof AiPlanBuilderLlmError) return err.code;
+    const maybeCode = (err as any)?.code;
+    return typeof maybeCode === 'string' && maybeCode.length ? maybeCode : 'UNKNOWN';
+  }
+
   private async callOrFallback<T>(params: {
     capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
     input: unknown;
@@ -121,6 +142,7 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
     system: string;
     deterministicFallback: () => Promise<T>;
   }): Promise<T> {
+    const startedAt = Date.now();
     const auditBase = computeAiUsageAudit({
       capability: params.capability,
       mode: 'llm',
@@ -128,48 +150,104 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       output: { pending: true },
     });
 
+    const specVersion = getAiPlanBuilderCapabilitySpecVersion(params.capability);
+    const retryCount = getAiPlanBuilderLlmRetryCountFromEnv();
+
     try {
       const cfg = getAiPlanBuilderLlmConfig();
       const transport = this.transportOverride ?? getAiPlanBuilderLlmTransport();
+
+      const maxOutputTokens = getAiPlanBuilderLlmMaxOutputTokensFromEnv(params.capability, process.env, {
+        fallback: cfg.maxOutputTokens,
+      });
+
+      if (this.beforeLlmCall) {
+        await this.beforeLlmCall({ capability: params.capability });
+      }
 
       logMeta('LLM_CALL_ATTEMPT', {
         capability: params.capability,
         provider: cfg.provider,
         model: cfg.model,
         timeoutMs: cfg.timeoutMs,
-        maxOutputTokens: cfg.maxOutputTokens,
+        maxOutputTokens,
+        retryCount,
         inputHash: auditBase.inputHash,
       });
 
-      const output = await this.generateWithRetry(async () =>
-        transport.generateStructuredJson({
-          system: `APB_CAPABILITY=${params.capability}\n${params.system}`,
-          input: JSON.stringify(params.input),
-          schema: params.schema,
-          model: cfg.model || 'mock',
-          maxOutputTokens: cfg.maxOutputTokens,
-          timeoutMs: cfg.timeoutMs,
-        })
+      const output = await this.generateWithRetry(
+        async () =>
+          transport.generateStructuredJson({
+            system: `APB_CAPABILITY=${params.capability}\n${params.system}`,
+            input: JSON.stringify(params.input),
+            schema: params.schema,
+            model: cfg.model || 'mock',
+            maxOutputTokens,
+            timeoutMs: cfg.timeoutMs,
+          }),
+        retryCount
       );
 
       recordAiUsageAudit(
         computeAiUsageAudit({ capability: params.capability, mode: 'llm', input: params.input, output })
       );
 
+      const finalAudit = computeAiUsageAudit({ capability: params.capability, mode: 'llm', input: params.input, output });
+      if (this.onInvocation) {
+        await this.onInvocation({
+          capability: params.capability,
+          specVersion,
+          effectiveMode: 'llm',
+          provider: (cfg.provider as any) ?? 'unknown',
+          model: cfg.model ?? null,
+          inputHash: finalAudit.inputHash,
+          outputHash: finalAudit.outputHash,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          retryCount,
+          fallbackUsed: false,
+          errorCode: null,
+        });
+      }
+
       logMeta('LLM_CALL_SUCCEEDED', {
         capability: params.capability,
         inputHash: auditBase.inputHash,
-        outputHash: computeAiUsageAudit({ capability: params.capability, mode: 'llm', input: params.input, output }).outputHash,
+        outputHash: finalAudit.outputHash,
       });
 
       return output as T;
     } catch (err) {
       const fallback = await params.deterministicFallback();
       const audit = computeAiUsageAudit({ capability: params.capability, mode: 'llm', input: params.input, output: fallback });
+      const errorCode = this.getErrorCode(err);
+
+      if (this.onInvocation) {
+        const cfg = (() => {
+          try {
+            return getAiPlanBuilderLlmConfig();
+          } catch {
+            return null;
+          }
+        })();
+
+        await this.onInvocation({
+          capability: params.capability,
+          specVersion,
+          effectiveMode: 'llm',
+          provider: (cfg?.provider as any) ?? 'unknown',
+          model: cfg?.model ?? null,
+          inputHash: audit.inputHash,
+          outputHash: audit.outputHash,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          retryCount,
+          fallbackUsed: true,
+          errorCode,
+        });
+      }
 
       logMeta('LLM_FALLBACK_USED', {
         capability: params.capability,
-        reason: err instanceof AiPlanBuilderLlmError ? err.code : 'UNKNOWN',
+        reason: errorCode,
         inputHash: audit.inputHash,
         outputHash: audit.outputHash,
       });

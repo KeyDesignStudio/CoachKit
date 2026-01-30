@@ -13,15 +13,23 @@ describe('AI Plan Builder v1 (Tranche 8: LLM seam)', () => {
     expect(mode2).toBe('deterministic');
   });
 
-  it('T8.2 factory selects LLM when env=llm', () => {
+  it('T8.2 factory respects global mode switch when env=llm', async () => {
     const mode = getAiPlanBuilderAIModeFromEnv({ AI_PLAN_BUILDER_AI_MODE: 'llm' } as any);
     expect(mode).toBe('llm');
 
     const prev = process.env.AI_PLAN_BUILDER_AI_MODE;
     process.env.AI_PLAN_BUILDER_AI_MODE = 'llm';
     try {
-      const ai = getAiPlanBuilderAI();
-      expect(ai).toBeInstanceOf(LlmAiPlanBuilderAI);
+      const infoCalls: any[] = [];
+      const prevInfo = console.info;
+      console.info = ((...args: any[]) => infoCalls.push(args)) as any;
+      try {
+        await getAiPlanBuilderAI().summarizeIntake({ evidence: [] } as any);
+      } finally {
+        console.info = prevInfo;
+      }
+
+      expect(infoCalls.some((c) => c?.[0] === 'LLM_CALL_ATTEMPT')).toBe(true);
     } finally {
       if (typeof prev === 'string') process.env.AI_PLAN_BUILDER_AI_MODE = prev;
       else delete process.env.AI_PLAN_BUILDER_AI_MODE;

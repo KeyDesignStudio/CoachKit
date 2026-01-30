@@ -9,7 +9,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 
 import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
-import { getAiPlanBuilderAI } from '../ai/factory';
+import { getAiPlanBuilderAIForCoachRequest } from './ai';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -80,7 +80,7 @@ export async function generateAiDraftPlanV1(params: {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
-  const ai = getAiPlanBuilderAI();
+  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const suggestion = await ai.suggestDraftPlan({ setup: params.setup as any });
   const draft = suggestion.planJson;
   const setupHash = computeStableSha256(params.setup);
