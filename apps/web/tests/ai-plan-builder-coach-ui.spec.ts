@@ -14,6 +14,75 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
 }
 
 test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
+  test('week lock disables session edits and persists after refresh', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await setRoleCookie(page, 'COACH');
+    await createCoach({ id: 'dev-coach' });
+
+    const athleteId = nextTestId('pw_weeklock');
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
+
+    await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
+    await page.getByTestId('apb-tab-plan').click();
+
+    const generateOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
+    await page.getByTestId('apb-generate-draft').click();
+    await generateOk;
+
+    const firstWeek = page.getByTestId('apb-week').first();
+    const weekLock = firstWeek.getByTestId('apb-week-lock');
+    await expect(weekLock).toBeEnabled({ timeout: 30_000 });
+
+    const lockOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 30_000 }
+    );
+    await weekLock.check();
+    await lockOk;
+
+    await expect(firstWeek.getByTestId('apb-week-locked-note')).toBeVisible();
+
+    const firstSession = firstWeek.getByTestId('apb-session').first();
+    const durationInput = firstSession.locator('[data-testid="apb-session-duration"]');
+    const saveButton = firstSession.locator('[data-testid="apb-session-save"]');
+    const sessionLock = firstSession.locator('[data-testid="apb-session-lock"]');
+
+    await expect(durationInput).toBeDisabled();
+    await expect(saveButton).toBeDisabled();
+    await expect(sessionLock).toBeDisabled();
+
+    await page.screenshot({ path: testInfo.outputPath('week-locked-session-disabled.png'), fullPage: true });
+
+    // Refresh should preserve week lock and keep sessions non-editable.
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByTestId('apb-tab-plan').click();
+
+    const firstWeekAfter = page.getByTestId('apb-week').first();
+    const weekLockAfter = firstWeekAfter.getByTestId('apb-week-lock');
+    await expect(weekLockAfter).toBeChecked({ timeout: 30_000 });
+    await expect(firstWeekAfter.getByTestId('apb-week-locked-note')).toBeVisible();
+
+    const firstSessionAfter = firstWeekAfter.getByTestId('apb-session').first();
+    await expect(firstSessionAfter.locator('[data-testid="apb-session-duration"]')).toBeDisabled();
+    await expect(firstSessionAfter.locator('[data-testid="apb-session-save"]')).toBeDisabled();
+  });
+
   test('week start differs from draft → shows regenerate note + button', async ({ page }, testInfo) => {
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 
@@ -150,8 +219,7 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
       if (msg.type() !== 'error') return;
 
       const text = msg.text();
-      // We intentionally trigger a 409 from the draft-plan PATCH when saving edits to a locked session.
-      // Chromium reports this as a console error even though the UI handles it.
+      // Chromium can report failed API requests as console errors.
       if (/Failed to load resource: the server responded with a status of 409/i.test(text)) return;
 
       // Next.js app-router can log this as an error under heavy parallel load.
@@ -217,6 +285,7 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const generateJson = await generateRes.json();
     const draftPlan = generateJson.data.draftPlan;
     expect(String(draftPlan?.id ?? '')).toBeTruthy();
+    const draftPlanId = String(draftPlan.id);
 
     const sessions = Array.isArray(draftPlan?.sessions) ? draftPlan.sessions : [];
     expect(sessions.length).toBeGreaterThan(0);
@@ -287,19 +356,23 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await weekLock.check();
     await lockWeekOk;
 
-    await durationInputAfter.fill('41');
-    const saveLocked = page.waitForResponse(
-      (res) =>
-        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
-        res.request().method() === 'PATCH' &&
-        res.status() === 409
-    );
-    await firstSessionAfterReload.locator('[data-testid="apb-session-save"]').click();
-    await saveLocked;
+    // When a week is locked, the UI should prevent edits client-side.
+    await expect(page.locator(`[data-week-index="${weekIndex}"] [data-testid="apb-week-locked-note"]`)).toBeVisible();
+    await expect(durationInputAfter).toBeDisabled();
+    await expect(firstSessionAfterReload.locator('[data-testid="apb-session-save"]')).toBeDisabled();
 
-    const weekLockedError = firstSessionAfterReload.locator('[data-testid="apb-session-error"]');
-    await expect(weekLockedError).toBeVisible();
-    await expect(weekLockedError).toContainText('Week is locked');
+    // Server should still enforce week locks (even if a client forces a PATCH).
+    const forcedWeekEditRes = await page.request.patch(
+      `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+      {
+        data: {
+          draftPlanId,
+          sessionEdits: [{ sessionId, durationMinutes: 41 }],
+        },
+      }
+    );
+    expect(forcedWeekEditRes.status()).toBe(409);
+    expect(await forcedWeekEditRes.text()).toContain('WEEK_LOCKED');
 
     // Verify previous saved value still remains.
     const draftAfterWeekLockRes = await page.request.get(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`);
@@ -335,19 +408,23 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     });
     await firstSessionForLock.locator('[data-testid="apb-session-lock"]').check();
     await lockSessionOk;
-    await firstSessionForLock.locator('[data-testid="apb-session-duration"]').fill('43');
-    const saveSessionLocked = page.waitForResponse(
-      (res) =>
-        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
-        res.request().method() === 'PATCH' &&
-        res.status() === 409
-    );
-    await firstSessionForLock.locator('[data-testid="apb-session-save"]').click();
-    await saveSessionLocked;
 
-    const sessionError = firstSessionForLock.locator('[data-testid="apb-session-error"]');
-    await expect(sessionError).toBeVisible();
-    await expect(sessionError).toContainText('Session is locked');
+    // When a session is locked, the UI should prevent edits client-side.
+    await expect(firstSessionForLock.locator('[data-testid="apb-session-duration"]')).toBeDisabled();
+    await expect(firstSessionForLock.locator('[data-testid="apb-session-save"]')).toBeDisabled();
+
+    // Server should still enforce session locks.
+    const forcedSessionEditRes = await page.request.patch(
+      `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+      {
+        data: {
+          draftPlanId,
+          sessionEdits: [{ sessionId, durationMinutes: 43 }],
+        },
+      }
+    );
+    expect(forcedSessionEditRes.status()).toBe(409);
+    expect(await forcedSessionEditRes.text()).toContain('SESSION_LOCKED');
 
     // Start a fresh draft for adaptations flow so we don't depend on lock state.
     await page.getByTestId('apb-generate-draft').click();

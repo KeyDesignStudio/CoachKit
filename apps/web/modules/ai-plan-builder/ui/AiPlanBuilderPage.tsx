@@ -891,6 +891,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
                 {(Array.isArray(draftPlanLatest.weeks) ? draftPlanLatest.weeks : []).map((w: any) => {
                   const weekIndex = Number(w.weekIndex);
+                  const isWeekLocked = Boolean(w.locked);
                   const weekSessions = groupSessionsByWeek.get(weekIndex) ?? [];
                   return (
                     <div
@@ -905,6 +906,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                           <input
                             type="checkbox"
                             checked={Boolean(w.locked)}
+                            disabled={busy !== null}
                             data-testid="apb-week-lock"
                             onChange={(e) => {
                               const locked = e.target.checked;
@@ -936,6 +938,12 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                         </label>
                       </div>
 
+                      {isWeekLocked && (
+                        <div className="mt-2 text-xs text-[var(--fg-muted)]" data-testid="apb-week-locked-note">
+                          Week is locked. Unlock to edit sessions.
+                        </div>
+                      )}
+
                       <div className="mt-2 text-xs text-[var(--fg-muted)]">
                         Sessions: {String(w.sessionsCount ?? weekSessions.length)} · Total minutes:{' '}
                         {String(w.totalMinutes ?? '')}
@@ -943,6 +951,11 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
                       <div className="mt-3 space-y-3">
                         {weekSessions.map((s: any) => (
+                          (() => {
+                            const isSessionLocked = Boolean(s.locked);
+                            const isSessionEditDisabled = busy !== null || isWeekLocked || isSessionLocked;
+                            const isSessionLockToggleDisabled = busy !== null || isWeekLocked;
+                            return (
                           <div
                             key={String(s.id)}
                             data-testid="apb-session"
@@ -958,6 +971,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 <input
                                   type="checkbox"
                                   checked={Boolean(s.locked)}
+                                  disabled={isSessionLockToggleDisabled}
                                   data-testid="apb-session-lock"
                                   onChange={(e) => {
                                     const locked = e.target.checked;
@@ -1004,6 +1018,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 <div className="mb-1 text-sm font-medium">Type</div>
                                 <Input
                                   value={String(s.type ?? '')}
+                                  disabled={isSessionEditDisabled}
                                   onChange={(e) => {
                                     const type = e.target.value;
                                     upsertSessionDraftEdit(String(s.id), { type });
@@ -1025,6 +1040,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                   value={Number(s.durationMinutes ?? 0)}
                                   min={0}
                                   max={10000}
+                                  disabled={isSessionEditDisabled}
                                   data-testid="apb-session-duration"
                                   onChange={(e) => {
                                     const durationMinutes = Number(e.target.value || 0);
@@ -1045,6 +1061,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 <Textarea
                                   rows={3}
                                   value={String(s.notes ?? '')}
+                                  disabled={isSessionEditDisabled}
                                   onChange={(e) => {
                                     const notes = e.target.value;
                                     upsertSessionDraftEdit(String(s.id), { notes });
@@ -1066,7 +1083,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 type="button"
                                 size="sm"
                                 variant="secondary"
-                                disabled={busy !== null}
+                                disabled={isSessionEditDisabled}
                                 data-testid="apb-session-save"
                                 onClick={() =>
                                   runAction('save-session', async () => {
@@ -1126,6 +1143,8 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                               </div>
                             )}
                           </div>
+                            );
+                          })()
                         ))}
                       </div>
                     </div>
