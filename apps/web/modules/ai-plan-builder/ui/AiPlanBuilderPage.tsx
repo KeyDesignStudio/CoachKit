@@ -3,7 +3,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { Block } from '@/components/ui/Block';
@@ -15,6 +15,8 @@ import { ApiClientError, useApi } from '@/components/api-client';
 
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
+
+  const draftPlanWriteTokenRef = useRef(0);
 
   const [tab, setTab] = useState<'intake' | 'plan' | 'adaptations'>('intake');
   const [busy, setBusy] = useState<string | null>(null);
@@ -95,10 +97,13 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   }, [athleteId, request]);
 
   const fetchDraftPlanLatest = useCallback(async () => {
+    const token = draftPlanWriteTokenRef.current;
     const data = await request<{ draftPlan: any | null }>(
       `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`
     );
-    setDraftPlanLatest(data.draftPlan);
+    if (token === draftPlanWriteTokenRef.current) {
+      setDraftPlanLatest(data.draftPlan);
+    }
     return data.draftPlan;
   }, [athleteId, request]);
 
@@ -115,6 +120,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
   const publishDraftPlan = useCallback(
     async (aiPlanDraftId: string) => {
+      draftPlanWriteTokenRef.current++;
       const data = await request<{ draftPlan: any; publish: any }>(
         `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/publish`,
         {
@@ -598,6 +604,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                 data-testid="apb-generate-draft"
                 onClick={() =>
                   runAction('generate', async () => {
+                    draftPlanWriteTokenRef.current++;
                     setSessionErrors({});
                     const created = await request<{ draftPlan: any }>(
                       `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,

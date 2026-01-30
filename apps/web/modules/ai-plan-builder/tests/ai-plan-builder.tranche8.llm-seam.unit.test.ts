@@ -30,7 +30,7 @@ describe('AI Plan Builder v1 (Tranche 8: LLM seam)', () => {
 
   it('T8.3 deterministic and LLM stub return identical results (all capabilities)', async () => {
     const det = new DeterministicAiPlanBuilderAI({ recordAudit: true });
-    const llm = new LlmAiPlanBuilderAI(new DeterministicAiPlanBuilderAI({ recordAudit: false }));
+    const llm = new LlmAiPlanBuilderAI({ deterministicFallback: new DeterministicAiPlanBuilderAI({ recordAudit: false }) });
 
     const summarizeInput = {
       evidence: [

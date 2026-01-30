@@ -6,11 +6,16 @@ Tranche 1 is **scaffolding only**:
 - Deterministic, testable server logic only
 - Data stored in additive Prisma models (no changes to existing plan flows)
 
-Tranche 8 adds an **LLM seam (still no external calls)**:
+Tranche 8 adds an **LLM seam**:
 - All “AI-like” behavior flows through a single capability interface.
 - The default implementation remains deterministic.
-- `AI_PLAN_BUILDER_AI_MODE=llm` selects a stub implementation that delegates to deterministic logic and logs `LLM_CALL_SIMULATED` metadata only.
+- `AI_PLAN_BUILDER_AI_MODE=llm` selects an LLM-backed implementation (with deterministic fallback).
 - Optional hash-only usage auditing (no payload storage).
+
+Tranche 9 adds **real OpenAI provider wiring** behind the seam:
+- Server-side only (never from client code).
+- Guardrails: timeouts, 1 retry on retryable failures, JSON validation, deterministic fallback.
+- CI/test uses the mock provider (no external calls).
 
 This module is intentionally isolated under `apps/web/modules/ai-plan-builder`.
 
@@ -45,12 +50,30 @@ CI should use the full mode (and may additionally run `npm run test:ai-plan-buil
 
 - Env var: `AI_PLAN_BUILDER_AI_MODE`
 	- `deterministic` (default)
-	- `llm` (stub; no network)
+	- `llm`
+
+LLM provider config (server-side only):
+- `AI_PLAN_BUILDER_LLM_PROVIDER` (`openai` | `mock`)
+- `AI_PLAN_BUILDER_LLM_MODEL`
+- `OPENAI_API_KEY`
+- `AI_PLAN_BUILDER_LLM_TIMEOUT_MS` (default `20000`)
+- `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS` (default `1200`)
 
 Safety guarantees in this repo version:
-- No external LLM requests (no keys required).
-- Stub logs only structured metadata (counts/booleans), never raw prompts or user content.
+- No client-side LLM requests.
+- CI/test forces the mock provider; no external calls and no `OPENAI_API_KEY` required.
+- Logs never include raw prompts or raw LLM outputs.
 - Audit helpers use stable hashes of input/output only.
+
+### Enabling LLM mode locally
+
+Set these in your local env (server-side only):
+- `AI_PLAN_BUILDER_AI_MODE=llm`
+- `AI_PLAN_BUILDER_LLM_PROVIDER=openai`
+- `AI_PLAN_BUILDER_LLM_MODEL=<model id>`
+- `OPENAI_API_KEY=<secret>`
+
+Never commit keys and never expose them to client-side env vars.
 
 ### Reproducing failures
 
