@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { daySortKey, normalizeWeekStart } from '../lib/week-start';
+
 export function buildDraftPlanJsonV1(params: {
   setupJson: unknown;
   weeks: Array<{ weekIndex: number; locked: boolean }>;
@@ -14,6 +16,8 @@ export function buildDraftPlanJsonV1(params: {
     locked: boolean;
   }>;
 }): Prisma.InputJsonValue {
+  const weekStart = normalizeWeekStart((params.setupJson as any)?.weekStart);
+
   const weeksSorted = params.weeks
     .slice()
     .sort((a, b) => a.weekIndex - b.weekIndex)
@@ -21,7 +25,12 @@ export function buildDraftPlanJsonV1(params: {
 
   const sessionsSorted = params.sessions
     .slice()
-    .sort((a, b) => a.weekIndex - b.weekIndex || a.ordinal - b.ordinal)
+    .sort(
+      (a, b) =>
+        a.weekIndex - b.weekIndex ||
+        daySortKey(a.dayOfWeek, weekStart) - daySortKey(b.dayOfWeek, weekStart) ||
+        a.ordinal - b.ordinal
+    )
     .map((s) => ({
       weekIndex: s.weekIndex,
       ordinal: s.ordinal,
@@ -49,3 +58,4 @@ export function buildDraftPlanJsonV1(params: {
     })),
   } as Prisma.InputJsonValue;
 }
+

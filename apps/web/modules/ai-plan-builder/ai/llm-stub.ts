@@ -34,6 +34,7 @@ const summarizeIntakeResultSchema = z
 
 const draftPlanSetupSchema = z
   .object({
+    weekStart: z.enum(['monday', 'sunday']).optional().default('monday'),
     eventDate: z.string().min(1),
     weeksToEvent: z.number().int().min(1).max(52),
     weeklyAvailabilityDays: z.array(z.number().int().min(0).max(6)),

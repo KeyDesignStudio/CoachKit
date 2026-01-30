@@ -81,7 +81,7 @@ describe('AI Plan Builder v1 (Tranche 11B: eval fixtures)', () => {
     expect(computeStableSha256(intakeMinimal)).toMatchInlineSnapshot(`"d93b27de59e594acd9232ee731d6d1a0f1645c99200f32cce8e2f872d46e2d0a"`);
     expect(computeStableSha256(intakeMedium)).toMatchInlineSnapshot(`"718438e183f9f0a06949779abcb21f954476fc77fb6447e1699f3f73c6ce1c59"`);
     expect(computeStableSha256(coachIntent)).toMatchInlineSnapshot(`"586be62bdfac809b73052e9fc739ab1a84a0298e476fc8f23653d743495a531c"`);
-    expect(computeStableSha256(draftSetup)).toMatchInlineSnapshot(`"35cf03c0a60f31a672d516a476bb7e93ea376e3d6ed700abd49d38605a4ab91c"`);
+    expect(computeStableSha256(draftSetup)).toMatchInlineSnapshot(`"f2ac2e03ba176d9260a3f3367454b5fa66854601eb254c36ab5cb0e32d5f6bc3"`);
     expect(computeStableSha256(proposalDiffs)).toMatchInlineSnapshot(`"8e878ee95bf5266074a7f5839f7e7dd20e42bdfab439a4a0b8e54201f3f1bb91"`);
   });
 
@@ -97,7 +97,7 @@ describe('AI Plan Builder v1 (Tranche 11B: eval fixtures)', () => {
     const diffsOut = await ai.suggestProposalDiffs(proposalDiffs as any);
 
     expect(computeStableSha256(intakeOut)).toMatchInlineSnapshot(`"25773d85f0a6230e35b4fd95bb975ee8023a19b93d2483766c45a5db050e8bfe"`);
-    expect(computeStableSha256(draftOut)).toMatchInlineSnapshot(`"f550998f486bbfe8ebd835a550988305eee8f48bec9bc655bfbc7e722a384df1"`);
+    expect(computeStableSha256(draftOut)).toMatchInlineSnapshot(`"0f0db68c018e50108625619fbc19f025e6920ba434e6723cb6a316390d334135"`);
     expect(computeStableSha256(diffsOut)).toMatchInlineSnapshot(`"1f0c88a58040d2742b66f59d0fef6564ba2dced176671933e72f4d3ce0980223"`);
   });
 

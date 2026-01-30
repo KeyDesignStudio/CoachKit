@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/Textarea';
 
 import { ApiClientError, useApi } from '@/components/api-client';
 
+import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
+
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
 
@@ -88,6 +90,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const [profileOverrideJson, setProfileOverrideJson] = useState<string>('{}');
 
   const [setup, setSetup] = useState({
+    weekStart: 'monday' as 'monday' | 'sunday',
     eventDate: new Date().toISOString().slice(0, 10),
     weeksToEvent: 12,
     weeklyAvailabilityDays: [1, 2, 3, 5, 6],
@@ -99,15 +102,17 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
     longSessionDay: 6 as number | null,
   });
 
-  const dayNames = useMemo(() => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], []);
+  const effectiveWeekStart = useMemo(
+    () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? (setup as any)?.weekStart),
+    [draftPlanLatest, setup]
+  );
 
-  const startOfWeekSunday = useCallback((date: Date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    const day = d.getDay();
-    d.setDate(d.getDate() - day);
-    return d;
-  }, []);
+  const persistedDraftWeekStart = useMemo(
+    () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart),
+    [draftPlanLatest]
+  );
+
+  const orderedDays = useMemo(() => orderedDayIndices(effectiveWeekStart), [effectiveWeekStart]);
 
   const formatIsoDate = useCallback((d: Date) => d.toISOString().slice(0, 10), []);
 
@@ -147,6 +152,33 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
       return data.publishStatus;
     },
     [athleteId, request]
+  );
+
+  const generateDraft = useCallback(
+    async (options?: { confirmReplaceExisting?: boolean }) => {
+      if (options?.confirmReplaceExisting && draftPlanLatest?.id) {
+        const ok = window.confirm(
+          'This will generate a new draft and replace the one currently loaded (losing any edits/locks in this view). Continue?'
+        );
+        if (!ok) return;
+      }
+
+      draftPlanWriteTokenRef.current++;
+      setSessionErrors({});
+      const created = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
+        method: 'POST',
+        data: { setup },
+      });
+      setDraftPlanLatest(created.draftPlan);
+      if (created.draftPlan?.id) {
+        void fetchPublishStatus(String(created.draftPlan.id)).catch(() => {
+          setPublishStatus(null);
+        });
+      } else {
+        setPublishStatus(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, fetchPublishStatus, request, setup]
   );
 
   const publishDraftPlan = useCallback(
@@ -315,8 +347,17 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
       if (!byWeek.has(weekIndex)) byWeek.set(weekIndex, []);
       byWeek.get(weekIndex)!.push(s);
     }
+
+    for (const list of byWeek.values()) {
+      list.sort(
+        (a, b) =>
+          daySortKey(Number(a.dayOfWeek), effectiveWeekStart) - daySortKey(Number(b.dayOfWeek), effectiveWeekStart) ||
+          Number(a.ordinal) - Number(b.ordinal)
+      );
+    }
+
     return byWeek;
-  }, [draftPlanLatest]);
+  }, [draftPlanLatest, effectiveWeekStart]);
 
   return (
     <div className="mx-auto w-full max-w-3xl p-4 md:p-8">
@@ -666,23 +707,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                 data-testid="apb-generate-draft"
                 onClick={() =>
                   runAction('generate', async () => {
-                    draftPlanWriteTokenRef.current++;
-                    setSessionErrors({});
-                    const created = await request<{ draftPlan: any }>(
-                      `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
-                      {
-                        method: 'POST',
-                        data: { setup },
-                      }
-                    );
-                    setDraftPlanLatest(created.draftPlan);
-                    if (created.draftPlan?.id) {
-                      void fetchPublishStatus(String(created.draftPlan.id)).catch(() => {
-                        setPublishStatus(null);
-                      });
-                    } else {
-                      setPublishStatus(null);
-                    }
+                    await generateDraft();
                   })
                 }
               >
@@ -691,6 +716,39 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
             }
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <div className="mb-1 text-sm font-medium">Week starts on</div>
+                <Select
+                  value={setup.weekStart}
+                  data-testid="apb-week-start"
+                  onChange={(e) => setSetup((s) => ({ ...s, weekStart: e.target.value as any }))}
+                >
+                  <option value="monday">Monday</option>
+                  <option value="sunday">Sunday</option>
+                </Select>
+
+                {draftPlanLatest?.id && setup.weekStart !== persistedDraftWeekStart ? (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
+                    <div className="text-xs text-[var(--fg-muted)]" data-testid="apb-week-start-note">
+                      Week start changes apply when you regenerate the draft.
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      data-testid="apb-week-start-regenerate"
+                      onClick={() =>
+                        runAction('generate', async () => {
+                          await generateDraft({ confirmReplaceExisting: true });
+                        })
+                      }
+                    >
+                      Regenerate draft
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
               <div>
                 <div className="mb-1 text-sm font-medium">Event date</div>
                 <Input
@@ -712,8 +770,9 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
               <div className="md:col-span-2">
                 <div className="mb-1 text-sm font-medium">Available days</div>
-                <div className="flex flex-wrap gap-2">
-                  {dayNames.map((d, idx) => {
+                <div className="flex flex-wrap gap-2" data-testid="apb-available-days">
+                  {orderedDays.map((idx) => {
+                    const d = DAY_NAMES_SUN0[idx] ?? String(idx);
                     const checked = setup.weeklyAvailabilityDays.includes(idx);
                     return (
                       <label
@@ -811,9 +870,9 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                   }
                 >
                   <option value="">Auto</option>
-                  {dayNames.map((d, idx) => (
-                    <option key={d} value={String(idx)}>
-                      {d}
+                  {orderedDays.map((idx) => (
+                    <option key={String(idx)} value={String(idx)}>
+                      {DAY_NAMES_SUN0[idx] ?? String(idx)}
                     </option>
                   ))}
                 </Select>
@@ -893,7 +952,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                           >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="text-sm font-medium">
-                                {String(s.discipline)} · {dayNames[Number(s.dayOfWeek) % 7]} · #{String(s.ordinal)}
+                                {String(s.discipline)} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · #{String(s.ordinal)}
                               </div>
                               <label className="flex items-center gap-2 text-sm">
                                 <input
@@ -1103,14 +1162,18 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                       const sessions: any[] = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const week0 = startOfWeekSunday(today);
+                      const week0 = startOfWeek(today, effectiveWeekStart);
                       const end = new Date(today);
                       end.setDate(end.getDate() + 7);
 
                       const upcoming = sessions
                         .map((s) => {
                           const date = new Date(week0);
-                          date.setDate(date.getDate() + Number(s.weekIndex) * 7 + Number(s.dayOfWeek));
+                          date.setDate(
+                            date.getDate() +
+                              Number(s.weekIndex) * 7 +
+                              daySortKey(Number(s.dayOfWeek), effectiveWeekStart)
+                          );
                           return { ...s, _date: date };
                         })
                         .filter((s) => s._date >= today && s._date <= end)
@@ -1128,7 +1191,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                           data-session-id={String(s.id)}
                         >
                           <div className="text-sm">
-                            <span className="font-medium">{formatIsoDate(s._date)}</span> · Week {Number(s.weekIndex) + 1} · {dayNames[Number(s.dayOfWeek) % 7]} · {String(s.type)} · {Number(s.durationMinutes)}m
+                            <span className="font-medium">{formatIsoDate(s._date)}</span> · Week {Number(s.weekIndex) + 1} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · {String(s.type)} · {Number(s.durationMinutes)}m
                           </div>
                           <Button
                             type="button"

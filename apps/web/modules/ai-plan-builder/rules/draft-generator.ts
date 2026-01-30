@@ -5,6 +5,7 @@ export type DraftDiscipline = 'swim' | 'bike' | 'run' | 'strength' | 'rest';
 export type DraftSessionType = 'endurance' | 'tempo' | 'threshold' | 'technique' | 'recovery' | 'strength' | 'rest';
 
 export type DraftPlanSetupV1 = {
+  weekStart?: 'monday' | 'sunday';
   eventDate: string; // yyyy-mm-dd
   weeksToEvent: number;
   weeklyAvailabilityDays: number[]; // 0=Sun..6=Sat
@@ -94,14 +95,22 @@ function pickLongDay(setup: DraftPlanSetupV1, days: number[]) {
   return days[days.length - 1] ?? 0;
 }
 
+function daySortKey(dayOfWeek: number, weekStart: 'monday' | 'sunday') {
+  const d = ((Number(dayOfWeek) % 7) + 7) % 7;
+  if (weekStart === 'sunday') return d;
+  return (d + 6) % 7;
+}
+
 export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): DraftPlanV1 {
   const days = stableDayList(setupRaw.weeklyAvailabilityDays);
   const weeksToEvent = clampInt(setupRaw.weeksToEvent, 1, 52);
   const maxIntensityDaysPerWeek = clampInt(setupRaw.maxIntensityDaysPerWeek, 1, 3);
   const maxDoublesPerWeek = clampInt(setupRaw.maxDoublesPerWeek, 0, 3);
+  const weekStart: 'monday' | 'sunday' = setupRaw.weekStart === 'sunday' ? 'sunday' : 'monday';
 
   const setup: DraftPlanSetupV1 = {
     ...setupRaw,
+    weekStart,
     weeksToEvent,
     weeklyAvailabilityDays: days,
     maxIntensityDaysPerWeek,
@@ -222,10 +231,10 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       });
     }
 
-    // Sort by day then ordinal for a stable UI order.
+    // Sort by configured week start, then ordinal for a stable UI order.
     const sorted = sessions
       .slice()
-      .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.ordinal - b.ordinal)
+      .sort((a, b) => daySortKey(a.dayOfWeek, weekStart) - daySortKey(b.dayOfWeek, weekStart) || a.ordinal - b.ordinal)
       .map((s, idx) => ({ ...s, ordinal: idx }));
 
     weeks.push({ weekIndex, locked: false, sessions: sorted });
@@ -233,3 +242,4 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
 
   return { version: 'v1', setup, weeks };
 }
+

@@ -14,6 +14,81 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
 }
 
 test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
+  test('week start differs from draft → shows regenerate note + button', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await setRoleCookie(page, 'COACH');
+
+    await createCoach({ id: 'dev-coach' });
+
+    const athleteId = nextTestId('pw_weekstart_note');
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
+
+    await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
+    await page.getByTestId('apb-tab-plan').click();
+
+    const generateOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
+    await page.getByTestId('apb-generate-draft').click();
+    await generateOk;
+
+    // Change week start to differ from the persisted draft value.
+    await page.getByTestId('apb-week-start').selectOption('sunday');
+
+    await expect(page.getByTestId('apb-week-start-note')).toBeVisible();
+    await expect(page.getByTestId('apb-week-start-note')).toContainText(
+      'Week start changes apply when you regenerate the draft.'
+    );
+    await expect(page.getByTestId('apb-week-start-regenerate')).toBeVisible();
+
+    await page.screenshot({ path: testInfo.outputPath('week-start-regenerate-note.png'), fullPage: true });
+  });
+
+  test('week start day toggle reorders day pickers (default Monday)', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await setRoleCookie(page, 'COACH');
+
+    // Ensure dev coach exists (dev-auth prefers dev-coach for COACH role).
+    await createCoach({ id: 'dev-coach' });
+
+    const athleteId = nextTestId('pw_weekstart');
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
+
+    await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
+
+    await page.getByTestId('apb-tab-plan').click();
+    await expect(page.getByTestId('apb-week-start')).toBeVisible();
+
+    // Default is Monday.
+    await expect(page.getByTestId('apb-week-start')).toHaveValue('monday');
+    await expect(page.locator('[data-testid="apb-available-days"] label').first()).toContainText('Mon');
+
+    await page.screenshot({ path: testInfo.outputPath('week-start-monday.png'), fullPage: true });
+
+    await page.getByTestId('apb-week-start').selectOption('sunday');
+    await expect(page.locator('[data-testid="apb-available-days"] label').first()).toContainText('Sun');
+
+    await page.screenshot({ path: testInfo.outputPath('week-start-sunday.png'), fullPage: true });
+  });
+
   test('intake empty state → create intake CTA creates a draft', async ({ page }, testInfo) => {
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 

@@ -4,7 +4,7 @@ import type { AiDraftPlanSnapshot, AiAdaptationTriggerType } from '../ai/types';
 function stableSortSessions<T extends { weekIndex: number; dayOfWeek: number; ordinal: number }>(sessions: T[]) {
   return sessions
     .slice()
-    .sort((a, b) => a.weekIndex - b.weekIndex || a.dayOfWeek - b.dayOfWeek || a.ordinal - b.ordinal);
+    .sort((a, b) => a.weekIndex - b.weekIndex || a.ordinal - b.ordinal || a.dayOfWeek - b.dayOfWeek);
 }
 
 function isIntensitySession(session: { type: string }) {
@@ -200,3 +200,4 @@ export function suggestProposalDiffsDeterministicV1(params: {
     respectsLocks,
   };
 }
+

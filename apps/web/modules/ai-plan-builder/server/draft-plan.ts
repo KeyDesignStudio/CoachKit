@@ -16,6 +16,7 @@ export const createDraftPlanSchema = z.object({
 });
 
 export const draftPlanSetupV1Schema = z.object({
+  weekStart: z.enum(['monday', 'sunday']).optional().default('monday'),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   weeksToEvent: z.number().int().min(1).max(52),
   weeklyAvailabilityDays: z.array(z.number().int().min(0).max(6)).min(1),
@@ -80,10 +81,15 @@ export async function generateAiDraftPlanV1(params: {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
+  const setup = {
+    ...params.setup,
+    weekStart: params.setup.weekStart ?? 'monday',
+  };
+
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
-  const suggestion = await ai.suggestDraftPlan({ setup: params.setup as any });
+  const suggestion = await ai.suggestDraftPlan({ setup: setup as any });
   const draft = suggestion.planJson;
-  const setupHash = computeStableSha256(params.setup);
+  const setupHash = computeStableSha256(setup);
 
   const created = await prisma.aiPlanDraft.create({
     data: {
@@ -92,7 +98,7 @@ export async function generateAiDraftPlanV1(params: {
       source: 'AI_DRAFT',
       status: 'DRAFT',
       planJson: draft as unknown as Prisma.InputJsonValue,
-      setupJson: params.setup as unknown as Prisma.InputJsonValue,
+      setupJson: setup as unknown as Prisma.InputJsonValue,
       setupHash,
       weeks: {
         create: draft.weeks.map((w) => ({
@@ -125,6 +131,7 @@ export async function generateAiDraftPlanV1(params: {
 
   return created;
 }
+
 
 export async function getLatestAiDraftPlan(params: { coachId: string; athleteId: string }) {
   requireAiPlanBuilderV1Enabled();

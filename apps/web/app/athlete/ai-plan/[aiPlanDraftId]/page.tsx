@@ -4,6 +4,7 @@ import { requireAthlete } from '@/lib/auth';
 
 import { requireAiPlanBuilderV1Enabled } from '@/modules/ai-plan-builder/server/flag';
 import { getPublishedAiPlanForAthlete } from '@/modules/ai-plan-builder/server/athlete-plan';
+import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart } from '@/modules/ai-plan-builder/lib/week-start';
 
 import { PublishUpdateBanner } from './PublishUpdateBanner';
 
@@ -12,6 +13,8 @@ export default async function AthleteAiPlanViewPage(props: { params: { aiPlanDra
   const { user } = await requireAthlete();
 
   const draft = await getPublishedAiPlanForAthlete({ athleteId: user.id, aiPlanDraftId: props.params.aiPlanDraftId });
+
+  const weekStart = normalizeWeekStart((draft as any)?.setupJson?.weekStart);
 
   const sessionsByWeek = new Map<number, typeof draft.sessions>();
   for (const s of draft.sessions) {
@@ -47,7 +50,12 @@ export default async function AthleteAiPlanViewPage(props: { params: { aiPlanDra
 
       <div className="space-y-3">
         {draft.weeks.map((w) => {
-          const weekSessions = (sessionsByWeek.get(w.weekIndex) ?? []).slice().sort((a, b) => a.ordinal - b.ordinal);
+          const weekSessions = (sessionsByWeek.get(w.weekIndex) ?? [])
+            .slice()
+            .sort(
+              (a, b) =>
+                daySortKey(a.dayOfWeek, weekStart) - daySortKey(b.dayOfWeek, weekStart) || a.ordinal - b.ordinal
+            );
           return (
             <div key={w.id} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3">
               <div className="flex items-center justify-between">
@@ -70,7 +78,9 @@ export default async function AthleteAiPlanViewPage(props: { params: { aiPlanDra
                         <div className="text-sm font-medium">{s.type}</div>
                         <div className="text-xs text-[var(--fg-muted)]">{s.durationMinutes} min</div>
                       </div>
-                      <div className="mt-1 text-xs text-[var(--fg-muted)]">{s.discipline} • day {s.dayOfWeek}</div>
+                      <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                        {s.discipline} • {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]}
+                      </div>
                     </Link>
                   ))
                 )}
