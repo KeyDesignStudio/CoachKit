@@ -129,6 +129,30 @@ enum AiInvocationActorType {
   SYSTEM
 }
 
+// --- AI Plan Builder (Tranche 12) ---
+// Usage rollups + directional cost estimates + soft alerts.
+
+enum AiUsageAlertSeverity {
+  INFO
+  WARN
+  ERROR
+}
+
+enum AiUsageAlertType {
+  HIGH_CALL_VOLUME
+  HIGH_FALLBACK_RATE
+  HIGH_ERROR_RATE
+  HIGH_RETRY_RATE
+  HIGH_P95_LATENCY
+  HIGH_COST_ESTIMATE
+}
+
+enum AiUsageAlertScope {
+  GLOBAL
+  CAPABILITY
+  COACH
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -1047,4 +1071,62 @@ model AiInvocationAudit {
   @@index([capability, createdAt])
   @@index([coachId, createdAt])
   @@index([athleteId, createdAt])
+}
+
+model AiInvocationDailyRollup {
+  id              String   @id @default(cuid())
+  date            DateTime // UTC day, stored at midnight UTC
+  provider        String
+  model           String
+  capability      String
+  effectiveMode   String
+
+  callCount       Int
+  fallbackCount   Int
+  errorCount      Int
+  retryCountTotal Int
+
+  avgDurationMs   Int
+  p95DurationMs   Int?
+
+  maxOutputTokensAvg   Int
+  estimatedOutputTokens Int
+  estimatedCostUsd      Float
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([date, provider, model, capability, effectiveMode])
+  @@index([date])
+  @@index([capability, date])
+}
+
+model AiUsageAlert {
+  id             String               @id @default(cuid())
+  createdAt      DateTime             @default(now())
+  dateRangeStart DateTime
+  dateRangeEnd   DateTime
+
+  // NOTE: Postgres UNIQUE indexes treat NULLs as distinct, so a composite unique
+  // over nullable columns will not de-dupe alerts where provider/model/capability
+  // are NULL. Use a stable, non-null unique key instead.
+  dedupeKey      String               @unique
+
+  severity       AiUsageAlertSeverity
+  alertType      AiUsageAlertType
+  scope          AiUsageAlertScope
+
+  capability     String?
+  provider       String?
+  model          String?
+
+  observedValue  Float
+  thresholdValue Float
+  message        String
+
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  @@index([createdAt(sort: Desc)])
+  @@index([alertType, createdAt(sort: Desc)])
+  @@index([dateRangeStart])
 }

@@ -91,6 +91,23 @@ Admin audit viewer (Tranche 11A):
 	- Non-admins receive `404` (feature remains effectively non-existent).
 	- Admin check runs server-side only; no audit data is exposed to non-admins.
 
+Usage rollups + cost estimates + alerts (Tranche 12):
+- UI route:
+	- `/admin/ai-usage` (summary + capability breakdown + alerts)
+- API routes:
+	- `POST /api/admin/ai-usage/rollup` body: `{ days: 7|30|90 }` (default 30)
+	- `GET /api/admin/ai-usage/rollups?days=7|30|90`
+	- `POST /api/admin/ai-usage/evaluate-alerts` body: `{ days: 7|30|90 }` (default 7)
+	- `GET /api/admin/ai-usage/alerts?limit=&offset=`
+	- `POST /api/admin/ai-usage/alerts/:id/ack`
+- Alert thresholds (optional; defaults apply if unset):
+	- `AI_USAGE_ALERT_CALLS_PER_DAY_THRESHOLD` (default `500`)
+	- `AI_USAGE_ALERT_FALLBACK_RATE_THRESHOLD` (default `0.15`)
+	- `AI_USAGE_ALERT_ERROR_RATE_THRESHOLD` (default `0.05`)
+	- `AI_USAGE_ALERT_P95_LATENCY_MS_THRESHOLD` (default `25000`)
+	- `AI_USAGE_ALERT_COST_USD_PER_DAY_THRESHOLD` (default `10`)
+- Costs are estimates (directional only; not billing-grade).
+
 Eval fixtures (Tranche 11B):
 - Stored under `modules/ai-plan-builder/evals/fixtures/`
 - Purpose: lightweight drift detection for schemas/specs/redaction behavior.
