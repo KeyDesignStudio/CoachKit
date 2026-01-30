@@ -7,9 +7,9 @@ import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
 
-import { generateDraftPlanDeterministicV1 } from '../rules/draft-generator';
 import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
+import { getAiPlanBuilderAI } from '../ai/factory';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -80,7 +80,9 @@ export async function generateAiDraftPlanV1(params: {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
-  const draft = generateDraftPlanDeterministicV1(params.setup);
+  const ai = getAiPlanBuilderAI();
+  const suggestion = await ai.suggestDraftPlan({ setup: params.setup as any });
+  const draft = suggestion.planJson;
   const setupHash = computeStableSha256(params.setup);
 
   const created = await prisma.aiPlanDraft.create({

@@ -6,6 +6,12 @@ Tranche 1 is **scaffolding only**:
 - Deterministic, testable server logic only
 - Data stored in additive Prisma models (no changes to existing plan flows)
 
+Tranche 8 adds an **LLM seam (still no external calls)**:
+- All “AI-like” behavior flows through a single capability interface.
+- The default implementation remains deterministic.
+- `AI_PLAN_BUILDER_AI_MODE=llm` selects a stub implementation that delegates to deterministic logic and logs `LLM_CALL_SIMULATED` metadata only.
+- Optional hash-only usage auditing (no payload storage).
+
 This module is intentionally isolated under `apps/web/modules/ai-plan-builder`.
 
 ## Running tests (1-minute setup)
@@ -34,6 +40,17 @@ What it does:
 	- Uses per-worker/per-shard databases.
 
 CI should use the full mode (and may additionally run `npm run test:ai-plan-builder:parallel` as a stress check).
+
+## AI seam mode switch
+
+- Env var: `AI_PLAN_BUILDER_AI_MODE`
+	- `deterministic` (default)
+	- `llm` (stub; no network)
+
+Safety guarantees in this repo version:
+- No external LLM requests (no keys required).
+- Stub logs only structured metadata (counts/booleans), never raw prompts or user content.
+- Audit helpers use stable hashes of input/output only.
 
 ### Reproducing failures
 

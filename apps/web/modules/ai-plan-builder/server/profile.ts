@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeEvidenceHash } from '../rules/evidence-hash';
-import { extractProfileDeterministic } from '../rules/profile-extractor';
+import { getAiPlanBuilderAI } from '../ai/factory';
 
 export const extractProfileSchema = z.object({
   intakeResponseId: z.string().min(1),
@@ -60,7 +60,10 @@ export async function extractAiProfileFromIntake(params: {
     return { profile: existing, evidenceHash, wasCreated: false };
   }
 
-  const extracted = extractProfileDeterministic(evidence);
+  const ai = getAiPlanBuilderAI();
+  const extracted = await ai.summarizeIntake({
+    evidence: evidence.map((e) => ({ questionKey: e.questionKey, answerJson: e.answerJson as any })),
+  });
 
   try {
     const created = await prisma.athleteProfileAI.create({
