@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
+import { createAthlete, createCoach, nextTestId, seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
 
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   await page.context().addCookies([
@@ -14,6 +14,53 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
 }
 
 test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
+  test('intake empty state → create intake CTA creates a draft', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await setRoleCookie(page, 'COACH');
+
+    // Ensure dev coach exists (dev-auth prefers dev-coach for COACH role).
+    await createCoach({ id: 'dev-coach' });
+
+    // Use a unique athlete ID to avoid bleeding state between runs.
+    const athleteId = nextTestId('pw_athlete_empty');
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
+
+    await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
+
+    await expect(page.getByTestId('apb-tab-intake')).toBeVisible();
+    await expect(page.getByText('Latest Intake')).toBeVisible();
+    await expect(page.getByText('No intake found.')).toBeVisible();
+
+    // Screenshot of the new empty state (with CTA visible).
+    await page.screenshot({ path: testInfo.outputPath('intake-review-empty-state.png'), fullPage: true });
+
+    const createOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 30_000 }
+    );
+
+    await expect(page.getByTestId('apb-create-intake')).toBeVisible();
+    await page.getByTestId('apb-create-intake').click();
+    await createOk;
+
+    // Latest intake panel should now show a draft intake.
+    await expect(page.getByText('Intake ID:')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Status:\s*DRAFT/i)).toBeVisible({ timeout: 30_000 });
+
+    // Evidence should no longer show the empty prompt.
+    await expect(page.getByText('Load an intake to view evidence.')).toHaveCount(0);
+  });
+
   test('generate → edit → persist → lock → blocked edit shows error', async ({ page }, testInfo) => {
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 

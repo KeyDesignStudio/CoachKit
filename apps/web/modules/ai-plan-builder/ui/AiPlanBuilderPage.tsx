@@ -438,7 +438,38 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
             }
           >
             {!intakeLatest ? (
-              <div className="text-sm text-[var(--fg-muted)]">No intake found.</div>
+              <div className="space-y-3">
+                <div className="text-sm text-[var(--fg-muted)]">No intake found.</div>
+                <div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    data-testid="apb-create-intake"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      runAction('create-intake', async () => {
+                        const data = await request<{ intakeResponse: any }>(
+                          `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
+                          {
+                            method: 'POST',
+                            data: {},
+                          }
+                        );
+
+                        const created = data.intakeResponse ?? null;
+                        setIntakeLatest(created);
+                        if (created?.id) {
+                          setIntakeEvidence(null);
+                          await fetchEvidence(String(created.id));
+                        }
+                      })
+                    }
+                  >
+                    {busy === 'create-intake' ? 'Creating…' : 'Create intake'}
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-3">
                 <div className="text-sm">
