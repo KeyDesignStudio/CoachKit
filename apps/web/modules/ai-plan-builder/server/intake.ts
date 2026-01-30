@@ -23,7 +23,7 @@ export async function getLatestSubmittedIntake(params: { coachId: string; athlet
     where: {
       athleteId: params.athleteId,
       coachId: params.coachId,
-      status: 'SUBMITTED',
+      submittedAt: { not: null },
     },
     orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
   });
