@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { UrlObject } from 'url';
 
 import { requireAiPlanBuilderAuditAdminUser, normalizeAiAuditListQuery, listAiInvocationAuditsForAdmin } from '@/modules/ai-plan-builder/server/audit-admin';
 
@@ -13,18 +14,23 @@ export default async function AdminAiAuditsPage(props: { searchParams?: Record<s
   const prevOffset = Math.max(0, page.offset - page.limit);
   const nextOffset = page.offset + page.limit;
 
-  const baseParams = new URLSearchParams();
-  baseParams.set('range', query.range);
-  if (query.capability) baseParams.set('capability', query.capability);
-  if (query.fallbackUsed !== undefined) baseParams.set('fallbackUsed', String(query.fallbackUsed));
-  if (query.errorCode) baseParams.set('errorCode', query.errorCode);
-  if (query.actorType) baseParams.set('actorType', query.actorType);
-  baseParams.set('limit', String(page.limit));
+  const baseQuery: Record<string, string> = {
+    range: query.range,
+    limit: String(page.limit),
+  };
+  if (query.capability) baseQuery.capability = query.capability;
+  if (query.fallbackUsed !== undefined) baseQuery.fallbackUsed = String(query.fallbackUsed);
+  if (query.errorCode) baseQuery.errorCode = query.errorCode;
+  if (query.actorType) baseQuery.actorType = query.actorType;
 
-  const makeHref = (offset: number) => {
-    const sp = new URLSearchParams(baseParams);
-    sp.set('offset', String(offset));
-    return `/admin/ai-audits?${sp.toString()}`;
+  const makeHref = (offset: number): UrlObject => {
+    return {
+      pathname: '/admin/ai-audits',
+      query: {
+        ...baseQuery,
+        offset: String(offset),
+      },
+    };
   };
 
   return (
@@ -102,7 +108,7 @@ export default async function AdminAiAuditsPage(props: { searchParams?: Record<s
           <button type="submit" className="rounded bg-black px-3 py-2 text-sm text-white">
             Apply
           </button>
-          <Link href="/admin/ai-audits" className="rounded border px-3 py-2 text-sm">
+          <Link href={{ pathname: '/admin/ai-audits' }} className="rounded border px-3 py-2 text-sm">
             Reset
           </Link>
         </div>
@@ -127,7 +133,7 @@ export default async function AdminAiAuditsPage(props: { searchParams?: Record<s
             {items.map((a) => (
               <tr key={a.id} className="border-t">
                 <td className="p-2 whitespace-nowrap">
-                  <Link className="underline" href={`/admin/ai-audits/${a.id}`}>
+                  <Link className="underline" href={{ pathname: `/admin/ai-audits/${a.id}` }}>
                     {a.createdAt.toISOString()}
                   </Link>
                 </td>

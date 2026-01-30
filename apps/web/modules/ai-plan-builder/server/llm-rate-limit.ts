@@ -61,7 +61,7 @@ export async function consumeLlmRateLimitOrThrow(
   options?: { now?: Date; store?: AiRateLimitStore; limitPerHour?: number }
 ): Promise<void> {
   const now = options?.now ?? new Date();
-  const store = options?.store ?? new PrismaAiRateLimitStore();
+  const store: AiRateLimitStore = options?.store ?? new PrismaAiRateLimitStore();
   const limitPerHour = options?.limitPerHour ?? getAiPlanBuilderLlmRateLimitPerHourFromEnv();
 
   const since = new Date(now.getTime() - 60 * 60 * 1000);
