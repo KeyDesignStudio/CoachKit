@@ -95,6 +95,7 @@ export async function createDraftPlanForAthlete(params: {
   setup?: {
     eventDate: string;
     weeksToEvent: number;
+    weekStart: 'monday' | 'sunday';
     weeklyAvailabilityDays: number[];
     weeklyAvailabilityMinutes: number;
     disciplineEmphasis: 'balanced' | 'swim' | 'bike' | 'run';
@@ -109,6 +110,7 @@ export async function createDraftPlanForAthlete(params: {
     ({
       eventDate: '2026-08-15',
       weeksToEvent: 6,
+      weekStart: 'monday',
       weeklyAvailabilityDays: [1, 3, 5, 6],
       weeklyAvailabilityMinutes: 300,
       disciplineEmphasis: 'balanced',
