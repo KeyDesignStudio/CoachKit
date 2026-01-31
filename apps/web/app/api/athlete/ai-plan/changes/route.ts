@@ -5,6 +5,10 @@ import { handleError, success } from '@/lib/http';
 import { guardAiPlanBuilderRequest } from '@/modules/ai-plan-builder/server/guard';
 import { athleteChangesQuerySchema, getAthleteAiPlanChanges } from '@/modules/ai-plan-builder/server/athlete-changes';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'nodejs';
+
 export async function GET(request: Request) {
   try {
     guardAiPlanBuilderRequest();
