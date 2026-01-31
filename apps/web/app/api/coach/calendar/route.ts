@@ -6,12 +6,13 @@ import { prisma } from '@/lib/prisma';
 import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
-import { assertValidDateRange, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
-import { formatUtcDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
+import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,17 @@ export async function GET(request: NextRequest) {
     const toDate = parseDateOnly(params.to, 'to');
     assertValidDateRange(fromDate, toDate);
 
+    const utcRange = getUtcRangeForLocalDayKeyRange({
+      fromDayKey: params.from,
+      toDayKey: params.to,
+      timeZone: athleteTimezone,
+    });
+
+    // Widen the candidate window: we store `CalendarItem.date` as UTC-midnight date-only,
+    // which can differ from athlete-local day boundaries.
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
+    const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
+
     prof.mark('auth+parse');
 
     const [items, athleteProfile] = await Promise.all([
@@ -67,8 +79,8 @@ export async function GET(request: NextRequest) {
           coachId: user.id,
           deletedAt: null,
           date: {
-            gte: fromDate,
-            lte: toDate,
+            gte: candidateFromDate,
+            lte: candidateToDate,
           },
         },
         orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
@@ -131,10 +143,20 @@ export async function GET(request: NextRequest) {
 
     prof.mark('db');
 
+    const filteredItems = items
+      .map((item: any) => ({
+        item,
+        storedStartUtc: combineDateWithLocalTime(item.date, item.plannedStartTimeLocal),
+      }))
+      .filter(({ storedStartUtc }) => isStoredStartInUtcRange(storedStartUtc, utcRange))
+      .sort((a, b) => a.storedStartUtc.getTime() - b.storedStartUtc.getTime())
+      .map(({ item }) => item);
+
     // Format items to include latestCompletedActivity.
     // Prefer STRAVA for metrics (duration/distance/calories) because manual completions
     // are often used for notes/pain flags on top of a synced activity.
-    const formattedItems = items.map((item: any) => {
+    const formattedItems = filteredItems.map((item: any) => {
+      const storedStartUtc = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
         painFlag: boolean;
@@ -183,7 +205,7 @@ export async function GET(request: NextRequest) {
         id: item.id,
         athleteId: item.athleteId,
         coachId: item.coachId,
-        date: formatUtcDayKey(item.date),
+        date: getLocalDayKey(storedStartUtc, athleteTimezone),
         plannedStartTimeLocal: item.plannedStartTimeLocal,
         origin: item.origin ?? null,
         planningStatus: item.planningStatus ?? null,

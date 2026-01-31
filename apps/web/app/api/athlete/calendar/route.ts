@@ -6,11 +6,12 @@ import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
-import { assertValidDateRange, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
-import { formatUtcDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
+import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,18 @@ export async function GET(request: NextRequest) {
     const toDate = parseDateOnly(params.to, 'to');
     assertValidDateRange(fromDate, toDate);
 
+    const athleteTimezone = user.timezone ?? 'Australia/Brisbane';
+    const utcRange = getUtcRangeForLocalDayKeyRange({
+      fromDayKey: params.from,
+      toDayKey: params.to,
+      timeZone: athleteTimezone,
+    });
+
+    // Candidate fetch window: widen by a day on either side to account for timezone offsets
+    // and date-only storage quirks.
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
+    const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
+
     const [athleteProfile, items] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: user.id },
@@ -79,8 +92,8 @@ export async function GET(request: NextRequest) {
           athleteId: user.id,
           deletedAt: null,
           date: {
-            gte: fromDate,
-            lte: toDate,
+            gte: candidateFromDate,
+            lte: candidateToDate,
           },
         },
         orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
@@ -97,10 +110,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Filter down to items whose stored start time falls within the requested local-day range.
+    const filteredItems = items
+      .map((item: any) => ({
+        item,
+        storedStartUtc: combineDateWithLocalTime(item.date, item.plannedStartTimeLocal),
+      }))
+      .filter(({ storedStartUtc }) => isStoredStartInUtcRange(storedStartUtc, utcRange))
+      .sort((a, b) => a.storedStartUtc.getTime() - b.storedStartUtc.getTime())
+      .map(({ item }) => item);
+
     // Format items to include latestCompletedActivity.
     // We prefer STRAVA for metrics (duration/distance/calories) because manual completions
     // are often used for notes/pain flags on top of a synced activity.
-    const formattedItems = items.map((item: any) => {
+    const formattedItems = filteredItems.map((item: any) => {
+      const storedStartUtc = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
         painFlag: boolean;
@@ -134,7 +158,7 @@ export async function GET(request: NextRequest) {
               includeDebug && metricsCompletion.source === CompletionSource.STRAVA
                 ? {
                     stravaTime: {
-                      tzUsed: user.timezone,
+                      tzUsed: athleteTimezone,
                       stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
                       stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
                       storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
@@ -146,7 +170,8 @@ export async function GET(request: NextRequest) {
 
       return {
         ...item,
-        date: formatUtcDayKey(item.date),
+        // IMPORTANT: return a local-day key so the UI groups items by the athlete's timezone.
+        date: getLocalDayKey(storedStartUtc, athleteTimezone),
         latestCompletedActivity,
         completedActivities: undefined,
       };
@@ -155,13 +180,12 @@ export async function GET(request: NextRequest) {
     let dayWeather: Record<string, any> | undefined;
     if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {
       try {
-        const tz = user.timezone ?? 'UTC';
         const map = await getWeatherSummariesForRange({
           lat: athleteProfile.defaultLat,
           lon: athleteProfile.defaultLon,
           from: params.from,
           to: params.to,
-          timezone: tz,
+          timezone: athleteTimezone,
         });
 
         if (Object.keys(map).length > 0) {

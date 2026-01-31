@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 import { buildIcsCalendar } from '@/lib/ical';
-import { calendarItemDateToDayKey, dayKeyToUtcMidnight, zonedDayTimeToUtc } from '@/lib/zoned-time';
-import { getTodayDayKey, addDaysToDayKey } from '@/lib/day-key';
+import { dayKeyToUtcMidnight, zonedDayTimeToUtc } from '@/lib/zoned-time';
+import { addDaysToDayKey, getTodayDayKey, isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
 import { isValidIanaTimeZone } from '@/lib/timezones';
+import { buildIcalEventsForCalendarItems, filterCalendarItemsForLocalDayRange } from '@/lib/calendar-ical-feed';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,6 @@ const DEFAULT_TZ = 'Australia/Brisbane';
 const DEFAULT_PAST_DAYS = 90;
 const DEFAULT_FUTURE_DAYS = 180;
 const MAX_RANGE_DAYS = 365;
-const DEFAULT_DURATION_SEC = 60 * 60;
 
 const rateLimitState = new Map<string, { count: number; resetAtMs: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -21,6 +21,29 @@ const RATE_LIMIT_MAX = 120;
 function clampRangeDays(value: number | null, fallback: number): number {
   if (!Number.isFinite(value) || !value) return fallback;
   return Math.min(MAX_RANGE_DAYS, Math.max(1, Math.floor(value)));
+}
+
+function getExplicitRangeOrNull(request: NextRequest): { fromKey: string; toKey: string } | null {
+  const fromRaw = request.nextUrl.searchParams.get('from')?.trim() ?? '';
+  const toRaw = request.nextUrl.searchParams.get('to')?.trim() ?? '';
+  if (!fromRaw && !toRaw) return null;
+
+  if (!isDayKey(fromRaw) || !isDayKey(toRaw)) {
+    throw new Error('from/to must be YYYY-MM-DD');
+  }
+
+  const fromDate = parseDayKeyToUtcDate(fromRaw);
+  const toDate = parseDayKeyToUtcDate(toRaw);
+  if (fromDate.getTime() > toDate.getTime()) {
+    throw new Error('from must be before or equal to to');
+  }
+
+  const diffDays = Math.floor((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  if (diffDays > MAX_RANGE_DAYS) {
+    throw new Error(`Range too large (max ${MAX_RANGE_DAYS} days)`);
+  }
+
+  return { fromKey: fromRaw, toKey: toRaw };
 }
 
 function getBaseUrl(): string {
@@ -71,135 +94,118 @@ function unauthorizedResponse(): NextResponse {
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token')?.trim() || '';
-  if (!token) return unauthorizedResponse();
+  try {
+    const token = request.nextUrl.searchParams.get('token')?.trim() || '';
+    if (!token) return unauthorizedResponse();
 
-  const limited = rateLimitOrNull(token);
-  if (limited) return limited;
+    const limited = rateLimitOrNull(token);
+    if (limited) return limited;
 
-  const athleteProfile = await prisma.athleteProfile.findUnique({
-    where: { icalToken: token },
-    select: {
-      userId: true,
-      user: { select: { timezone: true } },
-    },
-  });
-
-  if (!athleteProfile) {
-    return unauthorizedResponse();
-  }
-
-  const timeZoneRaw = athleteProfile.user?.timezone ?? DEFAULT_TZ;
-  const timeZone = isValidIanaTimeZone(timeZoneRaw) ? timeZoneRaw : DEFAULT_TZ;
-
-  const pastDays = clampRangeDays(
-    request.nextUrl.searchParams.get('pastDays') ? Number(request.nextUrl.searchParams.get('pastDays')) : null,
-    DEFAULT_PAST_DAYS
-  );
-  const futureDays = clampRangeDays(
-    request.nextUrl.searchParams.get('futureDays') ? Number(request.nextUrl.searchParams.get('futureDays')) : null,
-    DEFAULT_FUTURE_DAYS
-  );
-
-  const todayKey = getTodayDayKey(timeZone);
-  const fromKey = addDaysToDayKey(todayKey, -pastDays);
-  const toKey = addDaysToDayKey(todayKey, futureDays);
-
-  const fromUtc = dayKeyToUtcMidnight(fromKey);
-  const toUtc = dayKeyToUtcMidnight(toKey);
-
-  const items = await prisma.calendarItem.findMany({
-    where: {
-      athleteId: athleteProfile.userId,
-      deletedAt: null,
-      date: { gte: fromUtc, lte: toUtc },
-      status: {
-        in: ['PLANNED', 'SKIPPED', 'MODIFIED', 'COMPLETED_MANUAL', 'COMPLETED_SYNCED', 'COMPLETED_SYNCED_DRAFT'],
+    const athleteProfile = await prisma.athleteProfile.findUnique({
+      where: { icalToken: token },
+      select: {
+        userId: true,
+        user: { select: { timezone: true } },
       },
-    },
-    orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-    select: {
-      id: true,
-      date: true,
-      plannedStartTimeLocal: true,
-      status: true,
-      discipline: true,
-      title: true,
-      workoutDetail: true,
-      plannedDurationMinutes: true,
-      completedActivities: {
-        orderBy: { startTime: 'desc' },
-        take: 1,
-        select: {
-          startTime: true,
-          durationMinutes: true,
+    });
+
+    if (!athleteProfile) {
+      return unauthorizedResponse();
+    }
+
+    const timeZoneRaw = athleteProfile.user?.timezone ?? DEFAULT_TZ;
+    const timeZone = isValidIanaTimeZone(timeZoneRaw) ? timeZoneRaw : DEFAULT_TZ;
+
+    const explicit = getExplicitRangeOrNull(request);
+
+    const pastDays = clampRangeDays(
+      request.nextUrl.searchParams.get('pastDays') ? Number(request.nextUrl.searchParams.get('pastDays')) : null,
+      DEFAULT_PAST_DAYS
+    );
+    const futureDays = clampRangeDays(
+      request.nextUrl.searchParams.get('futureDays') ? Number(request.nextUrl.searchParams.get('futureDays')) : null,
+      DEFAULT_FUTURE_DAYS
+    );
+
+    const todayKey = getTodayDayKey(timeZone);
+    const fromKey = explicit?.fromKey ?? addDaysToDayKey(todayKey, -pastDays);
+    const toKey = explicit?.toKey ?? addDaysToDayKey(todayKey, futureDays);
+
+    // Compute UTC instant boundaries based on athlete-local day boundaries.
+    // Range is inclusive of start, exclusive of end.
+    const startUtc = zonedDayTimeToUtc(fromKey, '00:00', timeZone);
+    const endUtc = zonedDayTimeToUtc(addDaysToDayKey(toKey, 1), '00:00', timeZone);
+
+    // Candidate range on the date-only column: widened to avoid dropping near-midnight local items.
+    const candidateFromUtc = dayKeyToUtcMidnight(addDaysToDayKey(fromKey, -1));
+    const candidateToUtc = dayKeyToUtcMidnight(addDaysToDayKey(toKey, 1));
+
+    const items = await prisma.calendarItem.findMany({
+      where: {
+        athleteId: athleteProfile.userId,
+        deletedAt: null,
+        date: { gte: candidateFromUtc, lte: candidateToUtc },
+        status: {
+          in: ['PLANNED', 'SKIPPED', 'MODIFIED', 'COMPLETED_MANUAL', 'COMPLETED_SYNCED', 'COMPLETED_SYNCED_DRAFT'],
         },
       },
-    },
-  });
+      orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+      select: {
+        id: true,
+        date: true,
+        plannedStartTimeLocal: true,
+        status: true,
+        discipline: true,
+        title: true,
+        workoutDetail: true,
+        plannedDurationMinutes: true,
+        completedActivities: {
+          orderBy: { startTime: 'desc' },
+          take: 1,
+          select: {
+            startTime: true,
+            durationMinutes: true,
+          },
+        },
+      },
+    });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim()
-    ? getBaseUrl()
-    : (getBaseUrlFromRequest(request) ?? getBaseUrl());
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() ? getBaseUrl() : (getBaseUrlFromRequest(request) ?? getBaseUrl());
 
-  const events = items.map((item) => {
-    const latest = item.completedActivities[0] ?? null;
+    const filteredItems = filterCalendarItemsForLocalDayRange({
+      items,
+      fromDayKey: fromKey,
+      toDayKey: toKey,
+      timeZone,
+      utcRange: { startUtc, endUtc },
+    });
 
-    const dayKey = calendarItemDateToDayKey(item.date, timeZone);
+    const events = buildIcalEventsForCalendarItems({
+      items: filteredItems,
+      timeZone,
+      baseUrl,
+    });
 
-    const isCompleted =
-      item.status === 'COMPLETED_MANUAL' || item.status === 'COMPLETED_SYNCED' || item.status === 'COMPLETED_SYNCED_DRAFT';
+    const body = buildIcsCalendar({
+      timeZone,
+      calName: 'CoachKit Workouts',
+      events,
+    });
 
-    const startUtc =
-      isCompleted && latest?.startTime
-        ? new Date(latest.startTime)
-        : item.plannedStartTimeLocal
-          ? zonedDayTimeToUtc(dayKey, item.plannedStartTimeLocal, timeZone)
-          : zonedDayTimeToUtc(dayKey, '00:00', timeZone);
-
-    const durationSec =
-      (isCompleted && latest?.durationMinutes ? latest.durationMinutes * 60 : null) ??
-      (item.plannedDurationMinutes ? item.plannedDurationMinutes * 60 : null) ??
-      DEFAULT_DURATION_SEC;
-
-    const endUtc = new Date(startUtc.getTime() + durationSec * 1000);
-
-    const statusLabel =
-      item.status === 'SKIPPED'
-        ? 'MISSED'
-        : isCompleted
-          ? 'COMPLETED'
-          : item.status === 'MODIFIED'
-            ? 'PLANNED'
-            : 'PLANNED';
-
-    const detail = item.workoutDetail?.trim() || '';
-    const url = `${baseUrl}/athlete/workouts/${item.id}`;
-
-    const descriptionLines = [`Status: ${statusLabel}`];
-    if (detail) descriptionLines.push('', detail);
-    descriptionLines.push('', url);
-
-    return {
-      uid: `coachkit-${item.id}@coachkit`,
-      dtStartUtc: startUtc,
-      dtEndUtc: endUtc,
-      summary: `${item.discipline} — ${item.title}`,
-      description: descriptionLines.join('\n'),
-    };
-  });
-
-  const body = buildIcsCalendar({
-    timeZone,
-    calName: 'CoachKit Workouts',
-    events,
-  });
-
-  return new NextResponse(body, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/calendar; charset=utf-8',
-      'Cache-Control': 'private, max-age=60',
-    },
-  });
+    return new NextResponse(body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Cache-Control': 'private, max-age=60',
+      },
+    });
+  } catch (error: any) {
+    return new NextResponse(`Bad request: ${error?.message ?? 'invalid parameters'}`, {
+      status: 400,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'private, max-age=0',
+      },
+    });
+  }
 }
