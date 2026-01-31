@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
@@ -24,12 +25,16 @@ function requireCronAuth(request: NextRequest): NextResponse | null {
     throw new ApiError(500, 'CRON_SECRET_MISSING', 'CRON_SECRET is not set.');
   }
 
-  const bearer = request.headers.get('authorization');
-  const token = bearer?.startsWith('Bearer ') ? bearer.slice('Bearer '.length).trim() : null;
-  const alt = request.headers.get('x-cron-secret');
+  // IMPORTANT: Do not authenticate cron requests via the Authorization header.
+  // Clerk middleware may attempt to parse Authorization as a JWT and reject non-JWT values.
+  const provided = request.headers.get('x-cron-secret');
+  if (!provided) {
+    return cronAuthFailure();
+  }
 
-  const provided = token || alt;
-  if (!provided || provided !== expected) {
+  const providedBuf = Buffer.from(provided);
+  const expectedBuf = Buffer.from(expected);
+  if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
     return cronAuthFailure();
   }
 
