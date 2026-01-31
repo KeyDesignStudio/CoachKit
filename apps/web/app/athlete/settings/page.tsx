@@ -55,6 +55,8 @@ export default function AthleteSettingsPage() {
   const [timezoneMessage, setTimezoneMessage] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
 
+  const [weatherLocationLabel, setWeatherLocationLabel] = useState('');
+
   const [icalUrl, setIcalUrl] = useState<string>('');
   const [loadingIcal, setLoadingIcal] = useState(false);
   const [resettingIcal, setResettingIcal] = useState(false);
@@ -276,9 +278,21 @@ export default function AthleteSettingsPage() {
         </div>
 
         <div className="min-w-0">
-          <Block title="Weather location">
+          <Block
+            title="Weather location"
+            rightAction={
+              weatherLocationLabel.trim() ? (
+                <Badge
+                  title={weatherLocationLabel}
+                  className="max-w-[40vw] overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[14rem]"
+                >
+                  {weatherLocationLabel}
+                </Badge>
+              ) : null
+            }
+          >
             <p className="text-sm text-[var(--muted)] mb-3">Used for weather. Search by place name or use your current location.</p>
-            <WeatherLocationSelect />
+            <WeatherLocationSelect onSavedLocationLabelChange={setWeatherLocationLabel} />
           </Block>
         </div>
 
