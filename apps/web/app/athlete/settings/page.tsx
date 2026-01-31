@@ -294,7 +294,7 @@ export default function AthleteSettingsPage() {
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <p className="text-sm text-[var(--muted)]">Connect Strava to sync completed activities into CoachKit.</p>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col items-start gap-3 md:items-end">
                   {connected ? (
                     <>
                       <Button onClick={handleSyncNow} disabled={working || syncing || loadingStatus}>
