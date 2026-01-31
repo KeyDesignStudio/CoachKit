@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { handleError } from '@/lib/http';
+import { isPrismaInitError, logPrismaInitError } from '@/lib/prisma-diagnostics';
 import { syncStravaActivityById, syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
@@ -272,6 +273,25 @@ export async function GET(request: NextRequest) {
   try {
     return await runCron(request);
   } catch (error) {
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({ where: 'strava_cron', error });
+      const retryAfterSeconds = 300;
+      return NextResponse.json(
+        {
+          ok: true,
+          status: 'skipped',
+          reason: 'db_unreachable',
+          retryAfterSeconds,
+        },
+        {
+          status: 200,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     return handleError(error);
   }
 }
@@ -280,6 +300,25 @@ export async function POST(request: NextRequest) {
   try {
     return await runCron(request);
   } catch (error) {
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({ where: 'strava_cron', error });
+      const retryAfterSeconds = 300;
+      return NextResponse.json(
+        {
+          ok: true,
+          status: 'skipped',
+          reason: 'db_unreachable',
+          retryAfterSeconds,
+        },
+        {
+          status: 200,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     return handleError(error);
   }
 }
