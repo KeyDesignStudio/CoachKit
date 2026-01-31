@@ -7,13 +7,19 @@ import { mapWithConcurrency } from '@/lib/concurrency';
 export type PollSummary = {
   polledAthletes: number;
   fetched: number;
+  inWindow: number;
   created: number;
   updated: number;
   matched: number;
   createdCalendarItems: number;
   skippedExisting: number;
+  skippedByReason: Record<string, number>;
   errors: Array<{ athleteId?: string; message: string }>;
 };
+
+function inc(map: Record<string, number>, key: string, amount = 1) {
+  map[key] = (map[key] ?? 0) + amount;
+}
 
 export type StravaConnectionEntry = {
   athleteId: string;
@@ -516,9 +522,11 @@ async function ensureCalendarItemStatusForSyncedCompletion(params: { calendarIte
 
 async function ingestActivities(entry: StravaConnectionEntry, activities: StravaActivity[], summary: PollSummary) {
   summary.fetched += activities.length;
+  summary.inWindow += activities.length;
 
   for (const activity of activities) {
     if (!activity?.id || !activity.start_date || !activity.elapsed_time) {
+      inc(summary.skippedByReason, 'invalid_payload');
       continue;
     }
 
@@ -547,6 +555,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
         },
       });
       summary.skippedExisting += 1;
+      inc(summary.skippedByReason, 'tombstoned');
       continue;
     }
 
@@ -673,6 +682,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       ) {
         completed = existing;
         summary.skippedExisting += 1;
+        inc(summary.skippedByReason, 'duplicate_no_changes');
       } else {
         completed = await prisma.completedActivity.update({
           where: {
@@ -805,11 +815,13 @@ export async function syncStravaForConnections(
   const summary: PollSummary = {
     polledAthletes: 0,
     fetched: 0,
+    inWindow: 0,
     created: 0,
     updated: 0,
     matched: 0,
     createdCalendarItems: 0,
     skippedExisting: 0,
+    skippedByReason: {},
     errors: [],
   };
 
@@ -885,11 +897,13 @@ async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, acti
   const summary: PollSummary = {
     polledAthletes: 1,
     fetched: 0,
+    inWindow: 0,
     created: 0,
     updated: 0,
     matched: 0,
     createdCalendarItems: 0,
     skippedExisting: 0,
+    skippedByReason: {},
     errors: [],
   };
 

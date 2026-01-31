@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           BASE_URL="${{ vars.COACHKIT_BASE_URL }}"
-          URL="${BASE_URL}/api/integrations/strava/cron?mode=intents&forceDays=1"
+          URL="${BASE_URL}/api/integrations/strava/cron?mode=backfill&forceDays=1"
           echo "Calling host=$(echo "$BASE_URL" | sed -E 's#https?://##')"
           attempts=3
           backoff=(30 60 120)

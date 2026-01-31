@@ -19,7 +19,7 @@ function isAutosyncEnabled() {
 }
 
 function requireCronAuth(request: NextRequest): NextResponse | null {
-  const expected = process.env.CRON_SECRET;
+  const expected = process.env.CRON_SECRET ?? process.env.COACHKIT_CRON_SECRET;
   if (!expected) {
     // Misconfiguration should be visible.
     throw new ApiError(500, 'CRON_SECRET_MISSING', 'CRON_SECRET is not set.');
@@ -98,6 +98,12 @@ async function runCron(request: NextRequest) {
   let matchedCompletions = 0;
   let skippedDuplicates = 0;
   let rateLimited = false;
+  let athletesConsidered = 0;
+  let stravaConnectionsFound = 0;
+  let activitiesFetched = 0;
+  let activitiesInWindow = 0;
+  let activitiesUpserted = 0;
+  const activitiesSkippedByReason: Record<string, number> = {};
 
   if (mode === 'intents') {
     const intents = await prisma.stravaSyncIntent.findMany({
@@ -142,6 +148,12 @@ async function runCron(request: NextRequest) {
         createdCalendarItems += summary.createdCalendarItems;
         matchedCompletions += summary.matched;
         skippedDuplicates += summary.skippedExisting;
+        activitiesFetched += summary.fetched;
+        activitiesInWindow += summary.inWindow;
+        activitiesUpserted += summary.created + summary.updated;
+        for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
+          activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
+        }
 
         await prisma.stravaSyncIntent.update({
           where: { id: intent.id },
@@ -216,6 +228,8 @@ async function runCron(request: NextRequest) {
       },
     });
 
+    athletesConsidered += connections.length;
+
     const entries: StravaConnectionEntry[] = connections
       .map((a) => {
         if (!a.stravaConnection) return null;
@@ -228,11 +242,19 @@ async function runCron(request: NextRequest) {
       })
       .filter(Boolean) as any;
 
+    stravaConnectionsFound += entries.length;
+
     if (entries.length > 0) {
       const summary = await syncStravaForConnections(entries, { forceDays, deep: true, deepConcurrency: 2 });
       createdCalendarItems += summary.createdCalendarItems;
       matchedCompletions += summary.matched;
       skippedDuplicates += summary.skippedExisting;
+      activitiesFetched += summary.fetched;
+      activitiesInWindow += summary.inWindow;
+      activitiesUpserted += summary.created + summary.updated;
+      for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
+        activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
+      }
       if (summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'))) {
         rateLimited = true;
       }
@@ -261,6 +283,9 @@ async function runCron(request: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
+      mode,
+      forceDays,
+      athleteId,
       drainedCount,
       doneCount,
       failedCount,
@@ -268,6 +293,12 @@ async function runCron(request: NextRequest) {
       createdCalendarItems,
       matchedCompletions,
       skippedDuplicates,
+      athletesConsidered,
+      stravaConnectionsFound,
+      activitiesFetched,
+      activitiesInWindow,
+      activitiesUpserted,
+      activitiesSkipped: activitiesSkippedByReason,
       rateLimited,
     },
     { status: 200 }
