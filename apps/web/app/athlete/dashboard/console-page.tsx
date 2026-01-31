@@ -16,6 +16,7 @@ import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayT
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
+import { CumulativeTrainingChart } from '@/components/athlete/CumulativeTrainingChart';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -379,6 +380,15 @@ export default function AthleteDashboardConsolePage() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-6">
+              <CumulativeTrainingChart
+                from={dateRange.from}
+                to={dateRange.to}
+                discipline={discipline}
+                athleteTimeZone={athleteTimeZone}
+              />
             </div>
 
           {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
