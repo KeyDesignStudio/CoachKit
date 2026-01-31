@@ -104,6 +104,10 @@ async function runCron(request: NextRequest) {
   let activitiesInWindow = 0;
   let activitiesUpserted = 0;
   const activitiesSkippedByReason: Record<string, number> = {};
+  let calendarItemsLinked = 0;
+  let calendarItemLinksExisting = 0;
+  let calendarItemLinksClearedDeleted = 0;
+  const errors: Array<{ athleteId?: string; message: string }> = [];
 
   if (mode === 'intents') {
     const intents = await prisma.stravaSyncIntent.findMany({
@@ -151,9 +155,13 @@ async function runCron(request: NextRequest) {
         activitiesFetched += summary.fetched;
         activitiesInWindow += summary.inWindow;
         activitiesUpserted += summary.created + summary.updated;
+        calendarItemsLinked += summary.linkedCalendarItems;
+        calendarItemLinksExisting += summary.existingCalendarItemLinks;
+        calendarItemLinksClearedDeleted += summary.clearedDeletedCalendarItemLinks;
         for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
           activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
         }
+        for (const err of summary.errors ?? []) errors.push(err);
 
         await prisma.stravaSyncIntent.update({
           where: { id: intent.id },
@@ -252,9 +260,13 @@ async function runCron(request: NextRequest) {
       activitiesFetched += summary.fetched;
       activitiesInWindow += summary.inWindow;
       activitiesUpserted += summary.created + summary.updated;
+      calendarItemsLinked += summary.linkedCalendarItems;
+      calendarItemLinksExisting += summary.existingCalendarItemLinks;
+      calendarItemLinksClearedDeleted += summary.clearedDeletedCalendarItemLinks;
       for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
         activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
       }
+      for (const err of summary.errors ?? []) errors.push(err);
       if (summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'))) {
         rateLimited = true;
       }
@@ -299,6 +311,10 @@ async function runCron(request: NextRequest) {
       activitiesInWindow,
       activitiesUpserted,
       activitiesSkipped: activitiesSkippedByReason,
+      calendarItemsLinked,
+      calendarItemLinksExisting,
+      calendarItemLinksClearedDeleted,
+      errors,
       rateLimited,
     },
     { status: 200 }

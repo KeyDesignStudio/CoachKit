@@ -12,6 +12,9 @@ export type PollSummary = {
   updated: number;
   matched: number;
   createdCalendarItems: number;
+  linkedCalendarItems: number;
+  existingCalendarItemLinks: number;
+  clearedDeletedCalendarItemLinks: number;
   skippedExisting: number;
   skippedByReason: Record<string, number>;
   errors: Array<{ athleteId?: string; message: string }>;
@@ -714,7 +717,31 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       }
     }
 
-    let calendarItemId: string | null = completed?.calendarItemId ?? null;
+    const initialCalendarItemId: string | null = completed?.calendarItemId ?? null;
+    let calendarItemId: string | null = initialCalendarItemId;
+
+    if (calendarItemId) {
+      summary.existingCalendarItemLinks += 1;
+
+      // If the completion is linked to a deleted/missing item (e.g. coach deleted a planned session),
+      // clear the link so we can re-link/match and/or create an unplanned STRAVA calendar item.
+      const linked = await prisma.calendarItem.findUnique({
+        where: { id: calendarItemId },
+        select: { id: true, deletedAt: true },
+      });
+
+      if (!linked || linked.deletedAt) {
+        await prisma.completedActivity.update({
+          where: { id: completed.id },
+          data: { calendarItemId: null },
+          select: { id: true },
+        });
+
+        summary.clearedDeletedCalendarItemLinks += 1;
+        inc(summary.skippedByReason, 'linked_calendar_item_deleted');
+        calendarItemId = null;
+      }
+    }
 
     if (!calendarItemId) {
       const match = await matchAndLinkCalendarItem({
@@ -737,6 +764,8 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
         calendarItemId,
         confirmedAt: completed.confirmedAt ?? null,
       });
+
+      summary.linkedCalendarItems += 1;
     }
 
     if (!calendarItemId) {
@@ -794,6 +823,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       });
 
       summary.createdCalendarItems += 1;
+      summary.linkedCalendarItems += 1;
       calendarItemId = item.id;
     }
   }
@@ -820,6 +850,9 @@ export async function syncStravaForConnections(
     updated: 0,
     matched: 0,
     createdCalendarItems: 0,
+    linkedCalendarItems: 0,
+    existingCalendarItemLinks: 0,
+    clearedDeletedCalendarItemLinks: 0,
     skippedExisting: 0,
     skippedByReason: {},
     errors: [],
@@ -902,6 +935,9 @@ async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, acti
     updated: 0,
     matched: 0,
     createdCalendarItems: 0,
+    linkedCalendarItems: 0,
+    existingCalendarItemLinks: 0,
+    clearedDeletedCalendarItemLinks: 0,
     skippedExisting: 0,
     skippedByReason: {},
     errors: [],
