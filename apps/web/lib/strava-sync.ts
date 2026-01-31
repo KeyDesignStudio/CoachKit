@@ -85,6 +85,18 @@ function mapStravaDiscipline(activity: StravaActivity) {
   if (raw.includes('ride') || raw.includes('bike')) return 'BIKE';
   if (raw.includes('swim')) return 'SWIM';
 
+  if (
+    raw.includes('workout') ||
+    raw.includes('weight') ||
+    raw.includes('strength') ||
+    raw.includes('training') ||
+    raw.includes('crossfit') ||
+    raw.includes('yoga') ||
+    raw.includes('pilates')
+  ) {
+    return 'STRENGTH';
+  }
+
   return 'OTHER';
 }
 
@@ -252,24 +264,37 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
 async function fetchRecentActivities(accessToken: string, afterUnixSeconds: number) {
   if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));
-    const startUnix = Math.floor(start.getTime() / 1000);
-    if (afterUnixSeconds > startUnix) return [];
+    const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
 
-    return [
-      {
-        id: 999,
-        name: 'PW Unscheduled Strength',
-        sport_type: 'Workout',
-        type: 'Workout',
-        start_date: start.toISOString(),
-        start_date_local: start.toISOString(),
-        elapsed_time: 3600,
-        moving_time: 3600,
-        distance: 0,
-        total_elevation_gain: 0,
-      },
+    const mk = (id: number, name: string, sportType: string, startUtc: Date, elapsedSec: number, distanceMeters?: number) => ({
+      id,
+      name,
+      sport_type: sportType,
+      type: sportType,
+      start_date: startUtc.toISOString(),
+      start_date_local: startUtc.toISOString(),
+      elapsed_time: elapsedSec,
+      moving_time: elapsedSec,
+      distance: typeof distanceMeters === 'number' ? distanceMeters : 0,
+      total_elevation_gain: 0,
+    });
+
+    const activities: StravaActivity[] = [
+      // Always-present control activity used by existing Playwright coverage.
+      mk(999, 'PW Unscheduled Strength', 'Hike', new Date(base.getTime() + 12 * 60 * 60_000), 3600, 0),
+
+      // Matching scenarios.
+      mk(1000, 'PW Run Time Shift', 'Run', new Date(base.getTime() + (6 * 60 + 20) * 60_000), 2700, 8000),
+      mk(1001, 'PW Strength Fuzzy', 'Workout', new Date(base.getTime() + (14 * 60 + 10) * 60_000), 3600, 0),
+      mk(1002, 'PW Run Ambiguous', 'Run', new Date(base.getTime() + (8 * 60 + 5) * 60_000), 2400, 6000),
+      // Midnight-boundary case: just after midnight the next day.
+      mk(1003, 'PW Run Midnight', 'Run', new Date(base.getTime() + 24 * 60 * 60_000 + 10 * 60_000), 1800, 5000),
     ];
+
+    return activities.filter((a) => {
+      const t = a.start_date ? Math.floor(new Date(a.start_date).getTime() / 1000) : 0;
+      return t > afterUnixSeconds;
+    });
   }
 
   const url = new URL('https://www.strava.com/api/v3/athlete/activities');
@@ -350,20 +375,63 @@ async function matchAndLinkCalendarItem(params: {
 }) {
   const { athleteId, activityDateOnly, activityMinutes, discipline, completedActivityId, confirmedAt } = params;
 
+  function normalizeDiscipline(value: string) {
+    const upper = String(value ?? '').trim().toUpperCase();
+    if (upper === 'STR') return 'STRENGTH';
+    return upper;
+  }
+
+  function minutesDiffCircular(a: number, b: number) {
+    const diff = Math.abs(a - b);
+    return Math.min(diff, 1440 - diff);
+  }
+
+  function scoreCandidate(candidate: { item: { discipline: string; plannedStartTimeLocal: string | null; date: Date } }) {
+    const itemDiscipline = normalizeDiscipline(candidate.item.discipline);
+    const activityDiscipline = normalizeDiscipline(discipline);
+    const disciplineScore = itemDiscipline === activityDiscipline ? 50 : 0;
+
+    const plannedMinutes = candidate.item.plannedStartTimeLocal
+      ? parseTimeToMinutes(candidate.item.plannedStartTimeLocal)
+      : null;
+    const timeDiff = plannedMinutes == null ? null : minutesDiffCircular(plannedMinutes, activityMinutes);
+
+    // Prefer closer times and avoid weak auto-links.
+    // 0 min => 40 points, 90m+ => 0 points
+    const maxMinutes = 90;
+    const timeScore = timeDiff == null ? 0 : Math.max(0, Math.round(40 * (1 - Math.min(timeDiff, maxMinutes) / maxMinutes)));
+
+    const dayKey = candidate.item.date.toISOString().slice(0, 10);
+    const targetKey = activityDateOnly.toISOString().slice(0, 10);
+    const dayDistance = dayKey === targetKey ? 0 : 1;
+    const dayScore = dayDistance === 0 ? 20 : 0;
+
+    const total = disciplineScore + timeScore + dayScore;
+
+    return {
+      total,
+      plannedMinutes,
+      timeDiff,
+      dayDistance,
+    };
+  }
+
   const rangeStart = addDaysUtc(activityDateOnly, -1);
   const rangeEnd = addDaysUtc(activityDateOnly, 1);
 
   const items = await prisma.calendarItem.findMany({
     where: {
       athleteId,
-      discipline,
       deletedAt: null,
       date: { gte: rangeStart, lte: rangeEnd },
       status: { in: [CalendarItemStatus.PLANNED, CalendarItemStatus.MODIFIED] },
+      // Only match against planned sessions (provider/imported items have origin).
+      origin: null,
     },
     select: {
       id: true,
       date: true,
+      discipline: true,
       plannedStartTimeLocal: true,
       status: true,
     },
@@ -373,51 +441,44 @@ async function matchAndLinkCalendarItem(params: {
 
   if (!items.length) return { matched: false as const };
 
-  const targetKey = activityDateOnly.toISOString().slice(0, 10);
-
-  const candidates = items
+  const scored = items
     .map((item) => {
-      const plannedMinutes = item.plannedStartTimeLocal ? parseTimeToMinutes(item.plannedStartTimeLocal) : null;
-      const diff = plannedMinutes === null ? null : Math.abs(plannedMinutes - activityMinutes);
-      const dayKey = item.date.toISOString().slice(0, 10);
-      const dayDistance = dayKey === targetKey ? 0 : 1;
-      return { item, plannedMinutes, diff, dayDistance };
+      const s = scoreCandidate({ item });
+      return {
+        item,
+        score: s.total,
+        dayDistance: s.dayDistance,
+        timeDiff: s.timeDiff,
+      };
     })
-    .filter((c) => c.dayDistance <= 1);
+    .filter((c) => c.dayDistance <= 1)
+    .sort((a, b) => b.score - a.score);
 
-  if (!candidates.length) return { matched: false as const };
+  const best = scored[0] ?? null;
+  const second = scored[1] ?? null;
+  if (!best) return { matched: false as const };
 
-  candidates.sort((a, b) => {
-    if (a.dayDistance !== b.dayDistance) return a.dayDistance - b.dayDistance;
-
-    const aHas = a.diff !== null;
-    const bHas = b.diff !== null;
-
-    if (aHas && bHas) return (a.diff as number) - (b.diff as number);
-    if (aHas !== bHas) return aHas ? -1 : 1;
-
-    const aMin = a.plannedMinutes ?? Number.POSITIVE_INFINITY;
-    const bMin = b.plannedMinutes ?? Number.POSITIVE_INFINITY;
-    return aMin - bMin;
-  });
-
-  const match = candidates[0]?.item;
-  if (!match) return { matched: false as const };
+  // Require a strong match and avoid ambiguous auto-links.
+  // If it's close, prefer creating an unplanned STRAVA item instead.
+  const minScoreToMatch = 70;
+  const minLead = 10;
+  if (best.score < minScoreToMatch) return { matched: false as const };
+  if (second && best.score - second.score < minLead) return { matched: false as const };
 
   const nextStatus = confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
 
   await prisma.$transaction([
     prisma.calendarItem.update({
-      where: { id: match.id },
+      where: { id: best.item.id },
       data: { status: nextStatus },
     }),
     prisma.completedActivity.update({
       where: { id: completedActivityId },
-      data: { calendarItemId: match.id },
+      data: { calendarItemId: best.item.id },
     }),
   ]);
 
-  return { matched: true as const, calendarItemId: match.id };
+  return { matched: true as const, calendarItemId: best.item.id };
 }
 
 async function ensureCalendarItemStatusForSyncedCompletion(params: { calendarItemId: string; confirmedAt: Date | null }) {
@@ -672,7 +733,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       const nextStatus = completed.confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
 
       const plannedStartTimeLocal = minutesToTimeString(activityMinutes);
-      const title = (activity.name ?? '').trim() || 'Recorded activity';
+      const title = (activity.name ?? '').trim() || 'Unplanned (Imported from Strava)';
 
       const item = await prisma.calendarItem.upsert({
         where: {
@@ -693,6 +754,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
           discipline,
           subtype: stravaType ?? null,
           title,
+          notes: 'Imported from Strava.',
           plannedDurationMinutes: durationMinutes,
           plannedDistanceKm: distanceKm,
           distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,

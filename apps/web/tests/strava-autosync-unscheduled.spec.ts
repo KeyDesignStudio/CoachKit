@@ -50,8 +50,8 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(calBefore.ok()).toBeTruthy();
     const calBeforeJson = await calBefore.json();
-    const titlesBefore = (calBeforeJson.data?.items ?? []).map((i: any) => i.title);
-    expect(titlesBefore.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
+    const itemsBefore = (calBeforeJson.data?.items ?? []) as any[];
+    expect(itemsBefore.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toBeFalsy();
 
     // Backfill endpoint should surface it and remain idempotent (safety net).
     const cron2 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
@@ -70,8 +70,8 @@ test.describe('Strava autosync (debounced)', () => {
     });
     expect(calAfter.ok()).toBeTruthy();
     const calAfterJson = await calAfter.json();
-    const titlesAfter = (calAfterJson.data?.items ?? []).map((i: any) => i.title);
-    expect(titlesAfter.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeTruthy();
+    const itemsAfter = (calAfterJson.data?.items ?? []) as any[];
+    expect(itemsAfter.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toBeTruthy();
 
     // Repeat cron; should not duplicate.
     const cron3 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
@@ -88,10 +88,9 @@ test.describe('Strava autosync (debounced)', () => {
     expect(calAfter2.ok()).toBeTruthy();
     const calAfter2Json = await calAfter2.json();
     const itemsAfter2 = (calAfter2Json.data?.items ?? []) as any[];
-    const titlesAfter2 = itemsAfter2.map((i: any) => i.title);
-    expect(titlesAfter2.filter((t: string) => t.includes('PW Unscheduled Strength'))).toHaveLength(1);
+    expect(itemsAfter2.filter((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toHaveLength(1);
 
-    const createdItem = itemsAfter2.find((i: any) => typeof i?.title === 'string' && i.title.includes('PW Unscheduled Strength'));
+    const createdItem = itemsAfter2.find((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999');
     expect(createdItem?.id, 'Expected Strava-created calendar item to have an id').toBeTruthy();
     const itemId = String(createdItem.id);
 
