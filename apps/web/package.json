@@ -7,6 +7,7 @@
     "build": "node scripts/build.mjs",
     "ds:audit": "node scripts/design-system-audit.mjs",
     "vercel-build": "node scripts/build.mjs",
+    "verify:cron-auth": "node scripts/verify-cron-auth.mjs",
     "start": "next start",
     "test:mobile": "playwright test",
     "test:mobile:local": "playwright test",

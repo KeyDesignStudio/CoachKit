@@ -34,6 +34,16 @@ const isProtectedRoute = createRouteMatcher([
   '/athlete(.*)',
 ]);
 
+const CLERK_BYPASS_PATHS = new Set([
+  // Cron endpoints authenticate via CRON_SECRET header and must not be blocked by Clerk.
+  '/api/integrations/strava/cron',
+]);
+
+function getPathname(request: any) {
+  // NextRequest has nextUrl; Request does not.
+  return request?.nextUrl?.pathname ?? new URL(request.url).pathname;
+}
+
 /**
  * Clerk Middleware - Authentication Only
  * 
@@ -44,7 +54,7 @@ const isProtectedRoute = createRouteMatcher([
  * 
  * Note: No database queries in middleware (Edge runtime limitation)
  */
-const middleware = DISABLE_AUTH
+const authMiddleware = DISABLE_AUTH
   ? (request: Request) => {
       // Guardrail: dev pages never exist in production.
       if (process.env.NODE_ENV === 'production' && new URL(request.url).pathname.startsWith('/dev')) {
@@ -84,7 +94,16 @@ const middleware = DISABLE_AUTH
       return NextResponse.next();
     });
 
-export default middleware;
+export default function middleware(request: any, event: any) {
+  const pathname = getPathname(request);
+
+  // Bypass Clerk entirely for explicitly allowed paths.
+  if (CLERK_BYPASS_PATHS.has(pathname)) {
+    return NextResponse.next();
+  }
+
+  return (authMiddleware as any)(request, event);
+}
 
 export const config = {
   matcher: [
