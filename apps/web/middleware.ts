@@ -37,6 +37,7 @@ const isProtectedRoute = createRouteMatcher([
 const CLERK_BYPASS_PATHS = new Set([
   // Cron endpoints authenticate via CRON_SECRET header and must not be blocked by Clerk.
   '/api/integrations/strava/cron',
+  '/api/admin/integrations/strava/debug-links',
 ]);
 
 function getPathname(request: any) {

@@ -1,9 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { CompletionSource } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { ApiError } from '@/lib/errors';
 import { combineDateWithLocalTime } from '@/lib/date';
@@ -11,6 +11,28 @@ import { formatUtcDayKey } from '@/lib/day-key';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function cronAuthFailure() {
+  return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+}
+
+function requireCronAuth(request: NextRequest): NextResponse | null {
+  const expected = process.env.CRON_SECRET ?? process.env.COACHKIT_CRON_SECRET;
+  if (!expected) {
+    throw new ApiError(500, 'CRON_SECRET_MISSING', 'CRON_SECRET is not set.');
+  }
+
+  const provided = request.headers.get('x-cron-secret');
+  if (!provided) return cronAuthFailure();
+
+  const providedBuf = Buffer.from(provided);
+  const expectedBuf = Buffer.from(expected);
+  if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+    return cronAuthFailure();
+  }
+
+  return null;
+}
 
 const querySchema = z.object({
   athleteId: z.string().min(1),
@@ -23,7 +45,8 @@ const querySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin();
+    const authResponse = requireCronAuth(request);
+    if (authResponse) return authResponse;
 
     const url = new URL(request.url);
     const { athleteId, limit } = querySchema.parse({
@@ -33,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     const athlete = await prisma.user.findUnique({
       where: { id: athleteId },
-      select: { id: true, timezone: true, email: true, role: true },
+      select: { id: true, timezone: true, role: true },
     });
 
     if (!athlete) {
@@ -124,7 +147,6 @@ export async function GET(request: NextRequest) {
         id: athlete.id,
         role: athlete.role,
         timezone: athlete.timezone,
-        email: athlete.email,
       },
       count: items.length,
       items,
