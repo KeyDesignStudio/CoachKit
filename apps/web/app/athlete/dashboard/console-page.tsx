@@ -4,16 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { Button } from '@/components/ui/Button';
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
-import { Select } from '@/components/ui/Select';
-import { Textarea } from '@/components/ui/Textarea';
+import { SelectField } from '@/components/ui/SelectField';
 import { uiH1 } from '@/components/ui/typography';
+import { Block } from '@/components/ui/Block';
+import { BlockTitle } from '@/components/ui/BlockTitle';
+import { FieldLabel } from '@/components/ui/FieldLabel';
+import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
+import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -32,23 +34,6 @@ type AthleteDashboardResponse = {
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
 };
 
-type AthleteThreadSummary = {
-  threadId: string;
-  lastMessagePreview: string;
-  lastMessageAt: string | null;
-};
-
-type ThreadMessagesResponse = {
-  threadId: string;
-  messages: Array<{
-    id: string;
-    body: string;
-    createdAt: string;
-    senderRole: 'COACH' | 'ATHLETE';
-    senderUserId: string;
-  }>;
-};
-
 function NeedsAttentionItem({
   label,
   count,
@@ -65,22 +50,23 @@ function NeedsAttentionItem({
       ? 'bg-rose-500/15 text-rose-700'
       : tone === 'primary'
         ? 'bg-blue-600/10 text-blue-700'
-        : 'bg-[var(--bg-card)] border border-black/15 text-[var(--text)]';
+        : 'bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text)]';
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-2xl px-4 py-3 text-left min-h-[56px]',
+        'w-full rounded-2xl text-left min-h-[56px]',
+        tokens.spacing.containerPadding,
         'transition-colors',
-        tone === 'neutral' ? 'hover:bg-white/60' : '',
+        tone === 'neutral' ? 'hover:bg-[var(--bg-surface)]' : '',
         toneClasses
       )}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm font-medium">{label}</div>
-        <div className={cn('text-2xl font-semibold tabular-nums', tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
+      <div className={cn("flex items-center justify-between", tokens.spacing.blockRowGap)}>
+        <div className={cn("font-medium", tokens.typography.body)}>{label}</div>
+        <div className={cn("font-semibold tabular-nums", tokens.typography.h1, tone === 'danger' ? 'text-rose-700' : '')}>{count}</div>
       </div>
     </button>
   );
@@ -115,8 +101,6 @@ export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
 
-  const athleteDisplayName = user?.name ?? 'You';
-
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
 
@@ -124,119 +108,11 @@ export default function AthleteDashboardConsolePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ThreadMessagesResponse['messages']>([]);
-  const [threadsLoading, setThreadsLoading] = useState(false);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messageDraft, setMessageDraft] = useState('');
-  const [messageSending, setMessageSending] = useState(false);
-  const [messageStatus, setMessageStatus] = useState('');
-  const [messageError, setMessageError] = useState('');
-
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(() => new Set());
-  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
-  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
-  const [clearAllConfirmOpen, setClearAllConfirmOpen] = useState(false);
-  const [messageDeleteLoading, setMessageDeleteLoading] = useState(false);
-
   const needsCardRef = useRef<HTMLDivElement | null>(null);
   const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
-  const messagePollInFlightRef = useRef(false);
 
   const athleteTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, athleteTimeZone), [timeRange, athleteTimeZone]);
-
-  const displayMessages = useMemo(() => {
-    const rows = [...messages];
-    rows.sort((a, b) => {
-      const aAt = +new Date(a.createdAt);
-      const bAt = +new Date(b.createdAt);
-      if (aAt !== bAt) return bAt - aAt;
-      return a.id.localeCompare(b.id);
-    });
-    return rows;
-  }, [messages]);
-
-  const visibleThreadMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
-
-  const selectedVisibleMessageCount = useMemo(() => {
-    if (visibleThreadMessageIds.length === 0 || selectedMessageIds.size === 0) return 0;
-    let count = 0;
-    for (const id of visibleThreadMessageIds) {
-      if (selectedMessageIds.has(id)) count += 1;
-    }
-    return count;
-  }, [selectedMessageIds, visibleThreadMessageIds]);
-
-  const allVisibleMessagesSelected = useMemo(() => {
-    return visibleThreadMessageIds.length > 0 && selectedVisibleMessageCount === visibleThreadMessageIds.length;
-  }, [selectedVisibleMessageCount, visibleThreadMessageIds.length]);
-
-  const deleteSingleMessage = useCallback(
-    async (messageId: string) => {
-      if (!messageId) return;
-      setMessageDeleteLoading(true);
-      setMessageError('');
-
-      try {
-        await request(`/api/messages/${messageId}`, { method: 'DELETE' });
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
-        setSelectedMessageIds((prev) => {
-          if (!prev.has(messageId)) return prev;
-          const next = new Set(prev);
-          next.delete(messageId);
-          return next;
-        });
-      } catch (err) {
-        setMessageError(err instanceof Error ? err.message : 'Failed to delete message.');
-      } finally {
-        setMessageDeleteLoading(false);
-      }
-    },
-    [request]
-  );
-
-  const deleteSelectedMessages = useCallback(
-    async (messageIds: string[]) => {
-      if (messageIds.length === 0) return;
-      setMessageDeleteLoading(true);
-      setMessageError('');
-
-      try {
-        await request<{ deleted: number }>('/api/messages/bulk-delete', {
-          method: 'POST',
-          data: { messageIds },
-        });
-        const toDelete = new Set(messageIds);
-        setMessages((prev) => prev.filter((m) => !toDelete.has(m.id)));
-        setSelectedMessageIds(new Set());
-      } catch (err) {
-        setMessageError(err instanceof Error ? err.message : 'Failed to delete messages.');
-      } finally {
-        setMessageDeleteLoading(false);
-      }
-    },
-    [request]
-  );
-
-  const clearAllMessagesInThread = useCallback(
-    async (tid: string) => {
-      if (!tid) return;
-      setMessageDeleteLoading(true);
-      setMessageError('');
-
-      try {
-        await request<{ deleted: number }>(`/api/messages/thread/${tid}`, { method: 'DELETE' });
-        setMessages([]);
-        setSelectedMessageIds(new Set());
-      } catch (err) {
-        setMessageError(err instanceof Error ? err.message : 'Failed to delete thread messages.');
-      } finally {
-        setMessageDeleteLoading(false);
-      }
-    },
-    [request]
-  );
 
   const reload = useCallback(
     async (bypassCache = false) => {
@@ -266,145 +142,11 @@ export default function AthleteDashboardConsolePage() {
     [dateRange.from, dateRange.to, discipline, request, user?.role, user?.userId]
   );
 
-  const loadThread = useCallback(
-    async (bypassCache = false, opts?: { silent?: boolean }) => {
-      if (!user?.userId || user.role !== 'ATHLETE') return;
-
-      if (!opts?.silent) setThreadsLoading(true);
-      setMessageError('');
-
-      const qs = new URLSearchParams();
-      if (bypassCache) qs.set('t', String(Date.now()));
-
-      try {
-        const resp = await request<AthleteThreadSummary[]>(
-          `/api/messages/threads${qs.toString() ? `?${qs.toString()}` : ''}`,
-          bypassCache ? { cache: 'no-store' } : undefined
-        );
-        setThreadId(resp[0]?.threadId ?? null);
-      } catch (err) {
-        setMessageError(err instanceof Error ? err.message : 'Failed to load messages.');
-      } finally {
-        if (!opts?.silent) setThreadsLoading(false);
-      }
-    },
-    [request, user?.role, user?.userId]
-  );
-
-  const loadMessages = useCallback(
-    async (
-      tid: string,
-      bypassCache = false,
-      opts?: { silent?: boolean; skipThreadReload?: boolean }
-    ) => {
-      if (!user?.userId || user.role !== 'ATHLETE') return;
-
-      if (!opts?.silent) setMessagesLoading(true);
-      setMessageError('');
-
-      const qs = new URLSearchParams();
-      if (bypassCache) qs.set('t', String(Date.now()));
-
-      try {
-        const resp = await request<ThreadMessagesResponse>(
-          `/api/messages/threads/${tid}${qs.toString() ? `?${qs.toString()}` : ''}`,
-          bypassCache ? { cache: 'no-store' } : undefined
-        );
-        setMessages(resp.messages);
-        await request('/api/messages/mark-read', { method: 'POST', data: { threadId: tid } });
-        if (!opts?.skipThreadReload) void loadThread();
-      } catch (err) {
-        setMessageError(err instanceof Error ? err.message : 'Failed to load messages.');
-      } finally {
-        if (!opts?.silent) setMessagesLoading(false);
-      }
-    },
-    [loadThread, request, user?.role, user?.userId]
-  );
-
-  const sendMessage = useCallback(async () => {
-    const body = messageDraft.trim();
-    if (!body) return;
-    if (!user?.userId || user.role !== 'ATHLETE') return;
-
-    setMessageSending(true);
-    setMessageStatus('');
-    setMessageError('');
-
-    try {
-      const resp = await request<{ sent: number; threadIds: string[] }>('/api/messages/send', {
-        method: 'POST',
-        data: { body },
-      });
-
-      setMessageDraft('');
-      setMessageStatus('Sent.');
-
-      const tid = resp.threadIds[0] ?? threadId;
-      if (tid) {
-        setThreadId(tid);
-        void loadMessages(tid, true);
-      } else {
-        void loadThread(true);
-      }
-    } catch (err) {
-      setMessageError(err instanceof Error ? err.message : 'Failed to send message.');
-    } finally {
-      setMessageSending(false);
-    }
-  }, [loadMessages, loadThread, messageDraft, request, threadId, user?.role, user?.userId]);
-
   useEffect(() => {
     if (user?.role === 'ATHLETE') {
       void reload();
     }
   }, [reload, user?.role]);
-
-  useEffect(() => {
-    if (user?.role === 'ATHLETE') {
-      void loadThread();
-    }
-  }, [loadThread, user?.role]);
-
-  // Background refresh every 30s (avoid UI flicker by loading silently).
-  useEffect(() => {
-    if (user?.role !== 'ATHLETE') return;
-
-    const id = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      if (messagePollInFlightRef.current) return;
-
-      messagePollInFlightRef.current = true;
-      (async () => {
-        try {
-          await loadThread(true, { silent: true });
-          if (threadId) {
-            await loadMessages(threadId, true, { silent: true, skipThreadReload: true });
-          }
-        } finally {
-          messagePollInFlightRef.current = false;
-        }
-      })();
-    }, 30_000);
-
-    return () => window.clearInterval(id);
-  }, [loadMessages, loadThread, threadId, user?.role]);
-
-  useEffect(() => {
-    if (threadId) {
-      void loadMessages(threadId);
-    } else {
-      setMessages([]);
-    }
-  }, [loadMessages, threadId]);
-
-  // Reset selection + dialogs when the thread changes.
-  useEffect(() => {
-    setSelectedMessageIds(new Set());
-    setDeleteMessageId(null);
-    setBulkDeleteConfirmOpen(false);
-    setClearAllConfirmOpen(false);
-  }, [threadId]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   useEffect(() => {
@@ -440,123 +182,115 @@ export default function AthleteDashboardConsolePage() {
 
   // Keep loading/access gates consistent with the coach dashboard styling.
   if (userLoading) {
-    return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Loading...</p>
-      </div>
-    );
+    return <FullScreenLogoLoader />;
   }
 
   if (!user || user.role !== 'ATHLETE') {
     return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Athlete access required.</p>
+      <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
+        <p className={tokens.typography.bodyMuted}>Athlete access required.</p>
       </div>
     );
   }
 
   return (
     <>
-      <section className="px-4 pb-10 md:px-6">
+      <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className="pt-3 md:pt-6">
-          <h1 className={cn(uiH1, 'font-semibold')}>Athlete Console</h1>
+          <h1 className={tokens.typography.h1}>Athlete Console</h1>
         </div>
 
         <div className="mt-4">
           {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-          <div className="grid grid-cols-1 gap-4 min-w-0 items-start md:gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className={cn("grid grid-cols-1 min-w-0 items-start md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
               {/* Column 1: Needs your attention */}
               <div className="min-w-0 order-2 md:order-2">
-                <div ref={needsCardRef} className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-                  <div className="flex items-end justify-between gap-3 mb-2">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Needs your attention</h2>
-                    <div className="text-xs text-[var(--muted)]">Tap to open calendar</div>
-                  </div>
+                <div ref={needsCardRef}>
+                  <Block
+                    title="Needs your attention"
+                    rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
+                  >
+                    <div className={cn("grid", tokens.spacing.widgetGap)}>
+                      {typeof data?.attention.painFlagWorkouts === 'number' ? (
+                        <NeedsAttentionItem
+                          label="Workouts with pain flagged"
+                          count={data.attention.painFlagWorkouts}
+                          tone="danger"
+                          onClick={() => (window.location.href = '/athlete/calendar')}
+                        />
+                      ) : null}
 
-                  <div className="grid gap-2">
-                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
                       <NeedsAttentionItem
-                        label="Workouts with pain flagged"
-                        count={data.attention.painFlagWorkouts}
-                        tone="danger"
+                        label="Workouts pending your confirmation"
+                        count={data?.attention.pendingConfirmation ?? 0}
+                        tone="primary"
                         onClick={() => (window.location.href = '/athlete/calendar')}
                       />
-                    ) : null}
 
-                    <NeedsAttentionItem
-                      label="Workouts pending your confirmation"
-                      count={data?.attention.pendingConfirmation ?? 0}
-                      tone="primary"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-
-                    <NeedsAttentionItem
-                      label="Workouts missed"
-                      count={data?.attention.workoutsMissed ?? 0}
-                      tone="neutral"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-                  </div>
+                      <NeedsAttentionItem
+                        label="Workouts missed"
+                        count={data?.attention.workoutsMissed ?? 0}
+                        tone="neutral"
+                        onClick={() => (window.location.href = '/athlete/calendar')}
+                      />
+                    </div>
+                  </Block>
                 </div>
               </div>
 
               {/* Column 2: Filters/selectors */}
               <div className="min-w-0 order-1 md:order-1">
-                <div
-                  className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4"
+                <Block
+                  title="Make your selection"
+                  className="flex flex-col justify-between"
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 >
-                  <div className="flex items-end justify-between gap-3 mb-4">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">Make your selection</h2>
-                    <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
-                  </div>
+                  <div>
+                    <div className={cn("grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4", tokens.spacing.gridGap)}>
+                      {/* Row 1 */}
+                      <div className="min-w-0 col-start-1 row-start-1">
+                        <FieldLabel className="pl-1">Discipline</FieldLabel>
+                        <SelectField
+                          className="min-h-[44px] w-full"
+                          value={discipline ?? ''}
+                          onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
+                        >
+                          <option value="">All disciplines</option>
+                          <option value="BIKE">Bike</option>
+                          <option value="RUN">Run</option>
+                          <option value="SWIM">Swim</option>
+                          <option value="OTHER">Other</option>
+                        </SelectField>
+                      </div>
+                      <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 min-w-0">
-                    {/* Row 1 */}
-                    <div className="min-w-0 col-start-1 row-start-1">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Discipline (optional)</div>
-                      <Select
-                        className="min-h-[44px] w-full"
-                        value={discipline ?? ''}
-                        onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
-                      >
-                        <option value="">All disciplines</option>
-                        <option value="BIKE">Bike</option>
-                        <option value="RUN">Run</option>
-                        <option value="SWIM">Swim</option>
-                        <option value="OTHER">Other</option>
-                      </Select>
-                    </div>
-                    <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
+                      {/* Row 2 */}
+                      <div className="min-w-0 col-start-1 row-start-2">
+                        <FieldLabel className="pl-1">Time range</FieldLabel>
+                        <SelectField
+                          className="min-h-[44px] w-full"
+                          value={timeRange}
+                          onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                        >
+                          <option value="LAST_7">Last 7 days</option>
+                          <option value="LAST_14">Last 14 days</option>
+                          <option value="LAST_30">Last 30 days</option>
+                        </SelectField>
+                      </div>
 
-                    {/* Row 2 */}
-                    <div className="min-w-0 col-start-1 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">Time range</div>
-                      <Select className="min-h-[44px] w-full" value={timeRange} onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}>
-                        <option value="LAST_7">Last 7 days</option>
-                        <option value="LAST_14">Last 14 days</option>
-                        <option value="LAST_30">Last 30 days</option>
-                      </Select>
-                    </div>
-
-                    <div className="min-w-0 col-start-2 row-start-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-0.5 leading-none">&nbsp;</div>
-                      <div className="min-h-[44px] flex items-center min-w-0">
-                        <div className="text-sm font-semibold text-[var(--text)] truncate">
-                          {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                      <div className="min-w-0 col-start-2 row-start-2">
+                        <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                        <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75")}>
+                          <div className={cn("truncate", tokens.typography.body)}>
+                            {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                          </div>
                         </div>
                       </div>
                     </div>
-
-                    {/* Refresh (bottom-right, spans both columns) */}
-                    <div className="col-span-2 flex items-center justify-end gap-3 pt-1">
-                      <Button type="button" variant="secondary" onClick={() => reload(true)} className="min-h-[44px]">
-                        <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                        Refresh
-                      </Button>
-                    </div>
                   </div>
-                </div>
+
+                  {/* Refresh removed as data auto-reloads */}
+                </Block>
               </div>
 
               {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
@@ -567,17 +301,17 @@ export default function AthleteDashboardConsolePage() {
                   style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
                 >
                   <div className="flex items-end justify-between gap-3 mb-2">
-                    <h2 className="text-sm font-semibold text-[var(--text)]">At a glance</h2>
+                    <BlockTitle>At a glance</BlockTitle>
                     <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
                   </div>
 
                   <div
-                    className="grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center gap-3 min-w-0"
+                    className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
                     data-testid="athlete-dashboard-at-a-glance-grid"
                   >
                     {/* Left: stats */}
-                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-at-a-glance-stats">
-                      <div className="grid gap-1">
+                    <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-at-a-glance-stats">
+                      <div className={cn("grid", tokens.spacing.widgetGap)}>
                         {[
                           { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
                           { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
@@ -587,15 +321,16 @@ export default function AthleteDashboardConsolePage() {
                           <div
                             key={row.label}
                             className={cn(
-                              'min-w-0 flex items-baseline justify-between gap-3 py-[7px]',
-                              idx < 3 ? 'border-b border-black/5' : ''
+                              'min-w-0 flex items-baseline justify-between py-2',
+                              tokens.spacing.widgetGap,
+                              idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
                             )}
                             data-testid="athlete-dashboard-at-a-glance-stat-row"
                           >
-                            <div className="min-w-0 text-[10px] uppercase tracking-wide text-[var(--muted)]/90 truncate" title={row.label}>
+                            <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
                               {row.label}
                             </div>
-                            <div className="flex-shrink-0 text-[14px] sm:text-[16px] leading-[1.05] font-semibold tabular-nums text-[var(--text)]">
+                            <div className={cn('flex-shrink-0 leading-[1.05] font-semibold tabular-nums', tokens.typography.body, 'sm:text-base')}>
                               {row.value}
                             </div>
                           </div>
@@ -604,8 +339,8 @@ export default function AthleteDashboardConsolePage() {
                     </div>
 
                     {/* Right: discipline load */}
-                    <div className="min-w-0 rounded-2xl bg-[var(--bg-structure)]/40 px-3 py-2" data-testid="athlete-dashboard-discipline-load">
-                      <div className="flex flex-col gap-2">
+                    <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-discipline-load">
+                      <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
                         {(() => {
                           const rows = data?.disciplineLoad ?? [];
                           const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
@@ -616,18 +351,18 @@ export default function AthleteDashboardConsolePage() {
                                 const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
                                 const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
                                 return (
-                                  <div key={r.discipline} className="grid grid-cols-[auto,1fr,auto] items-center gap-2 min-w-0">
-                                    <div className="flex items-center gap-2 min-w-[64px]">
+                                  <div key={r.discipline} className={cn("grid grid-cols-[auto,1fr,auto] items-center min-w-0", tokens.spacing.widgetGap)}>
+                                    <div className={cn("flex items-center min-w-[64px]", tokens.spacing.widgetGap)}>
                                       <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                      <span className="text-[11px] font-medium text-[var(--text)]">{(r.discipline || 'OTHER').toUpperCase()}</span>
+                                      <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
                                     </div>
 
-                                    <div className="h-2 rounded-full bg-black/10 overflow-hidden">
-                                      <div className="h-full rounded-full bg-black/25" style={{ width: `${Math.round(pct * 100)}%` }} />
+                                    <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                                      <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
                                     </div>
 
                                     <div
-                                      className="text-[11px] text-[var(--muted)] tabular-nums text-right whitespace-nowrap truncate max-w-[120px]"
+                                      className={cn("tabular-nums text-right whitespace-nowrap truncate max-w-[120px]", tokens.typography.meta)}
                                       title={rightValue}
                                     >
                                       {rightValue}
@@ -647,239 +382,8 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
           {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
-          {loading ? <div className="mt-4 text-sm text-[var(--muted)]">Loading…</div> : null}
-
-          {/* Messages (below top row; half-width on desktop/tablet, right-aligned) */}
-          <div className="mt-6 flex justify-end">
-            <div className="w-full min-w-0 md:w-1/2" data-testid="athlete-dashboard-messages">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 pl-3 md:pl-4">
-                <h2 className="text-sm font-semibold text-[var(--text)]">Messages</h2>
-              </div>
-
-              <div className="rounded-2xl bg-[var(--bg-card)] p-3 md:p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-[var(--muted)]">Message your coach</div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className={cn(
-                      'min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                      'border border-[var(--border-subtle)]',
-                      threadId && messages.length > 0 && !messageDeleteLoading
-                        ? 'bg-rose-600 text-white hover:bg-rose-700'
-                        : 'bg-[var(--bg-surface)] text-[var(--muted)]'
-                    )}
-                    onClick={() => setClearAllConfirmOpen(true)}
-                    disabled={!threadId || messages.length === 0 || messageDeleteLoading}
-                    aria-label="Clear all messages in this conversation"
-                  >
-                    Clear all
-                  </button>
-                </div>
-
-                <div className="mt-2 grid gap-2" data-testid="athlete-dashboard-messages-compose">
-                  <Textarea
-                    rows={3}
-                    placeholder="Write a message…"
-                    className="text-sm"
-                    value={messageDraft}
-                    onChange={(e) => setMessageDraft(e.target.value)}
-                    disabled={messageSending}
-                  />
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      className="min-h-[44px]"
-                      onClick={sendMessage}
-                      disabled={messageSending || messageDraft.trim().length === 0}
-                    >
-                      {messageSending ? 'Sending…' : 'Send'}
-                    </Button>
-                  </div>
-                  {messageStatus ? <div className="text-xs text-emerald-700">{messageStatus}</div> : null}
-                  {messageError ? <div className="text-xs text-rose-700">{messageError}</div> : null}
-                </div>
-
-                <div className="mt-4 rounded-2xl bg-[var(--bg-surface)] p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs text-[var(--muted)]">
-                      {threadsLoading ? 'Loading thread…' : threadId ? 'Thread' : 'No messages yet'}
-                    </div>
-                    {threadId ? (
-                      <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => loadMessages(threadId, true)}>
-                        <Icon name="refresh" size="sm" className="mr-1" aria-hidden />
-                        Refresh
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {threadId && messages.length > 0 ? (
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-rose-600"
-                          checked={allVisibleMessagesSelected}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelectedMessageIds(() => (checked ? new Set(visibleThreadMessageIds) : new Set()));
-                          }}
-                          aria-label="Select all messages"
-                        />
-                        <span>Select all</span>
-                      </label>
-                      <div className="text-xs text-[var(--muted)] tabular-nums">{messages.length} messages</div>
-                    </div>
-                  ) : null}
-
-                  {messagesLoading ? <div className="mt-3 text-sm text-[var(--muted)]">Loading messages…</div> : null}
-                  {!messagesLoading && threadId && messages.length === 0 ? (
-                    <div className="mt-3 text-sm text-[var(--muted)]">No messages yet.</div>
-                  ) : null}
-
-                  <div className="mt-3 flex flex-col gap-2">
-                    {displayMessages.map((m) => {
-                      const mine = m.senderRole === 'ATHLETE';
-                      const senderLabel = mine ? athleteDisplayName : 'COACH';
-                      const checked = selectedMessageIds.has(m.id);
-                      return (
-                        <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-                          <div className="flex items-start gap-2 max-w-[min(560px,92%)]">
-                            <label className="h-9 w-9 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 accent-rose-600"
-                                checked={checked}
-                                onChange={(e) => {
-                                  const nextChecked = e.target.checked;
-                                  setSelectedMessageIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (nextChecked) next.add(m.id);
-                                    else next.delete(m.id);
-                                    return next;
-                                  });
-                                }}
-                                aria-label="Select message"
-                              />
-                            </label>
-
-                            <div
-                              className={cn(
-                                'min-w-0 flex-1 rounded-2xl px-3 py-2 border',
-                                mine
-                                  ? 'bg-[var(--bg-card)] border-[var(--border-subtle)]'
-                                  : 'bg-[var(--bg-structure)] border-black/10'
-                              )}
-                            >
-                              <div className="text-sm whitespace-pre-wrap text-[var(--text)]">{m.body}</div>
-                              <div className="mt-1 flex items-center justify-between gap-2">
-                                <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                                  {senderLabel} · {new Date(m.createdAt).toLocaleString()}
-                                </div>
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    'h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors',
-                                    'border border-black/10 bg-white/40 text-rose-700 hover:bg-white/60',
-                                    messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
-                                  )}
-                                  onClick={() => setDeleteMessageId(m.id)}
-                                  disabled={messageDeleteLoading}
-                                  aria-label="Delete message"
-                                >
-                                  <Icon name="delete" size="sm" aria-hidden />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {selectedVisibleMessageCount > 0 ? (
-                    <div className="sticky bottom-0 mt-3 rounded-2xl border border-black/10 bg-[var(--bg-card)] p-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs text-[var(--muted)] tabular-nums">{selectedVisibleMessageCount} selected</div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className={cn(
-                              'min-h-[36px] rounded-full px-3 py-1.5 text-sm font-medium',
-                              'bg-rose-600 text-white hover:bg-rose-700',
-                              messageDeleteLoading ? 'opacity-60 cursor-not-allowed' : ''
-                            )}
-                            onClick={() => setBulkDeleteConfirmOpen(true)}
-                            disabled={messageDeleteLoading}
-                          >
-                            Delete selected
-                          </button>
-                          <button
-                            type="button"
-                            className="min-h-[36px] rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                            onClick={() => setSelectedMessageIds(new Set())}
-                            disabled={messageDeleteLoading}
-                          >
-                            Clear selection
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
+          {loading && !data ? <FullScreenLogoLoader /> : null}
         </div>
-
-        <ConfirmModal
-          isOpen={Boolean(deleteMessageId)}
-          title="Delete message?"
-          message="This will remove the message from this conversation."
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
-          onCancel={() => setDeleteMessageId(null)}
-          onConfirm={async () => {
-            if (messageDeleteLoading) return;
-            if (!deleteMessageId) return;
-            const id = deleteMessageId;
-            setDeleteMessageId(null);
-            await deleteSingleMessage(id);
-          }}
-        />
-
-        <ConfirmModal
-          isOpen={bulkDeleteConfirmOpen}
-          title={`Delete ${selectedVisibleMessageCount} messages?`}
-          message="This will remove the message from this conversation."
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
-          onCancel={() => setBulkDeleteConfirmOpen(false)}
-          onConfirm={async () => {
-            if (messageDeleteLoading) return;
-            const ids = visibleThreadMessageIds.filter((id) => selectedMessageIds.has(id));
-            setBulkDeleteConfirmOpen(false);
-            await deleteSelectedMessages(ids);
-          }}
-        />
-
-        <ConfirmModal
-          isOpen={clearAllConfirmOpen}
-          title="Delete all messages in this conversation?"
-          message="This cannot be undone."
-          confirmLabel="Delete all"
-          cancelLabel="Cancel"
-          onCancel={() => setClearAllConfirmOpen(false)}
-          onConfirm={async () => {
-            if (messageDeleteLoading) return;
-            if (!threadId) return;
-            const tid = threadId;
-            setClearAllConfirmOpen(false);
-            await clearAllMessagesInThread(tid);
-          }}
-        />
       </section>
     </>
   );

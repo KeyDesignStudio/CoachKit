@@ -8,7 +8,20 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
-  --border-subtle: #fff;
+  /* Subtle, visible borders on light surfaces */
+  --border-subtle: rgba(12, 18, 34, 0.10);
+
+  /* Inverse surface (used for tooltips/popovers that sit over content) */
+  --bg-inverse: #0c1222;
+  --text-inverse: #f8fbff;
+
+  /* Semantic feedback surfaces */
+  --bg-success: rgba(16, 185, 129, 0.14);
+  --text-success: #047857;
+
+  /* Data viz / meters */
+  --bar-track: rgba(12, 18, 34, 0.10);
+  --bar-fill: rgba(12, 18, 34, 0.22);
 
   /* Interaction tokens */
   --today-border: rgba(59, 130, 246, 0.40);
@@ -23,14 +36,79 @@
   --ring: #91b4ff;
 }
 
+/* Manual override (persisted via localStorage + applied to <html data-theme="…">). */
+:root[data-theme='light'] {
+  --bg-page: #EEF0F3;
+  --bg-surface: #F6F7F9;
+  --bg-structure: #E6E9ED;
+  --bg-card: #FFFFFF;
+  --border-subtle: rgba(12, 18, 34, 0.10);
+
+  --bg-inverse: #0c1222;
+  --text-inverse: #f8fbff;
+
+  --bg-success: rgba(16, 185, 129, 0.14);
+  --text-success: #047857;
+
+  --bar-track: rgba(12, 18, 34, 0.10);
+  --bar-fill: rgba(12, 18, 34, 0.22);
+
+  --today-border: rgba(59, 130, 246, 0.40);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #0c1222;
+  --muted: #5a647d;
+  --primary: #2f68ff;
+  --ring: #91b4ff;
+}
+
+:root[data-theme='dark'] {
+  --bg-page: #05060e;
+  --bg-surface: rgba(13, 17, 35, 0.75);
+  --bg-structure: rgba(18, 24, 45, 0.65);
+  --bg-card: rgba(18, 24, 45, 0.85);
+  /* Avoid harsh white borders on dark surfaces */
+  --border-subtle: rgba(248, 251, 255, 0.14);
+
+  --bg-inverse: rgba(248, 251, 255, 0.92);
+  --text-inverse: #05060e;
+
+  --bg-success: rgba(16, 185, 129, 0.22);
+  --text-success: #34d399;
+
+  --bar-track: rgba(248, 251, 255, 0.12);
+  --bar-fill: rgba(248, 251, 255, 0.24);
+
+  --today-border: rgba(158, 193, 255, 0.50);
+
+  --bg: var(--bg-page);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-structure);
+  --text: #f8fbff;
+  --muted: #94a3b8;
+  --primary: #7ba6ff;
+  --ring: #9ec1ff;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     /* Preserve existing dark-mode behavior (no new feature work) */
     --bg-page: #05060e;
     --bg-surface: rgba(13, 17, 35, 0.75);
     --bg-structure: rgba(18, 24, 45, 0.65);
     --bg-card: rgba(18, 24, 45, 0.85);
-    --border-subtle: #fff;
+    --border-subtle: rgba(248, 251, 255, 0.14);
+
+    --bg-inverse: rgba(248, 251, 255, 0.92);
+    --text-inverse: #05060e;
+
+    --bg-success: rgba(16, 185, 129, 0.22);
+    --text-success: #34d399;
+
+    --bar-track: rgba(248, 251, 255, 0.12);
+    --bar-fill: rgba(248, 251, 255, 0.24);
 
     /* Interaction tokens */
     --today-border: rgba(158, 193, 255, 0.50);
@@ -55,6 +133,8 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
   font-family: 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-page);
   color: var(--text);
@@ -71,6 +151,16 @@ a {
   background: rgba(47, 104, 255, 0.25);
 }
 
+@keyframes coachkit-loader-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
 .glass {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -81,4 +171,12 @@ a {
   background: var(--bg-structure);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
+}
+
+@layer components {
+  /* .blocktitle removed - moved to tokens.ts */
+}
+
+@layer utilities {
+  /* Custom utility overrides removed to restore standard Tailwind scale */
 }

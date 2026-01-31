@@ -69,6 +69,9 @@ test.describe('Mobile smoke', () => {
     await expect(inboxSection).toBeVisible();
     await expect(page.getByRole('button', { name: /^Mark Reviewed/ })).toBeVisible();
 
+    // Notifications block removed from dashboard (redundant).
+    await expect(page.getByTestId('coach-dashboard-notifications')).toHaveCount(0);
+
     // Bulk select still works when inbox rows exist.
     const inboxCard = inboxSection.locator('div.rounded-2xl').first();
     const inboxCheckboxes = inboxCard.locator('input[type="checkbox"]');
@@ -165,10 +168,16 @@ test.describe('Mobile smoke', () => {
     await expect(statsBox).toBeVisible();
     await expect(statsBox.getByTestId('athlete-dashboard-at-a-glance-stat-row')).toHaveCount(4);
 
-    const compose = page.getByTestId('athlete-dashboard-messages-compose');
-    await expect(compose).toBeVisible();
-    await expect(compose.getByRole('button', { name: /^Send$/ })).toBeVisible();
+    // Notifications block removed from dashboard (redundant).
+    await expect(page.getByTestId('athlete-dashboard-notifications')).toHaveCount(0);
 
+    await assertNoHorizontalScroll(page);
+  });
+
+  test('Athlete notifications loads and no horizontal scroll', async ({ page }) => {
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/notifications', { waitUntil: 'networkidle' });
+    await expect(page.locator('h1', { hasText: 'Messages' })).toBeVisible();
     await assertNoHorizontalScroll(page);
   });
 });

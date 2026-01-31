@@ -114,7 +114,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
 
       {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/30 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">New Athlete</h2>
           <button
@@ -129,7 +129,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>
+            <div className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-300">{error}</div>
           )}
 
           <div>
@@ -177,8 +177,8 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
                     className={cn(
                       'flex items-center gap-1 rounded-xl border px-3 py-1.5 text-sm font-medium transition-all',
                       isSelected
-                        ? 'border-blue-400 bg-blue-50 text-blue-700'
-                        : 'border-white/30 bg-white/40 text-[var(--text)] hover:border-slate-300 hover:bg-white/60'
+                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)] hover:bg-[var(--bg-surface)]'
                     )}
                   >
                     <Icon name={theme.iconName} className="text-base" />

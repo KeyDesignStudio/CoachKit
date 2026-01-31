@@ -1,6 +1,7 @@
 import { forwardRef, TextareaHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
+import { tokens } from './tokens';
 
 export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
@@ -10,7 +11,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       ref={ref}
       rows={rows}
       className={cn(
-        'w-full rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:opacity-50',
+        'w-full bg-[var(--bg-card)] px-4 py-3 placeholder:text-[var(--muted)]',
+        tokens.typography.body,
+        tokens.borders.input,
+        tokens.radius.input,
+        tokens.transition.default,
+        tokens.opacity.disabled,
         className
       )}
       {...props}

@@ -18,6 +18,8 @@ const localTime = z
 
 const nonEmptyString = z.string().trim().min(1);
 
+const idSchema = z.string().cuid().or(z.string().cuid2());
+
 const createGroupSessionSchema = z.object({
   title: nonEmptyString,
   discipline: nonEmptyString,
@@ -34,8 +36,8 @@ const createGroupSessionSchema = z.object({
   recurrenceRule: nonEmptyString,
   visibilityType: z.nativeEnum(GroupVisibilityType).default(GroupVisibilityType.ALL),
   optionalFlag: z.boolean().optional().default(false),
-  targetAthleteIds: z.array(z.string().cuid()).optional(),
-  targetSquadIds: z.array(z.string().cuid()).optional(),
+  targetAthleteIds: z.array(idSchema).optional(),
+  targetSquadIds: z.array(idSchema).optional(),
 });
 
 const groupSessionInclude = {

@@ -221,7 +221,7 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm" onClick={handleClose} />
 
       {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-3xl border border-white/20 bg-white/40 backdrop-blur-3xl shadow-2xl">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl">
         <div className="flex flex-col gap-6 p-6">
           {/* Header */}
           <div className="flex items-start justify-between">
@@ -233,7 +233,7 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
               type="button"
               onClick={handleClose}
               disabled={creating}
-              className="rounded-full border border-white/30 bg-white/50 p-2 hover:bg-white/70 disabled:opacity-50"
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 hover:bg-[var(--bg-surface)] disabled:opacity-50"
             >
               <Icon name="close" size="sm" />
             </button>
@@ -243,7 +243,7 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Session Details</h3>
               
               <div className="space-y-3">
@@ -311,13 +311,13 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
                     checked={form.optionalFlag}
                     onChange={(e) => setForm({ ...form, optionalFlag: e.target.checked })}
                   />
-                  <span>Optional (athletes can skip)</span>
+                  <span>Optional (athletes can mark as missed)</span>
                 </label>
               </div>
             </div>
 
             {/* Weekdays */}
-            <div className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Weekdays</h3>
               <div className="flex flex-wrap gap-2">
                 {WEEKDAY_OPTIONS.map((day) => (
@@ -327,8 +327,8 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
                     onClick={() => toggleDay(day.value)}
                     className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                       form.selectedDays.includes(day.value)
-                        ? 'border-blue-400 bg-blue-50 text-blue-700'
-                        : 'border-white/30 bg-white/50 text-[var(--muted)] hover:bg-white/70'
+                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
                     }`}
                   >
                     {day.label}
@@ -338,7 +338,7 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
             </div>
 
             {/* Visibility */}
-            <div className="rounded-2xl border border-white/30 bg-white/30 p-4">
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Visibility</h3>
               
               <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
@@ -356,7 +356,7 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
               {form.visibilityType === 'SELECTED' && (
                 <div className="mt-3">
                   <p className="mb-2 text-xs text-[var(--muted)]">Select athletes:</p>
-                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/30 bg-white/50 p-2">
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
                     {athletes.map((athlete) => (
                       <label key={athlete.user.id} className="flex items-center gap-2 text-sm">
                         <input

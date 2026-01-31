@@ -53,10 +53,8 @@ const defaultWorkoutTitles = [
 ];
 
 async function resetDatabase() {
-  await prisma.workoutLibraryFavorite.deleteMany();
-  await prisma.workoutLibraryUsage.deleteMany();
-  await prisma.workoutLibrarySession.deleteMany();
   await prisma.coachJournalEntry.deleteMany();
+
   await prisma.comment.deleteMany();
   await prisma.message.deleteMany();
   await prisma.messageThread.deleteMany();
@@ -254,172 +252,11 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // Minimal starter Workout Library content (Phase 1).
-  // Intended to support UI work before dataset import is wired.
-  await prisma.workoutLibrarySession.createMany({
-    data: [
-      {
-        title: 'Swim Technique: Drills + Form Focus',
-        discipline: 'SWIM',
-        tags: ['technique', 'drills', 'form'],
-        description:
-          'Easy technique session focused on posture, catch, and relaxed breathing. Keep effort light and prioritize smooth strokes.',
-        durationSec: 45 * 60,
-        intensityTarget: 'Easy / Skill',
-        distanceMeters: 2000,
-        equipment: ['goggles', 'pull buoy'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', distanceMeters: 400, notes: 'Easy choice stroke' },
-            { label: 'Drills', distanceMeters: 8 * 50, notes: '25 drill / 25 swim; focus long body line' },
-            { label: 'Main', distanceMeters: 6 * 100, notes: 'Steady; hold consistent stroke count' },
-            { label: 'Cool-down', distanceMeters: 200, notes: 'Easy' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Swim Endurance: Aerobic Main Set',
-        discipline: 'SWIM',
-        tags: ['endurance', 'aerobic'],
-        description:
-          'Aerobic endurance swim with controlled pacing. Keep effort steady and avoid sprinting the last reps.',
-        durationSec: 60 * 60,
-        intensityTarget: 'Z2 / Aerobic',
-        distanceMeters: 2800,
-        equipment: ['goggles'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', distanceMeters: 600, notes: 'Easy mix' },
-            { label: 'Main', distanceMeters: 4 * 400, notes: 'Steady aerobic; 30s rest' },
-            { label: 'Main (build)', distanceMeters: 6 * 100, notes: 'Smooth build within each 100; 20s rest' },
-            { label: 'Cool-down', distanceMeters: 200, notes: 'Easy' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Bike Endurance: Steady Z2 Ride',
-        discipline: 'BIKE',
-        tags: ['endurance', 'aerobic'],
-        description:
-          'Steady endurance ride. Keep cadence comfortable and effort conversational. Fuel early if riding > 60 minutes.',
-        durationSec: 90 * 60,
-        intensityTarget: 'Z2',
-        distanceMeters: 40000,
-        elevationGainMeters: 200,
-        equipment: ['bike', 'helmet'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', durationSec: 15 * 60, notes: 'Easy spin' },
-            { label: 'Main', durationSec: 65 * 60, notes: 'Z2 steady; keep it smooth' },
-            { label: 'Cool-down', durationSec: 10 * 60, notes: 'Easy' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Bike Intervals: Tempo Blocks',
-        discipline: 'BIKE',
-        tags: ['intervals', 'tempo'],
-        description:
-          'Tempo-focused interval ride. Settle into a strong but sustainable effort; avoid surging above target.',
-        durationSec: 75 * 60,
-        intensityTarget: 'Z3',
-        distanceMeters: 32000,
-        equipment: ['bike', 'helmet'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', durationSec: 15 * 60, notes: 'Include 3 x 30s high cadence (easy between)' },
-            { label: 'Main', reps: 3, durationSec: 10 * 60, notes: 'Z3 tempo; 5 min easy between reps' },
-            { label: 'Cool-down', durationSec: 10 * 60, notes: 'Easy spin' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Run Easy: Aerobic Foundation',
-        discipline: 'RUN',
-        tags: ['easy', 'aerobic'],
-        description:
-          'Easy aerobic run. Keep it relaxed and controlled; finish feeling like you could continue.',
-        durationSec: 45 * 60,
-        intensityTarget: 'Z2',
-        distanceMeters: 9000,
-        equipment: ['running shoes'],
-        workoutStructure: {
-          segments: [
-            { label: 'Main', durationSec: 45 * 60, notes: 'Easy conversational pace' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Run Tempo: Controlled Threshold',
-        discipline: 'RUN',
-        tags: ['tempo', 'threshold'],
-        description:
-          'Tempo session with controlled effort. Stay smooth, tall posture, and avoid turning it into a race.',
-        durationSec: 60 * 60,
-        intensityTarget: 'Z4 (controlled)',
-        distanceMeters: 12000,
-        equipment: ['running shoes'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', durationSec: 15 * 60, notes: 'Easy + 4 x 20s strides' },
-            { label: 'Main', reps: 3, durationSec: 8 * 60, notes: 'Tempo; 2 min easy between reps' },
-            { label: 'Cool-down', durationSec: 15 * 60, notes: 'Easy' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Brick: Bike → Run Transition',
-        discipline: 'BRICK',
-        tags: ['brick', 'transition'],
-        description:
-          'Short brick to practice smooth transition and steady pacing off the bike.',
-        durationSec: 75 * 60,
-        intensityTarget: 'Bike Z2→Z3, Run Z2',
-        equipment: ['bike', 'helmet', 'running shoes'],
-        workoutStructure: {
-          segments: [
-            { label: 'Bike', durationSec: 60 * 60, notes: 'Z2 steady with 3 x 3 min Z3 pickups' },
-            { label: 'Transition', durationSec: 5 * 60, notes: 'Quick change; practice routine' },
-            { label: 'Run', durationSec: 10 * 60, notes: 'Easy; focus cadence + form' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-      {
-        title: 'Strength: Triathlon Stability (Bodyweight)',
-        discipline: 'STRENGTH',
-        tags: ['strength', 'stability', 'mobility'],
-        description:
-          'General strength and stability session. Keep reps controlled and stop short of failure to support training volume.',
-        durationSec: 40 * 60,
-        intensityTarget: 'Moderate',
-        equipment: ['mat'],
-        workoutStructure: {
-          segments: [
-            { label: 'Warm-up', durationSec: 8 * 60, notes: 'Dynamic mobility: hips/ankles/shoulders' },
-            { label: 'Circuit A', reps: 3, notes: 'Split squat 8/side; side plank 30s/side; push-up 8–12' },
-            { label: 'Circuit B', reps: 3, notes: 'Glute bridge 12; dead bug 8/side; calf raises 15' },
-            { label: 'Cool-down', durationSec: 5 * 60, notes: 'Easy stretching' },
-          ],
-        },
-        createdByUserId: coach.id,
-      },
-    ],
-    skipDuplicates: true,
-  });
-
   const athleteUsers = await Promise.all(
     athleteUsersSeed.map((seed, index) =>
       prisma.user.upsert({
-        where: { id: seed.id },
+        where: { email: seed.email },
         update: {
-          email: seed.email,
           name: index === 0 ? 'First Athlete' : 'Second Athlete',
           role: 'ATHLETE',
           timezone: 'Australia/Brisbane',

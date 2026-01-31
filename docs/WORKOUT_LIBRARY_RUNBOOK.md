@@ -4,6 +4,35 @@
 
 Workout Library items live in the Postgres table `"WorkoutLibrarySession"` (Prisma model: `WorkoutLibrarySession`).
 
+## Prompt Template import (Admin)
+
+Workout Library is populated via the **Prompt Library import** (prompt templates), not via Plan Library.
+
+### Import endpoint
+
+- `POST /api/admin/workout-library/import`
+- Creates `DRAFT` sessions by default.
+- Idempotent by fingerprint: `sha256(title + discipline + category)`.
+
+### Supported fields
+
+Required (CSV/JSON):
+
+- `title`
+- `discipline` (RUN/BIKE/SWIM/BRICK/STRENGTH/OTHER)
+- `category`
+- `workoutDetail` (stored as `WorkoutLibrarySession.description`)
+
+Optional:
+
+- `tags` (comma-separated)
+- `equipment` (comma-separated)
+
+Notes:
+
+- Coaches only see `PUBLISHED` items.
+- Admins can publish/unpublish via the admin UI.
+
 ## Verification queries (psql)
 
 Count:
@@ -28,7 +57,6 @@ SELECT id, title, status, "createdAt" FROM "WorkoutLibrarySession" ORDER BY "cre
 
 Admin-only:
 
-- `GET /api/admin/diagnostics/workout-library`
 
 Returns:
 
@@ -48,8 +76,10 @@ Returns:
 ```
 
 Notes:
-- The response never includes `DATABASE_URL` (secrets). Only safe host/database/schema info.
-- All responses are `Cache-Control: no-store`.
+
+## Purging legacy Plan-derived templates (Admin)
+
+If older Plan Library imports created `WorkoutLibrarySession` rows, use the admin purge tool (dry-run first) to delete only plan-derived templates.
 
 ## Coach list API caching
 

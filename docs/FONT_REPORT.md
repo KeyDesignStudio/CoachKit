@@ -12,7 +12,7 @@ This document inventories the font loading strategy and the typography utilities
 ## Sources of Truth (Global)
 
 ### Primary text font
-
+- No external webfont is loaded for primary text.
 - Applied globally on `body` in `apps/web/app/globals.css`:
   - `font-family: 'SF Pro Display', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;`
 
@@ -183,7 +183,14 @@ This is not a full per-component catalog; it highlights the primary surfaces tha
 
 These are concrete “drift points” discovered from the inventory.
 
-1) **Mixed text color strategies**
+1) **`font-bold` usage should be treated cautiously**
+- `font-bold` appears (e.g. `apps/web/app/coach/athletes/page.tsx`).
+- Result: depending on the platform font, bold may appear heavier than intended.
+- Fix options:
+  - Prefer `font-semibold` as the heaviest weight for consistency, or
+  - Keep `font-bold` limited to headings only.
+
+2) **Mixed text color strategies**
 - Many components use CSS variable colors: `text-[var(--text)]`, `text-[var(--muted)]`.
 - Some surfaces still use Tailwind palette colors (examples observed):
   - `text-slate-600`, `text-emerald-700`, `text-red-700`, `text-rose-500`, `text-amber-700`.

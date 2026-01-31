@@ -25,14 +25,56 @@ jobs:
         shell: bash
         run: |
           BASE_URL="${{ vars.COACHKIT_BASE_URL }}"
-          URL="${BASE_URL}/api/integrations/strava/cron?mode=intents&forceDays=1"
+          URL="${BASE_URL}/api/integrations/strava/cron?mode=backfill&forceDays=1"
           echo "Calling host=$(echo "$BASE_URL" | sed -E 's#https?://##')"
-          STATUS=$(curl -sS -o /tmp/cron.json -w "%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.COACHKIT_CRON_SECRET }}" \
-            "$URL" || true)
-          echo "HTTP status=$STATUS"
-          cat /tmp/cron.json | head -c 2000 || true
-          if [ "$STATUS" != "200" ]; then
-            echo "Cron call failed (status=$STATUS)"
-            exit 1
-          fi
+          attempts=3
+          backoff=(30 60 120)
+
+          for i in $(seq 1 $attempts); do
+            echo "Attempt $i/$attempts"
+            STATUS=$(curl -sS -o /tmp/cron.json -w "%{http_code}" -X POST \
+              -H "x-cron-secret: ${{ secrets.COACHKIT_CRON_SECRET }}" \
+              "$URL" || true)
+            echo "HTTP status=$STATUS"
+            cat /tmp/cron.json | head -c 2000 || true
+
+            if [ "$STATUS" = "200" ]; then
+              node - <<'NODE'
+              const fs = require('fs');
+              const path = '/tmp/cron.json';
+              let payload = null;
+              try {
+                payload = JSON.parse(fs.readFileSync(path, 'utf8'));
+              } catch {
+                payload = null;
+              }
+
+              if (payload?.status === 'skipped' && payload?.reason === 'db_unreachable') {
+                console.log('[cron] DB unreachable; treated as hobby-safe success', {
+                  retryAfterSeconds: payload?.retryAfterSeconds,
+                });
+                process.exit(0);
+              }
+
+              // Normal success contract
+              if (payload?.ok === true) process.exit(0);
+
+              // 200 with non-ok payload should still fail
+              console.error('[cron] 200 response but ok!=true', payload);
+              process.exit(2);
+NODE
+              exit_code=$?
+              if [ "$exit_code" = "0" ]; then
+                exit 0
+              fi
+            fi
+
+            if [ "$i" -lt "$attempts" ]; then
+              sleep_seconds=${backoff[$((i-1))]}
+              echo "Retrying in ${sleep_seconds}s..."
+              sleep "$sleep_seconds"
+            fi
+          done
+
+          echo "Cron call failed after ${attempts} attempts"
+          exit 1

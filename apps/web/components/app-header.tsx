@@ -8,22 +8,26 @@ import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
-import { AdminHeader } from '@/components/admin/AdminHeader';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
+import { tokens } from '@/components/ui/tokens';
+import { cn } from '@/lib/cn';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
-const DESKTOP_NAV_LINK_CLASS =
-  'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center text-[var(--muted)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]';
+const DESKTOP_NAV_LINK_CLASS = cn(
+  'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+  tokens.typography.navLink
+);
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/athletes', label: 'Manage Athletes', roles: ['COACH'] },
-  { href: '/coach/calendar', label: 'Workout Scheduling', roles: ['COACH'] },
+  { href: '/coach/notifications', label: 'Notifications', roles: ['COACH'] },
+  { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
+  { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
-  { href: '/admin/workout-library', label: 'Admin', roles: ['ADMIN'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
+  { href: '/athlete/notifications', label: 'Notifications', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
@@ -119,10 +123,11 @@ export async function AppHeader() {
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
-  // ADMIN is a separate mode: never mount coach/athlete navigation for admins.
-  if (userRole === 'ADMIN') {
-    return <AdminHeader />;
-  }
+  const desktopTextLinks = navLinks.filter(
+    (link) => !link.href.endsWith('/settings') && !link.href.endsWith('/notifications')
+  );
+  const desktopNotificationsLink = navLinks.find((link) => link.href.endsWith('/notifications'));
+  const desktopSettingsLink = navLinks.find((link) => link.href.endsWith('/settings'));
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
@@ -135,17 +140,31 @@ export async function AppHeader() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {headerClubBranding.type === 'logo' ? (
-              <picture>
+              <>
                 {headerClubBranding.darkLogoUrl ? (
-                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
-                ) : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={headerClubBranding.logoUrl}
-                  alt={`${headerClubBranding.name} logo`}
-                  className="h-8 w-auto object-contain"
-                />
-              </picture>
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.logoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="h-11 w-auto object-contain dark:hidden"
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.darkLogoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="hidden h-11 w-auto object-contain dark:block"
+                    />
+                  </>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerClubBranding.logoUrl}
+                    alt={`${headerClubBranding.name} logo`}
+                    className="h-11 w-auto object-contain"
+                  />
+                )}
+              </>
             ) : (
               <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">
                 {headerClubBranding.name}
@@ -159,15 +178,18 @@ export async function AppHeader() {
             aria-label="CoachKit"
           >
             <span className="text-sm">CoachKit</span>
-            <picture>
-              <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/coachkit-logo.png"
-                alt="CoachKit"
-                className="h-[26.4px] w-[26.4px] object-contain"
-              />
-            </picture>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/coachkit-logo.png"
+              alt="CoachKit"
+              className="h-[29px] w-[29px] object-contain dark:hidden"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/CoachKit_Dark.png"
+              alt="CoachKit"
+              className="hidden h-[29px] w-[29px] object-contain dark:block"
+            />
           </Link>
         </div>
       </div>
@@ -185,40 +207,35 @@ export async function AppHeader() {
           </div>
 
         {/* Desktop: keep existing multi-brand header */}
-        <div className="relative hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4 md:p-5">
-          {/* Center block: true-centered CoachKit branding (independent of nav width) */}
-          <div className="pointer-events-none absolute left-1/2 top-5 z-10 flex h-[55px] -translate-x-1/2 items-center">
-            <Link
-              href="/" 
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
-            >
-              <span className="hidden text-base sm:inline">CoachKit</span>
-              <picture>
-                <source srcSet="/brand/CoachKit_Dark.png" media="(prefers-color-scheme: dark)" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/brand/coachkit-logo.png"
-                  alt="CoachKit"
-                  className="h-[39.6px] w-[39.6px] object-contain"
-                />
-              </picture>
-            </Link>
-          </div>
-
-          {/* Left block: Club branding (logo-only else text fallback) */}
-          <div className="flex min-w-0 items-center">
+        <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:px-6 md:py-2">
+          {/* Left block: Club branding (row 1, col 1) */}
+          <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (
-              <picture>
+              <>
                 {headerClubBranding.darkLogoUrl ? (
-                  <source srcSet={headerClubBranding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
-                ) : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={headerClubBranding.logoUrl}
-                  alt={`${headerClubBranding.name} logo`}
-                  className="h-12 w-auto object-contain sm:h-14"
-                />
-              </picture>
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.logoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="h-12 w-auto object-contain sm:h-14 dark:hidden"
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={headerClubBranding.darkLogoUrl}
+                      alt={`${headerClubBranding.name} logo`}
+                      className="hidden h-12 w-auto object-contain sm:h-14 dark:block"
+                    />
+                  </>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={headerClubBranding.logoUrl}
+                    alt={`${headerClubBranding.name} logo`}
+                    className="h-12 w-auto object-contain sm:h-14"
+                  />
+                )}
+              </>
             ) : (
               <span
                 className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
@@ -228,31 +245,61 @@ export async function AppHeader() {
             )}
           </div>
 
-          {/* Right block: Nav + user (desktop) */}
-          <div className="flex items-center gap-3 md:gap-4">
+          {/* Center block: true-centered CoachKit branding */}
+          <div className="col-start-2 row-start-1 justify-self-center pointer-events-none z-10 flex items-center">
+            <Link
+              href="/" 
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
+            >
+              <span className="hidden text-base sm:inline">CoachKit</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/coachkit-logo.png"
+                alt="CoachKit"
+                className="h-[44px] w-[44px] object-contain dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/CoachKit_Dark.png"
+                alt="CoachKit"
+                className="hidden h-[44px] w-[44px] object-contain dark:block"
+              />
+            </Link>
+          </div>
+
+          {/* Right block: Nav + user (desktop) (row 1, col 3) */}
+          <div className="col-start-3 row-start-1 flex items-center justify-end gap-3 md:gap-4">
             {navLinks.length > 0 ? (
-              <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
-                {navLinks.map((link) =>
-                  link.href.endsWith('/settings') ? (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      aria-label="Settings"
-                      className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-                    >
-                      <Icon name="settings" size="md" className="text-[var(--muted)]" />
-                      <span className="sr-only">Settings</span>
-                    </Link>
-                  ) : (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}
-                    >
-                      {link.label}
-                    </Link>
-                  )
-                )}
+              <nav className="hidden md:flex flex-wrap gap-2">
+                {desktopTextLinks.map((link) => (
+                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "whitespace-nowrap")}>
+                    {link.label}
+                  </Link>
+                ))}
+
+                {desktopNotificationsLink ? (
+                  <Link
+                    key={desktopNotificationsLink.href}
+                    href={desktopNotificationsLink.href}
+                    aria-label="Notifications"
+                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
+                  >
+                    <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
+                    <span className="sr-only">Notifications</span>
+                  </Link>
+                ) : null}
+
+                {desktopSettingsLink ? (
+                  <Link
+                    key={desktopSettingsLink.href}
+                    href={desktopSettingsLink.href}
+                    aria-label="Settings"
+                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
+                  >
+                    <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
+                    <span className="sr-only">Settings</span>
+                  </Link>
+                ) : null}
               </nav>
             ) : null}
 

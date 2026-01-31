@@ -18,6 +18,8 @@ const localTime = z
 
 const nonEmptyString = z.string().trim().min(1);
 
+const idSchema = z.string().cuid().or(z.string().cuid2());
+
 const updateGroupSessionSchema = z
   .object({
     title: nonEmptyString.optional(),
@@ -35,8 +37,8 @@ const updateGroupSessionSchema = z
     recurrenceRule: nonEmptyString.optional(),
     visibilityType: z.nativeEnum(GroupVisibilityType).optional(),
     optionalFlag: z.boolean().optional(),
-    targetAthleteIds: z.array(z.string().cuid()).optional(),
-    targetSquadIds: z.array(z.string().cuid()).optional(),
+    targetAthleteIds: z.array(idSchema).optional(),
+    targetSquadIds: z.array(idSchema).optional(),
   })
   .refine((payload) => Object.keys(payload).length > 0, {
     message: 'At least one field must be provided.',

@@ -9,13 +9,15 @@ import { forbidden, notFound } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
+const idSchema = z.string().cuid().or(z.string().cuid2());
+
 const createSchema = z.object({
-  calendarItemId: z.string().cuid(),
+  calendarItemId: idSchema,
   body: z.string().trim().min(1, 'body cannot be empty.'),
 });
 
 const querySchema = z.object({
-  calendarItemId: z.string().cuid(),
+  calendarItemId: idSchema,
 });
 
 const authorSelect = {

@@ -34,6 +34,62 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-[var(--bg-page)] text-[var(--text)] overflow-x-hidden">
         <Script
+          id="coachkit-theme-preference"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  try {
+    const key = 'coachkit-theme';
+    const pref = localStorage.getItem(key);
+    const root = document.documentElement;
+
+    if (pref === 'dark' || pref === 'light') {
+      root.dataset.theme = pref;
+      if (pref === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+      root.style.colorScheme = pref;
+      return;
+    }
+
+    // system
+    const isSystemDark = (() => {
+      try {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch {
+        return false;
+      }
+    })();
+
+    root.classList.toggle('dark', isSystemDark);
+    root.style.colorScheme = isSystemDark ? 'dark' : '';
+    try {
+      delete root.dataset.theme;
+    } catch {
+      root.removeAttribute('data-theme');
+    }
+
+    // Keep in sync if OS theme changes while the app is open.
+    try {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = (e) => {
+        // Only react in system mode.
+        const prefNow = localStorage.getItem(key);
+        if (prefNow === 'dark' || prefNow === 'light') return;
+        root.classList.toggle('dark', !!e.matches);
+        root.style.colorScheme = e.matches ? 'dark' : '';
+      };
+      if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
+      else if (typeof mql.addListener === 'function') mql.addListener(onChange);
+    } catch {
+      // ignore
+    }
+  } catch {
+    // ignore
+  }
+})();`,
+          }}
+        />
+        <Script
           id="coachkit-build-marker"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{

@@ -1,0 +1,14 @@
+{
+  "evidence": [
+    { "questionKey": "primary_goal", "answerJson": "Complete an Olympic-distance triathlon" },
+    { "questionKey": "training_history", "answerJson": { "years": 2, "notes": "Consistent 3-4 sessions/week" } },
+    { "questionKey": "injury_history", "answerJson": { "hasInjury": false, "details": null } },
+    { "questionKey": "weekly_availability_days", "answerJson": [1, 2, 4, 6] },
+    { "questionKey": "weekly_availability_minutes", "answerJson": 300 },
+    { "questionKey": "preferences", "answerJson": { "long_session_day": 6, "max_intensity_days": 2 } }
+  ],
+  "coachIntent": {
+    "note": "Emphasize bike durability and keep intensity capped.",
+    "goalTag": "build"
+  }
+}

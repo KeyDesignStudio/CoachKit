@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, context: { params: { itemId: st
       }
 
       if (item.status === CalendarItemStatus.SKIPPED) {
-        throw new ApiError(409, 'ALREADY_SKIPPED', 'Skipped workouts cannot be completed.');
+        throw new ApiError(409, 'ALREADY_SKIPPED', 'Missed workouts cannot be completed.');
       }
 
       const completion = await tx.completedActivity.findFirst({

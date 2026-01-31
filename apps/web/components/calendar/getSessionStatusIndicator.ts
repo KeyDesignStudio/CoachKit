@@ -34,7 +34,7 @@ export function getSessionStatusIndicator({ status, date, timeZone, now }: Param
   }
 
   if (status === 'SKIPPED') {
-    return { iconName: 'skipped', ariaLabel: 'Skipped', colorClass: 'text-[var(--muted)]' };
+    return { iconName: 'skipped', ariaLabel: 'Missed', colorClass: 'text-[var(--muted)]' };
   }
 
   if (status === 'PLANNED' && dayEnded) {

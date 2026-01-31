@@ -16,6 +16,7 @@ import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRo
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
+import { CalendarContextMenu, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CalendarShell } from '@/components/calendar/CalendarShell';
@@ -24,6 +25,7 @@ import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
+import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -59,10 +61,16 @@ interface CalendarItem {
   discipline: string;
   status: string;
   notes: string | null;
+  plannedDurationMinutes?: number | null;
+  plannedDistanceKm?: number | null;
   latestCompletedActivity?: {
     painFlag: boolean;
     source: 'MANUAL' | 'STRAVA';
     effectiveStartTimeUtc: string;
+    confirmedAt?: string | null;
+    durationMinutes?: number | null;
+    distanceKm?: number | null;
+    caloriesKcal?: number | null;
   } | null;
 }
 
@@ -93,6 +101,13 @@ export default function AthleteCalendarPage() {
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessionForm, setSessionForm] = useState<SessionFormState>(() => emptyForm(weekStartKey));
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    type: 'session' | 'day';
+    data: any;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'day', data: null });
+  const [clipboard, setClipboard] = useState<any>(null);
 
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
@@ -309,6 +324,63 @@ export default function AthleteCalendarPage() {
     setDrawerOpen(false);
   }, []);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, type: 'session' | 'day', data: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      type,
+      data,
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleMenuAction = useCallback(async (action: ContextMenuAction, payload?: any) => {
+    const { type, data: contextData } = contextMenu;
+    closeContextMenu();
+
+    if (action === 'copy' && type === 'session') {
+      setClipboard(contextData);
+    } else if (action === 'delete' && type === 'session') {
+      if (!confirm('Are you sure you want to delete this workout?')) return;
+      try {
+        setLoading(true);
+        await request(`/api/athlete/calendar-items/${contextData.id}`, { method: 'DELETE' });
+        await loadItems(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to delete session');
+      } finally {
+        setLoading(false);
+      }
+    } else if (action === 'paste' && type === 'day') {
+      if (!clipboard) return;
+      
+      try {
+        setLoading(true);
+        await request('/api/athlete/calendar-items', {
+          method: 'POST',
+          data: {
+            date: contextData.date,
+            plannedStartTimeLocal: clipboard.plannedStartTimeLocal || undefined,
+            title: clipboard.title,
+            discipline: clipboard.discipline,
+            workoutDetail: clipboard.workoutDetail,
+            notes: clipboard.notes,
+          },
+        });
+        await loadItems(true);
+      } catch(e) {
+         setError('Couldn’t paste session.');
+      } finally {
+         setLoading(false);
+      }
+    }
+  }, [contextMenu, clipboard, request, loadItems]);
+
   const onCreateSession = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
@@ -423,9 +495,9 @@ export default function AthleteCalendarPage() {
       {viewMode === 'week' ? (
         <CalendarShell variant="week" data-athlete-week-view-version="athlete-week-v2">
           {showSkeleton ? (
-            <SkeletonWeekGrid />
+            <SkeletonWeekGrid showSummaryColumn />
           ) : (
-            <AthleteWeekGrid>
+            <AthleteWeekGrid includeSummaryColumn>
               {weekDays.map((day) => {
                 const dayItems = (itemsByDate[day.date] || []).map((item) => ({
                   ...item,
@@ -440,6 +512,7 @@ export default function AthleteCalendarPage() {
                     isEmpty={dayItems.length === 0}
                     isToday={day.date === todayKey}
                     onAddClick={() => openCreateDrawer(day.date)}
+                    onContextMenu={(e) => handleContextMenu(e, 'day', { date: day.date })}
                   >
                     {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
                       <AthleteWeekSessionRow
@@ -448,36 +521,157 @@ export default function AthleteCalendarPage() {
                         onClick={() => handleWorkoutClick(item.id)}
                         timeZone={athleteTimezone}
                         statusIndicatorVariant="bar"
+                        onContextMenu={(e) => handleContextMenu(e, 'session', item)}
                       />
                     ))}
                   </AthleteWeekDayColumn>
                 );
               })}
+
+              {/* Weekly summary column (desktop: right of Sunday) */}
+              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border border-[var(--border-subtle)]">
+                <div className="border-b border-[var(--border-subtle)] px-3 py-1.5">
+                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
+                  <p className="text-sm font-medium truncate">This week</p>
+                </div>
+                <div className="flex flex-col gap-2 p-2">
+                  <div className="rounded border border-[var(--border-subtle)] p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
+                    <div className="text-sm font-semibold text-[var(--text)]">
+                      {items.filter((i) => {
+                        const dateKey = getLocalDayKey(i.date, athleteTimezone);
+                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6) && !!i.latestCompletedActivity?.confirmedAt;
+                      }).length}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const toDayKey = addDaysToDayKey(weekStartKey, 6);
+                    const summary = getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStartKey,
+                      toDayKey,
+                      includePlannedFallback: false,
+                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
+                    });
+                    const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
+
+                    return (
+                      <>
+                        <div className="rounded border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
+                          <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
+                            {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
+                          </div>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
+                        </div>
+
+                        <div className="rounded border border-[var(--border-subtle)] p-2">
+                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
+                          {top.length === 0 ? (
+                            <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
+                          ) : (
+                            <div className="mt-1 space-y-1">
+                              {top.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </AthleteWeekGrid>
           )}
         </CalendarShell>
       ) : (
         <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
           {showSkeleton ? (
-            <SkeletonMonthGrid />
+            <SkeletonMonthGrid showSummaryColumn />
           ) : (
-            <MonthGrid>
-              {monthDays.map((day) => (
-                <AthleteMonthDayCell
-                  key={day.dateStr}
-                  date={day.date}
-                  dateStr={day.dateStr}
-                  dayWeather={day.weather}
-                  items={day.items}
-                  isCurrentMonth={day.isCurrentMonth}
-                  isToday={day.dateStr === todayKey}
-                  athleteTimezone={athleteTimezone}
-                  onDayClick={handleDayClick}
-                  onAddClick={(dateStr) => openCreateDrawer(dateStr)}
-                  canAdd
-                  onItemClick={handleItemIdClick}
-                />
-              ))}
+            <MonthGrid includeSummaryColumn>
+              {Array.from({ length: 6 }, (_, weekIndex) => {
+                const start = weekIndex * 7;
+                const week = monthDays.slice(start, start + 7);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => !!i.latestCompletedActivity?.confirmedAt).length, 0);
+                const weekStart = week[0]?.dateStr ?? '';
+                const weekEnd = week[6]?.dateStr ?? '';
+                const weekSummary = weekStart && weekEnd
+                  ? getRangeDisciplineSummary({
+                      items,
+                      timeZone: athleteTimezone,
+                      fromDayKey: weekStart,
+                      toDayKey: weekEnd,
+                      includePlannedFallback: false,
+                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
+                    })
+                  : null;
+                const weekTopDisciplines = weekSummary
+                  ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
+                  : [];
+
+                return (
+                  <div key={`week-${weekIndex}`} className="contents">
+                    {week.map((day) => (
+                      <AthleteMonthDayCell
+                        key={day.dateStr}
+                        date={day.date}
+                        dateStr={day.dateStr}
+                        dayWeather={day.weather}
+                        items={day.items}
+                        isCurrentMonth={day.isCurrentMonth}
+                        isToday={day.dateStr === todayKey}
+                        athleteTimezone={athleteTimezone}
+                        onDayClick={handleDayClick}
+                        onAddClick={(dateStr) => openCreateDrawer(dateStr)}
+                        canAdd
+                        onItemClick={handleItemIdClick}
+                        onContextMenu={handleContextMenu}
+                      />
+                    ))}
+
+                    <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
+                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
+                      <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
+                        {weekSummary ? (
+                          <>
+                            {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
+                          </>
+                        ) : (
+                          <>{weekWorkoutCount} workouts</>
+                        )}
+                      </div>
+                      {weekSummary ? (
+                        <>
+                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
+                          {weekTopDisciplines.length ? (
+                            <div className="mt-1 space-y-0.5">
+                              {weekTopDisciplines.map((row) => (
+                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
+                                  <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
+                                  <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
+                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="text-xs text-[var(--muted)]">{weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </MonthGrid>
           )}
         </CalendarShell>
@@ -491,6 +685,16 @@ export default function AthleteCalendarPage() {
         </div>
       ) : null}
     </section>
+
+    <CalendarContextMenu
+      isOpen={contextMenu.isOpen}
+      position={contextMenu.position}
+      type={contextMenu.type}
+      canPaste={!!clipboard}
+      onClose={closeContextMenu}
+      onAction={handleMenuAction}
+      showLibraryInsert={false}
+    />
 
     <SessionDrawer
       isOpen={drawerOpen}

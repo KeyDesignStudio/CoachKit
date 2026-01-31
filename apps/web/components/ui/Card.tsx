@@ -1,6 +1,10 @@
 import { HTMLAttributes } from 'react';
 
+// DEPRECATED: Use <Block> instead for consistent Layout containers with optional titles.
+// This primitive is kept for backward compatibility but should not be used in new code.
+
 import { cn } from '@/lib/cn';
+import { tokens } from './tokens';
 
 type CardVariant = 'default' | 'soft';
 
@@ -9,10 +13,21 @@ export type CardProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 const variantClasses: Record<CardVariant, string> = {
-  default: 'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)]',
-  soft: 'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]',
+  default: cn(tokens.borders.default, 'bg-[var(--bg-card)]'),
+  soft: cn(tokens.borders.default, 'bg-[var(--bg-structure)]'),
 };
 
 export function Card({ className, variant = 'default', ...props }: CardProps) {
-  return <div className={cn('p-6', variantClasses[variant], className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        'min-w-0 max-w-full',
+        tokens.radius.card,
+        tokens.spacing.blockPadding,
+        variantClasses[variant],
+        className
+      )}
+      {...props}
+    />
+  );
 }

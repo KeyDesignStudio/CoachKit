@@ -22,6 +22,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@prisma/client": [
+        "./node_modules/@prisma/client"
+      ],
+      "@prisma/client/*": [
+        "./node_modules/@prisma/client/*"
       ]
     },
     "plugins": [
@@ -34,7 +40,13 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next-apb-shard-1/types/**/*.ts",
+    ".next-apb-shard-2/types/**/*.ts",
+    ".next-apb-shard-3/types/**/*.ts",
+    ".next-apb-shard-4/types/**/*.ts",
+    ".next-apb-shard-off/types/**/*.ts",
+    ".next-apb-fast/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

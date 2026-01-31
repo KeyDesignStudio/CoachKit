@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { handleError } from '@/lib/http';
+import { isPrismaInitError, logPrismaInitError } from '@/lib/prisma-diagnostics';
 import { syncStravaActivityById, syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 
 export const dynamic = 'force-dynamic';
@@ -17,18 +19,22 @@ function isAutosyncEnabled() {
 }
 
 function requireCronAuth(request: NextRequest): NextResponse | null {
-  const expected = process.env.CRON_SECRET;
+  const expected = process.env.CRON_SECRET ?? process.env.COACHKIT_CRON_SECRET;
   if (!expected) {
     // Misconfiguration should be visible.
     throw new ApiError(500, 'CRON_SECRET_MISSING', 'CRON_SECRET is not set.');
   }
 
-  const bearer = request.headers.get('authorization');
-  const token = bearer?.startsWith('Bearer ') ? bearer.slice('Bearer '.length).trim() : null;
-  const alt = request.headers.get('x-cron-secret');
+  // IMPORTANT: Do not authenticate cron requests via the Authorization header.
+  // Clerk middleware may attempt to parse Authorization as a JWT and reject non-JWT values.
+  const provided = request.headers.get('x-cron-secret');
+  if (!provided) {
+    return cronAuthFailure();
+  }
 
-  const provided = token || alt;
-  if (!provided || provided !== expected) {
+  const providedBuf = Buffer.from(provided);
+  const expectedBuf = Buffer.from(expected);
+  if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
     return cronAuthFailure();
   }
 
@@ -92,6 +98,16 @@ async function runCron(request: NextRequest) {
   let matchedCompletions = 0;
   let skippedDuplicates = 0;
   let rateLimited = false;
+  let athletesConsidered = 0;
+  let stravaConnectionsFound = 0;
+  let activitiesFetched = 0;
+  let activitiesInWindow = 0;
+  let activitiesUpserted = 0;
+  const activitiesSkippedByReason: Record<string, number> = {};
+  let calendarItemsLinked = 0;
+  let calendarItemLinksExisting = 0;
+  let calendarItemLinksClearedDeleted = 0;
+  const errors: Array<{ athleteId?: string; message: string }> = [];
 
   if (mode === 'intents') {
     const intents = await prisma.stravaSyncIntent.findMany({
@@ -136,6 +152,16 @@ async function runCron(request: NextRequest) {
         createdCalendarItems += summary.createdCalendarItems;
         matchedCompletions += summary.matched;
         skippedDuplicates += summary.skippedExisting;
+        activitiesFetched += summary.fetched;
+        activitiesInWindow += summary.inWindow;
+        activitiesUpserted += summary.created + summary.updated;
+        calendarItemsLinked += summary.linkedCalendarItems;
+        calendarItemLinksExisting += summary.existingCalendarItemLinks;
+        calendarItemLinksClearedDeleted += summary.clearedDeletedCalendarItemLinks;
+        for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
+          activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
+        }
+        for (const err of summary.errors ?? []) errors.push(err);
 
         await prisma.stravaSyncIntent.update({
           where: { id: intent.id },
@@ -210,6 +236,8 @@ async function runCron(request: NextRequest) {
       },
     });
 
+    athletesConsidered += connections.length;
+
     const entries: StravaConnectionEntry[] = connections
       .map((a) => {
         if (!a.stravaConnection) return null;
@@ -222,11 +250,23 @@ async function runCron(request: NextRequest) {
       })
       .filter(Boolean) as any;
 
+    stravaConnectionsFound += entries.length;
+
     if (entries.length > 0) {
-      const summary = await syncStravaForConnections(entries, { forceDays });
+      const summary = await syncStravaForConnections(entries, { forceDays, deep: true, deepConcurrency: 2 });
       createdCalendarItems += summary.createdCalendarItems;
       matchedCompletions += summary.matched;
       skippedDuplicates += summary.skippedExisting;
+      activitiesFetched += summary.fetched;
+      activitiesInWindow += summary.inWindow;
+      activitiesUpserted += summary.created + summary.updated;
+      calendarItemsLinked += summary.linkedCalendarItems;
+      calendarItemLinksExisting += summary.existingCalendarItemLinks;
+      calendarItemLinksClearedDeleted += summary.clearedDeletedCalendarItemLinks;
+      for (const [reason, count] of Object.entries(summary.skippedByReason ?? {})) {
+        activitiesSkippedByReason[reason] = (activitiesSkippedByReason[reason] ?? 0) + count;
+      }
+      for (const err of summary.errors ?? []) errors.push(err);
       if (summary.errors.some((e) => e.message.toLowerCase().includes('rate limit'))) {
         rateLimited = true;
       }
@@ -255,6 +295,9 @@ async function runCron(request: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
+      mode,
+      forceDays,
+      athleteId,
       drainedCount,
       doneCount,
       failedCount,
@@ -262,6 +305,16 @@ async function runCron(request: NextRequest) {
       createdCalendarItems,
       matchedCompletions,
       skippedDuplicates,
+      athletesConsidered,
+      stravaConnectionsFound,
+      activitiesFetched,
+      activitiesInWindow,
+      activitiesUpserted,
+      activitiesSkipped: activitiesSkippedByReason,
+      calendarItemsLinked,
+      calendarItemLinksExisting,
+      calendarItemLinksClearedDeleted,
+      errors,
       rateLimited,
     },
     { status: 200 }
@@ -272,6 +325,25 @@ export async function GET(request: NextRequest) {
   try {
     return await runCron(request);
   } catch (error) {
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({ where: 'strava_cron', error });
+      const retryAfterSeconds = 300;
+      return NextResponse.json(
+        {
+          ok: true,
+          status: 'skipped',
+          reason: 'db_unreachable',
+          retryAfterSeconds,
+        },
+        {
+          status: 200,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     return handleError(error);
   }
 }
@@ -280,6 +352,25 @@ export async function POST(request: NextRequest) {
   try {
     return await runCron(request);
   } catch (error) {
+    if (isPrismaInitError(error)) {
+      logPrismaInitError({ where: 'strava_cron', error });
+      const retryAfterSeconds = 300;
+      return NextResponse.json(
+        {
+          ok: true,
+          status: 'skipped',
+          reason: 'db_unreachable',
+          retryAfterSeconds,
+        },
+        {
+          status: 200,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+
     return handleError(error);
   }
 }

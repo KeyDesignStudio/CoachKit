@@ -36,6 +36,7 @@ export const ICON_NAMES = [
   'today',
   'refresh',
   'copyWeek',
+  'paste',
   'add',
   'scheduleAdd',
   'calendarAddOn',
@@ -43,9 +44,14 @@ export const ICON_NAMES = [
   'delete',
   'close',
   'filter',
+  'inbox',
   'settings',
+  'expandMore',
+  'logout',
   'info',
   'warning',
+  'idea',
+  'chat',
 
   // Common UI
   'favorite',
@@ -96,6 +102,7 @@ export const ICONS: Record<IconName, string> = {
   today: 'today',
   refresh: 'refresh',
   copyWeek: 'content_copy',
+  paste: 'content_paste',
   add: 'add',
   scheduleAdd: 'schedule_add',
   calendarAddOn: 'calendar_add_on',
@@ -103,10 +110,13 @@ export const ICONS: Record<IconName, string> = {
   delete: 'delete',
   close: 'close',
   filter: 'filter_list',
+  inbox: 'inbox',
   settings: 'settings',
+  expandMore: 'expand_more',
+  logout: 'logout',
   info: 'info',
   warning: 'warning_amber',
-
+  idea: 'lightbulb',  chat: 'chat',
   // Common UI
   favorite: 'star',
 

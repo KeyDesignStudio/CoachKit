@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       throw new ApiError(403, 'FORBIDDEN', 'Access denied.');
     }
 
-    const summary = await syncStravaForConnections(connections, { forceDays });
+    const summary = await syncStravaForConnections(connections, { forceDays, deep: true });
     return success(summary);
   } catch (error) {
     return handleError(error);

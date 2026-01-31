@@ -10,9 +10,9 @@ type MobileHeaderTitleProps = {
 };
 
 function fallbackTitleFromPath(pathname: string): string {
-  if (pathname.startsWith('/admin/workout-library')) return 'Workout Library';
   if (pathname.startsWith('/coach/calendar')) return 'Calendar';
   if (pathname.startsWith('/coach/dashboard')) return 'Dashboard';
+  if (pathname.startsWith('/coach/notifications')) return 'Notifications';
   if (pathname.startsWith('/coach/athletes')) return 'Athletes';
   if (pathname.startsWith('/coach/group-sessions')) return 'Session Builder';
   if (pathname.startsWith('/coach/settings')) return 'Settings';
@@ -20,6 +20,7 @@ function fallbackTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/athlete/calendar')) return 'Calendar';
   if (pathname.startsWith('/athlete/today')) return 'Today';
   if (pathname.startsWith('/athlete/workouts')) return 'Workouts';
+  if (pathname.startsWith('/athlete/notifications')) return 'Notifications';
   if (pathname.startsWith('/athlete/settings')) return 'Settings';
 
   return 'CoachKit';

@@ -23,15 +23,13 @@ test('Admin can publish DRAFT workouts and coach can see them', async ({ page })
     data: {
       dryRun: false,
       confirmApply: true,
-      source: 'MANUAL',
       items: [
         {
           title,
           discipline: 'STRENGTH',
+          category: 'Playwright',
           tags: ['pw'],
-          description: 'Playwright-created draft library workout.',
-          durationSec: 600,
-          intensityTarget: 'RPE 6',
+          workoutDetail: 'Playwright-created draft library prompt.',
           equipment: [],
         },
       ],

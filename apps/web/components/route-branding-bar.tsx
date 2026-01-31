@@ -24,23 +24,37 @@ export function RouteBrandingBar() {
   // NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift).
 
   return (
-    <div className="px-6 pt-4">
+    <div className="px-4 pt-4 md:px-6">
       <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
         <div>
           <p className="m-0 text-xs text-[var(--muted)]">Program branding</p>
           <p className="m-0 font-semibold text-[var(--text)]">{branding.displayName || DEFAULT_BRAND_NAME}</p>
         </div>
-        <picture className="ml-auto">
+        <div className="ml-auto">
           {branding.darkLogoUrl ? (
-            <source srcSet={branding.darkLogoUrl} media="(prefers-color-scheme: dark)" />
-          ) : null}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolveLogoUrl(branding.logoUrl)}
-            alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
-            className="h-14 w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover"
-          />
-        </picture>
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={resolveLogoUrl(branding.logoUrl)}
+                alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
+                className="h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:hidden"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={branding.darkLogoUrl}
+                alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
+                className="hidden h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover dark:block"
+              />
+            </>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolveLogoUrl(branding.logoUrl)}
+              alt={`${branding.displayName || DEFAULT_BRAND_NAME} logo`}
+              className="h-20 w-20 md:h-14 md:w-14 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] object-cover"
+            />
+          )}
+        </div>
       </div>
     </div>
   );
