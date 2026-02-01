@@ -60,10 +60,11 @@ describe('AI Plan Builder v1 (PATCH draft-plan notes regression)', () => {
     const session = await prisma.aiPlanDraftSession.findFirstOrThrow({
       where: { draftId: draft.id },
       orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
-      select: { id: true, notes: true, durationMinutes: true },
+      select: { id: true, durationMinutes: true },
     });
 
-    const newNotes = 'the notes field is not changing but duration is changing\n\nthis is another line (repro)';
+    // Match the production repro payload shape/content (do not change without updating the incident doc).
+    const newNotes = 'Brick (add short run off bike)\n\nGordon tweaked';
     const newDurationMinutes = (session.durationMinutes ?? 30) + 5;
 
     const { PATCH } = await import('@/app/api/coach/athletes/[athleteId]/ai-plan-builder/draft-plan/route');
@@ -77,6 +78,7 @@ describe('AI Plan Builder v1 (PATCH draft-plan notes regression)', () => {
           sessionEdits: [
             {
               sessionId: session.id,
+              type: 'endurance',
               durationMinutes: newDurationMinutes,
               notes: newNotes,
             },
