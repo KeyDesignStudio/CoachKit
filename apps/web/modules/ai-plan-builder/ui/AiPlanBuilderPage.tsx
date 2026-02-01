@@ -15,8 +15,14 @@ import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
+import { AiPlanBuilderCoachV1 } from './AiPlanBuilderCoachV1';
 
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
+  const showDebugUi = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_APB_DEBUG_UI === '1';
+  if (!showDebugUi) {
+    return <AiPlanBuilderCoachV1 athleteId={athleteId} />;
+  }
+
   const { request } = useApi();
 
   const formatApiErrorMessage = useCallback((e: ApiClientError) => {
