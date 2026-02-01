@@ -915,6 +915,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                                 }
                                 data-testid="apb-session-duration"
                               />
+                              <div className="mt-1 text-xs text-[var(--fg-muted)]">Durations are adjusted to 5-minute blocks</div>
                             </div>
                             <div>
                               <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Coach notes</div>
