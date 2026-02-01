@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
 
@@ -46,7 +46,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-08-01',
       weeksToEvent: 6,
-      weekStart: 'monday',
+      weekStart: 'monday' as const,
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced' as const,
@@ -105,7 +105,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-09-01',
       weeksToEvent: 6,
-      weekStart: 'monday',
+      weekStart: 'monday' as const,
       weeklyAvailabilityDays: [1, 3, 5, 6],
       weeklyAvailabilityMinutes: 300,
       disciplineEmphasis: 'bike' as const,
@@ -155,7 +155,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-10-01',
       weeksToEvent: 4,
-      weekStart: 'monday',
+      weekStart: 'monday' as const,
       weeklyAvailabilityDays: [1, 2, 4, 6],
       weeklyAvailabilityMinutes: 240,
       disciplineEmphasis: 'run' as const,
@@ -193,7 +193,7 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
     const setup = {
       eventDate: '2026-11-01',
       weeksToEvent: 6,
-      weekStart: 'monday',
+      weekStart: 'monday' as const,
       weeklyAvailabilityDays: [1, 2, 3, 5, 6],
       weeklyAvailabilityMinutes: 360,
       disciplineEmphasis: 'balanced' as const,
@@ -221,5 +221,104 @@ describe('AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish)', () =
 
     const snapshots = await prisma.aiPlanDraftPublishSnapshot.findMany({ where: { draftId: String(draft.id) } });
     expect(snapshots.length).toBe(1);
+  });
+
+  it('T7A.5 approve-and-publish is idempotent on repeated calls (no duplicate audit/snapshot)', async () => {
+    const setup = {
+      eventDate: '2026-12-01',
+      weeksToEvent: 4,
+      weekStart: 'monday' as const,
+      weeklyAvailabilityDays: [1, 3, 5, 6],
+      weeklyAvailabilityMinutes: 240,
+      disciplineEmphasis: 'balanced' as const,
+      riskTolerance: 'med' as const,
+      maxIntensityDaysPerWeek: 2,
+      maxDoublesPerWeek: 0,
+      longSessionDay: 6,
+    };
+
+    const draft = (await generateAiDraftPlanV1({ coachId, athleteId, setup })) as any;
+    const seeded = await seedTriggersAndProposal({ coachId, athleteId, aiPlanDraftId: draft.id });
+
+    const first = await approveAndPublishPlanChangeProposal({
+      coachId,
+      athleteId,
+      proposalId: String(seeded.proposal.id),
+      aiPlanDraftId: String(draft.id),
+    });
+
+    expect(first.approval.proposal.status).toBe('APPLIED');
+    expect(first.publish.ok).toBe(true);
+
+    const second = await approveAndPublishPlanChangeProposal({
+      coachId,
+      athleteId,
+      proposalId: String(seeded.proposal.id),
+      aiPlanDraftId: String(draft.id),
+    });
+
+    expect(second.approval.proposal.status).toBe('APPLIED');
+    expect(second.publish.ok).toBe(true);
+
+    const audits = await prisma.planChangeAudit.findMany({ where: { proposalId: String(seeded.proposal.id) } });
+    expect(audits.length).toBe(1);
+
+    const snapshots = await prisma.aiPlanDraftPublishSnapshot.findMany({ where: { draftId: String(draft.id) } });
+    expect(snapshots.length).toBe(1);
+  });
+
+  it('T7A.6 approve-and-publish retries once on P2028 then succeeds', async () => {
+    const setup = {
+      eventDate: '2027-01-15',
+      weeksToEvent: 4,
+      weekStart: 'monday' as const,
+      weeklyAvailabilityDays: [1, 2, 4, 6],
+      weeklyAvailabilityMinutes: 240,
+      disciplineEmphasis: 'run' as const,
+      riskTolerance: 'low' as const,
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      longSessionDay: 6,
+    };
+
+    const draft = (await generateAiDraftPlanV1({ coachId, athleteId, setup })) as any;
+    const seeded = await seedTriggersAndProposal({ coachId, athleteId, aiPlanDraftId: draft.id });
+
+    const original = prisma.$transaction.bind(prisma);
+    let approvalTxCalls = 0;
+    let threwOnce = false;
+
+    const spy = vi.spyOn(prisma, '$transaction').mockImplementation(async (...args: any[]) => {
+      const hasOptions = args.length >= 2 && args[1] && typeof args[1] === 'object';
+      if (hasOptions) {
+        approvalTxCalls += 1;
+        if (!threwOnce) {
+          threwOnce = true;
+          const err: any = new Error('Interactive transaction closed');
+          err.name = 'PrismaClientKnownRequestError';
+          err.code = 'P2028';
+          throw err;
+        }
+      }
+      return (original as any)(...args);
+    });
+
+    try {
+      const res = await approveAndPublishPlanChangeProposal({
+        coachId,
+        athleteId,
+        proposalId: String(seeded.proposal.id),
+        aiPlanDraftId: String(draft.id),
+      });
+
+      expect(approvalTxCalls).toBe(2);
+      expect(res.approval.proposal.status).toBe('APPLIED');
+      expect(res.publish.ok).toBe(true);
+
+      const audits = await prisma.planChangeAudit.findMany({ where: { proposalId: String(seeded.proposal.id) } });
+      expect(audits.length).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

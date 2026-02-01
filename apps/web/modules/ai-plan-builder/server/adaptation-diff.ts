@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
@@ -71,6 +70,8 @@ export async function applyPlanDiffToDraft(params: {
   tx: any;
   draftId: string;
   diff: PlanDiffOp[];
+  // When false, skips the planJson cache rebuild (caller may rebuild outside tx).
+  syncPlanJson?: boolean;
 }) {
   // Important: lock enforcement lives in AiPlanDraftWeek/AiPlanDraftSession.
   // We re-check those here, and fail with 409 on apply if blocked.
@@ -90,31 +91,27 @@ export async function applyPlanDiffToDraft(params: {
     }
   }
 
-  if (weekIndicesToTouch.size) {
-    const lockedWeek = await params.tx.aiPlanDraftWeek.findFirst({
-      where: { draftId: params.draftId, weekIndex: { in: Array.from(weekIndicesToTouch) }, locked: true },
-      select: { weekIndex: true },
-    });
+  const weeksToTouch = weekIndicesToTouch.size
+    ? await params.tx.aiPlanDraftWeek.findMany({
+        where: { draftId: params.draftId, weekIndex: { in: Array.from(weekIndicesToTouch) } },
+        select: { weekIndex: true, locked: true },
+      })
+    : [];
 
-    if (lockedWeek) {
-      throw new ApiError(409, 'WEEK_LOCKED', 'Week is locked and sessions cannot be modified.', {
-        weekIndex: lockedWeek.weekIndex,
-      });
+  if (weekIndicesToTouch.size && weeksToTouch.length !== weekIndicesToTouch.size) {
+    throw new ApiError(404, 'NOT_FOUND', 'One or more draft weeks were not found.');
+  }
+
+  for (const w of weeksToTouch) {
+    if (w.locked) {
+      throw new ApiError(409, 'WEEK_LOCKED', 'Week is locked and cannot be edited.');
     }
   }
 
   const sessionsById = sessionIdsToTouch.size
     ? await params.tx.aiPlanDraftSession.findMany({
-        where: { id: { in: Array.from(sessionIdsToTouch) }, draftId: params.draftId },
-        select: {
-          id: true,
-          weekIndex: true,
-          ordinal: true,
-          type: true,
-          durationMinutes: true,
-          notes: true,
-          locked: true,
-        },
+        where: { draftId: params.draftId, id: { in: Array.from(sessionIdsToTouch) } },
+        select: { id: true, locked: true, notes: true },
       })
     : [];
 
@@ -242,24 +239,25 @@ export async function applyPlanDiffToDraft(params: {
     });
   }
 
+  if (params.syncPlanJson === false) return;
+
   // Keep planJson in sync with canonical week/session rows.
-  const [draftSetup, weeks, sessions] = await Promise.all([
-    params.tx.aiPlanDraft.findUnique({ where: { id: params.draftId }, select: { setupJson: true } }),
-    params.tx.aiPlanDraftWeek.findMany({ where: { draftId: params.draftId }, select: { weekIndex: true, locked: true } }),
-    params.tx.aiPlanDraftSession.findMany({
-      where: { draftId: params.draftId },
-      select: {
-        weekIndex: true,
-        ordinal: true,
-        dayOfWeek: true,
-        discipline: true,
-        type: true,
-        durationMinutes: true,
-        notes: true,
-        locked: true,
-      },
-    }),
-  ]);
+  // IMPORTANT: Do not use Promise.all inside interactive transactions.
+  const draftSetup = await params.tx.aiPlanDraft.findUnique({ where: { id: params.draftId }, select: { setupJson: true } });
+  const weeks = await params.tx.aiPlanDraftWeek.findMany({ where: { draftId: params.draftId }, select: { weekIndex: true, locked: true } });
+  const sessions = await params.tx.aiPlanDraftSession.findMany({
+    where: { draftId: params.draftId },
+    select: {
+      weekIndex: true,
+      ordinal: true,
+      dayOfWeek: true,
+      discipline: true,
+      type: true,
+      durationMinutes: true,
+      notes: true,
+      locked: true,
+    },
+  });
 
   if (draftSetup?.setupJson) {
     await params.tx.aiPlanDraft.update({
