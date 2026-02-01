@@ -5,10 +5,13 @@ import { prisma } from '@/lib/prisma';
 import { assertCoachOwnsAthlete } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 
+import type { DraftPlanV1 } from '../rules/draft-generator';
+
 import { requireAiPlanBuilderV1Enabled } from './flag';
 
 import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
+import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 
 export const createDraftPlanSchema = z.object({
@@ -88,7 +91,7 @@ export async function generateAiDraftPlanV1(params: {
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const suggestion = await ai.suggestDraftPlan({ setup: setup as any });
-  const draft = suggestion.planJson;
+  const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup, planJson: suggestion.planJson });
   const setupHash = computeStableSha256(setup);
 
   const created = await prisma.aiPlanDraft.create({
