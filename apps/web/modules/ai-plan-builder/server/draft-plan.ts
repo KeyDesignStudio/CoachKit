@@ -14,7 +14,12 @@ import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { buildDeterministicSessionDetailV1, sessionDetailV1Schema } from '../rules/session-detail';
+import {
+  buildDeterministicSessionDetailV1,
+  normalizeSessionDetailV1DurationsToTotal,
+  reflowSessionDetailV1ToNewTotal,
+  sessionDetailV1Schema,
+} from '../rules/session-detail';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 
@@ -57,9 +62,19 @@ export const updateDraftPlanV1Schema = z.object({
     .array(
       z.object({
         sessionId: z.string().min(1),
+        discipline: z.string().min(1).optional(),
         type: z.string().min(1).optional(),
         durationMinutes: z.number().int().min(0).max(10_000).optional(),
         notes: z.string().max(10_000).nullable().optional(),
+        objective: z.string().max(240).nullable().optional(),
+        blockEdits: z
+          .array(
+            z.object({
+              blockIndex: z.number().int().min(0).max(19),
+              steps: z.string().min(1).max(1_000),
+            })
+          )
+          .optional(),
         locked: z.boolean().optional(),
       })
     )
@@ -212,6 +227,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
           detailJson: true,
           detailInputHash: true,
           detailGeneratedAt: true,
+          detailMode: true,
         },
       },
     },
@@ -242,6 +258,9 @@ export async function generateSessionDetailsForDraftPlan(params: {
   const now = new Date();
 
   await mapWithConcurrency(draft.sessions, 4, async (s) => {
+    // Coach edits are authoritative; never overwrite them during background enrichment.
+    if (String((s as any)?.detailMode || '') === 'coach') return;
+
     const input = {
       athleteSummaryText,
       constraints: {
@@ -266,13 +285,15 @@ export async function generateSessionDetailsForDraftPlan(params: {
     try {
       const result = await ai.generateSessionDetail(input as any);
       const parsed = sessionDetailV1Schema.safeParse((result as any)?.detail);
-      const detail = parsed.success
+      const baseDetail = parsed.success
         ? parsed.data
         : buildDeterministicSessionDetailV1({
             discipline: s.discipline as any,
             type: s.type,
             durationMinutes: s.durationMinutes,
           });
+
+      const detail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
@@ -285,11 +306,13 @@ export async function generateSessionDetailsForDraftPlan(params: {
       });
     } catch {
       // Defensive catch-all: persist deterministic minimal detail and write a metadata-only audit row.
-      const detail = buildDeterministicSessionDetailV1({
+      const baseDetail = buildDeterministicSessionDetailV1({
         discipline: s.discipline as any,
         type: s.type,
         durationMinutes: s.durationMinutes,
       });
+
+      const detail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
@@ -350,9 +373,12 @@ export async function updateAiDraftPlan(params: {
   weekLocks?: Array<{ weekIndex: number; locked: boolean }>;
   sessionEdits?: Array<{
     sessionId: string;
+    discipline?: string;
     type?: string;
     durationMinutes?: number;
     notes?: string | null;
+    objective?: string | null;
+    blockEdits?: Array<{ blockIndex: number; steps: string }>;
     locked?: boolean;
   }>;
 }) {
@@ -408,10 +434,29 @@ export async function updateAiDraftPlan(params: {
         }
       }
 
+      const roundDurationTo5TowardChange = (next: number, previous: number) => {
+        const v = Number.isFinite(next) ? Math.trunc(next) : 0;
+        const prev = Number.isFinite(previous) ? Math.trunc(previous) : 0;
+
+        if (v === prev) return Math.max(0, Math.min(10_000, v));
+        if (v > prev) return Math.max(0, Math.min(10_000, Math.ceil(v / 5) * 5));
+        return Math.max(0, Math.min(10_000, Math.floor(v / 5) * 5));
+      };
+
       for (const edit of params.sessionEdits) {
         const existing = await tx.aiPlanDraftSession.findUnique({
           where: { id: edit.sessionId },
-          select: { id: true, draftId: true, locked: true, weekIndex: true },
+          select: {
+            id: true,
+            draftId: true,
+            locked: true,
+            weekIndex: true,
+            discipline: true,
+            type: true,
+            durationMinutes: true,
+            detailJson: true,
+            detailMode: true,
+          },
         });
 
         if (!existing || existing.draftId !== draft.id) {
@@ -419,20 +464,112 @@ export async function updateAiDraftPlan(params: {
         }
 
         const wantsContentChange =
-          edit.type !== undefined || edit.durationMinutes !== undefined || edit.notes !== undefined;
+          edit.discipline !== undefined ||
+          edit.type !== undefined ||
+          edit.durationMinutes !== undefined ||
+          edit.notes !== undefined ||
+          edit.objective !== undefined ||
+          (Array.isArray(edit.blockEdits) && edit.blockEdits.length > 0);
 
         // Locked sessions are immutable unless the only change is toggling locked=false.
         if (existing.locked && wantsContentChange) {
           throw new ApiError(409, 'SESSION_LOCKED', 'Session is locked and cannot be edited.');
         }
 
+        const nextDiscipline = edit.discipline !== undefined ? String(edit.discipline) : String(existing.discipline);
+        const nextType = edit.type !== undefined ? String(edit.type) : String(existing.type);
+        const nextDurationMinutes =
+          edit.durationMinutes !== undefined
+            ? roundDurationTo5TowardChange(edit.durationMinutes, Number(existing.durationMinutes ?? 0))
+            : Number(existing.durationMinutes ?? 0);
+
+        const disciplineChanged = edit.discipline !== undefined && String(edit.discipline) !== String(existing.discipline);
+        const typeChanged = edit.type !== undefined && String(edit.type) !== String(existing.type);
+        const durationChanged = edit.durationMinutes !== undefined && nextDurationMinutes !== Number(existing.durationMinutes ?? 0);
+        const objectiveChanged = edit.objective !== undefined;
+        const hasBlockEdits = Array.isArray(edit.blockEdits) && edit.blockEdits.length > 0;
+
+        const shouldEditDetail = disciplineChanged || typeChanged || durationChanged || objectiveChanged || hasBlockEdits;
+
+        let nextDetailJson: any = undefined;
+        let nextDetailMode: string | undefined = undefined;
+        let nextDetailGeneratedAt: Date | undefined = undefined;
+        let nextDetailInputHash: string | null | undefined = undefined;
+
+        if (shouldEditDetail) {
+          // If discipline/type changes, rebuild a fresh deterministic template so text stays coherent.
+          const baseDetail = (() => {
+            if (disciplineChanged || typeChanged) {
+              return buildDeterministicSessionDetailV1({
+                discipline: nextDiscipline as any,
+                type: nextType,
+                durationMinutes: nextDurationMinutes,
+              });
+            }
+
+            const parsed = sessionDetailV1Schema.safeParse(existing.detailJson);
+            if (parsed.success) return parsed.data;
+            return buildDeterministicSessionDetailV1({
+              discipline: nextDiscipline as any,
+              type: nextType,
+              durationMinutes: nextDurationMinutes,
+            });
+          })();
+
+          let updatedDetail = durationChanged
+            ? reflowSessionDetailV1ToNewTotal({ detail: baseDetail, newTotalMinutes: nextDurationMinutes })
+            : normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: nextDurationMinutes });
+
+          if (edit.objective !== undefined) {
+            const v = edit.objective === null ? '' : String(edit.objective);
+            const trimmed = v.trim();
+            if (trimmed) {
+              updatedDetail = { ...updatedDetail, objective: trimmed };
+            }
+          }
+
+          if (Array.isArray(edit.blockEdits) && edit.blockEdits.length) {
+            const structure = updatedDetail.structure.map((b) => ({ ...b }));
+            for (const be of edit.blockEdits) {
+              const idx = Number(be.blockIndex);
+              if (!Number.isInteger(idx) || idx < 0 || idx >= structure.length) continue;
+              const steps = String(be.steps ?? '').trim();
+              if (!steps) continue;
+              structure[idx] = { ...structure[idx], steps };
+            }
+            updatedDetail = { ...updatedDetail, structure };
+          }
+
+          updatedDetail = normalizeSessionDetailV1DurationsToTotal({ detail: updatedDetail, totalMinutes: nextDurationMinutes });
+
+          nextDetailJson = updatedDetail as unknown as Prisma.InputJsonValue;
+          nextDetailMode = 'coach';
+          nextDetailGeneratedAt = new Date();
+          nextDetailInputHash = computeStableSha256({
+            coachEdited: true,
+            discipline: nextDiscipline,
+            type: nextType,
+            durationMinutes: nextDurationMinutes,
+            detail: updatedDetail,
+          });
+        }
+
         await tx.aiPlanDraftSession.update({
           where: { id: existing.id },
           data: {
+            discipline: edit.discipline !== undefined ? nextDiscipline : undefined,
             type: edit.type,
-            durationMinutes: edit.durationMinutes,
+            durationMinutes: edit.durationMinutes !== undefined ? nextDurationMinutes : undefined,
             notes: edit.notes === undefined ? undefined : edit.notes,
             locked: edit.locked,
+            ...(shouldEditDetail
+              ? {
+                  detailJson: nextDetailJson,
+                  detailMode: nextDetailMode,
+                  detailGeneratedAt: nextDetailGeneratedAt,
+                  detailInputHash: nextDetailInputHash,
+                }
+              : {}),
           },
         });
       }
