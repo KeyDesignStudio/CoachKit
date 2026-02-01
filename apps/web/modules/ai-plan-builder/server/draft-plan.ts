@@ -172,7 +172,8 @@ export async function updateAiDraftPlan(params: {
     throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(
+    async (tx) => {
     if (params.weekLocks?.length) {
       for (const wl of params.weekLocks) {
         await tx.aiPlanDraftWeek.updateMany({
@@ -287,7 +288,11 @@ export async function updateAiDraftPlan(params: {
         },
       });
     }
-  });
+    },
+    // Production safety: interactive transactions can time out under serverless latency spikes.
+    // This path is user-facing and should be resilient to occasional DB slowness.
+    { maxWait: 15_000, timeout: 15_000 }
+  );
 
   return prisma.aiPlanDraft.findUniqueOrThrow({
     where: { id: draft.id },
