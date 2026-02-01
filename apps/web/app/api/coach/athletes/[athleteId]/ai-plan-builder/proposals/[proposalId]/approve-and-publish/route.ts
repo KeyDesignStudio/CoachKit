@@ -29,12 +29,14 @@ export async function POST(request: Request, context: { params: { athleteId: str
       athleteId: context.params.athleteId,
       proposalId: context.params.proposalId,
       aiPlanDraftId: body.aiPlanDraftId,
+      requestId,
     });
 
     return success({
       appliedProposalId: String(context.params.proposalId),
       approval: { proposal: result.approval.proposal, audit: result.approval.audit, draft: result.approval.draft },
       publish: result.publish,
+      materialisation: result.materialisation,
     });
   } catch (error) {
     try {

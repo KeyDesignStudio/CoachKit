@@ -29,6 +29,12 @@ export const planDiffOpSchema = z.union([
     .strict(),
   z
     .object({
+      op: z.literal('REMOVE_SESSION'),
+      draftSessionId: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
       op: z.literal('ADJUST_WEEK_VOLUME'),
       weekIndex: z.number().int().min(0).max(52),
       pctDelta: z.number().min(-0.9).max(1),
@@ -83,7 +89,7 @@ export async function applyPlanDiffToDraft(params: {
     if (op.op === 'ADJUST_WEEK_VOLUME' || (op.op === 'ADD_NOTE' && op.target === 'week')) {
       weekIndicesToTouch.add(op.weekIndex);
     }
-    if (op.op === 'UPDATE_SESSION' || op.op === 'SWAP_SESSION_TYPE') {
+    if (op.op === 'UPDATE_SESSION' || op.op === 'SWAP_SESSION_TYPE' || op.op === 'REMOVE_SESSION') {
       sessionIdsToTouch.add(op.draftSessionId);
     }
     if (op.op === 'ADD_NOTE' && op.target === 'session' && op.draftSessionId) {
@@ -158,6 +164,18 @@ export async function applyPlanDiffToDraft(params: {
         data: { type: op.newType },
       });
 
+      continue;
+    }
+
+    if (op.op === 'REMOVE_SESSION') {
+      const existing = sessionMap.get(op.draftSessionId);
+      if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Draft session not found.');
+      if (existing.locked) {
+        throw new ApiError(409, 'SESSION_LOCKED', 'Session is locked and cannot be edited.');
+      }
+
+      await params.tx.aiPlanDraftSession.delete({ where: { id: existing.id } });
+      sessionMap.delete(String(existing.id));
       continue;
     }
 

@@ -4,6 +4,9 @@ import crypto from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { generateAiDraftPlanV1 } from '../modules/ai-plan-builder/server/draft-plan';
+import { approveAndPublishPlanChangeProposal } from '../modules/ai-plan-builder/server/approve-and-publish';
+
 const prisma = new PrismaClient();
 
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE') {
@@ -26,6 +29,109 @@ function screenshotPath(testInfo: any, fileName: string) {
 test.describe('Mobile screenshots', () => {
   test.afterAll(async () => {
     await prisma.$disconnect();
+  });
+
+  test('captures coach weekly calendar with APB-published sessions for user-athlete-one', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'iphone16pro', 'APB calendar materialisation screenshot is captured only for iphone16pro.');
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await mkdir(path.join(process.cwd(), 'screenshots', String(testInfo.project.name || 'unknown')), { recursive: true });
+
+    await setRoleCookie(page, 'COACH');
+
+    // Ensure the dev coach exists (auth disabled uses this).
+    await prisma.user.upsert({
+      where: { id: 'dev-coach' },
+      update: { role: 'COACH', timezone: 'UTC', authProviderId: 'dev-coach' },
+      create: {
+        id: 'dev-coach',
+        email: 'dev-coach@local',
+        role: 'COACH',
+        timezone: 'UTC',
+        authProviderId: 'dev-coach',
+      },
+    });
+
+    // Link the seeded athlete to dev-coach for this screenshot run.
+    await prisma.user.upsert({
+      where: { id: 'user-athlete-one' },
+      update: { role: 'ATHLETE', timezone: 'Australia/Brisbane', authProviderId: 'user-athlete-one' },
+      create: {
+        id: 'user-athlete-one',
+        email: 'athlete.one@multisportgold.test',
+        role: 'ATHLETE',
+        timezone: 'Australia/Brisbane',
+        authProviderId: 'user-athlete-one',
+      },
+    });
+
+    await prisma.athleteProfile.upsert({
+      where: { userId: 'user-athlete-one' },
+      update: { coachId: 'dev-coach', disciplines: ['OTHER'] },
+      create: { userId: 'user-athlete-one', coachId: 'dev-coach', disciplines: ['OTHER'] },
+    });
+
+    // Pick an eventDate so that weekIndex=0 lands on the current week.
+    const now = new Date();
+    const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const weekday = utcMidnight.getUTCDay();
+    const diffToMonday = (weekday + 6) % 7;
+    const monday = new Date(utcMidnight);
+    monday.setUTCDate(monday.getUTCDate() - diffToMonday);
+
+    const weeksToEvent = 6;
+    const eventDate = new Date(monday);
+    eventDate.setUTCDate(eventDate.getUTCDate() + 7 * (weeksToEvent - 1) + 2); // Wednesday in the event week.
+    const eventDateKey = eventDate.toISOString().slice(0, 10);
+
+    const draft = (await generateAiDraftPlanV1({
+      coachId: 'dev-coach',
+      athleteId: 'user-athlete-one',
+      setup: {
+        eventDate: eventDateKey,
+        weeksToEvent,
+        weekStart: 'monday',
+        weeklyAvailabilityDays: [1, 3, 5, 6],
+        weeklyAvailabilityMinutes: 300,
+        disciplineEmphasis: 'balanced',
+        riskTolerance: 'med',
+        maxIntensityDaysPerWeek: 2,
+        maxDoublesPerWeek: 0,
+        longSessionDay: 6,
+      },
+    })) as any;
+
+    const proposal = await prisma.planChangeProposal.create({
+      data: {
+        athleteId: 'user-athlete-one',
+        coachId: 'dev-coach',
+        status: 'PROPOSED',
+        draftPlanId: String(draft.id),
+        proposalJson: {},
+        diffJson: [],
+        respectsLocks: true,
+      },
+    });
+
+    const approved = await approveAndPublishPlanChangeProposal({
+      coachId: 'dev-coach',
+      athleteId: 'user-athlete-one',
+      proposalId: String(proposal.id),
+      aiPlanDraftId: String(draft.id),
+      requestId: 'pw-calendar-apb-user-athlete-one',
+    });
+
+    expect(approved.publish.ok).toBe(true);
+    expect(approved.materialisation.ok).toBe(true);
+
+    await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: /Weekly Calendar/i })).toBeVisible();
+    await page.screenshot({ path: screenshotPath(testInfo, 'coach-calendar-week-apb-user-athlete-one.png'), fullPage: true });
   });
 
   test('captures coach calendar week, month, and menu drawer', async ({ page }, testInfo) => {
