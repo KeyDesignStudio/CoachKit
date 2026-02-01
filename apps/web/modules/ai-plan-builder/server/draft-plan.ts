@@ -33,6 +33,7 @@ export const draftPlanSetupV1Schema = z.object({
   maxIntensityDaysPerWeek: z.number().int().min(1).max(3),
   maxDoublesPerWeek: z.number().int().min(0).max(3),
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
+  coachGuidanceText: z.string().max(2_000).optional(),
 });
 
 export const generateDraftPlanV1Schema = z.object({
@@ -88,6 +89,7 @@ export async function generateAiDraftPlanV1(params: {
   const setup = {
     ...params.setup,
     weekStart: params.setup.weekStart ?? 'monday',
+    coachGuidanceText: params.setup.coachGuidanceText ?? '',
   };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
