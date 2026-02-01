@@ -37,14 +37,17 @@ export default async function HomePage() {
 
   // Redirect based on role
   if (user.role === 'ADMIN') {
-    redirect('/admin/workout-library');
+    console.info('[Authz] Root redirect', { role: user.role, userId, target: '/admin/ai-usage' });
+    redirect('/admin/ai-usage');
   }
 
   if (user.role === 'COACH') {
+    console.info('[Authz] Root redirect', { role: user.role, userId, target: '/coach/dashboard' });
     redirect('/coach/dashboard');
   }
 
   if (user.role === 'ATHLETE') {
+    console.info('[Authz] Root redirect', { role: user.role, userId, target: '/athlete/calendar' });
     redirect('/athlete/calendar');
   }
 

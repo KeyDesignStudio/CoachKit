@@ -31,14 +31,6 @@ Optional overrides (Vercel env vars):
 
 ## Dry-run (recommended first)
 
-From the Admin UI:
-
-- Go to `/admin/workout-library` → Import tab → **Plan Library** panel
-- Select dataset `ALL`
-- Ensure **Dry run** is checked
-- Set `limit`/`offset` as needed
-- Click **Run Dry-Run**
-
 From curl:
 
 ```bash
@@ -55,12 +47,6 @@ Expected outcome:
 - `steps[].created` is `0`
 
 ## Apply (writes)
-
-From the Admin UI:
-
-- Uncheck **Dry run**
-- Type `IMPORT`
-- Click **Import Now**
 
 From curl:
 

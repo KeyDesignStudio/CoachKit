@@ -14,47 +14,15 @@ async function setRoleCookie(page: import('@playwright/test').Page, role: 'ADMIN
   ]);
 }
 
-test.describe('Admin import UI enablement', () => {
-  test('manual import requires file before running', async ({ page }) => {
+test.describe('Admin UI smoke: AI usage page', () => {
+  test('ADMIN can load /admin/ai-usage', async ({ page }) => {
     await setRoleCookie(page, 'ADMIN');
 
-    await page.goto('/admin/workout-library', { waitUntil: 'networkidle' });
-    await page.getByTestId('admin-workout-library-import').click();
+    const res = await page.goto('/admin/ai-usage', { waitUntil: 'networkidle' });
+    expect(res?.status()).toBe(200);
 
-    const fileInput = page.getByTestId('admin-import-file');
-    const dryRunButton = page.getByTestId('admin-import-run-dryrun');
-
-    const manualJson = Buffer.from(
-      JSON.stringify([
-        {
-          title: 'Test Manual Workout',
-          discipline: 'RUN',
-          category: 'Playwright',
-          workoutDetail: 'Fixture prompt for manual import.',
-        },
-      ])
-    );
-
-    // MANUAL-only: file input visible, buttons blocked without file.
-    await expect(fileInput).toBeVisible();
-    await expect(dryRunButton).toBeDisabled();
-
-    // Apply gating: when dry-run unchecked, apply button requires confirm apply.
-    await page.getByTestId('admin-import-dryrun-toggle').uncheck();
-    const applyButton = page.getByTestId('admin-import-run-apply');
-    await expect(applyButton).toBeDisabled();
-    await page.getByLabel('Confirm apply').check();
-    await expect(applyButton).toBeDisabled();
-
-    // Put it back to dry-run for the rest of this test.
-    await page.getByTestId('admin-import-dryrun-toggle').check();
-
-    await fileInput.setInputFiles({
-      name: 'manual-import.json',
-      mimeType: 'application/json',
-      buffer: manualJson,
-    });
-
-    await expect(dryRunButton).toBeEnabled();
+    await expect(page.getByRole('heading', { name: /ai usage/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /run rollup/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /view raw audits/i })).toBeVisible();
   });
 });

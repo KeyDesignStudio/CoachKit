@@ -63,7 +63,7 @@ Safari iOS checks (required)
 
 Workout Library (Coach + Admin)
 - Coach: Library tab only shows `PUBLISHED` workouts; search/filter/preview works on mobile
-- Admin (desktop OK): can access `/admin/workout-library`, create/edit, import dry-run, confirm apply, and purge drafts
+- Admin (desktop OK): can access `/admin/ai-usage` and `/admin/ai-audits` (AI Plan Builder admin surfaces)
 6) Settings
 - Timezone
 - Logo upload

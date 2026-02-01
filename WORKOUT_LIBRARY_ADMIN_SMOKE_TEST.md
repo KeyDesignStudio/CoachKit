@@ -1,5 +1,7 @@
 # Workout Library Admin Smoke Test
 
+Note: this codebase no longer ships an `/admin/workout-library` UI route. Admin UI surfaces currently live under `/admin/*` (for example `/admin/ai-usage`). Workout Library operations (if enabled in your deployment) are exercised via server endpoints and/or internal tooling.
+
 ## Preconditions
 - You have an `ADMIN` user in the database (Prisma `User.role = ADMIN`).
 - If running with auth disabled (`DISABLE_AUTH=true`), set cookie `coachkit-role=ADMIN`.
@@ -10,14 +12,15 @@
 
 ## Access Control
 1) Sign in as a normal coach (role `COACH`).
-- Visit `/admin/workout-library` → should redirect to `/access-denied`.
-- Call `GET /api/admin/workout-library` → should be denied.
+- Visit `/admin/ai-usage` → should show Not Found (admin routes are 404-by-default for non-admins).
 
 2) Sign in as an admin (role `ADMIN`).
 - Confirm the nav shows an **Admin** link.
-- Visit `/admin/workout-library` → should load.
+- Visit `/admin/ai-usage` → should load.
 
 ## CRUD
+
+If your deployment still includes a Workout Library admin UI, update this runbook with the correct route and selectors for that UI.
 1) Create
 - Click **New**.
 - Create a session with:
