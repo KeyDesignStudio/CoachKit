@@ -5,6 +5,8 @@ import type {
   SuggestDraftPlanResult,
   SuggestProposalDiffsInput,
   SuggestProposalDiffsResult,
+  GenerateSessionDetailInput,
+  GenerateSessionDetailResult,
 } from './types';
 
 /**
@@ -40,4 +42,10 @@ export interface AiPlanBuilderAI {
    * Outputs: ordered diff ops + rationale text + lock-respect signal.
    */
   suggestProposalDiffs(input: SuggestProposalDiffsInput): Promise<SuggestProposalDiffsResult>;
+
+  /**
+   * Generate rich, structured content for a single already-determined session.
+   * Must NOT change schedule/topology (caller owns skeleton).
+   */
+  generateSessionDetail(input: GenerateSessionDetailInput): Promise<GenerateSessionDetailResult>;
 }

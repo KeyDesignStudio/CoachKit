@@ -1,7 +1,7 @@
 import { computeStableSha256 } from '../rules/stable-hash';
 import type { AiPlanBuilderAIMode } from './types';
 
-export type AiCapabilityName = 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+export type AiCapabilityName = 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs' | 'generateSessionDetail';
 
 export type AiUsageAudit = {
   capability: AiCapabilityName;

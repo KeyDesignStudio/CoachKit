@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
+import { sessionDetailV1Schema } from '../rules/session-detail';
 
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
@@ -955,6 +956,9 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                             const isSessionLocked = Boolean(s.locked);
                             const isSessionEditDisabled = busy !== null || isWeekLocked || isSessionLocked;
                             const isSessionLockToggleDisabled = busy !== null || isWeekLocked;
+
+                            const detailParsed = sessionDetailV1Schema.safeParse(s.detailJson);
+                            const detail = detailParsed.success ? detailParsed.data : null;
                             return (
                           <div
                             key={String(s.id)}
@@ -1012,6 +1016,58 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 Locked
                               </label>
                             </div>
+
+                            {detail?.objective ? (
+                              <div className="mt-2 text-sm text-[var(--fg-muted)]" data-testid="apb-session-objective">
+                                {detail.objective}
+                              </div>
+                            ) : null}
+
+                            {detail?.structure?.length ? (
+                              <details
+                                className="mt-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2"
+                                data-testid="apb-session-details"
+                              >
+                                <summary
+                                  className="cursor-pointer text-sm font-medium"
+                                  data-testid="apb-session-details-toggle"
+                                >
+                                  Details
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                  {detail.structure.map((b, idx) => {
+                                    const parts: string[] = [];
+                                    if (typeof (b as any).durationMinutes === 'number') {
+                                      parts.push(`${Number((b as any).durationMinutes)}m`);
+                                    }
+                                    if (typeof (b as any).distanceMeters === 'number') {
+                                      parts.push(`${Number((b as any).distanceMeters)}m`);
+                                    }
+                                    const intensityParts: string[] = [];
+                                    if ((b as any).intensity?.zone) intensityParts.push(String((b as any).intensity.zone));
+                                    if (typeof (b as any).intensity?.rpe === 'number') intensityParts.push(`RPE ${Number((b as any).intensity.rpe)}`);
+                                    return (
+                                      <div
+                                        key={`${String(s.id)}_block_${idx}`}
+                                        className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2"
+                                        data-testid="apb-session-detail-block"
+                                      >
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div className="text-xs font-medium">
+                                            {String((b as any).blockType).toUpperCase()}
+                                            {parts.length ? ` · ${parts.join(' · ')}` : ''}
+                                          </div>
+                                          {intensityParts.length ? (
+                                            <div className="text-xs text-[var(--fg-muted)]">{intensityParts.join(' · ')}</div>
+                                          ) : null}
+                                        </div>
+                                        <div className="mt-1 whitespace-pre-wrap text-sm">{String((b as any).steps ?? '')}</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </details>
+                            ) : null}
 
                             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                               <div>
