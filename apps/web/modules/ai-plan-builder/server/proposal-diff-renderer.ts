@@ -264,6 +264,35 @@ export function renderProposalDiff(
       continue;
     }
 
+    if (op.op === 'REMOVE_SESSION') {
+      const snapshot = sessionsById.get(String(op.draftSessionId));
+      if (!snapshot) {
+        unknownOps.push({ op, text: `Unknown sessionId=${String(op.draftSessionId)} (cannot remove).`, weekIndex: null });
+        continue;
+      }
+
+      const week = weekByIndex.get(snapshot.weekIndex);
+      if (!week) {
+        unknownOps.push({ op, text: `Unknown weekIndex=${snapshot.weekIndex} (cannot remove session).`, weekIndex: null });
+        continue;
+      }
+
+      const beforeCount = (week.sessions ?? []).length;
+      week.sessions = (week.sessions ?? []).filter((s) => Number(s.ordinal ?? -1) !== snapshot.ordinal);
+      const afterCount = (week.sessions ?? []).length;
+      if (afterCount === beforeCount) {
+        unknownOps.push({
+          op,
+          text: `Session not found in week=${snapshot.weekIndex} ordinal=${snapshot.ordinal} (cannot remove).`,
+          weekIndex: snapshot.weekIndex,
+        });
+      } else {
+        touchedSessions.add(`${snapshot.weekIndex}:${snapshot.ordinal}`);
+      }
+
+      continue;
+    }
+
     if (op.op === 'UPDATE_SESSION') {
       const snapshot = sessionsById.get(String(op.draftSessionId));
       if (!snapshot) {

@@ -10,6 +10,8 @@ import { ApiError, notFound } from '@/lib/errors';
 import { parseDateOnly } from '@/lib/date';
 import { findCoachTemplate } from '@/lib/templates';
 
+import { APB_CALENDAR_ORIGIN, APB_MANUAL_EDIT_TAG, APB_SOURCE_PREFIX } from '@/modules/ai-plan-builder/server/calendar-materialise';
+
 const commentsSelect = {
   select: {
     id: true,
@@ -146,7 +148,7 @@ export async function PATCH(
       throw new ApiError(400, 'NO_FIELDS_PROVIDED', 'At least one field must be provided.');
     }
 
-    await ensureCalendarItem(context.params.itemId, user.id);
+    const existing = await ensureCalendarItem(context.params.itemId, user.id);
 
     let templateDefaults: Awaited<ReturnType<typeof findCoachTemplate>> | null = null;
 
@@ -230,6 +232,39 @@ export async function PATCH(
 
     if (payload.attachmentsJson !== undefined) {
       data.attachmentsJson = payload.attachmentsJson as Prisma.InputJsonValue;
+    }
+
+    // If a coach edits an APB-origin item, mark it as manually edited so APB materialisation
+    // does not overwrite coach overrides on subsequent publishes.
+    const isApbOrigin =
+      existing.origin === APB_CALENDAR_ORIGIN &&
+      typeof (existing as any).sourceActivityId === 'string' &&
+      String((existing as any).sourceActivityId).startsWith(APB_SOURCE_PREFIX);
+
+    const touchesManualFields =
+      payload.date !== undefined ||
+      payload.plannedStartTimeLocal !== undefined ||
+      payload.discipline !== undefined ||
+      payload.subtype !== undefined ||
+      payload.title !== undefined ||
+      payload.plannedDurationMinutes !== undefined ||
+      payload.plannedDistanceKm !== undefined ||
+      payload.distanceMeters !== undefined ||
+      payload.intensityTarget !== undefined ||
+      payload.tags !== undefined ||
+      payload.equipment !== undefined ||
+      payload.workoutStructure !== undefined ||
+      payload.notes !== undefined ||
+      payload.intensityType !== undefined ||
+      payload.intensityTargetJson !== undefined ||
+      payload.workoutDetail !== undefined ||
+      payload.attachmentsJson !== undefined ||
+      payload.templateId !== undefined;
+
+    if (isApbOrigin && touchesManualFields) {
+      const base = payload.tags !== undefined ? payload.tags : ((existing.tags ?? []) as string[]);
+      const next = Array.from(new Set([...(base ?? []), APB_MANUAL_EDIT_TAG]));
+      data.tags = next;
     }
 
     if (payload.status) {

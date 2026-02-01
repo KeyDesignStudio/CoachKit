@@ -7,6 +7,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { planDiffSchema } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
 import { publishAiDraftPlan } from './publish';
+import { materialisePublishedAiPlanToCalendar } from './calendar-materialise';
 
 function isRetryableInteractiveTxError(error: unknown): boolean {
   const code = typeof (error as any)?.code === 'string' ? String((error as any).code) : null;
@@ -56,6 +57,7 @@ export async function approveAndPublishPlanChangeProposal(params: {
   athleteId: string;
   proposalId: string;
   aiPlanDraftId: string;
+  requestId?: string;
 }) {
   requireAiPlanBuilderV1Enabled();
 
@@ -93,6 +95,40 @@ export async function approveAndPublishPlanChangeProposal(params: {
       aiPlanDraftId: params.aiPlanDraftId,
     });
 
+    let materialisation:
+      | { ok: true; upsertedCount: number; softDeletedCount: number; publishedPlanId: string }
+      | { ok: false; code: 'CALENDAR_MATERIALISE_FAILED'; message: string };
+
+    try {
+      const m = await materialisePublishedAiPlanToCalendar({
+        coachId: params.coachId,
+        athleteId: params.athleteId,
+        aiPlanDraftId: params.aiPlanDraftId,
+        proposalId: params.proposalId,
+        requestId: params.requestId,
+      });
+      materialisation = {
+        ok: true,
+        upsertedCount: m.upsertedCount,
+        softDeletedCount: m.softDeletedCount,
+        publishedPlanId: m.publishedPlanId,
+      };
+    } catch (e) {
+      console.error('APB_CALENDAR_MATERIALISE_FAILED', {
+        requestId: params.requestId ?? null,
+        athleteId: params.athleteId,
+        coachId: params.coachId,
+        proposalId: params.proposalId,
+        aiPlanDraftId: params.aiPlanDraftId,
+        error: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { value: e },
+      });
+      materialisation = {
+        ok: false,
+        code: 'CALENDAR_MATERIALISE_FAILED',
+        message: e instanceof Error ? e.message : 'Calendar materialisation failed.',
+      };
+    }
+
     return {
       approval: { proposal: currentProposal, audit: audit ?? null, draft },
       publish: {
@@ -102,6 +138,7 @@ export async function approveAndPublishPlanChangeProposal(params: {
         lastPublishedSummaryText: publish.summaryText,
         draft: publish.draft,
       },
+      materialisation,
     };
   }
 
@@ -216,6 +253,41 @@ export async function approveAndPublishPlanChangeProposal(params: {
       aiPlanDraftId: params.aiPlanDraftId,
     });
 
+    let materialisation:
+      | { ok: true; upsertedCount: number; softDeletedCount: number; publishedPlanId: string }
+      | { ok: false; code: 'CALENDAR_MATERIALISE_FAILED'; message: string };
+
+    try {
+      const m = await materialisePublishedAiPlanToCalendar({
+        coachId: params.coachId,
+        athleteId: params.athleteId,
+        aiPlanDraftId: params.aiPlanDraftId,
+        proposalId: params.proposalId,
+        requestId: params.requestId,
+      });
+      materialisation = {
+        ok: true,
+        upsertedCount: m.upsertedCount,
+        softDeletedCount: m.softDeletedCount,
+        publishedPlanId: m.publishedPlanId,
+      };
+    } catch (e) {
+      console.error('APB_CALENDAR_MATERIALISE_FAILED', {
+        requestId: params.requestId ?? null,
+        athleteId: params.athleteId,
+        coachId: params.coachId,
+        proposalId: params.proposalId,
+        aiPlanDraftId: params.aiPlanDraftId,
+        error:
+          e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : { value: e },
+      });
+      materialisation = {
+        ok: false,
+        code: 'CALENDAR_MATERIALISE_FAILED',
+        message: e instanceof Error ? e.message : 'Calendar materialisation failed.',
+      };
+    }
+
     return {
       approval,
       publish: {
@@ -225,6 +297,7 @@ export async function approveAndPublishPlanChangeProposal(params: {
         lastPublishedSummaryText: publish.summaryText,
         draft: publish.draft,
       },
+      materialisation,
     };
   } catch (e) {
     const err = e instanceof ApiError ? e : new ApiError(500, 'PUBLISH_FAILED', e instanceof Error ? e.message : 'Publish failed.');
@@ -234,6 +307,11 @@ export async function approveAndPublishPlanChangeProposal(params: {
         ok: false as const,
         code: err.code,
         message: err.message,
+      },
+      materialisation: {
+        ok: false as const,
+        code: 'CALENDAR_MATERIALISE_FAILED',
+        message: 'Calendar materialisation was not attempted because publish failed.',
       },
     };
   }
