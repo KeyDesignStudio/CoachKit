@@ -35,8 +35,11 @@ export function failure(
   message: string,
   status = 400,
   requestId?: string,
-  extras?: Partial<ApiFailure['error']>
+  extras?: Partial<ApiFailure['error']>,
+  init?: ResponseInit
 ) {
+  const headers = new Headers(init?.headers);
+
   return NextResponse.json<ApiFailure>(
     {
       data: null,
@@ -48,7 +51,11 @@ export function failure(
         ...(extras ?? {}),
       },
     },
-    { status }
+    {
+      ...(init ?? {}),
+      status,
+      headers,
+    }
   );
 }
 
@@ -65,7 +72,22 @@ export function handleError(
       where: options?.where ?? 'handleError',
       error,
     });
-    return failure('DB_UNREACHABLE', 'Database is unreachable.', 500, options?.requestId);
+    const retryAfterSeconds = 30;
+    return failure(
+      'DB_UNREACHABLE',
+      'Database is temporarily unavailable.',
+      503,
+      options?.requestId,
+      {
+        diagnostics: { retryAfterSeconds },
+      },
+      {
+        headers: {
+          'Retry-After': String(retryAfterSeconds),
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
   }
 
   if (error instanceof ApiError) {
@@ -77,6 +99,12 @@ export function handleError(
   const prismaCode = typeof (error as any)?.code === 'string' ? String((error as any).code) : null;
   const prismaName = typeof (error as any)?.name === 'string' ? String((error as any).name) : null;
   if (prismaCode && /^P\d{4}$/.test(prismaCode) && prismaName === 'PrismaClientKnownRequestError') {
+    if (prismaCode === 'P2021' || prismaCode === 'P2022') {
+      return failure('DB_SCHEMA_MISMATCH', 'Database schema mismatch.', 500, options?.requestId, {
+        diagnostics: { prismaCode },
+      });
+    }
+
     if (prismaCode === 'P2025') {
       return failure('NOT_FOUND', 'Record not found.', 404, options?.requestId, {
         diagnostics: { prismaCode },
