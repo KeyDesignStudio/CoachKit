@@ -159,10 +159,40 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
 
     await page.screenshot({ path: testInfo.outputPath('apb-02-review-plan.png'), fullPage: true });
 
+    // Lock UX: locking the week should disable edits.
+    const weekLockOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 60_000 }
+    );
+    await firstWeek.getByTestId('apb-week-lock-toggle').click();
+    await weekLockOk;
+    await expect(firstSession.getByTestId('apb-session-duration')).toBeDisabled();
+    await expect(firstSession.getByTestId('apb-session-save')).toBeDisabled();
+
+    // Unlock week so we can proceed with edits.
+    const weekUnlockOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 60_000 }
+    );
+    await firstWeek.getByTestId('apb-week-lock-toggle').click();
+    await weekUnlockOk;
+    await expect(firstSession.getByTestId('apb-session-duration')).toBeEnabled();
+
     // 3) Edit a session and confirm persistence after refresh.
+    const originalObjectiveText = await firstSession.getByTestId('apb-session-objective').innerText();
     const editedDuration = String(durationInt + 5);
     await firstSession.getByTestId('apb-session-duration').fill(editedDuration);
     await firstSession.getByTestId('apb-session-notes').fill('Coach note: keep this aerobic.');
+
+    // Also edit an objective and a block step to validate server-side detail updates.
+    await firstSession.getByTestId('apb-session-objective-input').fill(`Aerobic endurance (${editedDuration} min)`);
+    await firstSession.getByTestId('apb-session-block-steps-0').fill('Easy warmup. Keep it conversational.');
 
     const saveOk = page.waitForResponse(
       (res) =>
@@ -174,10 +204,48 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await firstSession.getByTestId('apb-session-save').click();
     await saveOk;
 
+    // Objective should update (and be different from the pre-edit version).
+    await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText(originalObjectiveText);
+    await expect(firstSession.getByTestId('apb-session-objective')).toContainText(`(${editedDuration} min)`);
+
+    // Detail blocks should show 5-minute increments.
+    const blockLines = await firstSession.getByTestId('apb-session-detail-block').allInnerTexts();
+    for (const line of blockLines) {
+      const m = line.match(/\u00b7\s*(\d+)\s*min/);
+      if (!m) continue;
+      const minutes = Number.parseInt(m[1]!, 10);
+      expect(minutes % 5).toBe(0);
+    }
+
     await page.reload({ waitUntil: 'networkidle' });
     const firstSessionAfter = page.getByTestId('apb-session').first();
     await expect(firstSessionAfter.getByTestId('apb-session-duration')).toHaveValue(editedDuration);
     await expect(firstSessionAfter.getByTestId('apb-session-notes')).toHaveValue('Coach note: keep this aerobic.');
+    await expect(firstSessionAfter.getByTestId('apb-session-objective')).toContainText(`(${editedDuration} min)`);
+
+    // Session lock: locking an individual session should disable its edits.
+    const sessionLockOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 60_000 }
+    );
+    await firstSessionAfter.getByTestId('apb-session-lock-toggle').click();
+    await sessionLockOk;
+    await expect(firstSessionAfter.getByTestId('apb-session-duration')).toBeDisabled();
+    await expect(firstSessionAfter.getByTestId('apb-session-save')).toBeDisabled();
+
+    // Unlock session before publishing.
+    const sessionUnlockOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'PATCH' &&
+        res.status() === 200,
+      { timeout: 60_000 }
+    );
+    await firstSessionAfter.getByTestId('apb-session-lock-toggle').click();
+    await sessionUnlockOk;
 
     // 4) Publish and verify the coach calendar contains APB-origin sessions.
     const publishOk = page.waitForResponse(

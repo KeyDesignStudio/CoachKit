@@ -36,6 +36,12 @@ function formatApiErrorMessage(e: ApiClientError): string {
   if (e.code === 'CONFIG_MISSING') {
     return 'Temporarily unavailable — using a fallback.';
   }
+  if (e.code === 'WEEK_LOCKED') {
+    return 'This week is locked. Unlock it to make changes.';
+  }
+  if (e.code === 'SESSION_LOCKED') {
+    return 'This session is locked. Unlock it to make changes.';
+  }
   return 'Something went wrong.';
 }
 
@@ -170,9 +176,19 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [draftPlanLatest, setDraftPlanLatest] = useState<any | null>(null);
   const [publishStatus, setPublishStatus] = useState<any | null>(null);
 
-  const [sessionDraftEdits, setSessionDraftEdits] = useState<Record<string, { durationMinutes?: string; notes?: string }>>(
-    {}
-  );
+  const [sessionDraftEdits, setSessionDraftEdits] = useState<
+    Record<
+      string,
+      {
+        durationMinutes?: string;
+        notes?: string;
+        discipline?: string;
+        type?: string;
+        objective?: string;
+        blockSteps?: Record<number, string>;
+      }
+    >
+  >({});
 
   const [setup, setSetup] = useState<SetupState>(() => ({
     weekStart: 'monday',
@@ -358,6 +374,20 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       const patch = sessionDraftEdits[sessionId] ?? {};
       const durationMinutes = patch.durationMinutes ? Number.parseInt(patch.durationMinutes, 10) : undefined;
       const notes = patch.notes !== undefined ? patch.notes : undefined;
+      const discipline = patch.discipline !== undefined ? patch.discipline : undefined;
+      const type = patch.type !== undefined ? patch.type : undefined;
+      const objective = patch.objective !== undefined ? patch.objective : undefined;
+      const blockEdits = patch.blockSteps
+        ? Object.entries(patch.blockSteps)
+            .map(([k, v]) => ({ blockIndex: Number.parseInt(k, 10), steps: String(v ?? '') }))
+            .filter(
+              (x) =>
+                Number.isFinite(x.blockIndex) &&
+                Number.isInteger(x.blockIndex) &&
+                x.blockIndex >= 0 &&
+                x.steps.trim().length > 0
+            )
+        : undefined;
 
       setBusy(`save-session:${sessionId}`);
       setError(null);
@@ -373,6 +403,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   sessionId,
                   ...(Number.isFinite(durationMinutes as any) ? { durationMinutes } : {}),
                   ...(notes !== undefined ? { notes } : {}),
+                  ...(discipline !== undefined ? { discipline } : {}),
+                  ...(type !== undefined ? { type } : {}),
+                  ...(objective !== undefined ? { objective } : {}),
+                  ...(blockEdits !== undefined && blockEdits.length ? { blockEdits } : {}),
                 },
               ],
             },
@@ -393,6 +427,64 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       }
     },
     [athleteId, draftPlanLatest?.id, request, sessionDraftEdits]
+  );
+
+  const toggleWeekLock = useCallback(
+    async (weekIndex: number, locked: boolean) => {
+      const draftId = String(draftPlanLatest?.id ?? '');
+      if (!draftId) return;
+
+      setBusy(`lock-week:${weekIndex}`);
+      setError(null);
+      try {
+        const updated = await request<{ draftPlan: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+          {
+            method: 'PATCH',
+            data: {
+              draftPlanId: draftId,
+              weekLocks: [{ weekIndex, locked }],
+            },
+          }
+        );
+        setDraftPlanLatest(updated.draftPlan ?? null);
+      } catch (e) {
+        const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to update lock.';
+        setError(message);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, request]
+  );
+
+  const toggleSessionLock = useCallback(
+    async (sessionId: string, locked: boolean) => {
+      const draftId = String(draftPlanLatest?.id ?? '');
+      if (!draftId) return;
+
+      setBusy(`lock-session:${sessionId}`);
+      setError(null);
+      try {
+        const updated = await request<{ draftPlan: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+          {
+            method: 'PATCH',
+            data: {
+              draftPlanId: draftId,
+              sessionEdits: [{ sessionId, locked }],
+            },
+          }
+        );
+        setDraftPlanLatest(updated.draftPlan ?? null);
+      } catch (e) {
+        const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to update lock.';
+        setError(message);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, request]
   );
 
   const canStart = !intakeLatest;
@@ -420,6 +512,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
     return Array.from(byWeek.entries()).sort(([a], [b]) => a - b);
   }, [draftPlanLatest?.sessions, effectiveWeekStart]);
+
+  const weekLockedByIndex = useMemo(() => {
+    const weeks = Array.isArray(draftPlanLatest?.weeks) ? draftPlanLatest.weeks : [];
+    const map = new Map<number, boolean>();
+    for (const w of weeks) {
+      map.set(Number((w as any)?.weekIndex ?? 0), Boolean((w as any)?.locked));
+    }
+    return map;
+  }, [draftPlanLatest?.weeks]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -677,6 +778,25 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 <div key={weekIndex} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3" data-testid="apb-week">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-sm font-semibold">Week {Number(weekIndex) + 1}</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={(weekLockedByIndex.get(Number(weekIndex)) ?? false) ? 'primary' : 'secondary'}
+                      disabled={busy != null}
+                      data-testid="apb-week-lock-toggle"
+                      onClick={() =>
+                        toggleWeekLock(
+                          Number(weekIndex),
+                          !(weekLockedByIndex.get(Number(weekIndex)) ?? false)
+                        )
+                      }
+                    >
+                      {busy === `lock-week:${Number(weekIndex)}`
+                        ? 'Updating…'
+                        : (weekLockedByIndex.get(Number(weekIndex)) ?? false)
+                          ? 'Unlock week'
+                          : 'Lock week'}
+                    </Button>
                   </div>
 
                   <div className="space-y-3">
@@ -688,13 +808,79 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       const sessionId = String(s.id);
                       const edit = sessionDraftEdits[sessionId] ?? {};
 
+                      const weekLocked = weekLockedByIndex.get(Number(weekIndex)) ?? false;
+                      const sessionLocked = Boolean((s as any)?.locked);
+                      const locked = weekLocked || sessionLocked;
+
+                      const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'];
+                      const currentDisciplineRaw = String(edit.discipline ?? (s as any)?.discipline ?? '').trim().toUpperCase();
+                      const selectedDiscipline = currentDisciplineRaw || disciplineOptions[0];
+                      const disciplineChoices = Array.from(new Set([selectedDiscipline, ...disciplineOptions]));
+
                       return (
                         <div key={sessionId} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg)] px-3 py-3" data-testid="apb-session">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="text-sm font-medium">
-                              {DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0]} — {String(s.discipline ?? '').toUpperCase()} · {String(s.type ?? '')}
+                              {DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0]}
+                              {locked ? (
+                                <span className="ml-2 rounded bg-[var(--bg-structure)] px-2 py-0.5 text-xs text-[var(--fg-muted)]">Locked</span>
+                              ) : null}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Select
+                                value={selectedDiscipline}
+                                disabled={busy != null || locked}
+                                data-testid="apb-session-discipline"
+                                onChange={(e) =>
+                                  setSessionDraftEdits((m) => ({
+                                    ...m,
+                                    [sessionId]: { ...(m[sessionId] ?? {}), discipline: e.target.value },
+                                  }))
+                                }
+                              >
+                                {disciplineChoices.map((d) => (
+                                  <option key={d} value={d}>
+                                    {d}
+                                  </option>
+                                ))}
+                              </Select>
+
+                              <Input
+                                value={edit.type ?? String((s as any)?.type ?? '')}
+                                disabled={busy != null || locked}
+                                data-testid="apb-session-type"
+                                onChange={(e) =>
+                                  setSessionDraftEdits((m) => ({
+                                    ...m,
+                                    [sessionId]: { ...(m[sessionId] ?? {}), type: e.target.value },
+                                  }))
+                                }
+                                placeholder="Type"
+                              />
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={sessionLocked ? 'primary' : 'secondary'}
+                                disabled={busy != null || weekLocked}
+                                data-testid="apb-session-lock-toggle"
+                                onClick={() => toggleSessionLock(sessionId, !sessionLocked)}
+                              >
+                                {busy === `lock-session:${sessionId}`
+                                  ? 'Updating…'
+                                  : sessionLocked
+                                    ? 'Unlock session'
+                                    : 'Lock session'}
+                              </Button>
                             </div>
                           </div>
+
+                          {weekLocked ? (
+                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Week is locked — unlock the week to edit sessions.</div>
+                          ) : sessionLocked ? (
+                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Session is locked — unlock the session to edit details.</div>
+                          ) : null}
 
                           {objective ? (
                             <div className="mt-2 text-sm" data-testid="apb-session-objective">
@@ -706,7 +892,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
                           {blocks.length ? (
                             <div className="mt-2 space-y-2" data-testid="apb-session-detail-blocks">
-                              {blocks.slice(0, 3).map((b, idx) => (
+                              {blocks.map((b, idx) => (
                                 <div key={idx} className="text-xs text-[var(--fg-muted)]" data-testid="apb-session-detail-block">
                                   <span className="font-medium">{String(b.blockType).toUpperCase()}</span>
                                   {b.durationMinutes ? ` · ${b.durationMinutes} min` : ''} — {String(b.steps)}
@@ -720,6 +906,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                               <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Duration (min)</div>
                               <Input
                                 value={edit.durationMinutes ?? String(s.durationMinutes ?? '')}
+                                disabled={busy != null || locked}
                                 onChange={(e) =>
                                   setSessionDraftEdits((m) => ({
                                     ...m,
@@ -734,6 +921,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                               <Textarea
                                 rows={2}
                                 value={edit.notes ?? String(s.notes ?? '')}
+                                disabled={busy != null || locked}
                                 onChange={(e) =>
                                   setSessionDraftEdits((m) => ({
                                     ...m,
@@ -745,12 +933,63 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                             </div>
                           </div>
 
+                          <div className="mt-3">
+                            <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Objective (editable)</div>
+                            <Input
+                              value={edit.objective ?? (objective ?? '')}
+                              disabled={busy != null || locked}
+                              data-testid="apb-session-objective-input"
+                              onChange={(e) =>
+                                setSessionDraftEdits((m) => ({
+                                  ...m,
+                                  [sessionId]: { ...(m[sessionId] ?? {}), objective: e.target.value },
+                                }))
+                              }
+                              placeholder="Short session objective"
+                            />
+                          </div>
+
+                          {blocks.length ? (
+                            <div className="mt-3 space-y-2" data-testid="apb-session-block-editor">
+                              <div className="text-xs font-medium text-[var(--fg-muted)]">Block steps (editable)</div>
+                              {blocks.map((b, idx) => (
+                                <div
+                                  key={idx}
+                                  className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2"
+                                >
+                                  <div className="mb-1 text-xs font-medium">
+                                    {String(b.blockType).toUpperCase()}
+                                    {b.durationMinutes ? ` · ${b.durationMinutes} min` : ''}
+                                  </div>
+                                  <Textarea
+                                    rows={2}
+                                    value={edit.blockSteps?.[idx] ?? String(b.steps ?? '')}
+                                    disabled={busy != null || locked}
+                                    data-testid={`apb-session-block-steps-${idx}`}
+                                    onChange={(e) =>
+                                      setSessionDraftEdits((m) => ({
+                                        ...m,
+                                        [sessionId]: {
+                                          ...(m[sessionId] ?? {}),
+                                          blockSteps: {
+                                            ...((m[sessionId] ?? {}).blockSteps ?? {}),
+                                            [idx]: e.target.value,
+                                          },
+                                        },
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
                           <div className="mt-2 flex items-center gap-2">
                             <Button
                               type="button"
                               size="sm"
                               variant="secondary"
-                              disabled={busy != null}
+                              disabled={busy != null || locked}
                               data-testid="apb-session-save"
                               onClick={() => saveSessionEdit(sessionId)}
                             >
