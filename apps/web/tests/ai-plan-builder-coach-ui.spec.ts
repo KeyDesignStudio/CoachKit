@@ -46,6 +46,13 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     const weekLock = firstWeek.getByTestId('apb-week-lock');
     await expect(weekLock).toBeEnabled({ timeout: 30_000 });
 
+    // Session detail rendering (objective + collapsible blocks)
+    const firstSessionDetail = firstWeek.getByTestId('apb-session').first();
+    await expect(firstSessionDetail.getByTestId('apb-session-objective')).toBeVisible();
+    await expect(firstSessionDetail.getByTestId('apb-session-objective')).not.toHaveText('');
+    await firstSessionDetail.getByTestId('apb-session-details-toggle').click();
+    await expect(firstSessionDetail.getByTestId('apb-session-detail-block').first()).toBeVisible();
+
     const lockOk = page.waitForResponse(
       (res) =>
         res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
