@@ -97,35 +97,49 @@ export function handleError(
   // Map common Prisma known request errors to stable API semantics.
   // This prevents generic 500s for common "record not found" and constraint failures.
   const prismaCode = typeof (error as any)?.code === 'string' ? String((error as any).code) : null;
-  const prismaName = typeof (error as any)?.name === 'string' ? String((error as any).name) : null;
-  if (prismaCode && /^P\d{4}$/.test(prismaCode) && prismaName === 'PrismaClientKnownRequestError') {
+  if (prismaCode && /^P\d{4}$/.test(prismaCode)) {
     if (prismaCode === 'P2021' || prismaCode === 'P2022') {
       return failure('DB_SCHEMA_MISMATCH', 'Database schema mismatch.', 500, options?.requestId, {
-        diagnostics: { prismaCode },
+        diagnostics: {
+          prismaCode,
+          prismaName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+        },
       });
     }
 
     if (prismaCode === 'P2025') {
       return failure('NOT_FOUND', 'Record not found.', 404, options?.requestId, {
-        diagnostics: { prismaCode },
+        diagnostics: {
+          prismaCode,
+          prismaName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+        },
       });
     }
 
     if (prismaCode === 'P2002') {
       return failure('CONFLICT', 'Unique constraint failed.', 409, options?.requestId, {
-        diagnostics: { prismaCode },
+        diagnostics: {
+          prismaCode,
+          prismaName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+        },
       });
     }
 
     if (prismaCode === 'P2003') {
       return failure('CONFLICT', 'Foreign key constraint failed.', 409, options?.requestId, {
-        diagnostics: { prismaCode },
+        diagnostics: {
+          prismaCode,
+          prismaName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+        },
       });
     }
 
     if (prismaCode === 'P2028') {
       return failure('DB_TRANSACTION_ERROR', 'Database transaction failed.', 500, options?.requestId, {
-        diagnostics: { prismaCode },
+        diagnostics: {
+          prismaCode,
+          prismaName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+        },
       });
     }
   }
@@ -147,5 +161,9 @@ export function handleError(
   if (!options?.requestId) {
     console.error(error);
   }
-  return failure('INTERNAL_SERVER_ERROR', 'Something went wrong.', 500, options?.requestId);
+  return failure('INTERNAL_SERVER_ERROR', 'Something went wrong.', 500, options?.requestId, {
+    diagnostics: {
+      errName: typeof (error as any)?.name === 'string' ? String((error as any).name) : null,
+    },
+  });
 }

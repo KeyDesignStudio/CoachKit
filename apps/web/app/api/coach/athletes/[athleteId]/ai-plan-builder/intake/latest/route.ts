@@ -24,6 +24,7 @@ export async function GET(request: Request, context: { params: { athleteId: stri
     const prismaName = typeof (error as any)?.name === 'string' ? String((error as any).name) : null;
     const errName = typeof (error as any)?.name === 'string' ? String((error as any).name) : null;
     const errMessage = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack ?? null : null;
     const athleteIdHash = crypto
       .createHash('sha256')
       .update(String(context?.params?.athleteId ?? ''))
@@ -44,6 +45,7 @@ export async function GET(request: Request, context: { params: { athleteId: stri
         prismaName,
         errName,
         errMessage,
+        errStack,
         vercelId: request.headers.get('x-vercel-id') ?? null,
       })
     );
