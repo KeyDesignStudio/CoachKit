@@ -38,7 +38,10 @@ export default async function AccessDeniedPage({
   try {
     const { user } = await requireAuth();
 
-    if (user.role === 'ADMIN') redirect('/admin/workout-library');
+    if (user.role === 'ADMIN') {
+      console.info('[Authz] Access-denied redirect', { role: user.role, userId: user.id, target: '/admin/ai-usage' });
+      redirect('/admin/ai-usage');
+    }
     if (user.role === 'COACH') redirect('/coach/dashboard');
     if (user.role === 'ATHLETE') redirect('/athlete/calendar');
 

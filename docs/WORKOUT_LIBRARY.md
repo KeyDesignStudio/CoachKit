@@ -6,7 +6,7 @@
 RC1 is approved only when all items below are complete and verified on a non-prod Neon branch.
 
 - [ ] Schema complete (migrations applied; no runtime Prisma errors)
-- [ ] Admin UI functional (`/admin/workout-library`: CRUD, import dry-run, import apply confirm, purge drafts)
+- [ ] Admin UI functional (no `/admin/workout-library` route in this repo; if enabled, document the correct UI entry point)
 - [ ] Coach Library usable (`/coach/group-sessions` → Library tab: search/filter, favorites, inject)
 - [ ] Injection into Session Builder verified (library → group session prefill)
 - [ ] Athlete workout detail renders correctly (`/athlete/workouts/[id]` shows rich detail)
@@ -147,7 +147,7 @@ Validation rules (planned):
 ## Admin Role Behavior
 
 Definition:
-- Admin-only access to `/api/admin/**` routes and `/admin/workout-library` UI.
+- Admin-only access to `/api/admin/**` routes and admin UI surfaces under `/admin/*`.
 - Implemented as `UserRole.ADMIN` (Prisma enum).
 
 Rules:
@@ -246,7 +246,7 @@ Canonical equipment values:
 | unknown | `Other` |
 
 Admin UI import:
-- Location: `/admin/workout-library` → Import tab
+- Location: (no `/admin/workout-library` route in this repo)
 - Upload `.csv` or `.json`
 - Default is **dry-run** validation with per-row errors; import is blocked until errors are fixed.
 - Imports create `DRAFT` sessions.

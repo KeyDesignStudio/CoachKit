@@ -28,6 +28,10 @@ type ReverseGeocodeResult = {
   longitude: number;
 };
 
+type WeatherLocationSelectProps = {
+  onSavedLocationLabelChange?: (label: string) => void;
+};
+
 function parseNumberOrNull(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -36,7 +40,7 @@ function parseNumberOrNull(value: string): number | null {
   return parsed;
 }
 
-export function WeatherLocationSelect() {
+export function WeatherLocationSelect({ onSavedLocationLabelChange }: WeatherLocationSelectProps) {
   const { request } = useApi();
 
   const [savedLabel, setSavedLabel] = useState('');
@@ -64,6 +68,10 @@ export function WeatherLocationSelect() {
   const advancedTimer = useRef<number | null>(null);
 
   const hasLocation = savedLat != null && savedLon != null;
+
+  useEffect(() => {
+    onSavedLocationLabelChange?.(savedLabel);
+  }, [onSavedLocationLabelChange, savedLabel]);
 
   useEffect(() => {
     void (async () => {

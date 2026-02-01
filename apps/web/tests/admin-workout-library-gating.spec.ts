@@ -16,45 +16,30 @@ async function setRoleCookie(page: import('@playwright/test').Page, role: Role) 
   ]);
 }
 
-test.describe('Admin workout library gating', () => {
-  test('COACH cannot access /admin/workout-library', async ({ page }) => {
+test.describe('Admin routes gating', () => {
+  test('COACH cannot access /admin/ai-usage (404-by-default)', async ({ page }) => {
     await setRoleCookie(page, 'COACH');
 
-    await page.goto('/admin/workout-library', { waitUntil: 'networkidle' });
+    await page.goto('/admin/ai-usage', { waitUntil: 'networkidle' });
 
-    // Should not render admin page content
-    await expect(page.getByTestId('admin-workout-library-page')).toHaveCount(0);
-
-    // Should land on forbidden/denied surface (may be /access-denied)
-    await expect(page).toHaveURL(/\/access-denied/);
-    await expect(page.getByRole('heading', { name: /access denied/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /workout library/i })).toHaveCount(0);
+    // In dev, Next may return 200 with an error overlay; assert by page content.
+    await expect(page.getByRole('heading', { name: /ai usage/i })).toHaveCount(0);
+    await expect(page.getByText(/not found/i).first()).toBeVisible();
   });
 
-  test('ADMIN can access /admin/workout-library', async ({ page }) => {
+  test('ADMIN can access /admin/ai-usage', async ({ page }) => {
     await setRoleCookie(page, 'ADMIN');
 
-    await page.goto('/admin/workout-library', { waitUntil: 'networkidle' });
+    const res = await page.goto('/admin/ai-usage', { waitUntil: 'networkidle' });
+    expect(res?.status()).toBe(200);
 
-    await expect(page.getByTestId('admin-workout-library-page')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /workout library/i })).toBeVisible();
-    await expect(page.getByTestId('admin-workout-library-search')).toBeVisible();
-    await expect(page.getByTestId('admin-workout-library-import')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /ai usage/i })).toBeVisible();
   });
 
-  test('ADMIN visiting coach routes gets redirected to admin', async ({ page }) => {
-    await setRoleCookie(page, 'ADMIN');
-
-    await page.goto('/coach/dashboard', { waitUntil: 'networkidle' });
-    await expect(page).toHaveURL(/\/admin\/workout-library/);
-    await expect(page.getByTestId('admin-workout-library-page')).toBeVisible();
-  });
-
-  test('ADMIN visiting athlete routes gets redirected to admin', async ({ page }) => {
+  test('ADMIN visiting athlete routes sees a 403 page (no redirect)', async ({ page }) => {
     await setRoleCookie(page, 'ADMIN');
 
     await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
-    await expect(page).toHaveURL(/\/admin\/workout-library/);
-    await expect(page.getByTestId('admin-workout-library-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /403 — athlete access required/i })).toBeVisible();
   });
 });

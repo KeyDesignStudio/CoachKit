@@ -185,24 +185,18 @@ export async function updateAiDraftPlan(params: {
     if (params.sessionEdits?.length) {
       // Week lock enforcement: if a week is locked, sessions within that week are immutable
       // (including lock/unlock toggles).
-      const editedWeekIndices = Array.from(
-        new Set(
-          (
-            await Promise.all(
-              params.sessionEdits.map(async (edit) => {
-                const existing = await tx.aiPlanDraftSession.findUnique({
-                  where: { id: edit.sessionId },
-                  select: { id: true, draftId: true, weekIndex: true },
-                });
-                if (!existing || existing.draftId !== draft.id) {
-                  throw new ApiError(404, 'NOT_FOUND', 'Draft session not found.');
-                }
-                return existing.weekIndex;
-              })
-            )
-          ).filter((w): w is number => Number.isInteger(w))
-        )
-      );
+      const editedWeekIndexSet = new Set<number>();
+      for (const edit of params.sessionEdits) {
+        const existing = await tx.aiPlanDraftSession.findUnique({
+          where: { id: edit.sessionId },
+          select: { id: true, draftId: true, weekIndex: true },
+        });
+        if (!existing || existing.draftId !== draft.id) {
+          throw new ApiError(404, 'NOT_FOUND', 'Draft session not found.');
+        }
+        if (Number.isInteger(existing.weekIndex)) editedWeekIndexSet.add(existing.weekIndex);
+      }
+      const editedWeekIndices = Array.from(editedWeekIndexSet);
 
       if (editedWeekIndices.length) {
         const lockedWeek = await tx.aiPlanDraftWeek.findFirst({
@@ -266,23 +260,24 @@ export async function updateAiDraftPlan(params: {
     }
 
     // Keep planJson in sync with canonical week/session rows.
-    const [draftSetup, weeks, sessions] = await Promise.all([
-      tx.aiPlanDraft.findUnique({ where: { id: draft.id }, select: { setupJson: true } }),
-      tx.aiPlanDraftWeek.findMany({ where: { draftId: draft.id }, select: { weekIndex: true, locked: true } }),
-      tx.aiPlanDraftSession.findMany({
-        where: { draftId: draft.id },
-        select: {
-          weekIndex: true,
-          ordinal: true,
-          dayOfWeek: true,
-          discipline: true,
-          type: true,
-          durationMinutes: true,
-          notes: true,
-          locked: true,
-        },
-      }),
-    ]);
+    const draftSetup = await tx.aiPlanDraft.findUnique({ where: { id: draft.id }, select: { setupJson: true } });
+    const weeks = await tx.aiPlanDraftWeek.findMany({
+      where: { draftId: draft.id },
+      select: { weekIndex: true, locked: true },
+    });
+    const sessions = await tx.aiPlanDraftSession.findMany({
+      where: { draftId: draft.id },
+      select: {
+        weekIndex: true,
+        ordinal: true,
+        dayOfWeek: true,
+        discipline: true,
+        type: true,
+        durationMinutes: true,
+        notes: true,
+        locked: true,
+      },
+    });
 
     if (draftSetup?.setupJson) {
       await tx.aiPlanDraft.update({

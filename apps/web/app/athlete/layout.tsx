@@ -1,9 +1,9 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/prisma';
 import type { ReactNode } from 'react';
+import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth';
+import { ApiError } from '@/lib/errors';
+import { RoleForbiddenCard } from '@/components/RoleForbiddenCard';
 
 /**
  * Athlete Layout - Role-Based Access Control
@@ -14,42 +14,40 @@ import { requireAuth } from '@/lib/auth';
  * - Redirects unauthorized users
  */
 export default async function AthleteLayout({ children }: { children: ReactNode }) {
-  const disableAuth =
-    process.env.NODE_ENV === 'development' &&
-    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
-
-  if (disableAuth) {
+  try {
     const { user } = await requireAuth();
 
     if (user.role !== 'ATHLETE') {
-      redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/coach/dashboard');
+      console.warn('[Authz] Forbidden: athlete segment access denied', {
+        userId: user.id,
+        authProviderId: user.authProviderId,
+        role: user.role,
+      });
+
+      return (
+        <RoleForbiddenCard
+          title="403 — Athlete access required"
+          message="You are signed in, but your account does not have athlete access."
+          primaryHref="/"
+          primaryLabel="Go Home"
+        />
+      );
     }
 
     return <>{children}</>;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 401) {
+        console.info('[Authz] Redirecting to sign-in (athlete segment)', { code: error.code });
+        redirect('/sign-in');
+      }
+
+      if (error.status === 403) {
+        console.warn('[Authz] Redirecting to access-denied (athlete segment)', { code: error.code });
+        redirect('/access-denied');
+      }
+    }
+
+    throw error;
   }
-
-  const { userId } = await auth();
-
-  // Must be authenticated (middleware handles this, but double-check)
-  if (!userId) {
-    redirect('/sign-in');
-  }
-
-  // Look up user in database
-  const user = await prisma.user.findUnique({
-    where: { authProviderId: userId },
-    select: { role: true },
-  });
-
-  // Not in database = not invited
-  if (!user) {
-    redirect('/access-denied');
-  }
-
-  if (user.role !== 'ATHLETE') {
-    redirect(user.role === 'ADMIN' ? '/admin/workout-library' : '/coach/dashboard');
-  }
-
-  // Authorized - render athlete pages
-  return <>{children}</>;
 }

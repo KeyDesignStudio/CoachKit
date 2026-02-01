@@ -55,6 +55,8 @@ export default function AthleteSettingsPage() {
   const [timezoneMessage, setTimezoneMessage] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
 
+  const [weatherLocationLabel, setWeatherLocationLabel] = useState('');
+
   const [icalUrl, setIcalUrl] = useState<string>('');
   const [loadingIcal, setLoadingIcal] = useState(false);
   const [resettingIcal, setResettingIcal] = useState(false);
@@ -221,6 +223,7 @@ export default function AthleteSettingsPage() {
   }
 
   const connected = Boolean(status?.connected);
+  const stravaAthleteId = status?.connection?.stravaAthleteId ?? '';
 
   return (
     <section className="flex flex-col gap-6">
@@ -239,8 +242,9 @@ export default function AthleteSettingsPage() {
         </Block>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="min-w-0">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Column 1 */}
+        <div className="min-w-0 flex flex-col gap-6">
           <Block
             title="Timezone"
             rightAction={<Badge className="text-[var(--muted)]">{getTimezoneLabel(timezone)}</Badge>}
@@ -250,79 +254,47 @@ export default function AthleteSettingsPage() {
             {timezoneMessage ? <p className="text-sm text-[var(--text-success)] mt-2">{timezoneMessage}</p> : null}
             {timezoneError ? <p className="text-sm text-rose-700 dark:text-rose-300 mt-2">{timezoneError}</p> : null}
           </Block>
-        </div>
 
-        <div className="min-w-0">
           <Block
-            title="Appearance"
+            title="Weather location"
             rightAction={
-              <Badge className="text-[var(--muted)]">
-                {themePreference === 'system' ? 'System' : themePreference === 'dark' ? 'Dark' : 'Light'}
-              </Badge>
+              weatherLocationLabel.trim() ? (
+                <Badge
+                  title={weatherLocationLabel}
+                  className="max-w-[40vw] overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[14rem]"
+                >
+                  {weatherLocationLabel}
+                </Badge>
+              ) : null
             }
           >
-            <p className="text-sm text-[var(--muted)] mb-3">Choose light, dark, or follow your system setting.</p>
-
-            <SelectField
-              value={themePreference}
-              onChange={(e) => setThemePreference(e.target.value as any)}
-              aria-label="Theme"
-            >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </SelectField>
-          </Block>
-        </div>
-
-        <div className="min-w-0">
-          <Block title="Weather location">
             <p className="text-sm text-[var(--muted)] mb-3">Used for weather. Search by place name or use your current location.</p>
-            <WeatherLocationSelect />
+            <WeatherLocationSelect onSavedLocationLabelChange={setWeatherLocationLabel} />
           </Block>
         </div>
 
-        <div className="min-w-0">
-          <Block title="Calendar Sync">
-            <p className="text-sm text-[var(--muted)] mb-3">
-              Subscribe to your CoachKit workouts via a private iCal link (read-only). If you share the link, anyone with it can view your calendar.
-            </p>
-
-            {loadingIcal ? <p className="text-sm text-[var(--muted)]">Loading calendar sync link…</p> : null}
-            {icalError ? <p className="text-sm text-red-700">{icalError}</p> : null}
-
-            <div className="flex flex-col gap-3">
-              <Input
-                value={icalUrl}
-                readOnly
-                placeholder="Calendar sync link will appear here"
-                className="font-mono text-xs"
-              />
-
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={() => void copyIcalLink()} disabled={!icalUrl || loadingIcal}>
-                  Copy link
-                </Button>
-                <Button variant="secondary" onClick={() => void resetIcalLink()} disabled={resettingIcal || loadingIcal}>
-                  {resettingIcal ? 'Resetting…' : 'Reset link'}
-                </Button>
-              </div>
-
-              {icalMessage ? <p className="text-sm text-[var(--text-success)]">{icalMessage}</p> : null}
-            </div>
-          </Block>
-        </div>
-
-        <div className="min-w-0">
+        {/* Column 2 */}
+        <div className="min-w-0 flex flex-col gap-6">
           <Block
             title="Strava"
-            rightAction={<Badge className={connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>{connected ? 'Connected' : 'Not connected'}</Badge>}
+            rightAction={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge className={connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>
+                  {connected ? 'Connected' : 'Not connected'}
+                </Badge>
+                {connected && stravaAthleteId ? (
+                  <Badge className="text-[var(--muted)] normal-case tracking-normal">
+                    Strava athlete ID: {stravaAthleteId}
+                  </Badge>
+                ) : null}
+              </div>
+            }
           >
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <p className="text-sm text-[var(--muted)]">Connect Strava to sync completed activities into CoachKit.</p>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col items-start gap-3 md:items-end">
                   {connected ? (
                     <>
                       <Button onClick={handleSyncNow} disabled={working || syncing || loadingStatus}>
@@ -368,13 +340,65 @@ export default function AthleteSettingsPage() {
                 </div>
               ) : null}
 
-              {connected && status?.connection ? (
+              {connected && status?.connection?.scope ? (
                 <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[var(--muted)]">
-                  <p>Strava athlete ID: <span className="text-[var(--text)]">{status.connection.stravaAthleteId}</span></p>
-                  {status.connection.scope ? <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p> : null}
+                  <p>Scope: <span className="text-[var(--text)]">{status.connection.scope}</span></p>
                 </div>
               ) : null}
             </div>
+          </Block>
+
+          <Block title="Calendar Sync">
+            <p className="text-sm text-[var(--muted)] mb-3">
+              Subscribe to your CoachKit workouts via a private iCal link (read-only). If you share the link, anyone with it can view your calendar.
+            </p>
+
+            {loadingIcal ? <p className="text-sm text-[var(--muted)]">Loading calendar sync link…</p> : null}
+            {icalError ? <p className="text-sm text-red-700">{icalError}</p> : null}
+
+            <div className="flex flex-col gap-3">
+              <Input
+                value={icalUrl}
+                readOnly
+                placeholder="Calendar sync link will appear here"
+                className="font-mono text-xs"
+              />
+
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => void copyIcalLink()} disabled={!icalUrl || loadingIcal}>
+                  Copy link
+                </Button>
+                <Button variant="secondary" onClick={() => void resetIcalLink()} disabled={resettingIcal || loadingIcal}>
+                  {resettingIcal ? 'Resetting…' : 'Reset link'}
+                </Button>
+              </div>
+
+              {icalMessage ? <p className="text-sm text-[var(--text-success)]">{icalMessage}</p> : null}
+            </div>
+          </Block>
+        </div>
+
+        {/* Column 3 */}
+        <div className="min-w-0 flex flex-col gap-6">
+          <Block
+            title="Appearance"
+            rightAction={
+              <Badge className="text-[var(--muted)]">
+                {themePreference === 'system' ? 'System' : themePreference === 'dark' ? 'Dark' : 'Light'}
+              </Badge>
+            }
+          >
+            <p className="text-sm text-[var(--muted)] mb-3">Choose light, dark, or follow your system setting.</p>
+
+            <SelectField
+              value={themePreference}
+              onChange={(e) => setThemePreference(e.target.value as any)}
+              aria-label="Theme"
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </SelectField>
           </Block>
         </div>
       </div>
