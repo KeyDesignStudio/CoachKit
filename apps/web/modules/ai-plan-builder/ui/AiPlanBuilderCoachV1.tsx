@@ -31,12 +31,128 @@ type SetupState = {
 
 function formatApiErrorMessage(e: ApiClientError): string {
   if (e.status === 429 && e.code === 'LLM_RATE_LIMITED') {
-    return 'AI is temporarily rate limited — using a fallback.';
+    return 'Temporarily unavailable — using a fallback.';
   }
   if (e.code === 'CONFIG_MISSING') {
-    return 'AI is not configured — using a fallback.';
+    return 'Temporarily unavailable — using a fallback.';
   }
   return 'Something went wrong.';
+}
+
+function toSingleSentence(input: unknown): string | null {
+  const raw = typeof input === 'string' ? input : input == null ? '' : String(input);
+  const s = raw.replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+
+  const m = s.match(/^(.+?[.!?])\s+/);
+  const first = m?.[1] ? m[1].trim() : s;
+  if (!first) return null;
+  if (/[.!?]$/.test(first)) return first;
+  return `${first}.`;
+}
+
+function stripKeyPrefix(input: unknown): string | null {
+  const raw = typeof input === 'string' ? input : input == null ? '' : String(input);
+  const s = raw.trim();
+  if (!s) return null;
+  return s.replace(/^\s*[a-zA-Z_]+\s*:\s*/, '').trim() || null;
+}
+
+function humanizeEnumLabel(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const cleaned = s
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return cleaned || null;
+}
+
+function humanizeDiscipline(value: unknown): string | null {
+  const v = value == null ? '' : String(value).trim().toUpperCase();
+  if (!v) return null;
+  const map: Record<string, string> = {
+    RUN: 'Run',
+    BIKE: 'Bike',
+    CYCLE: 'Bike',
+    SWIM: 'Swim',
+    STRENGTH: 'Strength',
+    GYM: 'Strength',
+    ROW: 'Row',
+    HIKE: 'Hike',
+    WALK: 'Walk',
+    OTHER: 'Other',
+  };
+  return map[v] ?? humanizeEnumLabel(v);
+}
+
+function humanizeTrainingFrequency(value: unknown): string | null {
+  const v = value == null ? '' : String(value).trim().toUpperCase();
+  if (!v) return null;
+  const map: Record<string, string> = {
+    WEEKLY: 'Weekly',
+    FORTNIGHTLY: 'Fortnightly',
+    BIWEEKLY: 'Fortnightly',
+    MONTHLY: 'Monthly',
+    AD_HOC: 'As needed',
+  };
+  return map[v] ?? null;
+}
+
+function humanizeWeekOfMonth(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const upper = s.toUpperCase();
+  if (upper === 'LAST') return 'Last';
+  if (upper === 'FIRST') return '1st';
+  if (upper === 'SECOND') return '2nd';
+  if (upper === 'THIRD') return '3rd';
+  if (upper === 'FOURTH') return '4th';
+
+  const n = Number.parseInt(s, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th';
+  return `${n}${suffix}`;
+}
+
+function humanizeDayOfWeek(value: unknown): string | null {
+  if (value == null) return null;
+
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return DAY_NAMES_SUN0[value] ?? null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const asInt = Number.parseInt(raw, 10);
+  if (Number.isFinite(asInt) && String(asInt) === raw && Number.isInteger(asInt)) {
+    return DAY_NAMES_SUN0[asInt] ?? null;
+  }
+
+  const normalized = raw.replace(/\s+/g, '').replace(/[-_]/g, '').toUpperCase();
+  const map: Record<string, string> = {
+    SUN: 'Sunday',
+    SUNDAY: 'Sunday',
+    MON: 'Monday',
+    MONDAY: 'Monday',
+    TUE: 'Tuesday',
+    TUES: 'Tuesday',
+    TUESDAY: 'Tuesday',
+    WED: 'Wednesday',
+    WEDNESDAY: 'Wednesday',
+    THU: 'Thursday',
+    THUR: 'Thursday',
+    THURS: 'Thursday',
+    THURSDAY: 'Thursday',
+    FRI: 'Friday',
+    FRIDAY: 'Friday',
+    SAT: 'Saturday',
+    SATURDAY: 'Saturday',
+  };
+  return map[normalized] ?? null;
 }
 
 function stableDayList(days: number[]): number[] {
@@ -309,7 +425,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">AI Plan Builder</div>
+          <div className="text-lg font-semibold">Plan Builder</div>
           <div className="text-sm text-[var(--fg-muted)]">Coach-first planning in four steps.</div>
         </div>
 
@@ -333,7 +449,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             {canStart ? (
               <>
                 <div className="text-sm text-[var(--fg-muted)]">
-                  Generate a coach-friendly athlete summary.
+                  Build an athlete brief for planning.
                 </div>
                 <Button
                   type="button"
@@ -342,7 +458,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   data-testid="apb-generate-intake-ai"
                   onClick={startWithAi}
                 >
-                  {busy === 'generate-intake' ? 'Generating…' : 'Generate athlete info (AI)'}
+                  {busy === 'generate-intake' ? 'Preparing…' : 'Generate athlete info'}
                 </Button>
               </>
             ) : (
@@ -351,12 +467,73 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
             {!canPlan ? (
               <div className="text-sm text-[var(--fg-muted)]">Generate athlete info to continue.</div>
-            ) : profileLatest?.extractedSummaryText ? (
-              <div className="whitespace-pre-wrap text-sm" data-testid="apb-athlete-summary">
-                {String(profileLatest.extractedSummaryText)}
-              </div>
             ) : (
-              <div className="text-sm text-[var(--fg-muted)]">Building athlete summary…</div>
+              (() => {
+                const raw =
+                  (profileLatest as any)?.coachOverridesJson ??
+                  (profileLatest as any)?.extractedProfileJson ??
+                  (intakeLatest as any)?.draftJson ??
+                  null;
+
+                const primaryGoal = toSingleSentence((raw as any)?.primary_goal ?? (raw as any)?.primaryGoal ?? null);
+                const disciplines = Array.isArray((raw as any)?.disciplines)
+                  ? (raw as any).disciplines.map(humanizeDiscipline).filter(Boolean)
+                  : [];
+
+                const frequency = humanizeTrainingFrequency((raw as any)?.training_plan_frequency ?? (raw as any)?.trainingPlanFrequency);
+                const preferredDay = humanizeDayOfWeek((raw as any)?.training_plan_day_of_week ?? (raw as any)?.trainingPlanDayOfWeek);
+                const weekOfMonth = humanizeWeekOfMonth((raw as any)?.training_plan_week_of_month ?? (raw as any)?.trainingPlanWeekOfMonth);
+                const coachNotes = stripKeyPrefix((raw as any)?.coach_notes ?? (raw as any)?.coachNotes ?? null);
+
+                const hasAny = Boolean(primaryGoal || disciplines.length || frequency || preferredDay || weekOfMonth || coachNotes);
+
+                if (!hasAny) {
+                  return <div className="text-sm text-[var(--fg-muted)]">Preparing athlete brief…</div>;
+                }
+
+                return (
+                  <div
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3"
+                    data-testid="apb-athlete-brief"
+                  >
+                    <div className="text-sm font-semibold">Athlete Brief</div>
+
+                    <div className="mt-3 space-y-3 text-sm">
+                      {primaryGoal ? (
+                        <div>
+                          <div className="font-medium">Goal</div>
+                          <div className="text-[var(--fg)]">{primaryGoal}</div>
+                        </div>
+                      ) : null}
+
+                      {disciplines.length ? (
+                        <div>
+                          <div className="font-medium">Disciplines</div>
+                          <div className="text-[var(--fg)]">{disciplines.join(', ')}</div>
+                        </div>
+                      ) : null}
+
+                      {frequency || preferredDay || weekOfMonth ? (
+                        <div>
+                          <div className="font-medium">Training rhythm</div>
+                          <div className="space-y-1 text-[var(--fg)]">
+                            {frequency ? <div>Frequency: {frequency}</div> : null}
+                            {preferredDay ? <div>Preferred day: {preferredDay}</div> : null}
+                            {weekOfMonth ? <div>Week of month: {weekOfMonth}</div> : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {coachNotes ? (
+                        <div>
+                          <div className="font-medium">Coach notes</div>
+                          <div className="text-[var(--fg)]">{coachNotes}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         </Block>
