@@ -543,6 +543,7 @@ model CalendarItem {
   athletePlanInstanceId  String?
   date                   DateTime // use date-only at midnight; interpret in timezone in UI
   plannedStartTimeLocal  String?
+  coachEdited            Boolean            @default(false)
   // For non-planned sessions (e.g. recorded-from-provider).
   origin                 String?
   planningStatus         String?
