@@ -12,6 +12,7 @@ import type {
 import { extractProfileDeterministic } from '../rules/profile-extractor';
 import { generateDraftPlanDeterministicV1 } from '../rules/draft-generator';
 import { suggestProposalDiffsDeterministicV1 } from '../rules/proposal-diff-generator';
+import { buildDeterministicSessionDetailV1 } from '../rules/session-detail';
 
 import { computeAiUsageAudit, recordAiUsageAudit, type AiInvocationAuditMeta } from './audit';
 import { getAiPlanBuilderCapabilitySpecVersion } from './config';
@@ -131,6 +132,44 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
       await this.onInvocation({
         capability: 'suggestProposalDiffs',
         specVersion: getAiPlanBuilderCapabilitySpecVersion('suggestProposalDiffs'),
+        effectiveMode: 'deterministic',
+        provider: 'deterministic',
+        model: null,
+        inputHash: audit.inputHash,
+        outputHash: audit.outputHash,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        maxOutputTokens: null,
+        timeoutMs: null,
+        retryCount: 0,
+        fallbackUsed: false,
+        errorCode: null,
+      });
+    }
+
+    if (this.shouldRecordAudit) {
+      recordAiUsageAudit(audit);
+    }
+
+    return result;
+  }
+
+  async generateSessionDetail(input: any): Promise<any> {
+    const startedAt = Date.now();
+
+    const detail = buildDeterministicSessionDetailV1({
+      discipline: String(input?.session?.discipline ?? ''),
+      type: String(input?.session?.type ?? ''),
+      durationMinutes: Number(input?.session?.durationMinutes ?? 0),
+    });
+
+    const result = { detail };
+
+    const audit = computeAiUsageAudit({ capability: 'generateSessionDetail', mode: 'deterministic', input, output: result });
+
+    if (this.onInvocation) {
+      await this.onInvocation({
+        capability: 'generateSessionDetail',
+        specVersion: getAiPlanBuilderCapabilitySpecVersion('generateSessionDetail'),
         effectiveMode: 'deterministic',
         provider: 'deterministic',
         model: null,

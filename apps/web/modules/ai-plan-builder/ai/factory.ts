@@ -10,7 +10,7 @@ export { getAiPlanBuilderAIModeFromEnv } from './config';
 
 export type AiPlanBuilderHooks = {
   beforeLlmCall?: (params: {
-    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs' | 'generateSessionDetail';
   }) => void | Promise<void>;
   onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 };
@@ -47,6 +47,11 @@ class ConfiguredAiPlanBuilderAI implements AiPlanBuilderAI {
   async suggestProposalDiffs(input: any) {
     const mode = getAiPlanBuilderEffectiveMode('suggestProposalDiffs');
     return mode === 'llm' ? this.llm.suggestProposalDiffs(input) : this.deterministic.suggestProposalDiffs(input);
+  }
+
+  async generateSessionDetail(input: any) {
+    const mode = getAiPlanBuilderEffectiveMode('generateSessionDetail');
+    return mode === 'llm' ? this.llm.generateSessionDetail(input) : this.deterministic.generateSessionDetail(input);
   }
 }
 
