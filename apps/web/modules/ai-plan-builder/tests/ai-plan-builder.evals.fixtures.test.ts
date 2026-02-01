@@ -97,7 +97,7 @@ describe('AI Plan Builder v1 (Tranche 11B: eval fixtures)', () => {
     const diffsOut = await ai.suggestProposalDiffs(proposalDiffs as any);
 
     expect(computeStableSha256(intakeOut)).toMatchInlineSnapshot(`"25773d85f0a6230e35b4fd95bb975ee8023a19b93d2483766c45a5db050e8bfe"`);
-    expect(computeStableSha256(draftOut)).toMatchInlineSnapshot(`"0f0db68c018e50108625619fbc19f025e6920ba434e6723cb6a316390d334135"`);
+    expect(computeStableSha256(draftOut)).toMatchInlineSnapshot(`"11fd4b7f8ef2a12eaf11b1941e3784b02761473064e6be44a1a68afb8b9bef58"`);
     expect(computeStableSha256(diffsOut)).toMatchInlineSnapshot(`"1f0c88a58040d2742b66f59d0fef6564ba2dced176671933e72f4d3ce0980223"`);
   });
 

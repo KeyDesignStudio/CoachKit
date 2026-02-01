@@ -15,6 +15,7 @@ export type DraftPlanSetupV1 = {
   maxIntensityDaysPerWeek: number; // 1-3
   maxDoublesPerWeek: number; // 0-3
   longSessionDay?: number | null; // 0=Sun..6=Sat
+  coachGuidanceText?: string; // plain-English coach guidance; optional
 };
 
 export type DraftWeekV1 = {
@@ -99,6 +100,76 @@ function daySortKey(dayOfWeek: number, weekStart: 'monday' | 'sunday') {
   const d = ((Number(dayOfWeek) % 7) + 7) % 7;
   if (weekStart === 'sunday') return d;
   return (d + 6) % 7;
+}
+
+function roundToStep(value: number, step: number): number {
+  if (!Number.isFinite(value) || step <= 0) return value;
+  return Math.round(value / step) * step;
+}
+
+function humanizeWeekDurations(params: {
+  sessions: DraftWeekV1['sessions'];
+  longDay: number;
+}): DraftWeekV1['sessions'] {
+  const MIN = 20;
+  const MAX = 240;
+
+  const originalTotal = params.sessions.reduce((sum, s) => sum + (Number(s.durationMinutes) || 0), 0);
+
+  const rounded = params.sessions.map((s) => {
+    const isLongDay = s.dayOfWeek === params.longDay;
+    const base = Number(s.durationMinutes) || 0;
+    const step = isLongDay || base >= 90 ? 10 : 5;
+    const next = Math.max(MIN, Math.min(MAX, roundToStep(base, step)));
+    return { ...s, durationMinutes: next, __step: step, __isLongDay: isLongDay } as any;
+  });
+
+  let diff = originalTotal - rounded.reduce((sum, s: any) => sum + (Number(s.durationMinutes) || 0), 0);
+
+  const tryAdjust = (direction: 'up' | 'down') => {
+    const candidates = rounded
+      .slice()
+      .sort((a: any, b: any) => {
+        // Prefer adjusting non-long-day sessions first.
+        if (a.__isLongDay !== b.__isLongDay) return a.__isLongDay ? 1 : -1;
+
+        // Prefer smaller steps for fine adjustments.
+        if (a.__step !== b.__step) return a.__step - b.__step;
+
+        // For down: reduce biggest first. For up: increase smallest first.
+        return direction === 'down' ? b.durationMinutes - a.durationMinutes : a.durationMinutes - b.durationMinutes;
+      });
+
+    for (const s of candidates as any[]) {
+      const step = Number(s.__step) || 5;
+      if (direction === 'up') {
+        if (s.durationMinutes + step > MAX) continue;
+        s.durationMinutes += step;
+        diff -= step;
+        return true;
+      }
+
+      if (s.durationMinutes - step < MIN) continue;
+      s.durationMinutes -= step;
+      diff += step;
+      return true;
+    }
+
+    return false;
+  };
+
+  // Adjust to preserve weekly intent (sum of generated durations) after rounding.
+  // Cap iterations to avoid pathological loops.
+  let guard = 0;
+  while (diff !== 0 && guard++ < 500) {
+    if (diff > 0) {
+      if (!tryAdjust('up')) break;
+    } else {
+      if (!tryAdjust('down')) break;
+    }
+  }
+
+  return rounded.map(({ __step, __isLongDay, ...s }: any) => s);
 }
 
 export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): DraftPlanV1 {
@@ -237,7 +308,9 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       .sort((a, b) => daySortKey(a.dayOfWeek, weekStart) - daySortKey(b.dayOfWeek, weekStart) || a.ordinal - b.ordinal)
       .map((s, idx) => ({ ...s, ordinal: idx }));
 
-    weeks.push({ weekIndex, locked: false, sessions: sorted });
+    const humanized = humanizeWeekDurations({ sessions: sorted, longDay });
+
+    weeks.push({ weekIndex, locked: false, sessions: humanized });
   }
 
   return { version: 'v1', setup, weeks };

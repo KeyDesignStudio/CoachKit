@@ -794,6 +794,9 @@ model AthleteIntakeResponse {
   coachId   String // User.id
 
   status      AthleteIntakeResponseStatus @default(DRAFT)
+  // Metadata about how this intake was created. Keep out of draftJson so evidence remains clean.
+  source      String?
+  aiMode      String?
   draftJson   Json?
   submittedAt DateTime?
 

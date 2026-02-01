@@ -115,6 +115,7 @@ export function normalizeAiAuditListQuery(params: {
     'suggestDraftPlan',
     'suggestProposalDiffs',
     'generateSessionDetail',
+    'generateIntakeFromProfile',
   ]);
 
   const fallbackUsedRaw = (get('fallbackUsed') || '').trim().toLowerCase();

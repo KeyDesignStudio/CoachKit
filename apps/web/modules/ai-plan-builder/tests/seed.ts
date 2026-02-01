@@ -103,6 +103,7 @@ export async function createDraftPlanForAthlete(params: {
     maxIntensityDaysPerWeek: number;
     maxDoublesPerWeek: number;
     longSessionDay: number | null;
+    coachGuidanceText?: string;
   };
 }) {
   const setup =
@@ -118,6 +119,7 @@ export async function createDraftPlanForAthlete(params: {
       maxIntensityDaysPerWeek: 2,
       maxDoublesPerWeek: 0,
       longSessionDay: 6,
+      coachGuidanceText: '',
     } as const);
 
   return generateAiDraftPlanV1({

@@ -7,6 +7,8 @@ import type {
   SuggestDraftPlanResult,
   SuggestProposalDiffsInput,
   SuggestProposalDiffsResult,
+  GenerateIntakeFromProfileInput,
+  GenerateIntakeFromProfileResult,
 } from './types';
 
 import { extractProfileDeterministic } from '../rules/profile-extractor';
@@ -170,6 +172,67 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
       await this.onInvocation({
         capability: 'generateSessionDetail',
         specVersion: getAiPlanBuilderCapabilitySpecVersion('generateSessionDetail'),
+        effectiveMode: 'deterministic',
+        provider: 'deterministic',
+        model: null,
+        inputHash: audit.inputHash,
+        outputHash: audit.outputHash,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        maxOutputTokens: null,
+        timeoutMs: null,
+        retryCount: 0,
+        fallbackUsed: false,
+        errorCode: null,
+      });
+    }
+
+    if (this.shouldRecordAudit) {
+      recordAiUsageAudit(audit);
+    }
+
+    return result;
+  }
+
+  async generateIntakeFromProfile(input: GenerateIntakeFromProfileInput): Promise<GenerateIntakeFromProfileResult> {
+    const startedAt = Date.now();
+
+    const profile = input?.profile ?? {
+      disciplines: [],
+      goalsText: null,
+      trainingPlanFrequency: 'AD_HOC',
+      trainingPlanDayOfWeek: null,
+      trainingPlanWeekOfMonth: null,
+      coachNotes: null,
+    };
+
+    const draftJson: Record<string, AiJsonValue> = {
+      disciplines: Array.isArray(profile.disciplines) ? profile.disciplines.map(String) : [],
+      primary_goal: profile.goalsText ? String(profile.goalsText) : null,
+      training_plan_frequency: String(profile.trainingPlanFrequency ?? 'AD_HOC'),
+      training_plan_day_of_week:
+        profile.trainingPlanDayOfWeek === null || profile.trainingPlanDayOfWeek === undefined
+          ? null
+          : Number(profile.trainingPlanDayOfWeek),
+      training_plan_week_of_month:
+        profile.trainingPlanWeekOfMonth === null || profile.trainingPlanWeekOfMonth === undefined
+          ? null
+          : Number(profile.trainingPlanWeekOfMonth),
+      coach_notes: profile.coachNotes ? String(profile.coachNotes) : null,
+    };
+
+    const result: GenerateIntakeFromProfileResult = { draftJson };
+
+    const audit = computeAiUsageAudit({
+      capability: 'generateIntakeFromProfile',
+      mode: 'deterministic',
+      input,
+      output: result,
+    });
+
+    if (this.onInvocation) {
+      await this.onInvocation({
+        capability: 'generateIntakeFromProfile',
+        specVersion: getAiPlanBuilderCapabilitySpecVersion('generateIntakeFromProfile'),
         effectiveMode: 'deterministic',
         provider: 'deterministic',
         model: null,
