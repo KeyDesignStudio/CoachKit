@@ -76,4 +76,44 @@ describe('AI Plan Builder v1 (intake/latest empty state)', () => {
     expect(json.error).toBeNull();
     expect(json.data).toEqual({ intakeResponse: null });
   });
+
+  it('returns 200 with the latest submitted intakeResponse when one exists', async () => {
+    const older = await prisma.athleteIntakeResponse.create({
+      data: {
+        athleteId,
+        coachId,
+        status: 'SUBMITTED',
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        source: 'manual',
+        aiMode: null,
+        draftJson: {},
+      } as any,
+      select: { id: true },
+    });
+
+    const newer = await prisma.athleteIntakeResponse.create({
+      data: {
+        athleteId,
+        coachId,
+        status: 'SUBMITTED',
+        submittedAt: new Date('2026-01-02T00:00:00.000Z'),
+        source: 'manual',
+        aiMode: null,
+        draftJson: {},
+      } as any,
+      select: { id: true },
+    });
+
+    expect(older.id).not.toEqual(newer.id);
+
+    const { GET } = await import('@/app/api/coach/athletes/[athleteId]/ai-plan-builder/intake/latest/route');
+    const request = new Request(`http://localhost/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`);
+
+    const response = await GET(request, { params: { athleteId } } as any);
+    expect(response.status).toBe(200);
+
+    const json = await response.json();
+    expect(json.error).toBeNull();
+    expect(json.data?.intakeResponse?.id).toBe(newer.id);
+  });
 });
