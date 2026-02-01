@@ -74,7 +74,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await createAthlete({ coachId: 'dev-coach', id: athleteId });
 
     await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
-    await expect(page.getByText('AI Plan Builder')).toBeVisible();
+    await expect(page.getByText('Plan Builder')).toBeVisible();
 
     // Coach UI must not expose internal/system language.
     const forbidden = [
@@ -105,8 +105,22 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await page.getByTestId('apb-generate-intake-ai').click();
     await intakeOk;
 
-    await expect(page.getByTestId('apb-athlete-summary')).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByTestId('apb-athlete-summary')).not.toContainText('{');
+    await expect(page.getByTestId('apb-athlete-brief')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('apb-athlete-brief')).toContainText('Athlete Brief');
+
+    // Athlete Brief must not leak raw/internal keys or JSON/array formatting.
+    const athleteBriefForbidden = [
+      'coach_notes:',
+      'disciplines:',
+      'training_plan_day_of_week',
+      'training_plan_frequency',
+      'training_plan_week_of_month',
+      '[',
+      ']',
+    ];
+    for (const text of athleteBriefForbidden) {
+      await expect(page.locator('body')).not.toContainText(text);
+    }
     await page.screenshot({ path: testInfo.outputPath('apb-01-athlete-info.png'), fullPage: true });
 
     // 2) Generate plan preview (choose dates so sessions fall near "today").
@@ -336,7 +350,7 @@ test.describe.skip('AI Plan Builder v1: legacy coach UI (deprecated)', () => {
       await createAthlete({ coachId: 'dev-coach', id: athleteId });
 
       await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
-      await expect(page.getByText('AI Plan Builder')).toBeVisible();
+      await expect(page.getByText('Plan Builder')).toBeVisible();
 
       // Coach UI must not expose internal/system language.
       await expect(page.getByText('Raw profile JSON')).toHaveCount(0);
