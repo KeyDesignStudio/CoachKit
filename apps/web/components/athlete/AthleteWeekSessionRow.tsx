@@ -109,6 +109,7 @@ export function AthleteWeekSessionRow({
   const segments = item.discipline === 'BRICK' ? asStructureSegments(item.workoutStructure) : null;
 
   const isRecordedFromStrava = item.origin === 'STRAVA' && item.planningStatus === 'UNPLANNED';
+  const isAiPlanBuilder = item.origin === 'AI_PLAN_BUILDER';
   const titleLabel = isRecordedFromStrava
     ? `${(item.title || 'Recorded activity').trim()} (unscheduled)`
     : item.title || disciplineLabel;
@@ -178,7 +179,21 @@ export function AthleteWeekSessionRow({
             {item.displayTimeLocal ?? ''}
           </p>
           <p className={cn(isStacked ? 'text-[11px]' : 'text-xs', 'font-normal truncate text-[var(--text)]')}>
-            {titleLabel}
+            <span className="truncate">{titleLabel}</span>
+            {isAiPlanBuilder ? (
+              <span
+                className={cn(
+                  'ml-1 inline-flex items-center rounded border px-1.5 py-0.5 align-middle',
+                  'text-[10px] leading-none font-medium',
+                  'border-sky-500/40 text-sky-700 bg-sky-50',
+                  'dark:border-sky-400/30 dark:text-sky-200 dark:bg-sky-900/20'
+                )}
+                title="AI Plan Builder session"
+                aria-label="AI Plan Builder session"
+              >
+                AI
+              </span>
+            ) : null}
           </p>
         </div>
 

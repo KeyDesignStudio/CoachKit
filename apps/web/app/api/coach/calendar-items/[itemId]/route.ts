@@ -265,6 +265,10 @@ export async function PATCH(
       const base = payload.tags !== undefined ? payload.tags : ((existing.tags ?? []) as string[]);
       const next = Array.from(new Set([...(base ?? []), APB_MANUAL_EDIT_TAG]));
       data.tags = next;
+
+      // Explicit flag so downstream materialisation can reliably detect manual overrides.
+      // (We keep the tag as a backwards-compatible signal.)
+      data.coachEdited = true;
     }
 
     if (payload.status) {
