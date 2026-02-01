@@ -57,6 +57,8 @@ export default async function AdminAiAuditsPage(props: { searchParams?: Record<s
             <option value="summarizeIntake">summarizeIntake</option>
             <option value="suggestDraftPlan">suggestDraftPlan</option>
             <option value="suggestProposalDiffs">suggestProposalDiffs</option>
+            <option value="generateSessionDetail">generateSessionDetail</option>
+            <option value="generateIntakeFromProfile">generateIntakeFromProfile</option>
           </select>
         </label>
 

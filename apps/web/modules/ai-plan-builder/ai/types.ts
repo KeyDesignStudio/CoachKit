@@ -148,3 +148,26 @@ export type GenerateSessionDetailInput = {
 export type GenerateSessionDetailResult = {
   detail: SessionDetailV1;
 };
+
+export type GenerateIntakeFromProfileInput = {
+  /**
+   * Structured, non-LLM snapshot of the athlete profile.
+   * Must be derived from known DB fields only (no hallucinated facts).
+   */
+  profile: {
+    disciplines: string[];
+    goalsText: string | null;
+    trainingPlanFrequency: string;
+    trainingPlanDayOfWeek: number | null;
+    trainingPlanWeekOfMonth: number | null;
+    coachNotes: string | null;
+  };
+};
+
+export type GenerateIntakeFromProfileResult = {
+  /**
+   * Draft intake JSON keyed by questionKey.
+   * Values must be JSON-serializable.
+   */
+  draftJson: Record<string, AiJsonValue>;
+};

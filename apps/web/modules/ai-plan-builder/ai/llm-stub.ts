@@ -11,6 +11,8 @@ import type {
   SuggestProposalDiffsResult,
   GenerateSessionDetailInput,
   GenerateSessionDetailResult,
+  GenerateIntakeFromProfileInput,
+  GenerateIntakeFromProfileResult,
 } from './types';
 
 import { DeterministicAiPlanBuilderAI } from './deterministic';
@@ -100,7 +102,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
   private readonly delegate: AiPlanBuilderAI;
   private readonly transportOverride?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
   private readonly beforeLlmCall?: (params: {
-    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs' | 'generateSessionDetail';
+    capability:
+      | 'summarizeIntake'
+      | 'suggestDraftPlan'
+      | 'suggestProposalDiffs'
+      | 'generateSessionDetail'
+      | 'generateIntakeFromProfile';
   }) => void | Promise<void>;
   private readonly onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 
@@ -108,7 +115,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
     deterministicFallback?: AiPlanBuilderAI;
     transport?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
     beforeLlmCall?: (params: {
-      capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs' | 'generateSessionDetail';
+      capability:
+        | 'summarizeIntake'
+        | 'suggestDraftPlan'
+        | 'suggestProposalDiffs'
+        | 'generateSessionDetail'
+        | 'generateIntakeFromProfile';
     }) => void | Promise<void>;
     onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
   }) {
@@ -141,7 +153,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
   }
 
   private async callOrFallback<T>(params: {
-    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs' | 'generateSessionDetail';
+    capability:
+      | 'summarizeIntake'
+      | 'suggestDraftPlan'
+      | 'suggestProposalDiffs'
+      | 'generateSessionDetail'
+      | 'generateIntakeFromProfile';
     input: unknown;
     schema: z.ZodTypeAny;
     system: string;
@@ -315,6 +332,19 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       system:
         'You are a coaching assistant. Output JSON only matching the schema. Do NOT change schedule, dates, or minutes. Only fill in objective, structure blocks, and targets.',
       deterministicFallback: () => this.delegate.generateSessionDetail(input),
+    });
+  }
+
+  async generateIntakeFromProfile(input: GenerateIntakeFromProfileInput): Promise<GenerateIntakeFromProfileResult> {
+    const redacted = redactAiJsonValue(input as unknown as AiJsonValue) as unknown as GenerateIntakeFromProfileInput;
+
+    return this.callOrFallback<GenerateIntakeFromProfileResult>({
+      capability: 'generateIntakeFromProfile',
+      input: redacted,
+      schema: z.object({ draftJson: z.record(z.any()) }).strict(),
+      system:
+        'Generate an intake draft JSON keyed by questionKey. Use only the provided profile fields. Output JSON only matching the schema.',
+      deterministicFallback: () => this.delegate.generateIntakeFromProfile(input),
     });
   }
 }

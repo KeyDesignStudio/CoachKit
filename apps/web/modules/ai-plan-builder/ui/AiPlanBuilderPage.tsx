@@ -441,40 +441,44 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
             rightAction={
               intakeLatest?.id ? (
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('submit-intake', async () => {
-                        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
-                          method: 'POST',
-                          data: { intakeResponseId: String(intakeLatest.id) },
-                        });
-                        await fetchIntakeLatest();
-                      })
-                    }
-                  >
-                    Submit
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('extract-profile', async () => {
-                        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`, {
-                          method: 'POST',
-                          data: { intakeResponseId: String(intakeLatest.id) },
-                        });
-                        await fetchProfileLatest();
-                      })
-                    }
-                  >
-                    Extract Profile
-                  </Button>
+                  {String(intakeLatest.status ?? '').toUpperCase() === 'DRAFT' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('submit-intake', async () => {
+                          await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
+                            method: 'POST',
+                            data: { intakeResponseId: String(intakeLatest.id) },
+                          });
+                          await fetchIntakeLatest();
+                        })
+                      }
+                    >
+                      Submit
+                    </Button>
+                  ) : null}
+                  {String(intakeLatest.status ?? '').toUpperCase() === 'SUBMITTED' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('extract-profile', async () => {
+                          await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`, {
+                            method: 'POST',
+                            data: { intakeResponseId: String(intakeLatest.id) },
+                          });
+                          await fetchProfileLatest();
+                        })
+                      }
+                    >
+                      Extract Profile
+                    </Button>
+                  ) : null}
                 </div>
               ) : null
             }
@@ -483,33 +487,63 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
               <div className="space-y-3">
                 <div className="text-sm text-[var(--fg-muted)]">No intake found.</div>
                 <div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="primary"
-                    data-testid="apb-create-intake"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('create-intake', async () => {
-                        const data = await request<{ intakeResponse: any }>(
-                          `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
-                          {
-                            method: 'POST',
-                            data: {},
-                          }
-                        );
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="primary"
+                      data-testid="apb-create-intake"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('create-intake', async () => {
+                          const data = await request<{ intakeResponse: any }>(
+                            `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
+                            {
+                              method: 'POST',
+                              data: {},
+                            }
+                          );
 
-                        const created = data.intakeResponse ?? null;
-                        setIntakeLatest(created);
-                        if (created?.id) {
-                          setIntakeEvidence(null);
-                          await fetchEvidence(String(created.id));
-                        }
-                      })
-                    }
-                  >
-                    {busy === 'create-intake' ? 'Creating…' : 'Create intake'}
-                  </Button>
+                          const created = data.intakeResponse ?? null;
+                          setIntakeLatest(created);
+                          if (created?.id) {
+                            setIntakeEvidence(null);
+                            await fetchEvidence(String(created.id));
+                          }
+                        })
+                      }
+                    >
+                      {busy === 'create-intake' ? 'Creating…' : 'Create intake'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      data-testid="apb-generate-intake-ai"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('generate-intake-ai', async () => {
+                          const data = await request<{ intakeResponse: any }>(
+                            `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/generate`,
+                            {
+                              method: 'POST',
+                              data: {},
+                            }
+                          );
+
+                          const created = data.intakeResponse ?? null;
+                          setIntakeLatest(created);
+                          if (created?.id) {
+                            setIntakeEvidence(null);
+                            await fetchEvidence(String(created.id));
+                          }
+                        })
+                      }
+                    >
+                      {busy === 'generate-intake-ai' ? 'Generating…' : 'Generate intake (AI)'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (

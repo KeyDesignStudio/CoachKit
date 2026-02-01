@@ -212,6 +212,84 @@ test.describe('AI Plan Builder v1: coach UI smoke (flag ON)', () => {
     await expect(page.getByText('Load an intake to view evidence.')).toHaveCount(0);
   });
 
+  test('intake empty state → generate intake (AI) creates a submitted intake and enables Extract Profile', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'iphone16pro') test.skip();
+
+    expect(process.env.DATABASE_URL, 'DATABASE_URL must be set by the test harness.').toBeTruthy();
+    expect(
+      process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true',
+      'AI_PLAN_BUILDER_V1 must be enabled by the test harness.'
+    ).toBe(true);
+
+    await setRoleCookie(page, 'COACH');
+
+    // Ensure dev coach exists (dev-auth prefers dev-coach for COACH role).
+    await createCoach({ id: 'dev-coach' });
+
+    const athleteId = nextTestId('pw_athlete_intake_ai');
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
+
+    await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
+
+    await expect(page.getByTestId('apb-tab-intake')).toBeVisible();
+    await expect(page.getByText('Latest Intake')).toBeVisible();
+    await expect(page.getByText('No intake found.')).toBeVisible();
+
+    const generateOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/generate`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
+
+    await expect(page.getByTestId('apb-generate-intake-ai')).toBeVisible();
+    await page.getByTestId('apb-generate-intake-ai').click();
+    await generateOk;
+
+    await expect(page.getByText('Intake ID:')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Status:\s*SUBMITTED/i)).toBeVisible({ timeout: 30_000 });
+
+    // Evidence should have rows.
+    await expect(page.getByText('No evidence items.')).toHaveCount(0);
+
+    // Extract Profile should now be available.
+    const extractButton = page.getByRole('button', { name: 'Extract Profile' });
+    await expect(extractButton).toBeVisible();
+    await expect(extractButton).toBeEnabled();
+
+    const extractOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
+    await extractButton.click();
+    await extractOk;
+
+    // Profile panel should now show data.
+    await expect(page.getByText('Latest Profile')).toBeVisible();
+    await expect(page.getByText('Profile ID:')).toBeVisible({ timeout: 30_000 });
+
+    // Proceed to generate a draft plan.
+    await page.getByTestId('apb-tab-plan').click();
+    await expect(page.getByTestId('apb-generate-draft')).toBeVisible();
+
+    const draftOk = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`) &&
+        res.request().method() === 'POST' &&
+        (res.status() === 200 || res.status() === 201),
+      { timeout: 60_000 }
+    );
+    await page.getByTestId('apb-generate-draft').click();
+    await draftOk;
+
+    // Draft UI should render sessions.
+    await expect(page.locator('[data-testid="apb-session"]').first()).toBeVisible({ timeout: 30_000 });
+  });
+
   test('generate → edit → persist → lock → blocked edit shows error', async ({ page }, testInfo) => {
     if (testInfo.project.name !== 'iphone16pro') test.skip();
 

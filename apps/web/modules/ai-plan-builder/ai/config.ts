@@ -25,6 +25,8 @@ function getCapabilityModeEnvVar(capability: AiCapabilityName): string {
       return 'AI_PLAN_BUILDER_AI_CAP_SUGGEST_PROPOSAL_DIFFS';
     case 'generateSessionDetail':
       return 'AI_PLAN_BUILDER_AI_CAP_GENERATE_SESSION_DETAIL';
+    case 'generateIntakeFromProfile':
+      return 'AI_PLAN_BUILDER_AI_CAP_GENERATE_INTAKE_FROM_PROFILE';
   }
 }
 
@@ -56,6 +58,8 @@ export function getAiPlanBuilderCapabilitySpecVersion(capability: AiCapabilityNa
       return 'apb.suggestProposalDiffs@v1';
     case 'generateSessionDetail':
       return 'apb.generateSessionDetail@v1';
+    case 'generateIntakeFromProfile':
+      return 'apb.generateIntakeFromProfile@v1';
   }
 }
 
@@ -82,6 +86,8 @@ export function getAiPlanBuilderLlmMaxOutputTokensFromEnv(
         return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUGGEST_PROPOSAL_DIFFS';
       case 'generateSessionDetail':
         return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_GENERATE_SESSION_DETAIL';
+      case 'generateIntakeFromProfile':
+        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_GENERATE_INTAKE_FROM_PROFILE';
     }
   })();
 

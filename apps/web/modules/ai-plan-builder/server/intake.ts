@@ -6,6 +6,10 @@ import { assertCoachOwnsAthlete } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
+import { getAiPlanBuilderAIWithHooks } from '../ai/factory';
+
+import { consumeLlmRateLimitOrThrow } from './llm-rate-limit';
+import { recordAiInvocationAudit } from './ai-invocation-audit';
 
 export const intakeDraftSchema = z.object({
   draftJson: z.unknown().optional(),
@@ -38,9 +42,126 @@ export async function createIntakeDraft(params: { coachId: string; athleteId: st
       athleteId: params.athleteId,
       coachId: params.coachId,
       status: 'DRAFT',
+      source: 'manual',
+      aiMode: null,
       draftJson: {},
+    } as Prisma.AthleteIntakeResponseUncheckedCreateInput,
+  });
+}
+
+export async function generateSubmittedIntakeFromProfile(params: { coachId: string; athleteId: string }) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const profile = await prisma.athleteProfile.findUnique({
+    where: { userId: params.athleteId },
+    select: {
+      disciplines: true,
+      goalsText: true,
+      trainingPlanFrequency: true,
+      trainingPlanDayOfWeek: true,
+      trainingPlanWeekOfMonth: true,
+      coachNotes: true,
     },
   });
+
+  if (!profile) {
+    throw new ApiError(404, 'NOT_FOUND', 'Athlete profile not found.');
+  }
+
+  let invocationMeta: { effectiveMode: 'deterministic' | 'llm'; fallbackUsed: boolean } | null = null;
+  const ctx = {
+    actorType: 'COACH' as const,
+    actorId: params.coachId,
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+  };
+
+  const ai = getAiPlanBuilderAIWithHooks({
+    beforeLlmCall: async ({ capability }) => {
+      await consumeLlmRateLimitOrThrow({
+        actorType: ctx.actorType,
+        actorId: ctx.actorId,
+        capability,
+        coachId: ctx.coachId,
+        athleteId: ctx.athleteId,
+      });
+    },
+    onInvocation: async (meta) => {
+      invocationMeta = meta as any;
+      try {
+        await recordAiInvocationAudit(meta, ctx);
+      } catch (err) {
+        // Do not block the workflow if auditing fails.
+        // eslint-disable-next-line no-console
+        console.warn('AI_INVOCATION_AUDIT_FAILED', {
+          capability: meta.capability,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  });
+
+  const generated = await ai.generateIntakeFromProfile({
+    profile: {
+      disciplines: Array.isArray(profile.disciplines) ? profile.disciplines.map(String) : [],
+      goalsText: profile.goalsText ?? null,
+      trainingPlanFrequency: String(profile.trainingPlanFrequency ?? 'AD_HOC'),
+      trainingPlanDayOfWeek: profile.trainingPlanDayOfWeek ?? null,
+      trainingPlanWeekOfMonth: profile.trainingPlanWeekOfMonth ?? null,
+      coachNotes: profile.coachNotes ?? null,
+    },
+  });
+
+  const draftJson = (generated?.draftJson ?? {}) as unknown;
+  if (draftJson === null || typeof draftJson !== 'object' || Array.isArray(draftJson)) {
+    throw new ApiError(500, 'INVALID_AI_OUTPUT', 'AI intake output must be an object.');
+  }
+
+  const entries = Object.entries(draftJson as Record<string, unknown>);
+
+  const aiMode = (() => {
+    // Note: invocationMeta is set via hook callback; TS flow analysis cannot "see" that.
+    // Use a snapshot to avoid narrowing to `never`.
+    const meta = invocationMeta as any;
+
+    // Requirement: when deterministic (or fallback), label as deterministic_fallback.
+    if (!meta) return 'unknown';
+    if (meta.effectiveMode === 'deterministic') return 'deterministic_fallback';
+    if (meta.effectiveMode === 'llm' && meta.fallbackUsed) return 'deterministic_fallback';
+    if (meta.effectiveMode === 'llm') return 'llm';
+    return String(meta.effectiveMode);
+  })();
+
+  const created = await prisma.$transaction(async (tx) => {
+    const intakeResponse = await tx.athleteIntakeResponse.create({
+      data: {
+        athleteId: params.athleteId,
+        coachId: params.coachId,
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        source: 'ai_generated',
+        aiMode,
+        draftJson: draftJson as Prisma.InputJsonValue,
+      } as Prisma.AthleteIntakeResponseUncheckedCreateInput,
+    });
+
+    if (entries.length > 0) {
+      await tx.intakeEvidence.createMany({
+        data: entries.map(([questionKey, answerJson]) => ({
+          athleteId: params.athleteId,
+          coachId: params.coachId,
+          intakeResponseId: intakeResponse.id,
+          questionKey,
+          answerJson: answerJson as Prisma.InputJsonValue,
+        })),
+      });
+    }
+
+    return { intakeResponse, evidenceCreatedCount: entries.length };
+  });
+
+  return created;
 }
 
 export async function updateIntakeDraft(params: {
