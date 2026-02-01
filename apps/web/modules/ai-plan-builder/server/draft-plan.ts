@@ -13,6 +13,10 @@ import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
+import { mapWithConcurrency } from '@/lib/concurrency';
+import { buildDeterministicSessionDetailV1, sessionDetailV1Schema } from '../rules/session-detail';
+import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
+import { recordAiInvocationAudit } from './ai-invocation-audit';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -32,6 +36,7 @@ export const draftPlanSetupV1Schema = z.object({
   maxIntensityDaysPerWeek: z.number().int().min(1).max(3),
   maxDoublesPerWeek: z.number().int().min(0).max(3),
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
+  coachGuidanceText: z.string().max(2_000).optional(),
 });
 
 export const generateDraftPlanV1Schema = z.object({
@@ -87,6 +92,7 @@ export async function generateAiDraftPlanV1(params: {
   const setup = {
     ...params.setup,
     weekStart: params.setup.weekStart ?? 'monday',
+    coachGuidanceText: params.setup.coachGuidanceText ?? '',
   };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
@@ -132,7 +138,194 @@ export async function generateAiDraftPlanV1(params: {
     },
   });
 
-  return created;
+  // Enrich sessions with schema-validated detail JSON after deterministic rows are persisted.
+  // IMPORTANT: do not do this inside an interactive transaction.
+  try {
+    await generateSessionDetailsForDraftPlan({
+      coachId: params.coachId,
+      athleteId: params.athleteId,
+      draftPlanId: created.id,
+    });
+  } catch {
+    // Draft generation should still succeed even if enrichment fails.
+  }
+
+  return prisma.aiPlanDraft.findUniqueOrThrow({
+    where: { id: created.id },
+    include: {
+      weeks: { orderBy: [{ weekIndex: 'asc' }] },
+      sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
+    },
+  });
+}
+
+async function getAthleteSummaryTextForSessionDetail(params: { coachId: string; athleteId: string; setup: any }) {
+  const row = await prisma.athleteProfileAI.findFirst({
+    where: { coachId: params.coachId, athleteId: params.athleteId, status: 'APPROVED' as any },
+    orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
+    select: { extractedSummaryText: true },
+  });
+
+  if (row?.extractedSummaryText) return row.extractedSummaryText;
+
+  const weeklyMinutesTarget = (() => {
+    const v = params.setup?.weeklyAvailabilityMinutes;
+    if (typeof v === 'number') return v;
+    if (v && typeof v === 'object') {
+      return Object.values(v as Record<string, number>).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    }
+    return 0;
+  })();
+
+  const days = Array.isArray(params.setup?.weeklyAvailabilityDays) ? params.setup.weeklyAvailabilityDays.length : 0;
+  const risk = String(params.setup?.riskTolerance ?? 'med');
+  const emphasis = String(params.setup?.disciplineEmphasis ?? 'balanced');
+
+  return `Athlete summary (fallback): ${days} days/week, ~${weeklyMinutesTarget} min/week target, riskTolerance=${risk}, emphasis=${emphasis}.`;
+}
+
+export async function generateSessionDetailsForDraftPlan(params: {
+  coachId: string;
+  athleteId: string;
+  draftPlanId: string;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const draft = await prisma.aiPlanDraft.findUnique({
+    where: { id: params.draftPlanId },
+    select: {
+      id: true,
+      athleteId: true,
+      coachId: true,
+      setupJson: true,
+      sessions: {
+        orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+        select: {
+          id: true,
+          weekIndex: true,
+          ordinal: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          detailJson: true,
+          detailInputHash: true,
+          detailGeneratedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
+    throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+  }
+
+  const setup = draft.setupJson as any;
+  const athleteSummaryText = await getAthleteSummaryTextForSessionDetail({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    setup,
+  });
+
+  const weeklyMinutesTarget = (() => {
+    const v = setup?.weeklyAvailabilityMinutes;
+    if (typeof v === 'number') return v;
+    if (v && typeof v === 'object') {
+      return Object.values(v as Record<string, number>).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    }
+    return 0;
+  })();
+
+  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
+  const effectiveMode = getAiPlanBuilderEffectiveMode('generateSessionDetail');
+  const now = new Date();
+
+  await mapWithConcurrency(draft.sessions, 4, async (s) => {
+    const input = {
+      athleteSummaryText,
+      constraints: {
+        riskTolerance: setup?.riskTolerance,
+        maxIntensityDaysPerWeek: setup?.maxIntensityDaysPerWeek,
+        longSessionDay: setup?.longSessionDay ?? null,
+        weeklyMinutesTarget,
+      },
+      session: {
+        weekIndex: s.weekIndex,
+        dayOfWeek: s.dayOfWeek,
+        discipline: s.discipline,
+        type: s.type,
+        durationMinutes: s.durationMinutes,
+      },
+    };
+
+    const detailInputHash = computeStableSha256(input);
+
+    if (s.detailJson && s.detailInputHash === detailInputHash) return;
+
+    try {
+      const result = await ai.generateSessionDetail(input as any);
+      const parsed = sessionDetailV1Schema.safeParse((result as any)?.detail);
+      const detail = parsed.success
+        ? parsed.data
+        : buildDeterministicSessionDetailV1({
+            discipline: s.discipline as any,
+            type: s.type,
+            durationMinutes: s.durationMinutes,
+          });
+
+      await prisma.aiPlanDraftSession.update({
+        where: { id: s.id },
+        data: {
+          detailJson: detail as unknown as Prisma.InputJsonValue,
+          detailInputHash,
+          detailGeneratedAt: now,
+          detailMode: effectiveMode,
+        },
+      });
+    } catch {
+      // Defensive catch-all: persist deterministic minimal detail and write a metadata-only audit row.
+      const detail = buildDeterministicSessionDetailV1({
+        discipline: s.discipline as any,
+        type: s.type,
+        durationMinutes: s.durationMinutes,
+      });
+
+      await prisma.aiPlanDraftSession.update({
+        where: { id: s.id },
+        data: {
+          detailJson: detail as unknown as Prisma.InputJsonValue,
+          detailInputHash,
+          detailGeneratedAt: now,
+          detailMode: 'deterministic',
+        },
+      });
+
+      await recordAiInvocationAudit(
+        {
+          capability: 'generateSessionDetail',
+          specVersion: getAiPlanBuilderCapabilitySpecVersion('generateSessionDetail'),
+          effectiveMode,
+          provider: 'unknown',
+          model: null,
+          inputHash: computeStableSha256(input),
+          outputHash: computeStableSha256({ detail }),
+          durationMs: 0,
+          maxOutputTokens: null,
+          timeoutMs: null,
+          retryCount: 0,
+          fallbackUsed: true,
+          errorCode: 'PIPELINE_EXCEPTION',
+        },
+        {
+          actorType: 'COACH',
+          actorId: params.coachId,
+          coachId: params.coachId,
+          athleteId: params.athleteId,
+        }
+      );
+    }
+  });
 }
 
 

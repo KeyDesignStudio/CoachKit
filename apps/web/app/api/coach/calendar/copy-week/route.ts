@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         where: {
           coachId: user.id,
           athleteId: payload.athleteId,
+          origin: null,
           deletedAt: null,
           date: {
             gte: fromWeekStart,
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
         },
         select: {
           id: true,
+          origin: true,
           date: true,
           plannedStartTimeLocal: true,
           title: true,
@@ -93,10 +95,10 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const conflictMap = new Map<string, { id: string }>();
+      const conflictMap = new Map<string, { id: string; origin: string | null }>();
       existingTargets.forEach((item) => {
         const key = buildConflictKey(item.date, item.plannedStartTimeLocal, item.title, item.templateId);
-        conflictMap.set(key, { id: item.id });
+        conflictMap.set(key, { id: item.id, origin: item.origin ?? null });
       });
 
       const dataToCreate: Prisma.CalendarItemCreateManyInput[] = [];
@@ -123,8 +125,15 @@ export async function POST(request: NextRequest) {
           if (hasConflict) {
             const conflict = conflictMap.get(key);
             if (conflict) {
-              conflictsToDelete.add(conflict.id);
-              conflictMap.delete(key);
+              if (conflict.origin == null) {
+                conflictsToDelete.add(conflict.id);
+                conflictMap.delete(key);
+              } else {
+                // Never delete non-manual items (e.g. AI Plan Builder, provider-synced).
+                // Also avoid creating overlapping duplicates on top of them.
+                skippedCount += 1;
+                continue;
+              }
             }
           }
 
@@ -156,7 +165,12 @@ export async function POST(request: NextRequest) {
       }
 
       if (payload.mode === 'overwrite' && conflictsToDelete.size) {
-        await tx.calendarItem.deleteMany({ where: { id: { in: Array.from(conflictsToDelete) } } });
+        await tx.calendarItem.deleteMany({
+          where: {
+            id: { in: Array.from(conflictsToDelete) },
+            origin: null,
+          },
+        });
       }
 
       if (dataToCreate.length) {

@@ -33,8 +33,8 @@ exports[`AI Plan Builder v1 (Tranche 7A: diff preview + approve/publish) > T7A.1
       "weekIndex": 3,
     },
     {
-      "afterTotalMinutes": 335,
-      "beforeTotalMinutes": 335,
+      "afterTotalMinutes": 340,
+      "beforeTotalMinutes": 340,
       "items": [],
       "weekIndex": 4,
     },

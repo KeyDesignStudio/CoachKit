@@ -14,8 +14,15 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
+import { sessionDetailV1Schema } from '../rules/session-detail';
+import { AiPlanBuilderCoachV1 } from './AiPlanBuilderCoachV1';
 
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
+  const showDebugUi = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_APB_DEBUG_UI === '1';
+  if (!showDebugUi) {
+    return <AiPlanBuilderCoachV1 athleteId={athleteId} />;
+  }
+
   const { request } = useApi();
 
   const formatApiErrorMessage = useCallback((e: ApiClientError) => {
@@ -440,40 +447,44 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
             rightAction={
               intakeLatest?.id ? (
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('submit-intake', async () => {
-                        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
-                          method: 'POST',
-                          data: { intakeResponseId: String(intakeLatest.id) },
-                        });
-                        await fetchIntakeLatest();
-                      })
-                    }
-                  >
-                    Submit
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('extract-profile', async () => {
-                        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`, {
-                          method: 'POST',
-                          data: { intakeResponseId: String(intakeLatest.id) },
-                        });
-                        await fetchProfileLatest();
-                      })
-                    }
-                  >
-                    Extract Profile
-                  </Button>
+                  {String(intakeLatest.status ?? '').toUpperCase() === 'DRAFT' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('submit-intake', async () => {
+                          await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
+                            method: 'POST',
+                            data: { intakeResponseId: String(intakeLatest.id) },
+                          });
+                          await fetchIntakeLatest();
+                        })
+                      }
+                    >
+                      Submit
+                    </Button>
+                  ) : null}
+                  {String(intakeLatest.status ?? '').toUpperCase() === 'SUBMITTED' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('extract-profile', async () => {
+                          await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`, {
+                            method: 'POST',
+                            data: { intakeResponseId: String(intakeLatest.id) },
+                          });
+                          await fetchProfileLatest();
+                        })
+                      }
+                    >
+                      Extract Profile
+                    </Button>
+                  ) : null}
                 </div>
               ) : null
             }
@@ -482,33 +493,63 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
               <div className="space-y-3">
                 <div className="text-sm text-[var(--fg-muted)]">No intake found.</div>
                 <div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="primary"
-                    data-testid="apb-create-intake"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      runAction('create-intake', async () => {
-                        const data = await request<{ intakeResponse: any }>(
-                          `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
-                          {
-                            method: 'POST',
-                            data: {},
-                          }
-                        );
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="primary"
+                      data-testid="apb-create-intake"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('create-intake', async () => {
+                          const data = await request<{ intakeResponse: any }>(
+                            `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`,
+                            {
+                              method: 'POST',
+                              data: {},
+                            }
+                          );
 
-                        const created = data.intakeResponse ?? null;
-                        setIntakeLatest(created);
-                        if (created?.id) {
-                          setIntakeEvidence(null);
-                          await fetchEvidence(String(created.id));
-                        }
-                      })
-                    }
-                  >
-                    {busy === 'create-intake' ? 'Creating…' : 'Create intake'}
-                  </Button>
+                          const created = data.intakeResponse ?? null;
+                          setIntakeLatest(created);
+                          if (created?.id) {
+                            setIntakeEvidence(null);
+                            await fetchEvidence(String(created.id));
+                          }
+                        })
+                      }
+                    >
+                      {busy === 'create-intake' ? 'Creating…' : 'Create intake'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      data-testid="apb-generate-intake-ai"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        runAction('generate-intake-ai', async () => {
+                          const data = await request<{ intakeResponse: any }>(
+                            `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/generate`,
+                            {
+                              method: 'POST',
+                              data: {},
+                            }
+                          );
+
+                          const created = data.intakeResponse ?? null;
+                          setIntakeLatest(created);
+                          if (created?.id) {
+                            setIntakeEvidence(null);
+                            await fetchEvidence(String(created.id));
+                          }
+                        })
+                      }
+                    >
+                      {busy === 'generate-intake-ai' ? 'Generating…' : 'Generate intake (AI)'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -955,6 +996,9 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                             const isSessionLocked = Boolean(s.locked);
                             const isSessionEditDisabled = busy !== null || isWeekLocked || isSessionLocked;
                             const isSessionLockToggleDisabled = busy !== null || isWeekLocked;
+
+                            const detailParsed = sessionDetailV1Schema.safeParse(s.detailJson);
+                            const detail = detailParsed.success ? detailParsed.data : null;
                             return (
                           <div
                             key={String(s.id)}
@@ -1012,6 +1056,58 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                 Locked
                               </label>
                             </div>
+
+                            {detail?.objective ? (
+                              <div className="mt-2 text-sm text-[var(--fg-muted)]" data-testid="apb-session-objective">
+                                {detail.objective}
+                              </div>
+                            ) : null}
+
+                            {detail?.structure?.length ? (
+                              <details
+                                className="mt-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2"
+                                data-testid="apb-session-details"
+                              >
+                                <summary
+                                  className="cursor-pointer text-sm font-medium"
+                                  data-testid="apb-session-details-toggle"
+                                >
+                                  Details
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                  {detail.structure.map((b, idx) => {
+                                    const parts: string[] = [];
+                                    if (typeof (b as any).durationMinutes === 'number') {
+                                      parts.push(`${Number((b as any).durationMinutes)}m`);
+                                    }
+                                    if (typeof (b as any).distanceMeters === 'number') {
+                                      parts.push(`${Number((b as any).distanceMeters)}m`);
+                                    }
+                                    const intensityParts: string[] = [];
+                                    if ((b as any).intensity?.zone) intensityParts.push(String((b as any).intensity.zone));
+                                    if (typeof (b as any).intensity?.rpe === 'number') intensityParts.push(`RPE ${Number((b as any).intensity.rpe)}`);
+                                    return (
+                                      <div
+                                        key={`${String(s.id)}_block_${idx}`}
+                                        className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2"
+                                        data-testid="apb-session-detail-block"
+                                      >
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div className="text-xs font-medium">
+                                            {String((b as any).blockType).toUpperCase()}
+                                            {parts.length ? ` · ${parts.join(' · ')}` : ''}
+                                          </div>
+                                          {intensityParts.length ? (
+                                            <div className="text-xs text-[var(--fg-muted)]">{intensityParts.join(' · ')}</div>
+                                          ) : null}
+                                        </div>
+                                        <div className="mt-1 whitespace-pre-wrap text-sm">{String((b as any).steps ?? '')}</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </details>
+                            ) : null}
 
                             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                               <div>

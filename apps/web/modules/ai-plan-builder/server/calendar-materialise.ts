@@ -137,18 +137,32 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             origin: APB_CALENDAR_ORIGIN,
             sourceActivityId: { in: desiredSourceIds },
           },
-          select: { sourceActivityId: true, tags: true, status: true, deletedAt: true, plannedStartTimeLocal: true },
+          select: {
+            sourceActivityId: true,
+            coachEdited: true,
+            tags: true,
+            status: true,
+            deletedAt: true,
+            plannedStartTimeLocal: true,
+          },
         })
       : [];
 
     const existingBySourceId = new Map<
       string,
-      { tags: string[]; status: CalendarItemStatus; deletedAt: Date | null; plannedStartTimeLocal: string | null }
+      {
+        coachEdited: boolean;
+        tags: string[];
+        status: CalendarItemStatus;
+        deletedAt: Date | null;
+        plannedStartTimeLocal: string | null;
+      }
     >(
       existing
         .filter(
           (e): e is {
             sourceActivityId: string;
+            coachEdited: boolean;
             tags: string[];
             status: CalendarItemStatus;
             deletedAt: Date | null;
@@ -160,6 +174,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             [
               String(e.sourceActivityId),
               {
+                coachEdited: Boolean((e as any).coachEdited ?? false),
                 tags: (e.tags ?? []) as string[],
                 status: e.status,
                 deletedAt: e.deletedAt,
@@ -175,7 +190,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       const sourceActivityId = `${APB_SOURCE_PREFIX}${s.id}`;
       const existingItem = existingBySourceId.get(sourceActivityId) ?? null;
       const existingTags = existingItem?.tags ?? [];
-      const isManuallyEdited = existingTags.includes(APB_MANUAL_EDIT_TAG);
+      const isManuallyEdited = Boolean(existingItem?.coachEdited) || existingTags.includes(APB_MANUAL_EDIT_TAG);
 
       const dayKey = computeSessionDayKey({
         eventDate,
@@ -223,6 +238,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           coachId: params.coachId,
           date,
           plannedStartTimeLocal: null,
+          coachEdited: false,
           origin: APB_CALENDAR_ORIGIN,
           planningStatus: 'PLANNED',
           sourceActivityId,

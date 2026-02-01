@@ -5,6 +5,10 @@ import type {
   SuggestDraftPlanResult,
   SuggestProposalDiffsInput,
   SuggestProposalDiffsResult,
+  GenerateSessionDetailInput,
+  GenerateSessionDetailResult,
+  GenerateIntakeFromProfileInput,
+  GenerateIntakeFromProfileResult,
 } from './types';
 
 /**
@@ -40,4 +44,16 @@ export interface AiPlanBuilderAI {
    * Outputs: ordered diff ops + rationale text + lock-respect signal.
    */
   suggestProposalDiffs(input: SuggestProposalDiffsInput): Promise<SuggestProposalDiffsResult>;
+
+  /**
+   * Generate rich, structured content for a single already-determined session.
+   * Must NOT change schedule/topology (caller owns skeleton).
+   */
+  generateSessionDetail(input: GenerateSessionDetailInput): Promise<GenerateSessionDetailResult>;
+
+  /**
+   * Generate a submitted-ready intake draft from known athlete profile fields.
+   * Intended for bootstrapping intake when evidence is missing.
+   */
+  generateIntakeFromProfile(input: GenerateIntakeFromProfileInput): Promise<GenerateIntakeFromProfileResult>;
 }

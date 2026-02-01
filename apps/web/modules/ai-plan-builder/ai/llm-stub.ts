@@ -9,6 +9,10 @@ import type {
   SuggestDraftPlanResult,
   SuggestProposalDiffsInput,
   SuggestProposalDiffsResult,
+  GenerateSessionDetailInput,
+  GenerateSessionDetailResult,
+  GenerateIntakeFromProfileInput,
+  GenerateIntakeFromProfileResult,
 } from './types';
 
 import { DeterministicAiPlanBuilderAI } from './deterministic';
@@ -23,6 +27,8 @@ import {
   getAiPlanBuilderLlmMaxOutputTokensFromEnv,
   getAiPlanBuilderLlmRetryCountFromEnv,
 } from './config';
+
+import { sessionDetailV1Schema } from '../rules/session-detail';
 
 const summarizeIntakeResultSchema = z
   .object({
@@ -96,7 +102,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
   private readonly delegate: AiPlanBuilderAI;
   private readonly transportOverride?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
   private readonly beforeLlmCall?: (params: {
-    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+    capability:
+      | 'summarizeIntake'
+      | 'suggestDraftPlan'
+      | 'suggestProposalDiffs'
+      | 'generateSessionDetail'
+      | 'generateIntakeFromProfile';
   }) => void | Promise<void>;
   private readonly onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 
@@ -104,7 +115,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
     deterministicFallback?: AiPlanBuilderAI;
     transport?: ReturnType<typeof getAiPlanBuilderLlmTransport>;
     beforeLlmCall?: (params: {
-      capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+      capability:
+        | 'summarizeIntake'
+        | 'suggestDraftPlan'
+        | 'suggestProposalDiffs'
+        | 'generateSessionDetail'
+        | 'generateIntakeFromProfile';
     }) => void | Promise<void>;
     onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
   }) {
@@ -137,7 +153,12 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
   }
 
   private async callOrFallback<T>(params: {
-    capability: 'summarizeIntake' | 'suggestDraftPlan' | 'suggestProposalDiffs';
+    capability:
+      | 'summarizeIntake'
+      | 'suggestDraftPlan'
+      | 'suggestProposalDiffs'
+      | 'generateSessionDetail'
+      | 'generateIntakeFromProfile';
     input: unknown;
     schema: z.ZodTypeAny;
     system: string;
@@ -298,6 +319,32 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       system:
         'Propose safe plan diffs based on triggers and locks. Output JSON only with diff ops and rationale text.',
       deterministicFallback: () => this.delegate.suggestProposalDiffs(input),
+    });
+  }
+
+  async generateSessionDetail(input: GenerateSessionDetailInput): Promise<GenerateSessionDetailResult> {
+    const redacted = redactAiJsonValue(input as unknown as AiJsonValue) as unknown as GenerateSessionDetailInput;
+
+    return this.callOrFallback<GenerateSessionDetailResult>({
+      capability: 'generateSessionDetail',
+      input: redacted,
+      schema: z.object({ detail: sessionDetailV1Schema }).strict(),
+      system:
+        'You are a coaching assistant. Output JSON only matching the schema. Do NOT change schedule, dates, or minutes. Only fill in objective, structure blocks, and targets.',
+      deterministicFallback: () => this.delegate.generateSessionDetail(input),
+    });
+  }
+
+  async generateIntakeFromProfile(input: GenerateIntakeFromProfileInput): Promise<GenerateIntakeFromProfileResult> {
+    const redacted = redactAiJsonValue(input as unknown as AiJsonValue) as unknown as GenerateIntakeFromProfileInput;
+
+    return this.callOrFallback<GenerateIntakeFromProfileResult>({
+      capability: 'generateIntakeFromProfile',
+      input: redacted,
+      schema: z.object({ draftJson: z.record(z.any()) }).strict(),
+      system:
+        'Generate an intake draft JSON keyed by questionKey. Use only the provided profile fields. Output JSON only matching the schema.',
+      deterministicFallback: () => this.delegate.generateIntakeFromProfile(input),
     });
   }
 }

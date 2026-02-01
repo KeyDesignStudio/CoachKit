@@ -543,6 +543,7 @@ model CalendarItem {
   athletePlanInstanceId  String?
   date                   DateTime // use date-only at midnight; interpret in timezone in UI
   plannedStartTimeLocal  String?
+  coachEdited            Boolean            @default(false)
   // For non-planned sessions (e.g. recorded-from-provider).
   origin                 String?
   planningStatus         String?
@@ -794,6 +795,9 @@ model AthleteIntakeResponse {
   coachId   String // User.id
 
   status      AthleteIntakeResponseStatus @default(DRAFT)
+  // Metadata about how this intake was created. Keep out of draftJson so evidence remains clean.
+  source      String?
+  aiMode      String?
   draftJson   Json?
   submittedAt DateTime?
 
@@ -1039,6 +1043,12 @@ model AiPlanDraftSession {
   durationMinutes Int
   notes           String?
 
+  // v1: per-session structured detail (AI-authored) + idempotency hash.
+  detailJson        Json?
+  detailInputHash   String?
+  detailGeneratedAt DateTime?
+  detailMode        String?
+
   locked Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -1048,8 +1058,10 @@ model AiPlanDraftSession {
 
   feedback AthleteSessionFeedback[]
 
-  @@unique([draftId, weekIndex, ordinal])
+  @@index([draftId, id])
+  @@index([draftId, detailInputHash])
   @@index([draftId, weekIndex])
+  @@unique([draftId, weekIndex, ordinal])
 }
 
 model PlanChangeProposal {

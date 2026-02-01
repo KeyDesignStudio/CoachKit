@@ -1,5 +1,6 @@
 import type { DraftPlanSetupV1, DraftPlanV1 } from '../rules/draft-generator';
 import type { PlanDiffOp } from '../server/adaptation-diff';
+import type { SessionDetailV1 } from '../rules/session-detail';
 
 export type AiPlanBuilderAIMode = 'deterministic' | 'llm';
 
@@ -120,4 +121,53 @@ export type SuggestProposalDiffsResult = {
 
   /** Whether the diff respects current lock state. */
   respectsLocks: boolean;
+};
+
+export type GenerateSessionDetailInput = {
+  /** Stable, non-PII summary (from summarizeIntake if present). */
+  athleteSummaryText: string;
+
+  /** Snapshot of setup constraints for context only (must NOT change topology). */
+  constraints: {
+    riskTolerance: 'low' | 'med' | 'high';
+    maxIntensityDaysPerWeek: number;
+    longSessionDay: number | null;
+    weeklyMinutesTarget: number;
+  };
+
+  /** The deterministic skeleton session fields. */
+  session: {
+    weekIndex: number;
+    dayOfWeek: number;
+    discipline: string;
+    type: string;
+    durationMinutes: number;
+  };
+};
+
+export type GenerateSessionDetailResult = {
+  detail: SessionDetailV1;
+};
+
+export type GenerateIntakeFromProfileInput = {
+  /**
+   * Structured, non-LLM snapshot of the athlete profile.
+   * Must be derived from known DB fields only (no hallucinated facts).
+   */
+  profile: {
+    disciplines: string[];
+    goalsText: string | null;
+    trainingPlanFrequency: string;
+    trainingPlanDayOfWeek: number | null;
+    trainingPlanWeekOfMonth: number | null;
+    coachNotes: string | null;
+  };
+};
+
+export type GenerateIntakeFromProfileResult = {
+  /**
+   * Draft intake JSON keyed by questionKey.
+   * Values must be JSON-serializable.
+   */
+  draftJson: Record<string, AiJsonValue>;
 };

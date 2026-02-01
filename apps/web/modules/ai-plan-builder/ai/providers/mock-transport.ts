@@ -28,7 +28,7 @@ export class MockTransport implements AiPlanBuilderLlmTransport {
     if (next !== undefined) {
       payload = next;
     } else {
-      const m = String(params.system).match(/\bAPB_CAPABILITY\s*=\s*(summarizeIntake|suggestDraftPlan|suggestProposalDiffs)\b/);
+      const m = String(params.system).match(/\bAPB_CAPABILITY\s*=\s*(summarizeIntake|suggestDraftPlan|suggestProposalDiffs|generateSessionDetail)\b/);
       const capability = m?.[1] ?? '';
       let parsedInput: unknown;
       try {
@@ -43,6 +43,7 @@ export class MockTransport implements AiPlanBuilderLlmTransport {
       if (capability === 'summarizeIntake') payload = await this.deterministic.summarizeIntake(parsedInput as any);
       else if (capability === 'suggestDraftPlan') payload = await this.deterministic.suggestDraftPlan(parsedInput as any);
       else if (capability === 'suggestProposalDiffs') payload = await this.deterministic.suggestProposalDiffs(parsedInput as any);
+      else if (capability === 'generateSessionDetail') payload = await this.deterministic.generateSessionDetail(parsedInput as any);
       else {
         throw new AiPlanBuilderLlmError('PROVIDER_ERROR', 'Mock transport missing or invalid capability tag.', {
           isRetryable: false,
