@@ -125,6 +125,9 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
     });
 
+    const maxWeekIndex = sessions.reduce((acc, s) => Math.max(acc, Number(s.weekIndex) || 0), -1);
+    const effectiveWeeksToEvent = Math.max(weeksToEvent, maxWeekIndex >= 0 ? maxWeekIndex + 1 : 0);
+
     const desiredSourceIds = sessions.map((s) => `${APB_SOURCE_PREFIX}${s.id}`);
 
     const existing = desiredSourceIds.length
@@ -191,7 +194,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
 
       const dayKey = computeSessionDayKey({
         eventDate,
-        weeksToEvent,
+        weeksToEvent: effectiveWeeksToEvent,
         weekStart,
         weekIndex: s.weekIndex,
         dayOfWeek: s.dayOfWeek,
@@ -297,6 +300,8 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       proposalId: params.proposalId ?? null,
       publishedPlanId: draft.id,
       timeZone,
+      weeksToEventConfigured: weeksToEvent,
+      weeksToEventEffective: effectiveWeeksToEvent,
       upsertedCount,
       softDeletedCount,
     });

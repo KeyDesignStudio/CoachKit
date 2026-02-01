@@ -131,7 +131,21 @@ test.describe('Mobile screenshots', () => {
 
     await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: /Weekly Calendar/i })).toBeVisible();
-    await page.screenshot({ path: screenshotPath(testInfo, 'coach-calendar-week-apb-user-athlete-one.png'), fullPage: true });
+
+    // Week 1 (weekIndex=0)
+    await page.screenshot({ path: screenshotPath(testInfo, 'coach-calendar-week1-apb-user-athlete-one.png'), fullPage: true });
+
+    // Week 2 (weekIndex=1)
+    const week2Resp = page.waitForResponse((r) => r.url().includes('/api/coach/calendar?') && r.request().method() === 'GET');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await week2Resp;
+    await page.screenshot({ path: screenshotPath(testInfo, 'coach-calendar-week2-apb-user-athlete-one.png'), fullPage: true });
+
+    // Week 3 (weekIndex=2)
+    const week3Resp = page.waitForResponse((r) => r.url().includes('/api/coach/calendar?') && r.request().method() === 'GET');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await week3Resp;
+    await page.screenshot({ path: screenshotPath(testInfo, 'coach-calendar-week3-apb-user-athlete-one.png'), fullPage: true });
   });
 
   test('captures coach calendar week, month, and menu drawer', async ({ page }, testInfo) => {
