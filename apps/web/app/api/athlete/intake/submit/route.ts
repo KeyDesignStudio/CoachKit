@@ -11,7 +11,9 @@ export async function POST(request: Request) {
     const payload = athleteIntakeSubmissionSchema.safeParse(body);
 
     if (!payload.success) {
-      return failure('VALIDATION_ERROR', 'Invalid intake payload.', 400, payload.error.flatten());
+      return failure('VALIDATION_ERROR', 'Invalid intake payload.', 400, undefined, {
+        diagnostics: payload.error.flatten(),
+      });
     }
 
     const coachId = await requireAthleteCoachId(user.id);
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     const brief = await ensureAthleteBrief({
       athleteId: user.id,
       coachId,
-      intake: payload.data,
+      intake: payload.data as any,
     });
 
     return success({ submission, brief: brief.brief });

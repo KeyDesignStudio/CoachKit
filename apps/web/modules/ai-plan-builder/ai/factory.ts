@@ -15,7 +15,8 @@ export type AiPlanBuilderHooks = {
       | 'suggestDraftPlan'
       | 'suggestProposalDiffs'
       | 'generateSessionDetail'
-      | 'generateIntakeFromProfile';
+      | 'generateIntakeFromProfile'
+      | 'generateAthleteBriefFromIntake';
   }) => void | Promise<void>;
   onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 };
