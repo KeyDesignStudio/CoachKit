@@ -6,7 +6,8 @@ export type AiCapabilityName =
   | 'suggestDraftPlan'
   | 'suggestProposalDiffs'
   | 'generateSessionDetail'
-  | 'generateIntakeFromProfile';
+  | 'generateIntakeFromProfile'
+  | 'generateAthleteBriefFromIntake';
 
 export type AiUsageAudit = {
   capability: AiCapabilityName;

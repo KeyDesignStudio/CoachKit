@@ -9,6 +9,8 @@ import type {
   GenerateSessionDetailResult,
   GenerateIntakeFromProfileInput,
   GenerateIntakeFromProfileResult,
+  GenerateAthleteBriefFromIntakeInput,
+  GenerateAthleteBriefFromIntakeResult,
 } from './types';
 
 /**
@@ -56,4 +58,11 @@ export interface AiPlanBuilderAI {
    * Intended for bootstrapping intake when evidence is missing.
    */
   generateIntakeFromProfile(input: GenerateIntakeFromProfileInput): Promise<GenerateIntakeFromProfileResult>;
+
+  /**
+   * Generate a concise Athlete Brief from the latest intake + profile metadata.
+   */
+  generateAthleteBriefFromIntake(
+    input: GenerateAthleteBriefFromIntakeInput
+  ): Promise<GenerateAthleteBriefFromIntakeResult>;
 }

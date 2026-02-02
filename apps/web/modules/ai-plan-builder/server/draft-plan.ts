@@ -13,6 +13,7 @@ import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
+import { getLatestAthleteBriefJson } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import {
   buildDeterministicSessionDetailV1,
@@ -20,6 +21,7 @@ import {
   reflowSessionDetailV1ToNewTotal,
   sessionDetailV1Schema,
 } from '../rules/session-detail';
+import { formatAthleteBriefAsSummaryText } from '../rules/athlete-brief';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 
@@ -162,7 +164,8 @@ export async function generateAiDraftPlanV1(params: {
   };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
-  const suggestion = await ai.suggestDraftPlan({ setup: setup as any });
+  const athleteBrief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
+  const suggestion = await ai.suggestDraftPlan({ setup: setup as any, athleteBrief });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup, planJson: suggestion.planJson });
   const setupHash = computeStableSha256(setup);
 
@@ -226,6 +229,9 @@ export async function generateAiDraftPlanV1(params: {
 }
 
 async function getAthleteSummaryTextForSessionDetail(params: { coachId: string; athleteId: string; setup: any }) {
+  const brief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
+  if (brief) return formatAthleteBriefAsSummaryText(brief);
+
   const row = await prisma.athleteProfileAI.findFirst({
     where: { coachId: params.coachId, athleteId: params.athleteId, status: 'APPROVED' as any },
     orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
@@ -289,6 +295,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
   }
 
   const setup = draft.setupJson as any;
+  const athleteBrief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
   const athleteSummaryText = await getAthleteSummaryTextForSessionDetail({
     coachId: params.coachId,
     athleteId: params.athleteId,
@@ -314,6 +321,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
 
     const input = {
       athleteSummaryText,
+      athleteBrief,
       constraints: {
         riskTolerance: setup?.riskTolerance,
         maxIntensityDaysPerWeek: setup?.maxIntensityDaysPerWeek,
