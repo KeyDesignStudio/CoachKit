@@ -50,7 +50,7 @@ test.describe('Coach calendar month: planned icon parity', () => {
     const dd = String(tomorrow.getDate()).padStart(2, '0');
     const dayKey = `${yyyy}-${mm}-${dd}`;
 
-    const title = buildAiPlanBuilderSessionTitle({ discipline: 'run', type: 'endurance' });
+    const title = buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'tempo' });
 
     // Ensure required dev users exist for DISABLE_AUTH mode.
     await prisma.user.upsert({
@@ -95,7 +95,25 @@ test.describe('Coach calendar month: planned icon parity', () => {
         origin: 'AI_PLAN_BUILDER',
         planningStatus: 'PLANNED',
         sourceActivityId: 'apb:pw-month-icon-parity',
-        discipline: 'RUN',
+        discipline: 'BIKE',
+        subtype: 'tempo',
+        title: 'tempo',
+        plannedDurationMinutes: 45,
+        status: 'PLANNED',
+        deletedAt: null,
+        deletedByUserId: null,
+        tags: [],
+        equipment: [],
+      } as any,
+    });
+
+    const manualItem = await prisma.calendarItem.create({
+      data: {
+        athleteId,
+        coachId,
+        date: new Date(`${dayKey}T00:00:00.000Z`),
+        plannedStartTimeLocal: '06:30',
+        discipline: 'BIKE',
         title,
         plannedDurationMinutes: 45,
         status: 'PLANNED',
@@ -133,6 +151,10 @@ test.describe('Coach calendar month: planned icon parity', () => {
       const row = page.getByLabel(`Open workout ${String(item.id)}`);
       await expect(row).toBeVisible();
       await expect(row).toContainText(title);
+
+      const manualRow = page.getByLabel(`Open workout ${String(manualItem.id)}`);
+      await expect(manualRow).toBeVisible();
+      await expect(manualRow).toContainText(title);
 
       // Planned status icon is the Material Symbol "event".
       await expect(row.locator('span.material-symbols-outlined', { hasText: 'event' })).toHaveCount(1);
