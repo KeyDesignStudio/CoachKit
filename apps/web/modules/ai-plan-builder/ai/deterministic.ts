@@ -9,12 +9,15 @@ import type {
   SuggestProposalDiffsResult,
   GenerateIntakeFromProfileInput,
   GenerateIntakeFromProfileResult,
+  GenerateAthleteBriefFromIntakeInput,
+  GenerateAthleteBriefFromIntakeResult,
 } from './types';
 
 import { extractProfileDeterministic } from '../rules/profile-extractor';
 import { generateDraftPlanDeterministicV1 } from '../rules/draft-generator';
 import { suggestProposalDiffsDeterministicV1 } from '../rules/proposal-diff-generator';
 import { buildDeterministicSessionDetailV1 } from '../rules/session-detail';
+import { buildAthleteBriefDeterministic, athleteBriefSchema } from '../rules/athlete-brief';
 
 import { computeAiUsageAudit, recordAiUsageAudit, type AiInvocationAuditMeta } from './audit';
 import { getAiPlanBuilderCapabilitySpecVersion } from './config';
@@ -164,6 +167,26 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
       durationMinutes: Number(input?.session?.durationMinutes ?? 0),
     });
 
+    const briefParsed = athleteBriefSchema.safeParse(input?.athleteBrief ?? null);
+    if (briefParsed.success) {
+      const brief = briefParsed.data;
+      const focusLines = [...(brief.coachFocusNotes ?? []), ...(brief.riskFlags ?? [])].filter(Boolean).slice(0, 2);
+      if (focusLines.length) {
+        detail.targets.notes = `${detail.targets.notes} Focus: ${focusLines.join(' ')}`.slice(0, 500);
+      }
+
+      const cueAdditions = [...(brief.motivationTriggers ?? []), ...(brief.coachingStyleSummary ?? [])]
+        .filter(Boolean)
+        .slice(0, 2);
+      if (cueAdditions.length) {
+        detail.cues = Array.from(new Set([...(detail.cues ?? []), ...cueAdditions])).slice(0, 3);
+      }
+
+      if (brief.riskFlags?.length) {
+        detail.safetyNotes = `${detail.safetyNotes ?? ''} ${brief.riskFlags.join(' ')}`.trim().slice(0, 800);
+      }
+    }
+
     const result = { detail };
 
     const audit = computeAiUsageAudit({ capability: 'generateSessionDetail', mode: 'deterministic', input, output: result });
@@ -233,6 +256,49 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
       await this.onInvocation({
         capability: 'generateIntakeFromProfile',
         specVersion: getAiPlanBuilderCapabilitySpecVersion('generateIntakeFromProfile'),
+        effectiveMode: 'deterministic',
+        provider: 'deterministic',
+        model: null,
+        inputHash: audit.inputHash,
+        outputHash: audit.outputHash,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        maxOutputTokens: null,
+        timeoutMs: null,
+        retryCount: 0,
+        fallbackUsed: false,
+        errorCode: null,
+      });
+    }
+
+    if (this.shouldRecordAudit) {
+      recordAiUsageAudit(audit);
+    }
+
+    return result;
+  }
+
+  async generateAthleteBriefFromIntake(
+    input: GenerateAthleteBriefFromIntakeInput
+  ): Promise<GenerateAthleteBriefFromIntakeResult> {
+    const startedAt = Date.now();
+
+    const brief = buildAthleteBriefDeterministic({
+      intake: input.intake as any,
+      profile: input.profile ?? null,
+    });
+
+    const result = { brief };
+    const audit = computeAiUsageAudit({
+      capability: 'generateAthleteBriefFromIntake',
+      mode: 'deterministic',
+      input,
+      output: result,
+    });
+
+    if (this.onInvocation) {
+      await this.onInvocation({
+        capability: 'generateAthleteBriefFromIntake',
+        specVersion: getAiPlanBuilderCapabilitySpecVersion('generateAthleteBriefFromIntake'),
         effectiveMode: 'deterministic',
         provider: 'deterministic',
         model: null,

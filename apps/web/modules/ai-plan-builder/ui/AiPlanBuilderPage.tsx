@@ -555,53 +555,8 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="text-sm">
-                  <span className="font-medium">Intake ID:</span> {String(intakeLatest.id)}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Status:</span> {String(intakeLatest.status ?? 'UNKNOWN')}
-                </div>
-                <details className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3">
-                  <summary className="cursor-pointer text-sm font-medium">Raw intake JSON</summary>
-                  <pre className="mt-3 max-h-64 overflow-auto text-xs">
-                    {JSON.stringify(intakeLatest, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
-          </Block>
-
-          <Block title="Evidence">
-            {!intakeLatest?.id ? (
-              <div className="text-sm text-[var(--fg-muted)]">Load an intake to view evidence.</div>
-            ) : intakeEvidence === null ? (
-              <div className="text-sm text-[var(--fg-muted)]">Loading…</div>
-            ) : intakeEvidence.length === 0 ? (
-              <div className="text-sm text-[var(--fg-muted)]">No evidence items.</div>
-            ) : (
-              <div className="space-y-2">
-                {intakeEvidence.map((ev) => (
-                  <div
-                    key={String(ev?.id ?? `${ev?.kind ?? 'evidence'}-${ev?.createdAt ?? Math.random()}`)}
-                    className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3"
-                  >
-                    <div className="text-sm">
-                      <span className="font-medium">Kind:</span> {String(ev?.kind ?? 'unknown')}
-                    </div>
-                    {ev?.url && (
-                      <div className="text-sm">
-                        <span className="font-medium">URL:</span> {String(ev.url)}
-                      </div>
-                    )}
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-sm">Raw</summary>
-                      <pre className="mt-2 max-h-56 overflow-auto text-xs">
-                        {JSON.stringify(ev, null, 2)}
-                      </pre>
-                    </details>
-                  </div>
-                ))}
+              <div className="text-sm text-[var(--fg-muted)]">
+                Intake received. The Athlete Brief is used for plan generation and session detail.
               </div>
             )}
           </Block>

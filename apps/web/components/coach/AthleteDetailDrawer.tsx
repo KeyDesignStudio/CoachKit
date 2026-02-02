@@ -34,6 +34,18 @@ type AthleteProfile = {
   };
 };
 
+type AthleteBrief = {
+  coachingStyleSummary: string[];
+  motivationTriggers: string[];
+  riskFlags: string[];
+  goalContext: string[];
+  swimProfile: string[];
+  bikeProfile: string[];
+  runProfile: string[];
+  lifeConstraints: string[];
+  coachFocusNotes: string[];
+};
+
 type PainHistoryItem = {
   calendarItemId: string;
   date: string;
@@ -70,6 +82,19 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [brief, setBrief] = useState<AthleteBrief | null>(null);
+
+  const briefSections = [
+    { title: 'Coaching style', items: brief?.coachingStyleSummary ?? [] },
+    { title: 'Motivation', items: brief?.motivationTriggers ?? [] },
+    { title: 'Risks', items: brief?.riskFlags ?? [] },
+    { title: 'Goal context', items: brief?.goalContext ?? [] },
+    { title: 'Swim', items: brief?.swimProfile ?? [] },
+    { title: 'Bike', items: brief?.bikeProfile ?? [] },
+    { title: 'Run', items: brief?.runProfile ?? [] },
+    { title: 'Life constraints', items: brief?.lifeConstraints ?? [] },
+    { title: 'Coach focus', items: brief?.coachFocusNotes ?? [] },
+  ];
 
   // Form state
   const [name, setName] = useState('');
@@ -121,15 +146,17 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       setLoading(true);
       setError('');
       try {
-        const [athleteData, painData, journalData] = await Promise.all([
+        const [athleteData, painData, journalData, briefData] = await Promise.all([
           request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`),
           request<{ history: PainHistoryItem[] }>(`/api/coach/athletes/${athleteId}/pain-history`),
           request<{ entries: JournalEntry[] }>(`/api/coach/athletes/${athleteId}/journal`),
+          request<{ brief: AthleteBrief | null }>(`/api/coach/athletes/${athleteId}/athlete-brief/latest`),
         ]);
 
         setAthlete(athleteData.athlete);
         setPainHistory(painData.history);
         setJournalEntries(journalData.entries);
+        setBrief(briefData.brief ?? null);
 
         // Populate form
         setName(athleteData.athlete.user.name || '');
@@ -486,6 +513,30 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                     />
                   </div>
                 </div>
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+                <h3 className="text-lg font-semibold">Athlete Brief</h3>
+                {!brief ? (
+                  <p className="text-sm text-[var(--muted)]">No Athlete Brief available yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {briefSections.map((section) =>
+                      section.items.length ? (
+                        <div key={section.title} className="space-y-1">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                            {section.title}
+                          </div>
+                          <ul className="list-disc space-y-1 pl-4 text-sm text-[var(--text)]">
+                            {section.items.map((item, idx) => (
+                              <li key={`${section.title}-${idx}`}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                )}
               </section>
               </div>
 

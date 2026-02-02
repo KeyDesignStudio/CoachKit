@@ -22,6 +22,7 @@ function fallbackTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/athlete/workouts')) return 'Workouts';
   if (pathname.startsWith('/athlete/notifications')) return 'Notifications';
   if (pathname.startsWith('/athlete/settings')) return 'Settings';
+  if (pathname.startsWith('/athlete/intake')) return 'Intake';
 
   return 'CoachKit';
 }

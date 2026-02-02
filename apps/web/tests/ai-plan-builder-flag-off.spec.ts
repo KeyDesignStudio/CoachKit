@@ -12,6 +12,8 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
 }
 
 test.describe('AI Plan Builder v1: flag OFF gating', () => {
+  const apbEnabled = process.env.AI_PLAN_BUILDER_V1 === '1' || process.env.AI_PLAN_BUILDER_V1 === 'true';
+  test.skip(apbEnabled, 'AI_PLAN_BUILDER_V1 is enabled; skipping OFF-gating assertions.');
   test('unrelated route is unaffected when disabled', async ({ page }) => {
     const res = await page.request.get('/api/health/db');
     expect(res.status()).toBe(200);
