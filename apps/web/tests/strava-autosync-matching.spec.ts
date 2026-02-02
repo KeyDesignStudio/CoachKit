@@ -35,7 +35,7 @@ test.describe('Strava autosync matching (deterministic)', () => {
     // Run cron to ingest STRAVA_STUB activities.
     const cron = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=2', {
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+        'x-cron-secret': `${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
       data: {},
     });
@@ -86,7 +86,7 @@ test.describe('Strava autosync matching (deterministic)', () => {
     // Idempotency: re-run cron and ensure no duplicates for unplanned items.
     const cron2 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=2', {
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+        'x-cron-secret': `${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
       data: {},
     });

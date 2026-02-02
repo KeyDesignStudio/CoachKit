@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { generateAiDraftPlanV1 } from '@/modules/ai-plan-builder/server/draft-plan';
 import { approveAndPublishPlanChangeProposal } from '@/modules/ai-plan-builder/server/approve-and-publish';
 import { APB_CALENDAR_ORIGIN, APB_SOURCE_PREFIX } from '@/modules/ai-plan-builder/server/calendar-materialise';
+import { sessionDetailV1Schema } from '@/modules/ai-plan-builder/rules/session-detail';
 
 import { GET as coachCalendarGET } from '@/app/api/coach/calendar/route';
 import { POST as planWeeksPublishPOST } from '@/app/api/coach/plan-weeks/publish/route';
@@ -110,6 +111,18 @@ describe('AI Plan Builder v1 (calendar materialisation on approve-and-publish)',
     expect(items.length).toBe(sessions.length);
     expect(new Set(items.map((i) => i.sourceActivityId)).size).toBe(sessions.length);
     expect(items.every((i) => i.deletedAt == null)).toBe(true);
+
+    const sessionWithDetail = sessions.find((s) => s.detailJson != null);
+    expect(sessionWithDetail, 'Expected at least one draft session to have detailJson.').toBeTruthy();
+
+    const parsed = sessionDetailV1Schema.safeParse((sessionWithDetail as any)?.detailJson);
+    expect(parsed.success, 'Expected detailJson to conform to SessionDetailV1 schema.').toBe(true);
+    const objectiveSnippet = parsed.success ? parsed.data.objective.slice(0, 12) : '';
+
+    const item = await findApbCalendarItem(athleteId, String((sessionWithDetail as any).id));
+    expect(item).not.toBeNull();
+    expect(item?.workoutDetail ?? '').toContain(objectiveSnippet);
+    expect(item?.workoutDetail ?? '').toContain('Warmup');
   });
 
   it('is idempotent: re-running approve-and-publish does not create duplicates', async () => {

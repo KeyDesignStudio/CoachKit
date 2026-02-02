@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+import { prisma } from '../lib/prisma';
+
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE') {
   await page.context().addCookies([
     {
@@ -26,6 +28,11 @@ test.describe('Strava autosync (debounced)', () => {
     // Ensure dev fixtures exist (coach+athlete+athleteProfile+stravaConnection).
     const fixtures = await request.post('/api/dev/strava/test-fixtures');
     expect(fixtures.ok()).toBeTruthy();
+
+    // Clean up any prior run residue for the fixed activity id.
+    // This test depends on observing the transition from "not present" → "present".
+    await prisma.calendarItem.deleteMany({ where: { athleteId: 'dev-athlete', origin: 'STRAVA', sourceActivityId: '999' } });
+    await prisma.completedActivity.deleteMany({ where: { athleteId: 'dev-athlete', source: 'STRAVA', externalActivityId: '999' } as any });
 
     // Webhook marks athlete as pending (no heavy sync inline).
     const webhook = await request.post('/api/integrations/strava/webhook', {
@@ -56,7 +63,7 @@ test.describe('Strava autosync (debounced)', () => {
     // Backfill endpoint should surface it and remain idempotent (safety net).
     const cron2 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+        'x-cron-secret': `${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
       data: {},
     });
@@ -76,7 +83,7 @@ test.describe('Strava autosync (debounced)', () => {
     // Repeat cron; should not duplicate.
     const cron3 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+        'x-cron-secret': `${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
       data: {},
     });
@@ -133,7 +140,7 @@ test.describe('Strava autosync (debounced)', () => {
     // Cron runs again, but tombstone must prevent resurrection.
     const cronAfterDelete = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
+        'x-cron-secret': `${process.env.CRON_SECRET ?? 'playwright-cron-secret'}`,
       },
       data: {},
     });

@@ -70,7 +70,11 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await setRoleCookie(page, 'COACH');
     await createCoach({ id: 'dev-coach' });
 
-    const athleteId = nextTestId('pw_apb_coach_v1');
+    // In auth-disabled mode, switching to ATHLETE uses the `dev-athlete` identity.
+    // Keep the whole flow on that athlete so coach ↔ athlete checks are meaningful.
+    const athleteId = 'dev-athlete';
+    const runTag = String(Date.now());
+    const expectedCoachNote = `Coach note: keep this aerobic (${runTag}).`;
     await createAthlete({ coachId: 'dev-coach', id: athleteId });
 
     await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
@@ -188,7 +192,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     const originalObjectiveText = await firstSession.getByTestId('apb-session-objective').innerText();
     const editedDuration = String(durationInt + 5);
     await firstSession.getByTestId('apb-session-duration').fill(editedDuration);
-    await firstSession.getByTestId('apb-session-notes').fill('Coach note: keep this aerobic.');
+    await firstSession.getByTestId('apb-session-notes').fill(expectedCoachNote);
 
     // Also edit an objective and a block step to validate server-side detail updates.
     await firstSession.getByTestId('apb-session-objective-input').fill(`Aerobic endurance (${editedDuration} min)`);
@@ -202,7 +206,14 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       { timeout: 60_000 }
     );
     await firstSession.getByTestId('apb-session-save').click();
-    await saveOk;
+    const saveRes = await saveOk;
+    const saveJson = (await saveRes.json().catch(() => null)) as any;
+    const savedSessions = Array.isArray(saveJson?.data?.draftPlan?.sessions) ? saveJson.data.draftPlan.sessions : [];
+    const savedSession = savedSessions.find(
+      (s: any) =>
+        Number(s?.durationMinutes ?? 0) === Number(editedDuration) && String(s?.notes ?? '') === String(expectedCoachNote)
+    );
+    expect(savedSession, 'Expected saved draft plan session in PATCH response.').toBeTruthy();
 
     // Objective should update (and be different from the pre-edit version).
     await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText(originalObjectiveText);
@@ -217,11 +228,10 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       expect(minutes % 5).toBe(0);
     }
 
-    await page.reload({ waitUntil: 'networkidle' });
-    const firstSessionAfter = page.getByTestId('apb-session').first();
-    await expect(firstSessionAfter.getByTestId('apb-session-duration')).toHaveValue(editedDuration);
-    await expect(firstSessionAfter.getByTestId('apb-session-notes')).toHaveValue('Coach note: keep this aerobic.');
-    await expect(firstSessionAfter.getByTestId('apb-session-objective')).toContainText(`(${editedDuration} min)`);
+    // Persistence check: the PATCH response is our server-confirmed write.
+    // Avoid querying the shared `latest` draft plan in E2E because other tests may mutate it.
+    expect(Number((savedSession as any)?.durationMinutes ?? 0)).toBe(Number(editedDuration));
+    expect(String((savedSession as any)?.notes ?? '')).toBe(expectedCoachNote);
 
     // Session lock: locking an individual session should disable its edits.
     const sessionLockOk = page.waitForResponse(
@@ -231,10 +241,10 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
         res.status() === 200,
       { timeout: 60_000 }
     );
-    await firstSessionAfter.getByTestId('apb-session-lock-toggle').click();
+    await firstSession.getByTestId('apb-session-lock-toggle').click();
     await sessionLockOk;
-    await expect(firstSessionAfter.getByTestId('apb-session-duration')).toBeDisabled();
-    await expect(firstSessionAfter.getByTestId('apb-session-save')).toBeDisabled();
+    await expect(firstSession.getByTestId('apb-session-duration')).toBeDisabled();
+    await expect(firstSession.getByTestId('apb-session-save')).toBeDisabled();
 
     // Unlock session before publishing.
     const sessionUnlockOk = page.waitForResponse(
@@ -244,8 +254,12 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
         res.status() === 200,
       { timeout: 60_000 }
     );
-    await firstSessionAfter.getByTestId('apb-session-lock-toggle').click();
+    await firstSession.getByTestId('apb-session-lock-toggle').click();
     await sessionUnlockOk;
+
+    // Reload sanity check: page still loads (even if plan preview isn't shown by default).
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByText('Plan Builder')).toBeVisible({ timeout: 60_000 });
 
     // 4) Publish and verify the coach calendar contains APB-origin sessions.
     const publishOk = page.waitForResponse(
@@ -296,6 +310,16 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     );
     expect(apbItems.length).toBeGreaterThan(0);
 
+    // Target a published APB session that has BOTH structured workout detail and the coach-edited notes.
+    const apbTarget =
+      apbItems.find(
+        (it) =>
+          typeof it?.workoutDetail === 'string' &&
+          it.workoutDetail.includes('Warmup') &&
+          String(it?.notes ?? '').includes(expectedCoachNote)
+      ) ?? null;
+    expect(apbTarget).not.toBeNull();
+
     const weekStart: 'sunday' | 'monday' = 'sunday';
     const weekKeys = apbItems
       .map((it) => String(it?.date ?? ''))
@@ -330,7 +354,8 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await page.mouse.click(10, (vp?.height ?? 800) - 10);
     await expect(dropdown).toHaveCount(0);
 
-    const sessionRows = page.locator('[data-athlete-week-session-row="v2"]');
+    const weekView = page.locator('[data-coach-week-view-version="coach-week-v2"]').first();
+    const sessionRows = weekView.locator('[data-athlete-week-session-row="v2"]');
     // Some plans may start next week depending on weekStart; walk forward until sessions appear.
     for (let i = 0; i < 6; i += 1) {
       const count = await sessionRows.count();
@@ -342,13 +367,22 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(sessionRows.first()).toBeVisible({ timeout: 60_000 });
     await page.screenshot({ path: testInfo.outputPath('apb-04-calendar-week-1.png'), fullPage: true });
 
-    await page.getByRole('button', { name: 'Next' }).click();
-    await expect(sessionRows.first()).toBeVisible({ timeout: 60_000 });
-    await page.screenshot({ path: testInfo.outputPath('apb-05-calendar-week-2.png'), fullPage: true });
+    // Calendar truth (coach): verify the published calendar item has BOTH structured detail + coach notes.
+    // Use the specific item ID we already located via the coach calendar API to avoid slow/flaky UI scanning.
+    const coachItemRes = await page.request.get(`/api/coach/calendar-items/${encodeURIComponent(String((apbTarget as any).id))}`);
+    expect(coachItemRes.ok()).toBeTruthy();
+    const coachItemJson = (await coachItemRes.json().catch(() => null)) as any;
+    const coachItem = coachItemJson?.data?.item ?? coachItemJson?.data ?? coachItemJson;
+    expect(String(coachItem?.workoutDetail ?? '')).toContain('Warmup');
+    expect(String(coachItem?.notes ?? '')).toContain(expectedCoachNote);
 
-    await page.getByRole('button', { name: 'Next' }).click();
-    await expect(sessionRows.first()).toBeVisible({ timeout: 60_000 });
-    await page.screenshot({ path: testInfo.outputPath('apb-06-calendar-week-3.png'), fullPage: true });
+    // Athlete truth (UI): athlete can see the same structured detail + coach notes.
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto(`/athlete/workouts/${encodeURIComponent(String((apbTarget as any).id))}`, { waitUntil: 'networkidle' });
+    await expect(page.getByText('Description')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('Warmup')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('Coach Notes')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(expectedCoachNote)).toBeVisible({ timeout: 60_000 });
 
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);

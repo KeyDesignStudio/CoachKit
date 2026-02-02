@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
+import { createAthlete, createCoach } from '../modules/ai-plan-builder/tests/seed';
 
 async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   await page.context().addCookies([
@@ -25,9 +25,12 @@ test.describe('AI Plan Builder v1: core flow', () => {
 
     await setRoleCookie(page, 'COACH');
 
-    await seedDevCoachAndAthlete();
-
-    const athleteId = 'dev-athlete';
+    // Use a unique athlete id to avoid cross-test interference with other specs that rely on
+    // the shared auth-disabled `dev-athlete` identity.
+    const runTag = String(Date.now());
+    await createCoach({ id: 'dev-coach' });
+    const athleteId = `pw-athlete-${runTag}`;
+    await createAthlete({ coachId: 'dev-coach', id: athleteId });
 
     // Create intake draft.
     const createDraftRes = await page.request.post(
@@ -35,7 +38,7 @@ test.describe('AI Plan Builder v1: core flow', () => {
       {
         data: {
           draftJson: {
-            goals: 'Build aerobic base',
+            goals: `Build aerobic base (${runTag})`,
             availability: { daysPerWeek: 4 },
             injuries: [],
           },
@@ -55,10 +58,10 @@ test.describe('AI Plan Builder v1: core flow', () => {
         data: {
           intakeResponseId,
           draftJson: {
-            goals: 'Build aerobic base',
+            goals: `Build aerobic base (${runTag})`,
             availability: { daysPerWeek: 4 },
             injuries: [],
-            notes: 'Prefer mornings',
+            notes: `Prefer mornings (${runTag})`,
           },
         },
       }

@@ -34,6 +34,7 @@ export async function publishAiDraftPlan(params: {
         athleteId: true,
         coachId: true,
         planJson: true,
+        setupJson: true,
         visibilityStatus: true,
         publishedAt: true,
         lastPublishedHash: true,
@@ -71,6 +72,9 @@ export async function publishAiDraftPlan(params: {
 
     const summaryText = previous ? summarizePlanChanges(previous.planJson, draft.planJson) : 'Initial publish';
 
+    const legacySetupFromPlan = (draft.planJson as any)?.setup ?? null;
+    const setupJsonToPersist = (draft.setupJson as any) ?? (legacySetupFromPlan ? (legacySetupFromPlan as Prisma.InputJsonValue) : undefined);
+
     const updated = await tx.aiPlanDraft.update({
       where: { id: draft.id },
       data: {
@@ -79,6 +83,7 @@ export async function publishAiDraftPlan(params: {
         publishedByCoachId: params.coachId ?? null,
         lastPublishedHash: hash,
         lastPublishedSummaryText: summaryText,
+        ...(setupJsonToPersist ? { setupJson: setupJsonToPersist } : {}),
         publishSnapshots: {
           create: {
             athleteId: draft.athleteId,
