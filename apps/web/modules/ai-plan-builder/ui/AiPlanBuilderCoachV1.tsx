@@ -12,14 +12,17 @@ import { Textarea } from '@/components/ui/Textarea';
 
 import { ApiClientError, useApi } from '@/components/api-client';
 
-import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices } from '../lib/week-start';
+import { DAY_NAMES_SUN0, dayOffsetFromWeekStart, daySortKey, normalizeWeekStart, orderedDayIndices } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
 import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
+import { addDaysToDayKey, getTodayDayKey, isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
 
 type SetupState = {
   weekStart: 'monday' | 'sunday';
-  eventDate: string;
-  weeksToEvent: number;
+  startDate: string;
+  // Stored as legacy `eventDate` in setupJson for backward compatibility.
+  completionDate: string;
+  weeksToEventOverride: number | null;
   weeklyAvailabilityDays: number[];
   weeklyAvailabilityMinutes: number;
   disciplineEmphasis: 'balanced' | 'swim' | 'bike' | 'run';
@@ -166,6 +169,42 @@ function stableDayList(days: number[]): number[] {
   return Array.from(new Set(days)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6).sort((a, b) => a - b);
 }
 
+function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
+  if (!isDayKey(dayKey)) return dayKey;
+  const date = parseDayKeyToUtcDate(dayKey);
+  const jsDay = date.getUTCDay();
+  const startJsDay = weekStart === 'sunday' ? 0 : 1;
+  const diff = (jsDay - startJsDay + 7) % 7;
+  return addDaysToDayKey(dayKey, -diff);
+}
+
+function deriveWeeksToCompletionFromDates(params: {
+  startDate: string;
+  completionDate: string;
+  weekStart: 'monday' | 'sunday';
+}): number | null {
+  if (!isDayKey(params.startDate) || !isDayKey(params.completionDate)) return null;
+  const startWeek = startOfWeekDayKeyWithWeekStart(params.startDate, params.weekStart);
+  const endWeek = startOfWeekDayKeyWithWeekStart(params.completionDate, params.weekStart);
+  if (!isDayKey(startWeek) || !isDayKey(endWeek)) return null;
+  const start = parseDayKeyToUtcDate(startWeek);
+  const end = parseDayKeyToUtcDate(endWeek);
+  const diffDays = Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  const weeks = Math.floor(diffDays / 7) + 1;
+  return Math.max(1, Math.min(52, weeks));
+}
+
+function formatDayKeyShort(dayKey: string): string {
+  if (!isDayKey(dayKey)) return String(dayKey ?? '');
+  const d = parseDayKeyToUtcDate(dayKey);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dow = dayNames[d.getUTCDay()] ?? '';
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mon = monthNames[d.getUTCMonth()] ?? '';
+  return `${dow} ${dd} ${mon}`.trim();
+}
+
 export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
 
@@ -193,8 +232,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
   const [setup, setSetup] = useState<SetupState>(() => ({
     weekStart: 'monday',
-    eventDate: new Date().toISOString().slice(0, 10),
-    weeksToEvent: 12,
+    startDate: new Date().toISOString().slice(0, 10),
+    completionDate: new Date().toISOString().slice(0, 10),
+    weeksToEventOverride: null,
     weeklyAvailabilityDays: [1, 2, 3, 5, 6],
     weeklyAvailabilityMinutes: 360,
     disciplineEmphasis: 'balanced',
@@ -211,6 +251,59 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   );
 
   const orderedDays = useMemo(() => orderedDayIndices(effectiveWeekStart), [effectiveWeekStart]);
+
+  const athleteTimeZone = useMemo(() => {
+    const tz = (draftPlanLatest as any)?.athlete?.user?.timezone;
+    if (typeof tz === 'string' && tz.trim()) return tz.trim();
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return 'UTC';
+    }
+  }, [draftPlanLatest]);
+
+  // Hydrate setup defaults from latest draft setupJson when available.
+  useEffect(() => {
+    const setupJson = (draftPlanLatest as any)?.setupJson;
+    if (!setupJson || typeof setupJson !== 'object') return;
+
+    const weekStart = normalizeWeekStart((setupJson as any)?.weekStart);
+    const completionDate = (setupJson as any)?.completionDate ?? (setupJson as any)?.eventDate;
+    const startDate = (setupJson as any)?.startDate;
+    const weeksToEventOverrideRaw = (setupJson as any)?.weeksToEventOverride;
+
+    setSetup((prev) => {
+      const nextStart = typeof startDate === 'string' && isDayKey(startDate) ? startDate : prev.startDate;
+      const nextCompletion =
+        typeof completionDate === 'string' && isDayKey(completionDate) ? completionDate : prev.completionDate;
+
+      const nextOverride =
+        typeof weeksToEventOverrideRaw === 'number' && Number.isFinite(weeksToEventOverrideRaw)
+          ? Math.max(1, Math.min(52, Math.round(weeksToEventOverrideRaw)))
+          : null;
+
+      return {
+        ...prev,
+        weekStart,
+        startDate: nextStart,
+        completionDate: nextCompletion,
+        weeksToEventOverride: nextOverride,
+      };
+    });
+  }, [draftPlanLatest]);
+
+  const derivedWeeksToCompletion = useMemo(() => {
+    const w = deriveWeeksToCompletionFromDates({
+      startDate: setup.startDate,
+      completionDate: setup.completionDate,
+      weekStart: setup.weekStart,
+    });
+    return w;
+  }, [setup.completionDate, setup.startDate, setup.weekStart]);
+
+  const effectiveWeeksToCompletion = useMemo(() => {
+    return setup.weeksToEventOverride ?? derivedWeeksToCompletion ?? 1;
+  }, [derivedWeeksToCompletion, setup.weeksToEventOverride]);
 
   const fetchIntakeLatest = useCallback(async () => {
     const data = await request<{ intakeResponse: any | null }>(
@@ -316,11 +409,24 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     setBusy('generate-plan');
     setError(null);
     try {
+      const startDate = isDayKey(setup.startDate) ? setup.startDate : null;
+      const completionDate = isDayKey(setup.completionDate) ? setup.completionDate : null;
+      if (!startDate) {
+        throw new ApiClientError(400, 'VALIDATION_ERROR', 'Starting date is required.');
+      }
+      if (!completionDate) {
+        throw new ApiClientError(400, 'VALIDATION_ERROR', 'Completion date is required.');
+      }
+
       const payload = {
         ...setup,
+        startDate,
+        eventDate: completionDate,
+        completionDate,
         weeklyAvailabilityDays: stableDayList(setup.weeklyAvailabilityDays),
         weeklyAvailabilityMinutes: Number(setup.weeklyAvailabilityMinutes) || 0,
-        weeksToEvent: Number(setup.weeksToEvent) || 1,
+        weeksToEvent: effectiveWeeksToCompletion,
+        weeksToEventOverride: setup.weeksToEventOverride ?? undefined,
         maxIntensityDaysPerWeek: Number(setup.maxIntensityDaysPerWeek) || 1,
         maxDoublesPerWeek: Number(setup.maxDoublesPerWeek) || 0,
         longSessionDay: setup.longSessionDay,
@@ -344,7 +450,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchPublishStatus, request, setup]);
+  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup]);
 
   const publishPlan = useCallback(async () => {
     const id = String(draftPlanLatest?.id ?? '');
@@ -668,25 +774,74 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Event date</div>
+              <div className="mb-1 text-sm font-medium">Starting date</div>
               <Input
                 type="date"
-                value={setup.eventDate}
-                onChange={(e) => setSetup((s) => ({ ...s, eventDate: e.target.value }))}
-                data-testid="apb-event-date"
+                value={setup.startDate}
+                onChange={(e) =>
+                  setSetup((s) => ({
+                    ...s,
+                    startDate: e.target.value,
+                  }))
+                }
+                data-testid="apb-start-date"
               />
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Weeks to event</div>
+              <div className="mb-1 text-sm font-medium">Completion date</div>
               <Input
-                type="number"
-                min={1}
-                max={52}
-                value={String(setup.weeksToEvent)}
-                onChange={(e) => setSetup((s) => ({ ...s, weeksToEvent: Number(e.target.value) }))}
-                data-testid="apb-weeks-to-event"
+                type="date"
+                value={setup.completionDate}
+                onChange={(e) =>
+                  setSetup((s) => ({
+                    ...s,
+                    completionDate: e.target.value,
+                  }))
+                }
+                data-testid="apb-completion-date"
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Weeks to completion</div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={setup.weeksToEventOverride == null ? 'primary' : 'secondary'}
+                  onClick={() =>
+                    setSetup((s) => ({
+                      ...s,
+                      weeksToEventOverride: s.weeksToEventOverride == null ? (derivedWeeksToCompletion ?? 1) : null,
+                    }))
+                  }
+                  data-testid="apb-weeks-auto-toggle"
+                >
+                  {setup.weeksToEventOverride == null ? 'Auto' : 'Manual'}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={52}
+                  disabled={busy != null || setup.weeksToEventOverride == null}
+                  value={String(effectiveWeeksToCompletion)}
+                  onChange={(e) =>
+                    setSetup((s) => ({
+                      ...s,
+                      weeksToEventOverride: Math.max(1, Math.min(52, Number(e.target.value) || 1)),
+                    }))
+                  }
+                  data-testid="apb-weeks-to-completion"
+                />
+
+                <div className="text-xs text-[var(--fg-muted)]">
+                  Derived from dates: {derivedWeeksToCompletion ?? '—'} week{(derivedWeeksToCompletion ?? 0) === 1 ? '' : 's'}
+                </div>
+              </div>
             </div>
 
             <div>
@@ -777,28 +932,59 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             <div className="space-y-4">
               {sessionsByWeek.map(([weekIndex, sessions]) => (
                 <div key={weekIndex} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3" data-testid="apb-week">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="text-sm font-semibold">Week {Number(weekIndex) + 1}</div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={(weekLockedByIndex.get(Number(weekIndex)) ?? false) ? 'primary' : 'secondary'}
-                      disabled={busy != null}
-                      data-testid="apb-week-lock-toggle"
-                      onClick={() =>
-                        toggleWeekLock(
-                          Number(weekIndex),
-                          !(weekLockedByIndex.get(Number(weekIndex)) ?? false)
-                        )
+                  {(() => {
+                    const wIdx = Number(weekIndex);
+                    const startDate = setup.startDate;
+                    const completionDate = setup.completionDate;
+                    const weekStart = effectiveWeekStart;
+
+                    const weekCommencingDayKey = (() => {
+                      if (isDayKey(startDate)) {
+                        const week0 = startOfWeekDayKeyWithWeekStart(startDate, weekStart);
+                        return addDaysToDayKey(week0, 7 * wIdx);
                       }
-                    >
-                      {busy === `lock-week:${Number(weekIndex)}`
-                        ? 'Updating…'
-                        : (weekLockedByIndex.get(Number(weekIndex)) ?? false)
-                          ? 'Unlock week'
-                          : 'Lock week'}
-                    </Button>
-                  </div>
+
+                      if (isDayKey(completionDate)) {
+                        const completionWeekStart = startOfWeekDayKeyWithWeekStart(completionDate, weekStart);
+                        const remainingWeeks = Math.max(1, effectiveWeeksToCompletion) - 1 - wIdx;
+                        return addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
+                      }
+
+                      return '';
+                    })();
+
+                    return (
+                      <div className="mb-3 flex items-center justify-between" data-testid="apb-week-header">
+                        <div className="text-sm font-semibold" data-testid="apb-week-heading">
+                          Week {wIdx + 1}{' '}
+                          {weekCommencingDayKey ? (
+                            <span className="font-normal text-[var(--fg-muted)]" data-testid="apb-week-commencing">
+                              • Commencing {formatDayKeyShort(weekCommencingDayKey)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={(weekLockedByIndex.get(Number(weekIndex)) ?? false) ? 'primary' : 'secondary'}
+                          disabled={busy != null}
+                          data-testid="apb-week-lock-toggle"
+                          onClick={() =>
+                            toggleWeekLock(
+                              Number(weekIndex),
+                              !(weekLockedByIndex.get(Number(weekIndex)) ?? false)
+                            )
+                          }
+                        >
+                          {busy === `lock-week:${Number(weekIndex)}`
+                            ? 'Updating…'
+                            : (weekLockedByIndex.get(Number(weekIndex)) ?? false)
+                              ? 'Unlock week'
+                              : 'Lock week'}
+                        </Button>
+                      </div>
+                    );
+                  })()}
 
                   <div className="space-y-3">
                     {sessions.map((s) => {
@@ -822,16 +1008,57 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       const disciplineChoices = Array.from(new Set([selectedDiscipline, ...disciplineOptions]));
 
                       return (
-                        <div key={sessionId} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg)] px-3 py-3" data-testid="apb-session">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-sm font-medium">
-                              {DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0]}
-                              {locked ? (
-                                <span className="ml-2 rounded bg-[var(--bg-structure)] px-2 py-0.5 text-xs text-[var(--fg-muted)]">Locked</span>
-                              ) : null}
-                            </div>
+                        <div
+                          key={sessionId}
+                          className={`rounded-md border border-[var(--border-subtle)] bg-[var(--bg)] px-3 py-3 ${locked ? 'opacity-80' : ''}`}
+                          data-testid="apb-session"
+                        >
+                          {(() => {
+                            const wIdx = Number(weekIndex);
+                            const startDate = setup.startDate;
+                            const completionDate = setup.completionDate;
+                            const weekStart = effectiveWeekStart;
 
-                            <div className="flex flex-wrap items-center gap-2">
+                            const weekCommencingDayKey = (() => {
+                              if (isDayKey(startDate)) {
+                                const week0 = startOfWeekDayKeyWithWeekStart(startDate, weekStart);
+                                return addDaysToDayKey(week0, 7 * wIdx);
+                              }
+
+                              if (isDayKey(completionDate)) {
+                                const completionWeekStart = startOfWeekDayKeyWithWeekStart(completionDate, weekStart);
+                                const remainingWeeks = Math.max(1, effectiveWeeksToCompletion) - 1 - wIdx;
+                                return addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
+                              }
+
+                              return '';
+                            })();
+
+                            const sessionDayKey = weekCommencingDayKey
+                              ? addDaysToDayKey(weekCommencingDayKey, dayOffsetFromWeekStart(Number(s.dayOfWeek) ?? 0, weekStart))
+                              : '';
+
+                            return (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-medium" data-testid="apb-session-day">
+                                  {sessionDayKey ? formatDayKeyShort(sessionDayKey) : DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0]}
+                                  {locked ? (
+                                    <span className="ml-2 rounded bg-[var(--bg-structure)] px-2 py-0.5 text-xs text-[var(--fg-muted)]">Locked</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {weekLocked ? (
+                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Week is locked — unlock the week to edit sessions.</div>
+                          ) : sessionLocked ? (
+                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Session is locked — unlock the session to edit details.</div>
+                          ) : null}
+
+                          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                            <div>
+                              <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Discipline</div>
                               <Select
                                 value={selectedDiscipline}
                                 disabled={busy != null || locked}
@@ -849,61 +1076,24 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                                   </option>
                                 ))}
                               </Select>
+                            </div>
 
+                            <div>
+                              <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Session Title</div>
                               <Input
                                 value={edit.type ?? String((s as any)?.type ?? '')}
                                 disabled={busy != null || locked}
-                                data-testid="apb-session-type"
+                                data-testid="apb-session-title"
                                 onChange={(e) =>
                                   setSessionDraftEdits((m) => ({
                                     ...m,
                                     [sessionId]: { ...(m[sessionId] ?? {}), type: e.target.value },
                                   }))
                                 }
-                                placeholder="Type"
+                                placeholder="e.g. Endurance"
                               />
-
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={sessionLocked ? 'primary' : 'secondary'}
-                                disabled={busy != null || weekLocked}
-                                data-testid="apb-session-lock-toggle"
-                                onClick={() => toggleSessionLock(sessionId, !sessionLocked)}
-                              >
-                                {busy === `lock-session:${sessionId}`
-                                  ? 'Updating…'
-                                  : sessionLocked
-                                    ? 'Unlock session'
-                                    : 'Lock session'}
-                              </Button>
                             </div>
                           </div>
-
-                          {weekLocked ? (
-                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Week is locked — unlock the week to edit sessions.</div>
-                          ) : sessionLocked ? (
-                            <div className="mt-2 text-xs text-[var(--fg-muted)]">Session is locked — unlock the session to edit details.</div>
-                          ) : null}
-
-                          {objective ? (
-                            <div className="mt-2 text-sm" data-testid="apb-session-objective">
-                              {objective}
-                            </div>
-                          ) : (
-                            <div className="mt-2 text-sm text-[var(--fg-muted)]">Session detail is loading…</div>
-                          )}
-
-                          {blocks.length ? (
-                            <div className="mt-2 space-y-2" data-testid="apb-session-detail-blocks">
-                              {blocks.map((b, idx) => (
-                                <div key={idx} className="text-xs text-[var(--fg-muted)]" data-testid="apb-session-detail-block">
-                                  <span className="font-medium">{String(b.blockType).toUpperCase()}</span>
-                                  {b.durationMinutes ? ` · ${b.durationMinutes} min` : ''} — {String(b.steps)}
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
 
                           {workoutDetailPreview ? (
                             <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
@@ -914,41 +1104,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                             </div>
                           ) : null}
 
-                          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                            <div>
-                              <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Duration (min)</div>
-                              <Input
-                                value={edit.durationMinutes ?? String(s.durationMinutes ?? '')}
-                                disabled={busy != null || locked}
-                                onChange={(e) =>
-                                  setSessionDraftEdits((m) => ({
-                                    ...m,
-                                    [sessionId]: { ...(m[sessionId] ?? {}), durationMinutes: e.target.value },
-                                  }))
-                                }
-                                data-testid="apb-session-duration"
-                              />
-                              <div className="mt-1 text-xs text-[var(--fg-muted)]">Durations are adjusted to 5-minute blocks</div>
-                            </div>
-                            <div>
-                              <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Coach notes</div>
-                              <Textarea
-                                rows={2}
-                                value={edit.notes ?? String(s.notes ?? '')}
-                                disabled={busy != null || locked}
-                                onChange={(e) =>
-                                  setSessionDraftEdits((m) => ({
-                                    ...m,
-                                    [sessionId]: { ...(m[sessionId] ?? {}), notes: e.target.value },
-                                  }))
-                                }
-                                data-testid="apb-session-notes"
-                              />
-                            </div>
-                          </div>
-
                           <div className="mt-3">
-                            <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Objective (editable)</div>
+                            <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Objective</div>
                             <Input
                               value={edit.objective ?? (objective ?? '')}
                               disabled={busy != null || locked}
@@ -961,6 +1118,22 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                               }
                               placeholder="Short session objective"
                             />
+                          </div>
+
+                          <div className="mt-3">
+                            <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Duration</div>
+                            <Input
+                              value={edit.durationMinutes ?? String(s.durationMinutes ?? '')}
+                              disabled={busy != null || locked}
+                              onChange={(e) =>
+                                setSessionDraftEdits((m) => ({
+                                  ...m,
+                                  [sessionId]: { ...(m[sessionId] ?? {}), durationMinutes: e.target.value },
+                                }))
+                              }
+                              data-testid="apb-session-duration"
+                            />
+                            <div className="mt-1 text-xs text-[var(--fg-muted)]">Durations are adjusted to 5-minute blocks</div>
                           </div>
 
                           {blocks.length ? (
@@ -998,7 +1171,23 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                             </div>
                           ) : null}
 
-                          <div className="mt-2 flex items-center gap-2">
+                          <div className="mt-3">
+                            <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Coach Notes</div>
+                            <Textarea
+                              rows={3}
+                              value={edit.notes ?? String(s.notes ?? '')}
+                              disabled={busy != null || locked}
+                              onChange={(e) =>
+                                setSessionDraftEdits((m) => ({
+                                  ...m,
+                                  [sessionId]: { ...(m[sessionId] ?? {}), notes: e.target.value },
+                                }))
+                              }
+                              data-testid="apb-session-notes"
+                            />
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-2">
                             <Button
                               type="button"
                               size="sm"
@@ -1008,6 +1197,21 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                               onClick={() => saveSessionEdit(sessionId)}
                             >
                               {busy === `save-session:${sessionId}` ? 'Saving…' : 'Save'}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={sessionLocked ? 'primary' : 'secondary'}
+                              disabled={busy != null || weekLocked}
+                              data-testid="apb-session-lock-toggle"
+                              onClick={() => toggleSessionLock(sessionId, !sessionLocked)}
+                            >
+                              {busy === `lock-session:${sessionId}`
+                                ? 'Updating…'
+                                : sessionLocked
+                                  ? 'Unlock session'
+                                  : 'Lock session'}
                             </Button>
                           </div>
                         </div>

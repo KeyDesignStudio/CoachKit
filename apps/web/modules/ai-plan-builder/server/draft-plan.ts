@@ -29,8 +29,17 @@ export const createDraftPlanSchema = z.object({
 
 export const draftPlanSetupV1Schema = z.object({
   weekStart: z.enum(['monday', 'sunday']).optional().default('monday'),
-  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  weeksToEvent: z.number().int().min(1).max(52),
+  // New (v1 UX): explicit plan start and completion dates.
+  // Backward compatibility:
+  // - `eventDate` is the legacy completion date key.
+  // - `completionDate` is accepted as an alias.
+  // - `startDate` may be absent for older drafts.
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  completionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Weeks are derived from dates unless overridden.
+  weeksToEvent: z.number().int().min(1).max(52).optional(),
+  weeksToEventOverride: z.number().int().min(1).max(52).optional(),
   weeklyAvailabilityDays: z.array(z.number().int().min(0).max(6)).min(1),
   weeklyAvailabilityMinutes: z.union([
     z.number().int().min(0).max(10_000),
@@ -42,6 +51,47 @@ export const draftPlanSetupV1Schema = z.object({
   maxDoublesPerWeek: z.number().int().min(0).max(3),
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
   coachGuidanceText: z.string().max(2_000).optional(),
+}).transform((raw) => {
+  const eventDate = raw.eventDate ?? raw.completionDate;
+  if (!eventDate) {
+    throw new ApiError(400, 'INVALID_DRAFT_SETUP', 'Draft setup completionDate/eventDate must be YYYY-MM-DD.');
+  }
+
+  const weekStart = raw.weekStart ?? 'monday';
+
+  const startDate = raw.startDate;
+  const weeksDerived = (() => {
+    if (!startDate) return undefined;
+    // Derive based on week boundaries: week 1 begins at startDate's week boundary.
+    const start = new Date(`${startDate}T00:00:00.000Z`);
+    const end = new Date(`${eventDate}T00:00:00.000Z`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined;
+
+    const startJsDay = weekStart === 'sunday' ? 0 : 1;
+    const startDiff = (start.getUTCDay() - startJsDay + 7) % 7;
+    const startWeekStart = new Date(start);
+    startWeekStart.setUTCDate(startWeekStart.getUTCDate() - startDiff);
+
+    const endDiff = (end.getUTCDay() - startJsDay + 7) % 7;
+    const endWeekStart = new Date(end);
+    endWeekStart.setUTCDate(endWeekStart.getUTCDate() - endDiff);
+
+    const diffDays = Math.floor((endWeekStart.getTime() - startWeekStart.getTime()) / (24 * 60 * 60 * 1000));
+    const weeks = Math.floor(diffDays / 7) + 1;
+    return Math.max(1, Math.min(52, weeks));
+  })();
+
+  const weeksToEvent = raw.weeksToEventOverride ?? raw.weeksToEvent ?? weeksDerived;
+  if (!weeksToEvent) {
+    throw new ApiError(400, 'INVALID_DRAFT_SETUP', 'Draft setup weeksToEvent is required (or provide startDate + completionDate).');
+  }
+
+  return {
+    ...raw,
+    weekStart,
+    eventDate,
+    weeksToEvent,
+  };
 });
 
 export const generateDraftPlanV1Schema = z.object({
@@ -99,15 +149,16 @@ export async function createAiDraftPlan(params: { coachId: string; athleteId: st
 export async function generateAiDraftPlanV1(params: {
   coachId: string;
   athleteId: string;
-  setup: z.infer<typeof draftPlanSetupV1Schema>;
+  setup: unknown;
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
+  const parsedSetup = draftPlanSetupV1Schema.parse(params.setup);
   const setup = {
-    ...params.setup,
-    weekStart: params.setup.weekStart ?? 'monday',
-    coachGuidanceText: params.setup.coachGuidanceText ?? '',
+    ...parsedSetup,
+    weekStart: parsedSetup.weekStart ?? 'monday',
+    coachGuidanceText: parsedSetup.coachGuidanceText ?? '',
   };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
