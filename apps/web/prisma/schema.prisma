@@ -226,6 +226,9 @@ model User {
   aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
 
+  athleteIntakeSubmissions AthleteIntakeSubmission[] @relation("CoachToIntakeSubmissions")
+  athleteBriefs            AthleteBrief[]            @relation("CoachToAthleteBriefs")
+
   // AI Plan Builder (Tranche 10)
   aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
   aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
@@ -349,6 +352,9 @@ model AthleteProfile {
   aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
   aiPlanBuilderPublishAcks        AiPlanPublishAck[]
+
+  intakeSubmissions AthleteIntakeSubmission[]
+  athleteBriefs     AthleteBrief[]
 
   // AI Plan Builder (Tranche 10)
   aiInvocationAudits   AiInvocationAudit[]   @relation("AiInvocationAuditAthlete")
@@ -860,6 +866,43 @@ model AthleteProfileAI {
   @@unique([athleteId, evidenceHash])
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
+}
+
+model AthleteIntakeSubmission {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  answersJson Json
+  submittedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation("CoachToIntakeSubmissions", fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@index([athleteId, submittedAt])
+  @@index([coachId, submittedAt])
+}
+
+model AthleteBrief {
+  id        String @id @default(cuid())
+  athleteId String // AthleteProfile.userId
+  coachId   String // User.id
+
+  generatedAt DateTime @default(now())
+  inputHash   String
+  briefJson   Json
+  aiMode      String?
+
+  createdAt DateTime @default(now())
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation("CoachToAthleteBriefs", fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@unique([athleteId, inputHash])
+  @@index([athleteId, generatedAt])
+  @@index([coachId, generatedAt])
 }
 
 model CoachIntent {

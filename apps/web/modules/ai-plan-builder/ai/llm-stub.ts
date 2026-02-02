@@ -13,7 +13,10 @@ import type {
   GenerateSessionDetailResult,
   GenerateIntakeFromProfileInput,
   GenerateIntakeFromProfileResult,
+  GenerateAthleteBriefFromIntakeInput,
+  GenerateAthleteBriefFromIntakeResult,
 } from './types';
+import { athleteBriefSchema } from '../rules/athlete-brief';
 
 import { DeterministicAiPlanBuilderAI } from './deterministic';
 import { computeAiUsageAudit, recordAiUsageAudit, type AiInvocationAuditMeta } from './audit';
@@ -107,7 +110,8 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       | 'suggestDraftPlan'
       | 'suggestProposalDiffs'
       | 'generateSessionDetail'
-      | 'generateIntakeFromProfile';
+      | 'generateIntakeFromProfile'
+      | 'generateAthleteBriefFromIntake';
   }) => void | Promise<void>;
   private readonly onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
 
@@ -120,7 +124,8 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
         | 'suggestDraftPlan'
         | 'suggestProposalDiffs'
         | 'generateSessionDetail'
-        | 'generateIntakeFromProfile';
+        | 'generateIntakeFromProfile'
+        | 'generateAthleteBriefFromIntake';
     }) => void | Promise<void>;
     onInvocation?: (meta: AiInvocationAuditMeta) => void | Promise<void>;
   }) {
@@ -158,7 +163,8 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       | 'suggestDraftPlan'
       | 'suggestProposalDiffs'
       | 'generateSessionDetail'
-      | 'generateIntakeFromProfile';
+      | 'generateIntakeFromProfile'
+      | 'generateAthleteBriefFromIntake';
     input: unknown;
     schema: z.ZodTypeAny;
     system: string;
@@ -345,6 +351,21 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       system:
         'Generate an intake draft JSON keyed by questionKey. Use only the provided profile fields. Output JSON only matching the schema.',
       deterministicFallback: () => this.delegate.generateIntakeFromProfile(input),
+    });
+  }
+
+  async generateAthleteBriefFromIntake(
+    input: GenerateAthleteBriefFromIntakeInput
+  ): Promise<GenerateAthleteBriefFromIntakeResult> {
+    const redacted = redactAiJsonValue(input as unknown as AiJsonValue) as unknown as GenerateAthleteBriefFromIntakeInput;
+
+    return this.callOrFallback<GenerateAthleteBriefFromIntakeResult>({
+      capability: 'generateAthleteBriefFromIntake',
+      input: redacted,
+      schema: z.object({ brief: athleteBriefSchema }).strict(),
+      system:
+        'You are a deterministic assistant. Produce a concise athlete brief JSON. Output JSON only matching the schema.',
+      deterministicFallback: () => this.delegate.generateAthleteBriefFromIntake(input),
     });
   }
 }

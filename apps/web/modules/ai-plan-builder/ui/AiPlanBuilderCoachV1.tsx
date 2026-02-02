@@ -213,6 +213,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
   const [intakeLatest, setIntakeLatest] = useState<any | null>(null);
   const [profileLatest, setProfileLatest] = useState<any | null>(null);
+  const [briefLatest, setBriefLatest] = useState<any | null>(null);
   const [draftPlanLatest, setDraftPlanLatest] = useState<any | null>(null);
   const [publishStatus, setPublishStatus] = useState<any | null>(null);
 
@@ -321,6 +322,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return data.profile;
   }, [athleteId, request]);
 
+  const fetchBriefLatest = useCallback(async () => {
+    const data = await request<{ brief: any | null }>(
+      `/api/coach/athletes/${athleteId}/athlete-brief/latest`
+    );
+    setBriefLatest(data.brief ?? null);
+    return data.brief;
+  }, [athleteId, request]);
+
   const fetchDraftPlanLatest = useCallback(async () => {
     const data = await request<{ draftPlan: any | null }>(
       `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`
@@ -345,7 +354,12 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     (async () => {
       try {
         setError(null);
-        const [intake, profile, draft] = await Promise.all([fetchIntakeLatest(), fetchProfileLatest(), fetchDraftPlanLatest()]);
+        const [intake, profile, brief, draft] = await Promise.all([
+          fetchIntakeLatest(),
+          fetchProfileLatest(),
+          fetchBriefLatest(),
+          fetchDraftPlanLatest(),
+        ]);
 
         if (cancelled) return;
 
@@ -354,6 +368,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         } else {
           setPublishStatus(null);
         }
+
+        setBriefLatest(brief ?? null);
 
         // If there is an intake but no AI summary yet, build it automatically.
         if (intake?.id && !profile?.id) {
@@ -380,7 +396,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchDraftPlanLatest, fetchIntakeLatest, fetchProfileLatest, fetchPublishStatus, request]);
+  }, [athleteId, fetchBriefLatest, fetchDraftPlanLatest, fetchIntakeLatest, fetchProfileLatest, fetchPublishStatus, request]);
 
   const startWithAi = useCallback(async () => {
     setBusy('generate-intake');
@@ -652,6 +668,37 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       )}
 
       <div className="mt-6 space-y-4">
+        <Block title="Athlete Brief">
+          {!briefLatest ? (
+            <div className="text-sm text-[var(--fg-muted)]">No Athlete Brief yet. Ask the athlete to complete intake.</div>
+          ) : (
+            <div className="space-y-3 text-sm">
+              {[
+                { title: 'Coaching style', items: briefLatest.coachingStyleSummary },
+                { title: 'Motivation', items: briefLatest.motivationTriggers },
+                { title: 'Risks', items: briefLatest.riskFlags },
+                { title: 'Goal context', items: briefLatest.goalContext },
+                { title: 'Swim', items: briefLatest.swimProfile },
+                { title: 'Bike', items: briefLatest.bikeProfile },
+                { title: 'Run', items: briefLatest.runProfile },
+                { title: 'Life constraints', items: briefLatest.lifeConstraints },
+                { title: 'Coach focus', items: briefLatest.coachFocusNotes },
+              ].map((section) =>
+                Array.isArray(section.items) && section.items.length ? (
+                  <div key={section.title}>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{section.title}</div>
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {section.items.map((item: string, idx: number) => (
+                        <li key={`${section.title}-${idx}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null
+              )}
+            </div>
+          )}
+        </Block>
+
         <Block title="1) Athlete Info">
           <div className="space-y-3">
             {canStart ? (

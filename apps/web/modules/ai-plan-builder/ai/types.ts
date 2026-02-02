@@ -19,6 +19,18 @@ export type AiIntakeEvidenceItem = {
 
 export type AiIntakeFlag = 'injury' | 'pain' | 'marathon' | 'triathlon';
 
+export type AthleteBriefJson = {
+  coachingStyleSummary: string[];
+  motivationTriggers: string[];
+  riskFlags: string[];
+  goalContext: string[];
+  swimProfile: string[];
+  bikeProfile: string[];
+  runProfile: string[];
+  lifeConstraints: string[];
+  coachFocusNotes: string[];
+};
+
 export type AiCoachIntent = {
   /**
    * Human-entered coach notes, used only as a hint.
@@ -60,6 +72,9 @@ export type SuggestDraftPlanInput = {
    * Must be fully explicit and deterministic-friendly.
    */
   setup: DraftPlanSetupV1;
+
+  /** Athlete brief context (preferred over raw intake). */
+  athleteBrief?: AthleteBriefJson | null;
 
   /** Optional structured coach intent (not used today). */
   coachIntent?: AiCoachIntent;
@@ -127,6 +142,9 @@ export type GenerateSessionDetailInput = {
   /** Stable, non-PII summary (from summarizeIntake if present). */
   athleteSummaryText: string;
 
+  /** Structured athlete brief context, if available. */
+  athleteBrief?: AthleteBriefJson | null;
+
   /** Snapshot of setup constraints for context only (must NOT change topology). */
   constraints: {
     riskTolerance: 'low' | 'med' | 'high';
@@ -170,4 +188,26 @@ export type GenerateIntakeFromProfileResult = {
    * Values must be JSON-serializable.
    */
   draftJson: Record<string, AiJsonValue>;
+};
+
+export type GenerateAthleteBriefFromIntakeInput = {
+  intake: {
+    sections: Array<{
+      key: string;
+      title?: string | null;
+      answers: Array<{ questionKey: string; answer: AiJsonValue }>;
+    }>;
+  };
+  profile?: {
+    disciplines: string[];
+    goalsText: string | null;
+    trainingPlanFrequency: string;
+    trainingPlanDayOfWeek: number | null;
+    trainingPlanWeekOfMonth: number | null;
+    coachNotes: string | null;
+  } | null;
+};
+
+export type GenerateAthleteBriefFromIntakeResult = {
+  brief: AthleteBriefJson;
 };

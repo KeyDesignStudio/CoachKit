@@ -63,6 +63,13 @@ class ConfiguredAiPlanBuilderAI implements AiPlanBuilderAI {
     const mode = getAiPlanBuilderEffectiveMode('generateIntakeFromProfile');
     return mode === 'llm' ? this.llm.generateIntakeFromProfile(input) : this.deterministic.generateIntakeFromProfile(input);
   }
+
+  async generateAthleteBriefFromIntake(input: any) {
+    const mode = getAiPlanBuilderEffectiveMode('generateAthleteBriefFromIntake');
+    return mode === 'llm'
+      ? this.llm.generateAthleteBriefFromIntake(input)
+      : this.deterministic.generateAthleteBriefFromIntake(input);
+  }
 }
 
 /**
