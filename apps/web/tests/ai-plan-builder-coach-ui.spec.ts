@@ -14,6 +14,15 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   ]);
 }
 
+async function setDateInput(locator: any, dayKey: string) {
+  // WebKit can be finicky about typing into <input type="date">.
+  await locator.evaluate((el: HTMLInputElement, value: string) => {
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, dayKey);
+}
+
 function formatDayKey(date: Date): string {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -129,12 +138,17 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
 
     // 2) Generate plan preview (choose dates so sessions fall near "today").
     const today = new Date();
-    const eventDate = formatDayKey(addDays(today, 28));
+    const startDate = formatDayKey(today);
+    const completionDate = formatDayKey(addDays(today, 28));
     const fromDayKey = formatDayKey(addDays(today, -7));
     const toDayKey = formatDayKey(addDays(today, 60));
 
-    await page.getByTestId('apb-event-date').fill(eventDate);
-    await page.getByTestId('apb-weeks-to-event').fill('4');
+    await setDateInput(page.getByTestId('apb-start-date'), startDate);
+    await setDateInput(page.getByTestId('apb-completion-date'), completionDate);
+    await expect(page.getByText(/Derived from dates:\s*\d+/)).toBeVisible();
+    await page.getByTestId('apb-weeks-auto-toggle').click();
+    await expect(page.getByTestId('apb-weeks-to-completion')).toBeEnabled();
+    await page.getByTestId('apb-weeks-to-completion').fill('4');
     await page.getByTestId('apb-week-start').selectOption('sunday');
 
     const draftOk = page.waitForResponse(
@@ -149,11 +163,22 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
 
     const firstWeek = page.getByTestId('apb-week').first();
     await expect(firstWeek).toBeVisible({ timeout: 60_000 });
+    await expect(firstWeek.getByTestId('apb-week-commencing')).toContainText('Commencing');
 
     const firstSession = firstWeek.getByTestId('apb-session').first();
-    await expect(firstSession.getByTestId('apb-session-objective')).toBeVisible({ timeout: 60_000 });
-    await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText('');
-    await expect(firstSession.getByTestId('apb-session-detail-block').first()).toBeVisible();
+    await expect(firstSession.getByTestId('apb-session-day')).toBeVisible({ timeout: 60_000 });
+    await expect(firstSession.getByTestId('apb-session-day')).toContainText(/\d/);
+    await expect(firstSession.getByTestId('apb-session-objective-input')).toBeVisible({ timeout: 60_000 });
+    await expect(firstSession.getByTestId('apb-session-objective-input')).not.toHaveValue('');
+    await expect(firstSession.getByTestId('apb-session-workout-detail-preview')).toBeVisible();
+    await expect(firstSession.getByTestId('apb-session-block-steps-0')).toBeVisible();
+
+    // Save bottom-left; Lock session bottom-right.
+    const saveBox = await firstSession.getByTestId('apb-session-save').boundingBox();
+    const lockBox = await firstSession.getByTestId('apb-session-lock-toggle').boundingBox();
+    expect(saveBox, 'Expected Save button to have a bounding box').toBeTruthy();
+    expect(lockBox, 'Expected Lock button to have a bounding box').toBeTruthy();
+    expect(saveBox!.x).toBeLessThan(lockBox!.x);
 
     // Duration should be humanised (multiples of 5 minutes).
     const durationValue = await firstSession.getByTestId('apb-session-duration').inputValue();
@@ -189,7 +214,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(firstSession.getByTestId('apb-session-duration')).toBeEnabled();
 
     // 3) Edit a session and confirm persistence after refresh.
-    const originalObjectiveText = await firstSession.getByTestId('apb-session-objective').innerText();
+    const originalObjectiveText = await firstSession.getByTestId('apb-session-objective-input').inputValue();
     const editedDuration = String(durationInt + 5);
     await firstSession.getByTestId('apb-session-duration').fill(editedDuration);
     await firstSession.getByTestId('apb-session-notes').fill(expectedCoachNote);
@@ -216,8 +241,8 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     expect(savedSession, 'Expected saved draft plan session in PATCH response.').toBeTruthy();
 
     // Objective should update (and be different from the pre-edit version).
-    await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText(originalObjectiveText);
-    await expect(firstSession.getByTestId('apb-session-objective')).toContainText(`(${editedDuration} min)`);
+    await expect(firstSession.getByTestId('apb-session-objective-input')).not.toHaveValue(originalObjectiveText);
+    await expect(firstSession.getByTestId('apb-session-objective-input')).toHaveValue(new RegExp(`\\(${editedDuration} min\\)`));
 
     const normalizeText = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
 
@@ -228,11 +253,11 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     expect(plannerPreviewText).toContain('WARMUP');
     expect(plannerPreviewText).toContain('MAIN');
     expect(plannerPreviewText).toContain('COOLDOWN');
+    expect(plannerPreviewText).toContain('Easy warmup');
 
-    // Detail blocks should show 5-minute increments.
-    const blockLines = await firstSession.getByTestId('apb-session-detail-block').allInnerTexts();
-    for (const line of blockLines) {
-      const m = line.match(/\u00b7\s*(\d+)\s*min/);
+    // Workout preview should show 5-minute increments.
+    for (const line of plannerPreviewText.split('\n')) {
+      const m = line.match(/\u00b7\s*(\d+)\s*min/i);
       if (!m) continue;
       const minutes = Number.parseInt(m[1]!, 10);
       expect(minutes % 5).toBe(0);
@@ -497,12 +522,17 @@ test.describe.skip('AI Plan Builder v1: legacy coach UI (deprecated)', () => {
 
       // 2) Generate plan preview.
       const today = new Date();
-      const eventDate = formatDayKey(addDays(today, 28));
+      const startDate = formatDayKey(today);
+      const completionDate = formatDayKey(addDays(today, 28));
       const fromDayKey = formatDayKey(addDays(today, -7));
       const toDayKey = formatDayKey(addDays(today, 42));
 
-      await page.getByTestId('apb-event-date').fill(eventDate);
-      await page.getByTestId('apb-weeks-to-event').fill('4');
+      await setDateInput(page.getByTestId('apb-start-date'), startDate);
+      await setDateInput(page.getByTestId('apb-completion-date'), completionDate);
+      await expect(page.getByText(/Derived from dates:\s*\d+/)).toBeVisible();
+      await page.getByTestId('apb-weeks-auto-toggle').click();
+      await expect(page.getByTestId('apb-weeks-to-completion')).toBeEnabled();
+      await page.getByTestId('apb-weeks-to-completion').fill('4');
 
       const draftOk = page.waitForResponse(
         (res) =>
@@ -516,11 +546,15 @@ test.describe.skip('AI Plan Builder v1: legacy coach UI (deprecated)', () => {
 
       const firstWeek = page.getByTestId('apb-week').first();
       await expect(firstWeek).toBeVisible({ timeout: 60_000 });
+      await expect(firstWeek.getByTestId('apb-week-commencing')).toContainText('Commencing');
 
       const firstSession = firstWeek.getByTestId('apb-session').first();
-      await expect(firstSession.getByTestId('apb-session-objective')).toBeVisible({ timeout: 60_000 });
-      await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText('');
-      await expect(firstSession.getByTestId('apb-session-detail-block').first()).toBeVisible();
+      await expect(firstSession.getByTestId('apb-session-day')).toBeVisible({ timeout: 60_000 });
+      await expect(firstSession.getByTestId('apb-session-day')).toContainText(/\d/);
+      await expect(firstSession.getByTestId('apb-session-objective-input')).toBeVisible({ timeout: 60_000 });
+      await expect(firstSession.getByTestId('apb-session-objective-input')).not.toHaveValue('');
+      await expect(firstSession.getByTestId('apb-session-workout-detail-preview')).toBeVisible();
+      await expect(firstSession.getByTestId('apb-session-block-steps-0')).toBeVisible();
 
       // Duration should be humanised (multiples of 5 minutes).
       const durationValue = await firstSession.getByTestId('apb-session-duration').inputValue();

@@ -40,7 +40,7 @@ function toCalendarDiscipline(raw: string): string {
 }
 
 function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
-  if (!isDayKey(dayKey)) throw new ApiError(400, 'INVALID_DATE_FORMAT', 'eventDate must be YYYY-MM-DD.');
+  if (!isDayKey(dayKey)) throw new ApiError(400, 'INVALID_DATE_FORMAT', 'Date must be YYYY-MM-DD.');
 
   const date = new Date(`${dayKey}T00:00:00.000Z`);
   const jsDay = date.getUTCDay(); // 0=Sun..6=Sat
@@ -50,16 +50,26 @@ function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 's
 }
 
 function computeSessionDayKey(params: {
-  eventDate: string;
+  // When startDate is present, weekIndex counts forward from startDate's week boundary.
+  startDate?: string | null;
+  // Legacy name: eventDate == completion date.
+  completionDate: string;
   weeksToEvent: number;
   weekStart: 'monday' | 'sunday';
   weekIndex: number;
   dayOfWeek: number;
 }): string {
-  const eventWeekStart = startOfWeekDayKeyWithWeekStart(params.eventDate, params.weekStart);
-  const remainingWeeks = params.weeksToEvent - 1 - params.weekIndex;
-  const weekStartDayKey = addDaysToDayKey(eventWeekStart, -7 * remainingWeeks);
   const offset = dayOffsetFromWeekStart(params.dayOfWeek, params.weekStart);
+
+  if (params.startDate && isDayKey(params.startDate)) {
+    const week0Start = startOfWeekDayKeyWithWeekStart(params.startDate, params.weekStart);
+    const weekStartDayKey = addDaysToDayKey(week0Start, 7 * params.weekIndex);
+    return addDaysToDayKey(weekStartDayKey, offset);
+  }
+
+  const completionWeekStart = startOfWeekDayKeyWithWeekStart(params.completionDate, params.weekStart);
+  const remainingWeeks = params.weeksToEvent - 1 - params.weekIndex;
+  const weekStartDayKey = addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
   return addDaysToDayKey(weekStartDayKey, offset);
 }
 
@@ -115,13 +125,22 @@ export async function materialisePublishedAiPlanToCalendar(params: {
     const setupJson = (draft.setupJson ?? planSetup ?? {}) as any;
     // Draft setup is stored as JSON and has historically been serialized in a few different
     // shapes (YYYY-MM-DD, ISO timestamps, locale strings). Normalise to a canonical day key.
-    const rawEventDate = (setupJson as any)?.eventDate;
-    let eventDate = getLocalDayKey(typeof rawEventDate === 'string' ? rawEventDate.trim() : (rawEventDate as any), timeZone);
+    const rawCompletionDate = (setupJson as any)?.completionDate ?? (setupJson as any)?.eventDate;
+    const completionDate = getLocalDayKey(
+      typeof rawCompletionDate === 'string' ? rawCompletionDate.trim() : (rawCompletionDate as any),
+      timeZone
+    );
+
+    const rawStartDate = (setupJson as any)?.startDate;
+    const startDate = rawStartDate
+      ? getLocalDayKey(typeof rawStartDate === 'string' ? rawStartDate.trim() : (rawStartDate as any), timeZone)
+      : null;
+
     const weekStart = normalizeWeekStart(setupJson?.weekStart);
     const weeksToEvent = clampInt(setupJson?.weeksToEvent, 1, 52, 1);
 
-    if (!isDayKey(eventDate)) {
-      throw new ApiError(400, 'INVALID_DRAFT_SETUP', 'Draft setup eventDate must be YYYY-MM-DD.');
+    if (!isDayKey(completionDate)) {
+      throw new ApiError(400, 'INVALID_DRAFT_SETUP', 'Draft setup completionDate must be YYYY-MM-DD.');
     }
 
     const sessions = await prisma.aiPlanDraftSession.findMany({
@@ -223,14 +242,13 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       const title = titleFromType || titleFromObjective || buildApbTitle({ discipline: s.discipline, type: s.type });
 
       const dayKey = computeSessionDayKey({
-        eventDate,
+        startDate,
+        completionDate,
         weeksToEvent: effectiveWeeksToEvent,
         weekStart,
-        weekIndex: s.weekIndex,
-        dayOfWeek: s.dayOfWeek,
+        weekIndex: Number(s.weekIndex) || 0,
+        dayOfWeek: Number(s.dayOfWeek) || 0,
       });
-
-      // NOTE: CalendarItem.date is stored as UTC midnight of the YYYY-MM-DD key.
       // The UI interprets it in athlete timezone using the same day-key boundary logic.
       const date = parseDateOnly(dayKey, 'date');
 

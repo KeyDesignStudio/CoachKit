@@ -6,8 +6,13 @@ export type DraftSessionType = 'endurance' | 'tempo' | 'threshold' | 'technique'
 
 export type DraftPlanSetupV1 = {
   weekStart?: 'monday' | 'sunday';
+  // New UX: explicit plan start; still optional for backward compatibility.
+  startDate?: string; // yyyy-mm-dd
+  // Legacy name for completion date.
   eventDate: string; // yyyy-mm-dd
   weeksToEvent: number;
+  // When present, coach explicitly overrides the date-derived weeks.
+  weeksToEventOverride?: number;
   weeklyAvailabilityDays: number[]; // 0=Sun..6=Sat
   weeklyAvailabilityMinutes: number | Record<string, number>; // total minutes/week OR map dayIndex->minutes
   disciplineEmphasis: DisciplineEmphasis;

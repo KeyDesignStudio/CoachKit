@@ -29,10 +29,15 @@ test.describe('Strava autosync (debounced)', () => {
     const fixtures = await request.post('/api/dev/strava/test-fixtures');
     expect(fixtures.ok()).toBeTruthy();
 
+    // Dev Strava fixtures use a fixed set of stub activity ids.
+    // Use one of those ids so cron can hydrate it deterministically.
+    const objectId = 999;
+    const objectIdStr = String(objectId);
+
     // Clean up any prior run residue for the fixed activity id.
     // This test depends on observing the transition from "not present" → "present".
-    await prisma.calendarItem.deleteMany({ where: { athleteId: 'dev-athlete', origin: 'STRAVA', sourceActivityId: '999' } });
-    await prisma.completedActivity.deleteMany({ where: { athleteId: 'dev-athlete', source: 'STRAVA', externalActivityId: '999' } as any });
+    await prisma.calendarItem.deleteMany({ where: { athleteId: 'dev-athlete', origin: 'STRAVA', sourceActivityId: objectIdStr } });
+    await prisma.completedActivity.deleteMany({ where: { athleteId: 'dev-athlete', source: 'STRAVA', externalActivityId: objectIdStr } as any });
 
     // Webhook marks athlete as pending (no heavy sync inline).
     const webhook = await request.post('/api/integrations/strava/webhook', {
@@ -40,7 +45,7 @@ test.describe('Strava autosync (debounced)', () => {
         object_type: 'activity',
         aspect_type: 'create',
         owner_id: 123,
-        object_id: 999,
+        object_id: objectId,
         event_time: Math.floor(Date.now() / 1000),
       },
     });
@@ -58,7 +63,7 @@ test.describe('Strava autosync (debounced)', () => {
     expect(calBefore.ok()).toBeTruthy();
     const calBeforeJson = await calBefore.json();
     const itemsBefore = (calBeforeJson.data?.items ?? []) as any[];
-    expect(itemsBefore.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toBeFalsy();
+    expect(itemsBefore.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr)).toBeFalsy();
 
     // Backfill endpoint should surface it and remain idempotent (safety net).
     const cron2 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
@@ -78,7 +83,7 @@ test.describe('Strava autosync (debounced)', () => {
     expect(calAfter.ok()).toBeTruthy();
     const calAfterJson = await calAfter.json();
     const itemsAfter = (calAfterJson.data?.items ?? []) as any[];
-    expect(itemsAfter.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toBeTruthy();
+    expect(itemsAfter.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr)).toBeTruthy();
 
     // Repeat cron; should not duplicate.
     const cron3 = await request.post('/api/integrations/strava/cron?mode=intents&athleteId=dev-athlete&forceDays=1', {
@@ -95,9 +100,9 @@ test.describe('Strava autosync (debounced)', () => {
     expect(calAfter2.ok()).toBeTruthy();
     const calAfter2Json = await calAfter2.json();
     const itemsAfter2 = (calAfter2Json.data?.items ?? []) as any[];
-    expect(itemsAfter2.filter((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999')).toHaveLength(1);
+    expect(itemsAfter2.filter((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr)).toHaveLength(1);
 
-    const createdItem = itemsAfter2.find((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === '999');
+    const createdItem = itemsAfter2.find((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr);
     expect(createdItem?.id, 'Expected Strava-created calendar item to have an id').toBeTruthy();
     const itemId = String(createdItem.id);
 
@@ -111,25 +116,39 @@ test.describe('Strava autosync (debounced)', () => {
     await page.getByRole('button', { name: 'Delete workout' }).click();
     await expect(page.getByTestId('athlete-workout-toast')).toContainText('Workout deleted');
 
-    // Athlete calendar should not include it.
-    const calAfterDelete = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`, {
-      headers: cookieHeader,
-    });
-    expect(calAfterDelete.ok()).toBeTruthy();
-    const calAfterDeleteJson = await calAfterDelete.json();
-    const titlesAfterDelete = (calAfterDeleteJson.data?.items ?? []).map((i: any) => i.title);
-    expect(titlesAfterDelete.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
+    // Athlete calendar should not include the deleted Strava item.
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`, {
+            headers: cookieHeader,
+          });
+          if (!res.ok()) return true;
+          const json = await res.json();
+          const items = (json.data?.items ?? []) as any[];
+          return items.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr);
+        },
+        { timeout: 15_000, intervals: [500, 1000, 2000] }
+      )
+      .toBe(false);
 
-    // Coach calendar should not include it.
+    // Coach calendar should not include the deleted Strava item.
     const coachCookieHeader = { Cookie: 'coachkit-role=COACH' };
-    const coachCal = await request.get(
-      `/api/coach/calendar?athleteId=dev-athlete&from=${from}&to=${to}&_=${Date.now()}`,
-      { headers: coachCookieHeader }
-    );
-    expect(coachCal.ok()).toBeTruthy();
-    const coachCalJson = await coachCal.json();
-    const coachTitles = (coachCalJson.data?.items ?? []).map((i: any) => i.title);
-    expect(coachTitles.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get(
+            `/api/coach/calendar?athleteId=dev-athlete&from=${from}&to=${to}&_=${Date.now()}`,
+            { headers: coachCookieHeader }
+          );
+          if (!res.ok()) return true;
+          const json = await res.json();
+          const items = (json.data?.items ?? []) as any[];
+          return items.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr);
+        },
+        { timeout: 15_000, intervals: [500, 1000, 2000] }
+      )
+      .toBe(false);
 
     // Detail API should now 404.
     const detailAfterDelete = await request.get(`/api/athlete/calendar-items/${itemId}?_=${Date.now()}`, {
@@ -151,8 +170,23 @@ test.describe('Strava autosync (debounced)', () => {
     );
     expect(calAfterCron.ok()).toBeTruthy();
     const calAfterCronJson = await calAfterCron.json();
-    const titlesAfterCron = (calAfterCronJson.data?.items ?? []).map((i: any) => i.title);
-    expect(titlesAfterCron.some((t: string) => t.includes('PW Unscheduled Strength'))).toBeFalsy();
+    const itemsAfterCron = (calAfterCronJson.data?.items ?? []) as any[];
+    expect(itemsAfterCron.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr)).toBeFalsy();
+
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get(`/api/athlete/calendar?from=${from}&to=${to}&_=${Date.now()}`,
+            { headers: cookieHeader }
+          );
+          if (!res.ok()) return true;
+          const json = await res.json();
+          const items = (json.data?.items ?? []) as any[];
+          return items.some((i: any) => i.origin === 'STRAVA' && String(i.sourceActivityId) === objectIdStr);
+        },
+        { timeout: 15_000, intervals: [500, 1000, 2000] }
+      )
+      .toBe(false);
 
     // Direct navigation to detail should show the not-found message (API is 404).
     await page.goto(`/athlete/workouts/${itemId}`, { waitUntil: 'networkidle' });
