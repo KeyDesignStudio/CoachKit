@@ -6,6 +6,7 @@ describe('AI Plan Builder v1 session titles', () => {
   it('uses canonical 2-word titles for known types', () => {
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'run', type: 'endurance' })).toBe('Endurance Run');
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'threshold' })).toBe('Threshold Ride');
+    expect(buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'tempo' })).toBe('Tempo Ride');
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'swim', type: 'technique' })).toBe('Technique Swim');
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'recovery' })).toBe('Recovery Ride');
   });

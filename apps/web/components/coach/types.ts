@@ -6,6 +6,9 @@ export type CalendarItem = {
   discipline: string;
   status: string;
   title: string;
+  origin?: string | null;
+  subtype?: string | null;
+  planningStatus?: string | null;
   athleteId?: string;
   athleteName?: string | null;
   athleteTimezone?: string;

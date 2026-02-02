@@ -35,11 +35,14 @@ import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView
 import { WorkoutDetail } from '@/components/workouts/WorkoutDetail';
 import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
+import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { CalendarItem } from '@/components/coach/types';
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
+
+const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 
 type DisciplineOption = (typeof DISCIPLINE_OPTIONS)[number];
 
@@ -111,6 +114,27 @@ function parseOptionalFloat(text: string): number | null {
   const value = Number(trimmed);
   if (!Number.isFinite(value)) return null;
   return value;
+}
+
+function resolveCalendarItemTitle(item: CalendarItem): string {
+  const title = String(item.title ?? '').trim();
+  const subtype = String(item.subtype ?? '').trim();
+  const discipline = String(item.discipline ?? '').trim();
+
+  if (item.origin === APB_CALENDAR_ORIGIN) {
+    const candidate = title || subtype;
+    const wordCount = candidate ? candidate.split(/\s+/).filter(Boolean).length : 0;
+    const titleMatchesSubtype = title && subtype && title.toLowerCase() === subtype.toLowerCase();
+
+    if (!candidate || wordCount < 2 || titleMatchesSubtype) {
+      return buildAiPlanBuilderSessionTitle({
+        discipline: discipline || 'workout',
+        type: subtype || title,
+      });
+    }
+  }
+
+  return title || discipline || 'Workout';
 }
 
 function parseOptionalInt(text: string): number | null {
@@ -558,7 +582,15 @@ export default function CoachCalendarPage() {
         const weekData = weekResult.status === 'fulfilled' ? weekResult.value : { weeks: [] };
 
         const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
-        setItems(itemsData.items.map((item) => ({ ...item, athleteId, athleteName, athleteTimezone: itemsData.athleteTimezone })));
+        setItems(
+          itemsData.items.map((item) => ({
+            ...item,
+            title: resolveCalendarItemTitle(item),
+            athleteId,
+            athleteName,
+            athleteTimezone: itemsData.athleteTimezone,
+          }))
+        );
         setDayWeatherByDate(itemsData.dayWeather ?? {});
         if (itemsData.athleteTimezone) {
           setAthleteTimezone(itemsData.athleteTimezone);
@@ -581,6 +613,7 @@ export default function CoachCalendarPage() {
           const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
           return itemsData.items.map((item) => ({
             ...item,
+            title: resolveCalendarItemTitle(item),
             athleteId,
             athleteName,
             athleteTimezone: itemsData.athleteTimezone,

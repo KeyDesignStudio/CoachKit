@@ -27,11 +27,14 @@ import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
+import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
+
+const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 
 type DisciplineOption = (typeof DISCIPLINE_OPTIONS)[number];
 
@@ -59,6 +62,8 @@ interface CalendarItem {
   date: string;
   plannedStartTimeLocal: string | null;
   discipline: string;
+  origin?: string | null;
+  subtype?: string | null;
   status: string;
   notes: string | null;
   plannedDurationMinutes?: number | null;
@@ -81,6 +86,27 @@ function pad2(value: number): string {
 function getMonthGridStartKey(year: number, monthIndex: number): string {
   const firstOfMonth = `${year}-${pad2(monthIndex + 1)}-01`;
   return startOfWeekDayKey(firstOfMonth);
+}
+
+function resolveCalendarItemTitle(item: CalendarItem): string {
+  const title = String(item.title ?? '').trim();
+  const subtype = String(item.subtype ?? '').trim();
+  const discipline = String(item.discipline ?? '').trim();
+
+  if (item.origin === APB_CALENDAR_ORIGIN) {
+    const candidate = title || subtype;
+    const wordCount = candidate ? candidate.split(/\s+/).filter(Boolean).length : 0;
+    const titleMatchesSubtype = title && subtype && title.toLowerCase() === subtype.toLowerCase();
+
+    if (!candidate || wordCount < 2 || titleMatchesSubtype) {
+      return buildAiPlanBuilderSessionTitle({
+        discipline: discipline || 'workout',
+        type: subtype || title,
+      });
+    }
+  }
+
+  return title || discipline || 'Workout';
 }
 
 export default function AthleteCalendarPage() {
@@ -208,7 +234,7 @@ export default function AthleteCalendarPage() {
         url,
         bypassCache ? { cache: 'no-store' } : undefined
       );
-      setItems(data.items);
+      setItems(data.items.map((item) => ({ ...item, title: resolveCalendarItemTitle(item) })));
       setDayWeatherByDate(data.dayWeather ?? {});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
