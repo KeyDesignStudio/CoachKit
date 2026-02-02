@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/Icon';
 import { CALENDAR_ACTION_ICON_CLASS } from '@/components/calendar/iconTokens';
 import { formatDisplay } from '@/lib/client-date';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
+import { getWorkoutDetailTextFromCalendarItem } from '@/lib/workoutDetailRenderer';
 
 type CalendarItem = {
   id: string;
@@ -15,6 +16,9 @@ type CalendarItem = {
   discipline: string;
   status: string;
   workoutDetail: string | null;
+  workoutStructure?: unknown | null;
+  plannedDurationMinutes?: number | null;
+  notes?: string | null;
   latestCompletedActivity?: {
     painFlag: boolean;
   } | null;
@@ -29,6 +33,12 @@ type CalendarItemDrawerProps = {
 
 export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawerProps) {
   if (!item) return null;
+
+  const workoutDetailText = getWorkoutDetailTextFromCalendarItem({
+    workoutDetail: item.workoutDetail,
+    workoutStructure: item.workoutStructure,
+  });
+  const plannedDurationLabel = item.plannedDurationMinutes != null ? `${item.plannedDurationMinutes} min` : null;
 
   return (
     <>
@@ -56,6 +66,11 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
               <p className="mt-1 text-sm text-[var(--muted)]">
                 {formatDisplay(item.date)} · {item.plannedStartTimeLocal ?? 'n/a'}
               </p>
+              {plannedDurationLabel ? (
+                <p className="mt-1 text-sm text-[var(--muted)]" data-testid="coach-calendar-item-duration">
+                  Duration: {plannedDurationLabel}
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -67,14 +82,27 @@ export function CalendarItemDrawer({ item, onClose, onSave }: CalendarItemDrawer
           </div>
 
           {/* Workout Detail */}
-          {item.workoutDetail && (
+          {workoutDetailText && (
             <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Workout Detail
               </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">{item.workoutDetail}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]" data-testid="coach-calendar-item-description">
+                {workoutDetailText}
+              </p>
             </section>
           )}
+
+          {item.notes ? (
+            <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Coach Notes
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]" data-testid="coach-calendar-item-notes">
+                {item.notes}
+              </p>
+            </section>
+          ) : null}
 
           {/* Pain Flag Alert */}
           {item.latestCompletedActivity?.painFlag && (

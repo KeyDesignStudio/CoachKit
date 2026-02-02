@@ -1,0 +1,105 @@
+import { sessionDetailV1Schema, type SessionDetailV1 } from '@/modules/ai-plan-builder/rules/session-detail';
+
+function formatBlockLabel(blockType: SessionDetailV1['structure'][number]['blockType']): string {
+  switch (blockType) {
+    case 'warmup':
+      return 'WARMUP';
+    case 'main':
+      return 'MAIN';
+    case 'cooldown':
+      return 'COOLDOWN';
+    case 'drill':
+      return 'DRILL';
+    case 'strength':
+      return 'STRENGTH';
+    default:
+      return String(blockType ?? '').trim().toUpperCase() || 'SESSION';
+  }
+}
+
+function toIntMinutes(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.round(value));
+}
+
+export function assertNormalizedSessionDetailMatchesTotal(params: {
+  detail: SessionDetailV1;
+  totalMinutes: number;
+  incrementMinutes?: number;
+}): void {
+  const inc = Math.max(1, Math.round(params.incrementMinutes ?? 5));
+  const total = Math.max(0, Math.round(params.totalMinutes));
+
+  if (total % inc !== 0) {
+    throw new Error(`Total duration must be in ${inc}-minute increments.`);
+  }
+
+  const durations = params.detail.structure.map((b) => toIntMinutes((b as any)?.durationMinutes));
+  const sum = durations.reduce((a, b) => a + b, 0);
+  if (sum !== total) {
+    throw new Error(`Block durations must sum to ${total} minutes (got ${sum}).`);
+  }
+
+  for (const d of durations) {
+    if (d % inc !== 0) {
+      throw new Error(`Block durations must be in ${inc}-minute increments.`);
+    }
+  }
+}
+
+export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1): string {
+  const objective = String(detail.objective ?? '').trim();
+
+  const blockLines = (detail.structure ?? [])
+    .map((block) => {
+      const label = formatBlockLabel(block.blockType);
+      const duration = toIntMinutes((block as any)?.durationMinutes);
+      const steps = String((block as any)?.steps ?? '').trim();
+      if (!steps) return null;
+      return `${label}: ${duration} min – ${steps}`;
+    })
+    .filter((x): x is string => Boolean(x));
+
+  const extraLines: string[] = [];
+  const targets = String((detail as any)?.targets?.notes ?? '').trim();
+  if (targets) extraLines.push(`TARGETS: ${targets}`);
+
+  const cues = Array.isArray((detail as any)?.cues)
+    ? (detail as any).cues.map((c: any) => String(c ?? '').trim()).filter(Boolean)
+    : [];
+  if (cues.length) extraLines.push(`CUES: ${cues.join(' | ')}`);
+
+  const safety = String((detail as any)?.safetyNotes ?? '').trim();
+  if (safety) extraLines.push(`SAFETY: ${safety}`);
+
+  const lines: string[] = [];
+  if (objective) lines.push(objective);
+  if (blockLines.length) {
+    if (lines.length) lines.push('');
+    lines.push(...blockLines);
+  }
+  if (extraLines.length) {
+    if (lines.length) lines.push('');
+    lines.push(...extraLines);
+  }
+
+  return lines.join('\n').trim();
+}
+
+export function tryRenderWorkoutDetailFromDetailJson(detailJson: unknown): string | null {
+  const parsed = sessionDetailV1Schema.safeParse(detailJson);
+  if (!parsed.success) return null;
+  const rendered = renderWorkoutDetailFromSessionDetailV1(parsed.data);
+  return rendered || null;
+}
+
+export function getWorkoutDetailTextFromCalendarItem(params: {
+  workoutDetail?: string | null;
+  workoutStructure?: unknown | null;
+}): string | null {
+  const direct = typeof params.workoutDetail === 'string' ? params.workoutDetail.trim() : '';
+  if (direct) return direct;
+
+  const rendered = tryRenderWorkoutDetailFromDetailJson(params.workoutStructure);
+  return rendered || null;
+}

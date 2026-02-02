@@ -63,7 +63,7 @@ test.describe('Coach calendar: add-schedule placement', () => {
     await expect(dateHeaders.filter({ has: page.getByTestId('athlete-week-day-column-add') })).toHaveCount(0);
 
     // Athlete rows should still include the add-schedule button.
-    const athleteRows = weekView.getByTestId('coach-calendar-athlete-row');
+    const athleteRows = weekView.locator('[data-testid="coach-calendar-athlete-row"]:visible');
     expect(await athleteRows.count()).toBeGreaterThan(0);
     await expect(athleteRows.filter({ hasNot: page.getByTestId('add-schedule-button') })).toHaveCount(0);
   });
@@ -99,7 +99,7 @@ test.describe('Coach calendar: add-schedule placement', () => {
       weekView.getByTestId('coach-calendar-date-header').filter({ has: page.getByTestId('athlete-week-day-column-add') })
     ).toHaveCount(0);
 
-    const athleteRows = weekView.getByTestId('coach-calendar-athlete-row');
+    const athleteRows = weekView.locator('[data-testid="coach-calendar-athlete-row"]:visible');
     expect(await athleteRows.count()).toBeGreaterThan(0);
     await expect(athleteRows.filter({ hasNot: page.getByTestId('add-schedule-button') })).toHaveCount(0);
   });

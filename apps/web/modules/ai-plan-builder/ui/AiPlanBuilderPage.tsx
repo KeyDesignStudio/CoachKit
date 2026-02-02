@@ -15,6 +15,7 @@ import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
+import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
 import { AiPlanBuilderCoachV1 } from './AiPlanBuilderCoachV1';
 
 export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
@@ -999,6 +1000,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
 
                             const detailParsed = sessionDetailV1Schema.safeParse(s.detailJson);
                             const detail = detailParsed.success ? detailParsed.data : null;
+                            const workoutDetailPreview = detail ? renderWorkoutDetailFromSessionDetailV1(detail) : null;
                             return (
                           <div
                             key={String(s.id)}
@@ -1105,6 +1107,23 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                                       </div>
                                     );
                                   })}
+
+                                  {workoutDetailPreview ? (
+                                    <div
+                                      className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2"
+                                      data-testid="apb-session-workout-detail-preview-container"
+                                    >
+                                      <div className="text-xs font-medium" data-testid="apb-session-workout-detail-preview-label">
+                                        Workout instructions (preview)
+                                      </div>
+                                      <div
+                                        className="mt-1 whitespace-pre-wrap text-sm text-[var(--text)]"
+                                        data-testid="apb-session-workout-detail-preview"
+                                      >
+                                        {workoutDetailPreview}
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                               </details>
                             ) : null}

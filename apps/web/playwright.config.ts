@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { loadEnvConfig } from '@next/env';
+
+// Keep Playwright's test-runner environment aligned with Next's environment loading.
+// Some tests assert on `process.env.*` (e.g. feature flags) and expect `.env*` files.
+loadEnvConfig(process.cwd(), true);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
 const APB_MODE = String(process.env.APB_MODE ?? '').trim();

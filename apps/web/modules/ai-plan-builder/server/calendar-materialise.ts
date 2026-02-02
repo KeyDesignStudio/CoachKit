@@ -3,13 +3,24 @@ import { CalendarItemStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { parseDateOnly } from '@/lib/date';
-import { addDaysToDayKey, isDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey, isDayKey } from '@/lib/day-key';
+import {
+  assertNormalizedSessionDetailMatchesTotal,
+  renderWorkoutDetailFromSessionDetailV1,
+} from '@/lib/workoutDetailRenderer';
 
 import { dayOffsetFromWeekStart, normalizeWeekStart } from '../lib/week-start';
+import { sessionDetailV1Schema } from '../rules/session-detail';
 
 export const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 export const APB_SOURCE_PREFIX = 'apb:';
 export const APB_MANUAL_EDIT_TAG = 'APB_MANUAL_EDITED';
+
+function deriveTitleFromObjective(objective: string): string {
+  const s = String(objective ?? '').trim();
+  if (!s) return '';
+  return s.replace(/\(\s*\d+\s*min\s*\)\.?\s*$/i, '').replace(/\s+/g, ' ').trim();
+}
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
@@ -86,7 +97,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
   const run = async () => {
     const draft = await prisma.aiPlanDraft.findUnique({
       where: { id: params.aiPlanDraftId },
-      select: { id: true, athleteId: true, coachId: true, setupJson: true, visibilityStatus: true },
+      select: { id: true, athleteId: true, coachId: true, setupJson: true, planJson: true, visibilityStatus: true },
     });
 
     if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
@@ -100,8 +111,12 @@ export async function materialisePublishedAiPlanToCalendar(params: {
     const athlete = await prisma.user.findUnique({ where: { id: params.athleteId }, select: { timezone: true } });
     const timeZone = athlete?.timezone ?? 'UTC';
 
-    const setupJson = (draft.setupJson ?? {}) as any;
-    const eventDate = String(setupJson?.eventDate ?? '').trim();
+    const planSetup = (draft.planJson as any)?.setup ?? null;
+    const setupJson = (draft.setupJson ?? planSetup ?? {}) as any;
+    // Draft setup is stored as JSON and has historically been serialized in a few different
+    // shapes (YYYY-MM-DD, ISO timestamps, locale strings). Normalise to a canonical day key.
+    const rawEventDate = (setupJson as any)?.eventDate;
+    let eventDate = getLocalDayKey(typeof rawEventDate === 'string' ? rawEventDate.trim() : (rawEventDate as any), timeZone);
     const weekStart = normalizeWeekStart(setupJson?.weekStart);
     const weeksToEvent = clampInt(setupJson?.weeksToEvent, 1, 52, 1);
 
@@ -120,6 +135,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         type: true,
         durationMinutes: true,
         notes: true,
+        detailJson: true,
         locked: true,
       },
       orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
@@ -137,6 +153,8 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             origin: APB_CALENDAR_ORIGIN,
             sourceActivityId: { in: desiredSourceIds },
           },
+          // NOTE: Some workspaces resolve Prisma types from a different package root.
+          // Keep runtime fields stable but avoid hard typing on select.
           select: {
             sourceActivityId: true,
             coachEdited: true,
@@ -144,7 +162,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             status: true,
             deletedAt: true,
             plannedStartTimeLocal: true,
-          },
+          } as any,
         })
       : [];
 
@@ -157,32 +175,19 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         deletedAt: Date | null;
         plannedStartTimeLocal: string | null;
       }
-    >(
-      existing
-        .filter(
-          (e): e is {
-            sourceActivityId: string;
-            coachEdited: boolean;
-            tags: string[];
-            status: CalendarItemStatus;
-            deletedAt: Date | null;
-            plannedStartTimeLocal: string | null;
-          } => Boolean(e.sourceActivityId)
-        )
-        .map(
-          (e) =>
-            [
-              String(e.sourceActivityId),
-              {
-                coachEdited: Boolean((e as any).coachEdited ?? false),
-                tags: (e.tags ?? []) as string[],
-                status: e.status,
-                deletedAt: e.deletedAt,
-                plannedStartTimeLocal: e.plannedStartTimeLocal,
-              },
-            ] as const
-        )
-    );
+    >();
+
+    for (const e of existing as any[]) {
+      const sourceActivityId = typeof e?.sourceActivityId === 'string' ? e.sourceActivityId : null;
+      if (!sourceActivityId) continue;
+      existingBySourceId.set(sourceActivityId, {
+        coachEdited: Boolean(e?.coachEdited ?? false),
+        tags: Array.isArray(e?.tags) ? e.tags : [],
+        status: e?.status as CalendarItemStatus,
+        deletedAt: (e?.deletedAt as Date | null) ?? null,
+        plannedStartTimeLocal: (e?.plannedStartTimeLocal as string | null) ?? null,
+      });
+    }
 
     let upsertedCount = 0;
 
@@ -191,6 +196,31 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       const existingItem = existingBySourceId.get(sourceActivityId) ?? null;
       const existingTags = existingItem?.tags ?? [];
       const isManuallyEdited = Boolean(existingItem?.coachEdited) || existingTags.includes(APB_MANUAL_EDIT_TAG);
+
+      const detailParsed = sessionDetailV1Schema.safeParse((s as any).detailJson);
+      if (!detailParsed.success) {
+        throw new ApiError(
+          409,
+          'MISSING_SESSION_DETAIL',
+          'Draft session detailJson is required and must conform to SessionDetailV1 to publish.'
+        );
+      }
+
+      try {
+        assertNormalizedSessionDetailMatchesTotal({
+          detail: detailParsed.data,
+          totalMinutes: Number(s.durationMinutes ?? 0),
+          incrementMinutes: 5,
+        });
+      } catch (e) {
+        throw new ApiError(409, 'INVALID_SESSION_DETAIL', String((e as any)?.message ?? e));
+      }
+
+      const workoutDetail = renderWorkoutDetailFromSessionDetailV1(detailParsed.data);
+
+      const titleFromType = String((s as any)?.type ?? '').trim();
+      const titleFromObjective = deriveTitleFromObjective(detailParsed.data.objective);
+      const title = titleFromType || titleFromObjective || buildApbTitle({ discipline: s.discipline, type: s.type });
 
       const dayKey = computeSessionDayKey({
         eventDate,
@@ -218,11 +248,12 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         ...restoreOnly,
         ...(canUpdateDate ? { date } : {}),
         discipline: toCalendarDiscipline(s.discipline),
-        subtype: null,
-        title: buildApbTitle({ discipline: s.discipline, type: s.type }),
+        subtype: String((s as any)?.type ?? '').trim() || null,
+        title,
         plannedDurationMinutes: Math.max(0, Math.round(s.durationMinutes ?? 0)),
         notes: s.notes ?? null,
-        workoutDetail: s.notes ?? null,
+        workoutDetail,
+        workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
       };
 
       await prisma.calendarItem.upsert({
@@ -238,22 +269,21 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           coachId: params.coachId,
           date,
           plannedStartTimeLocal: null,
-          coachEdited: false,
           origin: APB_CALENDAR_ORIGIN,
           planningStatus: 'PLANNED',
           sourceActivityId,
           discipline: toCalendarDiscipline(s.discipline),
-          subtype: null,
-          title: buildApbTitle({ discipline: s.discipline, type: s.type }),
+          subtype: String((s as any)?.type ?? '').trim() || null,
+          title,
           plannedDurationMinutes: Math.max(0, Math.round(s.durationMinutes ?? 0)),
           plannedDistanceKm: null,
           distanceMeters: null,
           intensityTarget: null,
           tags: [],
           equipment: [],
-          workoutStructure: Prisma.DbNull,
+          workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
           notes: s.notes ?? null,
-          workoutDetail: s.notes ?? null,
+          workoutDetail,
           intensityType: null,
           intensityTargetJson: Prisma.DbNull,
           attachmentsJson: Prisma.DbNull,
