@@ -14,6 +14,7 @@ import { getSessionStatusIndicator } from '@/components/calendar/getSessionStatu
 import { formatDisplay } from '@/lib/client-date';
 import { WEATHER_ICON_NAME } from '@/components/calendar/weatherIconName';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
+import { getWorkoutDetailTextFromCalendarItem } from '@/lib/workoutDetailRenderer';
 
 // --- Types ---
 
@@ -250,6 +251,11 @@ export function WorkoutDetail({
   const plannedDuration = item.plannedDurationMinutes ? `${item.plannedDurationMinutes} min` : null;
   const plannedDistance = item.plannedDistanceKm ? `${item.plannedDistanceKm} km` : item.distanceMeters ? `${(item.distanceMeters/1000).toFixed(2)} km` : null;
 
+  const workoutDetailText = getWorkoutDetailTextFromCalendarItem({
+    workoutDetail: item.workoutDetail,
+    workoutStructure: item.workoutStructure,
+  });
+
   return (
     <div className={cn(tokens.spacing.dashboardSectionGap, className)}>
       {/* Header Info (Title, Status, Weather) if not in Drawer, or specialized header */}
@@ -287,7 +293,7 @@ export function WorkoutDetail({
                  <div>
                    <div className={tokens.typography.bodySemi}>{item.discipline}</div>
                    <div className={tokens.typography.meta}>
-                      {plannedDuration && <span>{plannedDuration}</span>}
+                     {plannedDuration && <span data-testid="athlete-workout-duration">{plannedDuration}</span>}
                       {plannedDuration && plannedDistance && <span> · </span>}
                       {plannedDistance && <span>{plannedDistance}</span>}
                    </div>
@@ -328,10 +334,15 @@ export function WorkoutDetail({
               </div>
 
                {/* Description / Detail */}
-               {item.workoutDetail && (
+               {workoutDetailText && (
                  <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
                     <FieldLabel>Description</FieldLabel>
-                    <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{item.workoutDetail}</div>
+                    <div
+                      className={cn('whitespace-pre-wrap', tokens.typography.body)}
+                      data-testid="athlete-workout-description"
+                    >
+                      {workoutDetailText}
+                    </div>
                  </div>
                )}
 
@@ -346,7 +357,9 @@ export function WorkoutDetail({
                 {item.notes && (
                   <div className={cn(tokens.borders.divider, tokens.spacing.blockPaddingY, 'flex flex-col', tokens.spacing.widgetGap)}>
                     <FieldLabel>Coach Notes</FieldLabel>
-                    <div className={cn("whitespace-pre-wrap", tokens.typography.body)}>{item.notes}</div>
+                    <div className={cn('whitespace-pre-wrap', tokens.typography.body)} data-testid="athlete-workout-coach-notes">
+                      {item.notes}
+                    </div>
                   </div>
                 )}
             </div>

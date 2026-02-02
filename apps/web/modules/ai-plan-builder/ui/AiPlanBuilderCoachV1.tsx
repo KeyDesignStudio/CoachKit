@@ -14,6 +14,7 @@ import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
+import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
 
 type SetupState = {
   weekStart: 'monday' | 'sunday';
@@ -804,6 +805,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       const detailParsed = sessionDetailV1Schema.safeParse((s as any)?.detailJson ?? null);
                       const objective = detailParsed.success ? detailParsed.data.objective : null;
                       const blocks = detailParsed.success ? detailParsed.data.structure : [];
+                      const workoutDetailPreview = detailParsed.success
+                        ? renderWorkoutDetailFromSessionDetailV1(detailParsed.data)
+                        : null;
 
                       const sessionId = String(s.id);
                       const edit = sessionDraftEdits[sessionId] ?? {};
@@ -898,6 +902,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                                   {b.durationMinutes ? ` · ${b.durationMinutes} min` : ''} — {String(b.steps)}
                                 </div>
                               ))}
+                            </div>
+                          ) : null}
+
+                          {workoutDetailPreview ? (
+                            <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                              <div className="text-xs font-medium text-[var(--fg-muted)]">Workout instructions (preview)</div>
+                              <div className="mt-1 whitespace-pre-wrap text-sm" data-testid="apb-session-workout-detail-preview">
+                                {workoutDetailPreview}
+                              </div>
                             </div>
                           ) : null}
 

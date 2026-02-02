@@ -219,6 +219,16 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(firstSession.getByTestId('apb-session-objective')).not.toHaveText(originalObjectiveText);
     await expect(firstSession.getByTestId('apb-session-objective')).toContainText(`(${editedDuration} min)`);
 
+    const normalizeText = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
+
+    // Planner truth: capture the canonical workout instructions preview (detailJson -> workoutDetail renderer).
+    const plannerPreviewText = normalizeText(
+      await firstSession.getByTestId('apb-session-workout-detail-preview').innerText()
+    );
+    expect(plannerPreviewText).toContain('WARMUP');
+    expect(plannerPreviewText).toContain('MAIN');
+    expect(plannerPreviewText).toContain('COOLDOWN');
+
     // Detail blocks should show 5-minute increments.
     const blockLines = await firstSession.getByTestId('apb-session-detail-block').allInnerTexts();
     for (const line of blockLines) {
@@ -315,7 +325,9 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       apbItems.find(
         (it) =>
           typeof it?.workoutDetail === 'string' &&
-          it.workoutDetail.includes('Warmup') &&
+          it.workoutDetail.includes('WARMUP') &&
+          it.workoutDetail.includes('MAIN') &&
+          it.workoutDetail.includes('COOLDOWN') &&
           String(it?.notes ?? '').includes(expectedCoachNote)
       ) ?? null;
     expect(apbTarget).not.toBeNull();
@@ -373,16 +385,28 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     expect(coachItemRes.ok()).toBeTruthy();
     const coachItemJson = (await coachItemRes.json().catch(() => null)) as any;
     const coachItem = coachItemJson?.data?.item ?? coachItemJson?.data ?? coachItemJson;
-    expect(String(coachItem?.workoutDetail ?? '')).toContain('Warmup');
+    const coachWorkoutDetail = normalizeText(String(coachItem?.workoutDetail ?? ''));
+    expect(coachWorkoutDetail).toBe(plannerPreviewText);
+    expect(coachWorkoutDetail).toContain('WARMUP');
+    expect(coachWorkoutDetail).toContain('MAIN');
+    expect(coachWorkoutDetail).toContain('COOLDOWN');
+    expect(Number(coachItem?.plannedDurationMinutes ?? 0)).toBe(Number(editedDuration));
     expect(String(coachItem?.notes ?? '')).toContain(expectedCoachNote);
 
     // Athlete truth (UI): athlete can see the same structured detail + coach notes.
     await setRoleCookie(page, 'ATHLETE');
     await page.goto(`/athlete/workouts/${encodeURIComponent(String((apbTarget as any).id))}`, { waitUntil: 'networkidle' });
     await expect(page.getByText('Description')).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('Warmup')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('athlete-workout-description')).toBeVisible({ timeout: 60_000 });
+    const athleteWorkoutDetail = normalizeText(await page.getByTestId('athlete-workout-description').innerText());
+    expect(athleteWorkoutDetail).toBe(plannerPreviewText);
+    expect(athleteWorkoutDetail).toContain('WARMUP');
+    expect(athleteWorkoutDetail).toContain('MAIN');
+    expect(athleteWorkoutDetail).toContain('COOLDOWN');
+
+    await expect(page.getByTestId('athlete-workout-duration')).toContainText(`${editedDuration} min`);
     await expect(page.getByText('Coach Notes')).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(expectedCoachNote)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('athlete-workout-coach-notes')).toContainText(expectedCoachNote);
 
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);

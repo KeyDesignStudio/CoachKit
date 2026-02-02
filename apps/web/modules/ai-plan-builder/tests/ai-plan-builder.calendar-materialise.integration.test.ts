@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { generateAiDraftPlanV1 } from '@/modules/ai-plan-builder/server/draft-plan';
 import { approveAndPublishPlanChangeProposal } from '@/modules/ai-plan-builder/server/approve-and-publish';
 import { APB_CALENDAR_ORIGIN, APB_SOURCE_PREFIX } from '@/modules/ai-plan-builder/server/calendar-materialise';
-import { sessionDetailV1Schema } from '@/modules/ai-plan-builder/rules/session-detail';
+import { normalizeSessionDetailV1DurationsToTotal, sessionDetailV1Schema } from '@/modules/ai-plan-builder/rules/session-detail';
 
 import { GET as coachCalendarGET } from '@/app/api/coach/calendar/route';
 import { POST as planWeeksPublishPOST } from '@/app/api/coach/plan-weeks/publish/route';
@@ -121,8 +121,17 @@ describe('AI Plan Builder v1 (calendar materialisation on approve-and-publish)',
 
     const item = await findApbCalendarItem(athleteId, String((sessionWithDetail as any).id));
     expect(item).not.toBeNull();
+    expect(Number(item?.plannedDurationMinutes ?? 0)).toBe(Number((sessionWithDetail as any)?.durationMinutes ?? 0));
+    expect(item?.notes ?? null).toBe(((sessionWithDetail as any)?.notes ?? null) as any);
     expect(item?.workoutDetail ?? '').toContain(objectiveSnippet);
-    expect(item?.workoutDetail ?? '').toContain('Warmup');
+    expect(item?.workoutDetail ?? '').toContain('WARMUP');
+    expect(item?.workoutDetail ?? '').toContain('MAIN');
+    expect(item?.workoutDetail ?? '').toContain('COOLDOWN');
+
+    const coachNotes = String((sessionWithDetail as any)?.notes ?? '').trim();
+    if (coachNotes) {
+      expect(String(item?.workoutDetail ?? '')).not.toContain(coachNotes);
+    }
   });
 
   it('is idempotent: re-running approve-and-publish does not create duplicates', async () => {
@@ -205,9 +214,21 @@ describe('AI Plan Builder v1 (calendar materialisation on approve-and-publish)',
     const item1 = await findApbCalendarItem(athleteId, String(firstSession.id));
     expect(item1).not.toBeNull();
 
+    const incrementMinutes = 5;
+    const rawNextDuration = firstSession.durationMinutes + 7;
+    const nextDurationMinutes = rawNextDuration + ((incrementMinutes - (rawNextDuration % incrementMinutes)) % incrementMinutes);
+    const nextDetail = normalizeSessionDetailV1DurationsToTotal({
+      detail: sessionDetailV1Schema.parse(firstSession.detailJson),
+      totalMinutes: nextDurationMinutes,
+    });
+
     await prisma.aiPlanDraftSession.update({
       where: { id: String(firstSession.id) },
-      data: { durationMinutes: firstSession.durationMinutes + 7, notes: 'Updated in test' },
+      data: {
+        durationMinutes: nextDurationMinutes,
+        detailJson: nextDetail as any,
+        notes: 'Updated in test',
+      },
     });
 
     await approveAndPublishPlanChangeProposal({
@@ -220,7 +241,7 @@ describe('AI Plan Builder v1 (calendar materialisation on approve-and-publish)',
 
     const item2 = await findApbCalendarItem(athleteId, String(firstSession.id));
     expect(item2).not.toBeNull();
-    expect(item2?.plannedDurationMinutes).toBe(firstSession.durationMinutes + 7);
+    expect(item2?.plannedDurationMinutes).toBe(nextDurationMinutes);
     expect(item2?.notes ?? '').toContain('Updated in test');
     expect(item2?.deletedAt).toBeNull();
   });

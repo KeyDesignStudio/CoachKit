@@ -4,83 +4,22 @@ import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { parseDateOnly } from '@/lib/date';
 import { addDaysToDayKey, getLocalDayKey, isDayKey } from '@/lib/day-key';
+import {
+  assertNormalizedSessionDetailMatchesTotal,
+  renderWorkoutDetailFromSessionDetailV1,
+} from '@/lib/workoutDetailRenderer';
 
 import { dayOffsetFromWeekStart, normalizeWeekStart } from '../lib/week-start';
-import { sessionDetailV1Schema, type SessionDetailV1 } from '../rules/session-detail';
+import { sessionDetailV1Schema } from '../rules/session-detail';
 
 export const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 export const APB_SOURCE_PREFIX = 'apb:';
 export const APB_MANUAL_EDIT_TAG = 'APB_MANUAL_EDITED';
 
-function formatBlockTypeLabel(blockType: SessionDetailV1['structure'][number]['blockType']): string {
-  switch (blockType) {
-    case 'warmup':
-      return 'Warmup';
-    case 'main':
-      return 'Main set';
-    case 'cooldown':
-      return 'Cooldown';
-    case 'drill':
-      return 'Drills';
-    case 'strength':
-      return 'Strength';
-    default:
-      return 'Session';
-  }
-}
-
-function formatBlockHeader(block: SessionDetailV1['structure'][number]): string {
-  const label = formatBlockTypeLabel(block.blockType);
-  const duration = Number.isFinite((block as any)?.durationMinutes) ? Math.max(0, Math.round((block as any).durationMinutes)) : null;
-  const distanceMeters = Number.isFinite((block as any)?.distanceMeters)
-    ? Math.max(0, Math.round((block as any).distanceMeters))
-    : null;
-
-  const durationText = duration != null ? `${duration} min` : null;
-  const distanceText = distanceMeters != null ? `${distanceMeters} m` : null;
-  const suffix = [durationText, distanceText].filter(Boolean).join(' · ');
-  return suffix ? `${label} (${suffix})` : label;
-}
-
-function renderSessionDetailV1ToWorkoutDetail(detail: SessionDetailV1): string {
-  const parts: string[] = [];
-
-  const objective = String(detail.objective ?? '').trim();
-  if (objective) parts.push(objective);
-
-  const targets = String((detail as any)?.targets?.notes ?? '').trim();
-  if (targets) {
-    parts.push('Targets');
-    parts.push(targets);
-  }
-
-  for (const block of detail.structure) {
-    const steps = String(block.steps ?? '').trim();
-    if (!steps) continue;
-    parts.push(formatBlockHeader(block));
-    parts.push(steps);
-  }
-
-  const cues = Array.isArray(detail.cues) ? detail.cues.map((c) => String(c ?? '').trim()).filter(Boolean) : [];
-  if (cues.length) {
-    parts.push('Cues');
-    parts.push(cues.map((c) => `- ${c}`).join('\n'));
-  }
-
-  const safety = String(detail.safetyNotes ?? '').trim();
-  if (safety) {
-    parts.push('Safety');
-    parts.push(safety);
-  }
-
-  return parts.filter(Boolean).join('\n\n').trim();
-}
-
-function tryRenderWorkoutDetailFromDetailJson(detailJson: unknown): string | null {
-  const parsed = sessionDetailV1Schema.safeParse(detailJson);
-  if (!parsed.success) return null;
-  const rendered = renderSessionDetailV1ToWorkoutDetail(parsed.data);
-  return rendered || null;
+function deriveTitleFromObjective(objective: string): string {
+  const s = String(objective ?? '').trim();
+  if (!s) return '';
+  return s.replace(/\(\s*\d+\s*min\s*\)\.?\s*$/i, '').replace(/\s+/g, ' ').trim();
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
@@ -214,6 +153,8 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             origin: APB_CALENDAR_ORIGIN,
             sourceActivityId: { in: desiredSourceIds },
           },
+          // NOTE: Some workspaces resolve Prisma types from a different package root.
+          // Keep runtime fields stable but avoid hard typing on select.
           select: {
             sourceActivityId: true,
             coachEdited: true,
@@ -221,7 +162,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
             status: true,
             deletedAt: true,
             plannedStartTimeLocal: true,
-          },
+          } as any,
         })
       : [];
 
@@ -234,32 +175,19 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         deletedAt: Date | null;
         plannedStartTimeLocal: string | null;
       }
-    >(
-      existing
-        .filter(
-          (e): e is {
-            sourceActivityId: string;
-            coachEdited: boolean;
-            tags: string[];
-            status: CalendarItemStatus;
-            deletedAt: Date | null;
-            plannedStartTimeLocal: string | null;
-          } => Boolean(e.sourceActivityId)
-        )
-        .map(
-          (e) =>
-            [
-              String(e.sourceActivityId),
-              {
-                coachEdited: Boolean((e as any).coachEdited ?? false),
-                tags: (e.tags ?? []) as string[],
-                status: e.status,
-                deletedAt: e.deletedAt,
-                plannedStartTimeLocal: e.plannedStartTimeLocal,
-              },
-            ] as const
-        )
-    );
+    >();
+
+    for (const e of existing as any[]) {
+      const sourceActivityId = typeof e?.sourceActivityId === 'string' ? e.sourceActivityId : null;
+      if (!sourceActivityId) continue;
+      existingBySourceId.set(sourceActivityId, {
+        coachEdited: Boolean(e?.coachEdited ?? false),
+        tags: Array.isArray(e?.tags) ? e.tags : [],
+        status: e?.status as CalendarItemStatus,
+        deletedAt: (e?.deletedAt as Date | null) ?? null,
+        plannedStartTimeLocal: (e?.plannedStartTimeLocal as string | null) ?? null,
+      });
+    }
 
     let upsertedCount = 0;
 
@@ -269,8 +197,30 @@ export async function materialisePublishedAiPlanToCalendar(params: {
       const existingTags = existingItem?.tags ?? [];
       const isManuallyEdited = Boolean(existingItem?.coachEdited) || existingTags.includes(APB_MANUAL_EDIT_TAG);
 
-      const renderedWorkoutDetail = tryRenderWorkoutDetailFromDetailJson((s as any).detailJson);
-      const workoutDetail = renderedWorkoutDetail ?? (s.notes ?? null);
+      const detailParsed = sessionDetailV1Schema.safeParse((s as any).detailJson);
+      if (!detailParsed.success) {
+        throw new ApiError(
+          409,
+          'MISSING_SESSION_DETAIL',
+          'Draft session detailJson is required and must conform to SessionDetailV1 to publish.'
+        );
+      }
+
+      try {
+        assertNormalizedSessionDetailMatchesTotal({
+          detail: detailParsed.data,
+          totalMinutes: Number(s.durationMinutes ?? 0),
+          incrementMinutes: 5,
+        });
+      } catch (e) {
+        throw new ApiError(409, 'INVALID_SESSION_DETAIL', String((e as any)?.message ?? e));
+      }
+
+      const workoutDetail = renderWorkoutDetailFromSessionDetailV1(detailParsed.data);
+
+      const titleFromType = String((s as any)?.type ?? '').trim();
+      const titleFromObjective = deriveTitleFromObjective(detailParsed.data.objective);
+      const title = titleFromType || titleFromObjective || buildApbTitle({ discipline: s.discipline, type: s.type });
 
       const dayKey = computeSessionDayKey({
         eventDate,
@@ -298,11 +248,12 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         ...restoreOnly,
         ...(canUpdateDate ? { date } : {}),
         discipline: toCalendarDiscipline(s.discipline),
-        subtype: null,
-        title: buildApbTitle({ discipline: s.discipline, type: s.type }),
+        subtype: String((s as any)?.type ?? '').trim() || null,
+        title,
         plannedDurationMinutes: Math.max(0, Math.round(s.durationMinutes ?? 0)),
         notes: s.notes ?? null,
         workoutDetail,
+        workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
       };
 
       await prisma.calendarItem.upsert({
@@ -318,20 +269,19 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           coachId: params.coachId,
           date,
           plannedStartTimeLocal: null,
-          coachEdited: false,
           origin: APB_CALENDAR_ORIGIN,
           planningStatus: 'PLANNED',
           sourceActivityId,
           discipline: toCalendarDiscipline(s.discipline),
-          subtype: null,
-          title: buildApbTitle({ discipline: s.discipline, type: s.type }),
+          subtype: String((s as any)?.type ?? '').trim() || null,
+          title,
           plannedDurationMinutes: Math.max(0, Math.round(s.durationMinutes ?? 0)),
           plannedDistanceKm: null,
           distanceMeters: null,
           intensityTarget: null,
           tags: [],
           equipment: [],
-          workoutStructure: Prisma.DbNull,
+          workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
           notes: s.notes ?? null,
           workoutDetail,
           intensityType: null,
