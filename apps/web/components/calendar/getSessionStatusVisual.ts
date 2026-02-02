@@ -106,7 +106,7 @@ export function getSessionStatusVisual(session: SessionLike, options: StatusVisu
   // PLANNED (upcoming)
   return {
     icon,
-    overlay: null,
+    overlay: 'planned',
     iconColor: 'text-slate-500',
     backgroundTint: null,
   };

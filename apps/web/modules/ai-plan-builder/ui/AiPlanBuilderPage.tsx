@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ApiClientError, useApi } from '@/components/api-client';
 
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart, orderedDayIndices, startOfWeek } from '../lib/week-start';
+import { buildAiPlanBuilderSessionTitle } from '../lib/session-title';
 import { sessionDetailV1Schema } from '../rules/session-detail';
 import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
 import { AiPlanBuilderCoachV1 } from './AiPlanBuilderCoachV1';
@@ -998,6 +999,8 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                             const isSessionEditDisabled = busy !== null || isWeekLocked || isSessionLocked;
                             const isSessionLockToggleDisabled = busy !== null || isWeekLocked;
 
+                            const sessionTitle = buildAiPlanBuilderSessionTitle({ discipline: s.discipline, type: s.type });
+
                             const detailParsed = sessionDetailV1Schema.safeParse(s.detailJson);
                             const detail = detailParsed.success ? detailParsed.data : null;
                             const workoutDetailPreview = detail ? renderWorkoutDetailFromSessionDetailV1(detail) : null;
@@ -1011,7 +1014,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                           >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="text-sm font-medium">
-                                {String(s.discipline)} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · #{String(s.ordinal)}
+                                {sessionTitle} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · #{String(s.ordinal)}
                               </div>
                               <label className="flex items-center gap-2 text-sm">
                                 <input
@@ -1325,7 +1328,7 @@ export function AiPlanBuilderPage({ athleteId }: { athleteId: string }) {
                           data-session-id={String(s.id)}
                         >
                           <div className="text-sm">
-                            <span className="font-medium">{formatIsoDate(s._date)}</span> · Week {Number(s.weekIndex) + 1} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · {String(s.type)} · {Number(s.durationMinutes)}m
+                            <span className="font-medium">{formatIsoDate(s._date)}</span> · Week {Number(s.weekIndex) + 1} · {DAY_NAMES_SUN0[Number(s.dayOfWeek) % 7]} · {buildAiPlanBuilderSessionTitle({ discipline: s.discipline, type: s.type })} · {Number(s.durationMinutes)}m
                           </div>
                           <Button
                             type="button"

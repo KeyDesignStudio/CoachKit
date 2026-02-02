@@ -5,6 +5,7 @@ import { requireAthlete } from '@/lib/auth';
 import { requireAiPlanBuilderV1Enabled } from '@/modules/ai-plan-builder/server/flag';
 import { getPublishedAiPlanForAthlete } from '@/modules/ai-plan-builder/server/athlete-plan';
 import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart } from '@/modules/ai-plan-builder/lib/week-start';
+import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 
 import { PublishUpdateBanner } from './PublishUpdateBanner';
 
@@ -75,7 +76,7 @@ export default async function AthleteAiPlanViewPage(props: { params: { aiPlanDra
                       data-testid="athlete-ai-plan-session"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-medium">{s.type}</div>
+                        <div className="text-sm font-medium">{buildAiPlanBuilderSessionTitle({ discipline: s.discipline, type: s.type })}</div>
                         <div className="text-xs text-[var(--fg-muted)]">{s.durationMinutes} min</div>
                       </div>
                       <div className="mt-1 text-xs text-[var(--fg-muted)]">

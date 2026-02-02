@@ -5,6 +5,7 @@ import { requireAthlete } from '@/lib/auth';
 import { requireAiPlanBuilderV1Enabled } from '@/modules/ai-plan-builder/server/flag';
 import { getPublishedAiPlanSessionForAthlete } from '@/modules/ai-plan-builder/server/athlete-plan';
 import { DAY_NAMES_SUN0 } from '@/modules/ai-plan-builder/lib/week-start';
+import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 
 import { AthleteFeedbackForm } from './AthleteFeedbackForm';
 
@@ -36,7 +37,7 @@ export default async function AthleteAiPlanSessionPage(props: {
       </div>
 
       <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3">
-        <div className="text-sm font-medium">{session.type}</div>
+        <div className="text-sm font-medium">{buildAiPlanBuilderSessionTitle({ discipline: session.discipline, type: session.type })}</div>
         <div className="mt-1 text-xs text-[var(--fg-muted)]">
           {session.discipline} • {DAY_NAMES_SUN0[Number(session.dayOfWeek) % 7]} • {session.durationMinutes} min
         </div>
