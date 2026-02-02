@@ -3,11 +3,16 @@ import crypto from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import nextEnv from '@next/env';
+import {
+  ensureDatabaseExists,
+  ensureDockerComposeUp,
+  getDatabaseName,
+  redactDatabaseUrl,
+  withDatabase,
+} from './test-db-helpers.mjs';
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd(), true);
-
-const REPO_ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
 
 const TEST_DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
@@ -95,32 +100,6 @@ function runQuiet(cmd, args, { env, allowFailure = false } = {}) {
   return result;
 }
 
-function redactDatabaseUrl(rawUrl) {
-  try {
-    const u = new URL(rawUrl);
-    if (u.password) u.password = '***';
-    return u.toString();
-  } catch {
-    return String(rawUrl || '');
-  }
-}
-
-function withDatabase(rawUrl, dbName) {
-  const u = new URL(rawUrl);
-  u.pathname = `/${dbName}`;
-  // Each dedicated database still uses the default Prisma schema mapping.
-  if (!u.searchParams.get('schema')) u.searchParams.set('schema', 'public');
-  return u.toString();
-}
-
-function getDatabaseName(rawUrl) {
-  try {
-    const u = new URL(rawUrl);
-    return u.pathname.replace(/^\//, '') || null;
-  } catch {
-    return null;
-  }
-}
 
 function lastLines(text, n = 50) {
   const lines = String(text ?? '').split(/\r?\n/);
@@ -222,32 +201,6 @@ function setCachedSchemaHash(hash) {
   writeFileSync(cachePath, `${hash}\n`, 'utf8');
 }
 
-function ensureDockerComposeUp() {
-  // Prefer reusing an existing container (common in local dev).
-  const exists = runQuiet('docker', ['inspect', 'programassist-postgres'], { allowFailure: true });
-  if (exists.status === 0) {
-    run('docker', ['start', 'programassist-postgres'], { allowFailure: true });
-  } else {
-    // Uses repo root docker-compose.yml.
-    run('docker', ['compose', '-f', `${REPO_ROOT}/docker-compose.yml`, 'up', '-d', 'postgres']);
-  }
-
-  // Wait until Postgres is ready.
-  const maxAttempts = 20;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const ok = run(
-      'docker',
-      ['exec', 'programassist-postgres', 'pg_isready', '-U', 'programassist', '-d', 'programassist'],
-      { allowFailure: true }
-    );
-
-    if (ok.status === 0) return;
-    sleep(1000);
-  }
-
-  console.error('[test-ai-plan-builder] Postgres did not become ready in time.');
-  process.exit(1);
-}
 
 function prismaReset(env) {
   const schemaArgs = ['--schema', 'prisma/schema.prisma'];
@@ -275,47 +228,6 @@ function prismaMigrateDeploy(env) {
   runStep('prisma:migrate:deploy', 'npx', ['prisma', 'migrate', 'deploy', ...schemaArgs], { env, phase: 'prisma' });
 }
 
-function ensureDatabaseExists(dbName) {
-  if (!/^[a-zA-Z0-9_]+$/.test(dbName)) {
-    throw new Error(`Invalid database name: ${dbName}`);
-  }
-
-  // CREATE DATABASE cannot run inside a transaction; use the dockerized psql client.
-  const check = spawnSync(
-    'docker',
-    [
-      'exec',
-      'programassist-postgres',
-      'psql',
-      '-U',
-      'programassist',
-      '-d',
-      'postgres',
-      '-tAc',
-      `SELECT 1 FROM pg_database WHERE datname='${dbName}';`,
-    ],
-    { shell: false, encoding: 'utf8' }
-  );
-
-  const exists = String(check.stdout ?? '').trim() === '1';
-  if (exists) return;
-
-  runStep(
-    'db:create-database',
-    'docker',
-    [
-      'exec',
-      'programassist-postgres',
-      'psql',
-      '-U',
-      'programassist',
-      '-d',
-      'postgres',
-      '-c',
-      `CREATE DATABASE "${dbName}";`,
-    ]
-  );
-}
 
 function runVitest(env) {
   runStep('vitest', 'npx', ['vitest', 'run', '--no-file-parallelism', '--maxWorkers=1'], { env, phase: 'vitest' });
