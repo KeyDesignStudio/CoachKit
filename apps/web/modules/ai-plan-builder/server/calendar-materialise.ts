@@ -12,15 +12,11 @@ import {
 import { dayOffsetFromWeekStart, normalizeWeekStart } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
 
+import { buildAiPlanBuilderSessionTitle } from '../lib/session-title';
+
 export const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 export const APB_SOURCE_PREFIX = 'apb:';
 export const APB_MANUAL_EDIT_TAG = 'APB_MANUAL_EDITED';
-
-function deriveTitleFromObjective(objective: string): string {
-  const s = String(objective ?? '').trim();
-  if (!s) return '';
-  return s.replace(/\(\s*\d+\s*min\s*\)\.?\s*$/i, '').replace(/\s+/g, ' ').trim();
-}
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
@@ -71,13 +67,6 @@ function computeSessionDayKey(params: {
   const remainingWeeks = params.weeksToEvent - 1 - params.weekIndex;
   const weekStartDayKey = addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
   return addDaysToDayKey(weekStartDayKey, offset);
-}
-
-function buildApbTitle(params: { discipline: string; type: string }) {
-  const discipline = toCalendarDiscipline(params.discipline);
-  const rawType = String(params.type ?? '').trim();
-  if (!rawType) return `${discipline} Session`;
-  return `${discipline} ${rawType}`;
 }
 
 function isRetryableMaterialiseError(error: unknown): boolean {
@@ -237,9 +226,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
 
       const workoutDetail = renderWorkoutDetailFromSessionDetailV1(detailParsed.data);
 
-      const titleFromType = String((s as any)?.type ?? '').trim();
-      const titleFromObjective = deriveTitleFromObjective(detailParsed.data.objective);
-      const title = titleFromType || titleFromObjective || buildApbTitle({ discipline: s.discipline, type: s.type });
+      const title = buildAiPlanBuilderSessionTitle({ discipline: s.discipline, type: s.type });
 
       const dayKey = computeSessionDayKey({
         startDate,

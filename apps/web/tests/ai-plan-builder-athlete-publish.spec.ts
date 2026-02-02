@@ -87,6 +87,12 @@ test.describe('AI Plan Builder v1: athlete publish + feedback (flag ON)', () => 
 
     const firstSessionLink = page.getByTestId('athlete-ai-plan-session').first();
     await expect(firstSessionLink).toBeVisible();
+
+    // Title should be compact and descriptive (2+ words), and should not be a generic "session" label.
+    const titleEl = firstSessionLink.locator('div.text-sm.font-medium');
+    await expect(titleEl).toHaveText(/\w+\s+\w+/);
+    await expect(titleEl).not.toHaveText(/session/i);
+
     await firstSessionLink.click();
 
     await expect(page.getByText('Log feedback')).toBeVisible();
