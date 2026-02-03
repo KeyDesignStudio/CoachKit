@@ -673,18 +673,118 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             <div className="text-sm text-[var(--fg-muted)]">No Athlete Brief yet. Ask the athlete to complete intake.</div>
           ) : (
             <div className="space-y-3 text-sm">
-              {[
-                { title: 'Coaching style', items: briefLatest.coachingStyleSummary },
-                { title: 'Motivation', items: briefLatest.motivationTriggers },
-                { title: 'Risks', items: briefLatest.riskFlags },
-                { title: 'Goal context', items: briefLatest.goalContext },
-                { title: 'Swim', items: briefLatest.swimProfile },
-                { title: 'Bike', items: briefLatest.bikeProfile },
-                { title: 'Run', items: briefLatest.runProfile },
-                { title: 'Life constraints', items: briefLatest.lifeConstraints },
-                { title: 'Coach focus', items: briefLatest.coachFocusNotes },
-              ].map((section) =>
-                Array.isArray(section.items) && section.items.length ? (
+              {(() => {
+                const sections: Array<{ title: string; items: string[] }> = [];
+                const pushLabeled = (items: string[], label: string, value: string | number | null | undefined) => {
+                  if (value == null || value === '') return;
+                  items.push(`${label}: ${value}`);
+                };
+
+                const snapshotItems: string[] = [];
+                if (briefLatest.snapshot?.headline) snapshotItems.push(briefLatest.snapshot.headline);
+                if (briefLatest.snapshot?.tags?.length) snapshotItems.push(`Tags: ${briefLatest.snapshot.tags.join(', ')}`);
+                if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
+
+                const goalItems: string[] = [];
+                pushLabeled(goalItems, 'Type', humanizeEnumLabel(briefLatest.goals?.type) ?? briefLatest.goals?.type ?? undefined);
+                pushLabeled(goalItems, 'Details', briefLatest.goals?.details ?? undefined);
+                pushLabeled(goalItems, 'Timeline', humanizeEnumLabel(briefLatest.goals?.timeline) ?? briefLatest.goals?.timeline ?? undefined);
+                pushLabeled(goalItems, 'Focus', humanizeEnumLabel(briefLatest.goals?.focus) ?? briefLatest.goals?.focus ?? undefined);
+                if (goalItems.length) sections.push({ title: 'Goals', items: goalItems });
+
+                const trainingItems: string[] = [];
+                pushLabeled(
+                  trainingItems,
+                  'Experience',
+                  humanizeEnumLabel(briefLatest.disciplineProfile?.experienceLevel) ?? briefLatest.disciplineProfile?.experienceLevel
+                );
+                const disciplineList = Array.isArray(briefLatest.disciplineProfile?.disciplines)
+                  ? briefLatest.disciplineProfile?.disciplines.map(humanizeDiscipline).filter(Boolean)
+                  : [];
+                if (disciplineList.length) trainingItems.push(`Disciplines: ${disciplineList.join(', ')}`);
+                pushLabeled(trainingItems, 'Weekly minutes', briefLatest.disciplineProfile?.weeklyMinutes ?? undefined);
+                pushLabeled(
+                  trainingItems,
+                  'Recent consistency',
+                  humanizeEnumLabel(briefLatest.disciplineProfile?.recentConsistency) ??
+                    briefLatest.disciplineProfile?.recentConsistency
+                );
+                if (briefLatest.disciplineProfile?.swimConfidence)
+                  trainingItems.push(`Swim confidence: ${briefLatest.disciplineProfile.swimConfidence}/5`);
+                if (briefLatest.disciplineProfile?.bikeConfidence)
+                  trainingItems.push(`Bike confidence: ${briefLatest.disciplineProfile.bikeConfidence}/5`);
+                if (briefLatest.disciplineProfile?.runConfidence)
+                  trainingItems.push(`Run confidence: ${briefLatest.disciplineProfile.runConfidence}/5`);
+                if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
+
+                const constraintItems: string[] = [];
+                if (briefLatest.constraints?.availabilityDays?.length) {
+                  constraintItems.push(`Available days: ${briefLatest.constraints.availabilityDays.join(', ')}`);
+                }
+                pushLabeled(
+                  constraintItems,
+                  'Schedule variability',
+                  humanizeEnumLabel(briefLatest.constraints?.scheduleVariability) ?? briefLatest.constraints?.scheduleVariability
+                );
+                pushLabeled(
+                  constraintItems,
+                  'Sleep quality',
+                  humanizeEnumLabel(briefLatest.constraints?.sleepQuality) ?? briefLatest.constraints?.sleepQuality
+                );
+                pushLabeled(
+                  constraintItems,
+                  'Injury status',
+                  humanizeEnumLabel(briefLatest.constraints?.injuryStatus) ?? briefLatest.constraints?.injuryStatus
+                );
+                pushLabeled(constraintItems, 'Notes', briefLatest.constraints?.notes ?? undefined);
+                if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
+
+                const coachingItems: string[] = [];
+                pushLabeled(
+                  coachingItems,
+                  'Feedback style',
+                  humanizeEnumLabel(briefLatest.coaching?.feedbackStyle) ?? briefLatest.coaching?.feedbackStyle
+                );
+                pushLabeled(
+                  coachingItems,
+                  'Tone preference',
+                  humanizeEnumLabel(briefLatest.coaching?.tonePreference) ?? briefLatest.coaching?.tonePreference
+                );
+                pushLabeled(
+                  coachingItems,
+                  'Check-in cadence',
+                  humanizeEnumLabel(briefLatest.coaching?.checkinPreference) ?? briefLatest.coaching?.checkinPreference
+                );
+                if (briefLatest.coaching?.structurePreference)
+                  coachingItems.push(`Structure preference: ${briefLatest.coaching.structurePreference}/5`);
+                pushLabeled(
+                  coachingItems,
+                  'Motivation style',
+                  humanizeEnumLabel(briefLatest.coaching?.motivationStyle) ?? briefLatest.coaching?.motivationStyle
+                );
+                pushLabeled(coachingItems, 'Notes', briefLatest.coaching?.notes ?? undefined);
+                if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
+
+                const guidanceItems: string[] = [];
+                pushLabeled(
+                  guidanceItems,
+                  'Tone',
+                  humanizeEnumLabel(briefLatest.planGuidance?.tone) ?? briefLatest.planGuidance?.tone
+                );
+                if (briefLatest.planGuidance?.focusNotes?.length) {
+                  guidanceItems.push(`Focus notes: ${briefLatest.planGuidance.focusNotes.join(' ')}`);
+                }
+                if (briefLatest.planGuidance?.coachingCues?.length) {
+                  guidanceItems.push(`Coaching cues: ${briefLatest.planGuidance.coachingCues.join(' ')}`);
+                }
+                if (briefLatest.planGuidance?.safetyNotes?.length) {
+                  guidanceItems.push(`Safety notes: ${briefLatest.planGuidance.safetyNotes.join(' ')}`);
+                }
+                if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
+
+                if (briefLatest.risks?.length) sections.push({ title: 'Risks', items: briefLatest.risks });
+
+                return sections.map((section) => (
                   <div key={section.title}>
                     <div className="text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{section.title}</div>
                     <ul className="mt-1 list-disc space-y-1 pl-4">
@@ -693,8 +793,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       ))}
                     </ul>
                   </div>
-                ) : null
-              )}
+                ));
+              })()}
             </div>
           )}
         </Block>
@@ -730,17 +830,26 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   (intakeLatest as any)?.draftJson ??
                   null;
 
-                const primaryGoal = toSingleSentence((raw as any)?.primary_goal ?? (raw as any)?.primaryGoal ?? null);
+                const goalDetails = toSingleSentence((raw as any)?.goal_details ?? (raw as any)?.goalDetails ?? null);
+                const goalType = humanizeEnumLabel((raw as any)?.goal_type ?? (raw as any)?.goalType ?? null);
+                const goalFocus = humanizeEnumLabel((raw as any)?.goal_focus ?? (raw as any)?.goalFocus ?? null);
+                const goalTimeline = humanizeEnumLabel((raw as any)?.goal_timeline ?? (raw as any)?.goalTimeline ?? null);
                 const disciplines = Array.isArray((raw as any)?.disciplines)
                   ? (raw as any).disciplines.map(humanizeDiscipline).filter(Boolean)
                   : [];
+                const weeklyMinutes = Number.isFinite(Number((raw as any)?.weekly_minutes))
+                  ? Number((raw as any)?.weekly_minutes)
+                  : null;
+                const availabilityDays = Array.isArray((raw as any)?.availability_days)
+                  ? (raw as any).availability_days.map(String)
+                  : [];
+                const injuryStatus = humanizeEnumLabel((raw as any)?.injury_status ?? (raw as any)?.injuryStatus ?? null);
+                const coachNotes = stripKeyPrefix((raw as any)?.coaching_notes ?? (raw as any)?.coachNotes ?? null);
 
-                const frequency = humanizeTrainingFrequency((raw as any)?.training_plan_frequency ?? (raw as any)?.trainingPlanFrequency);
-                const preferredDay = humanizeDayOfWeek((raw as any)?.training_plan_day_of_week ?? (raw as any)?.trainingPlanDayOfWeek);
-                const weekOfMonth = humanizeWeekOfMonth((raw as any)?.training_plan_week_of_month ?? (raw as any)?.trainingPlanWeekOfMonth);
-                const coachNotes = stripKeyPrefix((raw as any)?.coach_notes ?? (raw as any)?.coachNotes ?? null);
-
-                const hasAny = Boolean(primaryGoal || disciplines.length || frequency || preferredDay || weekOfMonth || coachNotes);
+                const hasAny = Boolean(
+                  goalDetails || goalType || goalFocus || goalTimeline || disciplines.length || weeklyMinutes || availabilityDays.length ||
+                    injuryStatus || coachNotes
+                );
 
                 if (!hasAny) {
                   return <div className="text-sm text-[var(--fg-muted)]">Preparing athlete brief…</div>;
@@ -754,10 +863,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                     <div className="text-sm font-semibold">Athlete Brief</div>
 
                     <div className="mt-3 space-y-3 text-sm">
-                      {primaryGoal ? (
+                      {goalDetails || goalType || goalFocus || goalTimeline ? (
                         <div>
-                          <div className="font-medium">Goal</div>
-                          <div className="text-[var(--fg)]">{primaryGoal}</div>
+                          <div className="font-medium">Goals</div>
+                          <div className="space-y-1 text-[var(--fg)]">
+                            {goalType ? <div>Type: {goalType}</div> : null}
+                            {goalDetails ? <div>Details: {goalDetails}</div> : null}
+                            {goalTimeline ? <div>Timeline: {goalTimeline}</div> : null}
+                            {goalFocus ? <div>Focus: {goalFocus}</div> : null}
+                          </div>
                         </div>
                       ) : null}
 
@@ -768,13 +882,13 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                         </div>
                       ) : null}
 
-                      {frequency || preferredDay || weekOfMonth ? (
+                      {weeklyMinutes || availabilityDays.length || injuryStatus ? (
                         <div>
-                          <div className="font-medium">Training rhythm</div>
+                          <div className="font-medium">Constraints</div>
                           <div className="space-y-1 text-[var(--fg)]">
-                            {frequency ? <div>Frequency: {frequency}</div> : null}
-                            {preferredDay ? <div>Preferred day: {preferredDay}</div> : null}
-                            {weekOfMonth ? <div>Week of month: {weekOfMonth}</div> : null}
+                            {weeklyMinutes ? <div>Weekly minutes: {weeklyMinutes}</div> : null}
+                            {availabilityDays.length ? <div>Available days: {availabilityDays.join(', ')}</div> : null}
+                            {injuryStatus ? <div>Injury status: {injuryStatus}</div> : null}
                           </div>
                         </div>
                       ) : null}

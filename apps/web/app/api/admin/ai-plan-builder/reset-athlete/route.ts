@@ -16,7 +16,11 @@ export async function POST(request: Request) {
 
     const body = aiPlanBuilderResetAthleteSchema.parse(await request.json().catch(() => ({})));
 
-    const result = await resetAiPlanBuilderStateForAthlete({ athleteId: body.athleteId, dryRun: body.dryRun });
+    const result = await resetAiPlanBuilderStateForAthlete({
+      athleteId: body.athleteId,
+      dryRun: body.dryRun,
+      mode: body.mode,
+    });
 
     // Log only athleteId + counts. No PII.
     console.info('[apb_admin_reset_athlete]', {

@@ -1,5 +1,13 @@
 export type IntakeQuestionType = 'text' | 'textarea' | 'select' | 'multi' | 'scale' | 'number';
 
+export type IntakeQuestionVisibility = {
+  questionKey: string;
+  equals?: string | number | boolean;
+  anyOf?: Array<string | number | boolean>;
+  includes?: string;
+  includesAny?: string[];
+};
+
 export type IntakeQuestion = {
   key: string;
   prompt: string;
@@ -8,6 +16,7 @@ export type IntakeQuestion = {
   options?: string[];
   min?: number;
   max?: number;
+  visibleWhen?: IntakeQuestionVisibility;
 };
 
 export type IntakeSection = {
@@ -19,179 +28,91 @@ export type IntakeSection = {
 
 export const INTAKE_SECTIONS: IntakeSection[] = [
   {
-    key: 'coaching-style',
-    title: 'Coaching Style & Relationship',
-    intro: 'Let’s shape how we work together so coaching feels supportive and effective.',
+    key: 'goals',
+    title: 'Goals & Timeline',
+    intro: 'A quick snapshot of what you want to accomplish next.',
     questions: [
-      { key: 'coach_feedback_style', prompt: 'What kind of feedback helps you most?', type: 'textarea' },
       {
-        key: 'coach_checkin_preference',
-        prompt: 'How do you prefer check-ins?',
+        key: 'goal_type',
+        prompt: 'What best describes your main goal?',
         type: 'select',
-        options: ['Quick check-in', 'Detailed review', 'Only when needed', 'Mix it up'],
+        options: ['Race or event', 'Improve fitness', 'Return from a break', 'General health', 'Other'],
       },
       {
-        key: 'coach_tone_preference',
-        prompt: 'What tone feels best for coaching feedback?',
+        key: 'goal_timeline',
+        prompt: 'When do you want to feel ready?',
         type: 'select',
-        options: ['Direct and concise', 'Encouraging and supportive', 'Balanced and pragmatic'],
+        options: ['No date in mind', 'In 6–8 weeks', 'In 2–3 months', 'In 3–6 months', 'In 6–12 months'],
       },
       {
-        key: 'coach_structure_preference',
-        prompt: 'How much structure do you want in training weeks?',
+        key: 'goal_focus',
+        prompt: 'What matters most right now?',
+        type: 'select',
+        options: ['Consistency', 'Base fitness', 'Performance', 'Return to training', 'Health & recovery'],
+      },
+      { key: 'goal_details', prompt: 'Optional: add any details about your goal', type: 'text' },
+    ],
+  },
+  {
+    key: 'training-profile',
+    title: 'Training Profile',
+    intro: 'A quick snapshot of your current training background.',
+    questions: [
+      {
+        key: 'experience_level',
+        prompt: 'Experience level',
+        type: 'select',
+        options: ['New to structured training', 'Some experience', 'Experienced'],
+      },
+      {
+        key: 'disciplines',
+        prompt: 'Which disciplines are you training for right now?',
+        type: 'multi',
+        options: ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'],
+      },
+      {
+        key: 'weekly_minutes',
+        prompt: 'Typical weekly minutes available',
+        type: 'number',
+        min: 0,
+        max: 1500,
+      },
+      {
+        key: 'recent_consistency',
+        prompt: 'How consistent has training been lately?',
+        type: 'select',
+        options: ['Just starting', 'Some weeks consistent', 'Mostly consistent'],
+      },
+      {
+        key: 'swim_confidence',
+        prompt: 'Swim confidence',
         type: 'scale',
         min: 1,
         max: 5,
-      },
-      { key: 'coach_green_flags', prompt: 'What feels like a green flag in coaching?', type: 'text' },
-      { key: 'coach_red_flags', prompt: 'Anything you want to avoid in coaching?', type: 'text' },
-    ],
-  },
-  {
-    key: 'identity-mindset',
-    title: 'Athlete Identity & Mindset',
-    intro: 'A little about how you think and feel as an athlete.',
-    questions: [
-      { key: 'athlete_identity', prompt: 'How would you describe yourself as an athlete?', type: 'textarea' },
-      { key: 'motivation_triggers', prompt: 'What keeps you consistent when motivation dips?', type: 'textarea' },
-      { key: 'success_definition', prompt: 'What makes training feel successful for you?', type: 'text' },
-      {
-        key: 'tough_session_response',
-        prompt: 'How do you usually handle tough sessions?',
-        type: 'select',
-        options: ['Push through', 'Adjust pace/intensity', 'Need extra support', 'Depends on the day'],
-      },
-      { key: 'confidence_level', prompt: 'Confidence level right now', type: 'scale', min: 1, max: 5 },
-      { key: 'mindset_challenges', prompt: 'Any mindset challenges you want help with?', type: 'textarea' },
-    ],
-  },
-  {
-    key: 'goal-context',
-    title: 'Goal & Event Context',
-    intro: 'Let’s clarify what we’re building toward.',
-    questions: [
-      { key: 'primary_goal', prompt: 'What’s your main goal or event?', type: 'text' },
-      { key: 'goal_date', prompt: 'Event date (if known)', type: 'text' },
-      { key: 'goal_reason', prompt: 'Why does this goal matter to you?', type: 'textarea' },
-      { key: 'secondary_goals', prompt: 'Any secondary goals?', type: 'textarea' },
-      {
-        key: 'goal_experience_level',
-        prompt: 'Your experience with similar events',
-        type: 'select',
-        options: ['First time', 'Some experience', 'Plenty of experience'],
+        visibleWhen: { questionKey: 'disciplines', includes: 'SWIM' },
       },
       {
-        key: 'next_12_weeks_priority',
-        prompt: 'Top priority for the next 8–12 weeks',
-        type: 'select',
-        options: ['Consistency', 'Fitness base', 'Speed/strength', 'Health & recovery'],
-      },
-    ],
-  },
-  {
-    key: 'swim-profile',
-    title: 'Swim Profile',
-    intro: 'Help me understand your swimming background.',
-    questions: [
-      {
-        key: 'swim_background',
-        prompt: 'Swim background',
-        type: 'select',
-        options: ['New to swimming', 'Some experience', 'Strong swimmer'],
-      },
-      {
-        key: 'swim_open_water_confidence',
-        prompt: 'Open water confidence',
+        key: 'bike_confidence',
+        prompt: 'Bike confidence',
         type: 'scale',
         min: 1,
         max: 5,
+        visibleWhen: { questionKey: 'disciplines', includes: 'BIKE' },
       },
       {
-        key: 'swim_weekly_sessions',
-        prompt: 'Typical swim sessions per week',
-        type: 'select',
-        options: ['0–1', '2', '3+'],
+        key: 'run_confidence',
+        prompt: 'Run confidence',
+        type: 'scale',
+        min: 1,
+        max: 5,
+        visibleWhen: { questionKey: 'disciplines', includes: 'RUN' },
       },
-      { key: 'swim_limiters', prompt: 'Main limiter in swimming', type: 'textarea' },
-      {
-        key: 'swim_preference',
-        prompt: 'Preferred swim session focus',
-        type: 'select',
-        options: ['Technique', 'Endurance', 'Speed', 'Variety'],
-      },
-      { key: 'swim_injury_notes', prompt: 'Any swim-related injuries or pain?', type: 'textarea' },
     ],
   },
   {
-    key: 'bike-profile',
-    title: 'Bike Profile',
-    intro: 'Let’s capture your cycling strengths and needs.',
-    questions: [
-      {
-        key: 'bike_background',
-        prompt: 'Bike background',
-        type: 'select',
-        options: ['New to cycling', 'Some experience', 'Strong cyclist'],
-      },
-      {
-        key: 'bike_weekly_sessions',
-        prompt: 'Typical bike sessions per week',
-        type: 'select',
-        options: ['0–1', '2', '3+'],
-      },
-      { key: 'bike_limiters', prompt: 'Main limiter on the bike', type: 'textarea' },
-      {
-        key: 'bike_preference',
-        prompt: 'Preferred bike session focus',
-        type: 'select',
-        options: ['Endurance', 'Tempo', 'Hills/strength', 'Cadence/skills'],
-      },
-      {
-        key: 'bike_environment',
-        prompt: 'Where do you ride most?',
-        type: 'select',
-        options: ['Outdoor', 'Indoor', 'Mix of both'],
-      },
-      { key: 'bike_injury_notes', prompt: 'Any bike-related injuries or pain?', type: 'textarea' },
-    ],
-  },
-  {
-    key: 'run-profile',
-    title: 'Run Profile',
-    intro: 'Running often drives fatigue — let’s get this right.',
-    questions: [
-      {
-        key: 'run_background',
-        prompt: 'Run background',
-        type: 'select',
-        options: ['New to running', 'Some experience', 'Strong runner'],
-      },
-      {
-        key: 'run_weekly_sessions',
-        prompt: 'Typical run sessions per week',
-        type: 'select',
-        options: ['1–2', '3–4', '5+'],
-      },
-      { key: 'run_limiters', prompt: 'Main limiter in running', type: 'textarea' },
-      {
-        key: 'run_preference',
-        prompt: 'Preferred run session focus',
-        type: 'select',
-        options: ['Easy aerobic', 'Tempo', 'Intervals', 'Long run'],
-      },
-      {
-        key: 'run_surface',
-        prompt: 'Where do you run most?',
-        type: 'select',
-        options: ['Road', 'Trail', 'Treadmill', 'Mix'],
-      },
-      { key: 'run_injury_notes', prompt: 'Any run-related injuries or pain?', type: 'textarea' },
-    ],
-  },
-  {
-    key: 'life-constraints',
-    title: 'Life & Constraints',
-    intro: 'Let’s shape training around your real life.',
+    key: 'constraints',
+    title: 'Constraints & Safety',
+    intro: 'This helps keep the plan realistic and safe.',
     questions: [
       {
         key: 'availability_days',
@@ -200,13 +121,11 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         options: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
       },
       {
-        key: 'availability_minutes',
-        prompt: 'Typical minutes available per week',
-        type: 'number',
-        min: 0,
-        max: 1500,
+        key: 'schedule_variability',
+        prompt: 'How predictable is your weekly schedule?',
+        type: 'select',
+        options: ['Very stable', 'Some variation', 'Often unpredictable'],
       },
-      { key: 'schedule_constraints', prompt: 'Work/life constraints I should know', type: 'textarea' },
       {
         key: 'sleep_quality',
         prompt: 'Sleep quality lately',
@@ -214,13 +133,51 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         options: ['Great', 'Okay', 'Inconsistent', 'Poor'],
       },
       {
-        key: 'travel_variability',
-        prompt: 'How variable is your weekly schedule?',
+        key: 'injury_status',
+        prompt: 'Any injuries or medical considerations?',
         type: 'select',
-        options: ['Very stable', 'Some variation', 'Often unpredictable'],
+        options: ['No injuries', 'Managing minor pain', 'Recovering from injury', 'Medical considerations'],
       },
-      { key: 'equipment_access', prompt: 'Equipment or facilities you have access to', type: 'textarea' },
-      { key: 'injury_risk_notes', prompt: 'Any injuries, pain, or medical considerations?', type: 'textarea' },
+      { key: 'constraints_notes', prompt: 'Optional: anything else we should plan around?', type: 'text' },
+    ],
+  },
+  {
+    key: 'coaching-preferences',
+    title: 'Coaching Preferences',
+    intro: 'How you want feedback and support.',
+    questions: [
+      {
+        key: 'feedback_style',
+        prompt: 'What feedback style helps you most?',
+        type: 'select',
+        options: ['Direct and concise', 'Encouraging and supportive', 'Balanced and pragmatic'],
+      },
+      {
+        key: 'tone_preference',
+        prompt: 'Preferred coaching tone',
+        type: 'select',
+        options: ['Direct', 'Warm', 'Balanced'],
+      },
+      {
+        key: 'checkin_preference',
+        prompt: 'Check-in cadence',
+        type: 'select',
+        options: ['Weekly', 'Every two weeks', 'Only when needed', 'As needed'],
+      },
+      {
+        key: 'structure_preference',
+        prompt: 'How much structure do you want in training weeks?',
+        type: 'scale',
+        min: 1,
+        max: 5,
+      },
+      {
+        key: 'motivation_style',
+        prompt: 'What keeps you motivated?',
+        type: 'select',
+        options: ['Progress updates', 'Clear accountability', 'Variety', 'Performance targets', 'Community'],
+      },
+      { key: 'coaching_notes', prompt: 'Optional: anything you want your coach to know', type: 'text' },
     ],
   },
 ];

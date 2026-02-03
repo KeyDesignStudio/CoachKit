@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 import { createAthlete, createCoach, createDraftPlanForAthlete, seedTriggersAndProposal } from './seed';
 import { createIntakeDraft, submitIntake, updateIntakeDraft } from '../server/intake';
+import { APB_CALENDAR_ORIGIN, APB_MANUAL_EDIT_TAG, APB_SOURCE_PREFIX } from '../server/calendar-materialise';
 
 describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
   let coachId = '';
@@ -137,6 +138,34 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
         athleteId,
       },
     });
+
+    await prisma.calendarItem.createMany({
+      data: [
+        {
+          athleteId,
+          coachId,
+          date: new Date('2026-01-15T00:00:00Z'),
+          discipline: 'RUN',
+          title: 'APB Run',
+          origin: APB_CALENDAR_ORIGIN,
+          sourceActivityId: `${APB_SOURCE_PREFIX}test-1`,
+          planningStatus: 'PLANNED',
+          coachEdited: false,
+        },
+        {
+          athleteId,
+          coachId,
+          date: new Date('2026-01-16T00:00:00Z'),
+          discipline: 'BIKE',
+          title: 'APB Bike (manual)',
+          origin: APB_CALENDAR_ORIGIN,
+          sourceActivityId: `${APB_SOURCE_PREFIX}test-2`,
+          planningStatus: 'PLANNED',
+          coachEdited: false,
+          tags: [APB_MANUAL_EDIT_TAG],
+        },
+      ],
+    });
   });
 
   afterAll(async () => {
@@ -151,6 +180,7 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
     await prisma.intakeEvidence.deleteMany({ where: { athleteId, coachId } });
     await prisma.athleteIntakeResponse.deleteMany({ where: { athleteId, coachId } });
     await prisma.coachIntent.deleteMany({ where: { athleteId, coachId } });
+    await prisma.calendarItem.deleteMany({ where: { athleteId, coachId } });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (prisma as any).aiInvocationAudit.deleteMany({ where: { coachId } });
@@ -213,7 +243,7 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
     expect(typeof json.data.counts.aiPlanDrafts).toBe('number');
   });
 
-  it('admin reset wipes APB state and coach endpoints return empty state', async () => {
+  it('admin reset wipes APB state, removes APB calendar items, and coach endpoints return empty state', async () => {
     authUser = {
       ...authUser,
       role: UserRole.COACH,
@@ -226,7 +256,7 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
       new Request('http://localhost/api/admin/ai-plan-builder/reset-athlete', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-reset-secret': 'test-secret' },
-        body: JSON.stringify({ athleteId }),
+        body: JSON.stringify({ athleteId, mode: 'APB_AND_CALENDAR' }),
       })
     );
 
@@ -235,6 +265,19 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
     expect(json.error).toBeNull();
     expect(json.data.ok).toBe(true);
     expect(json.data.dryRun).toBe(false);
+    expect(json.data.mode).toBe('APB_AND_CALENDAR');
+
+    const remainingCalendarItems = await prisma.calendarItem.findMany({
+      where: {
+        athleteId,
+        origin: APB_CALENDAR_ORIGIN,
+        sourceActivityId: { startsWith: APB_SOURCE_PREFIX },
+      },
+      select: { tags: true },
+    });
+
+    expect(remainingCalendarItems).toHaveLength(1);
+    expect(remainingCalendarItems[0]?.tags ?? []).toContain(APB_MANUAL_EDIT_TAG);
 
     const { GET: intakeGET } = await import('@/app/api/coach/athletes/[athleteId]/ai-plan-builder/intake/latest/route');
     const { GET: profileGET } = await import('@/app/api/coach/athletes/[athleteId]/ai-plan-builder/profile/latest/route');

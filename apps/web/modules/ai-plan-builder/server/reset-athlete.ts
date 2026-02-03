@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { notFound } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 
+import { APB_CALENDAR_ORIGIN, APB_MANUAL_EDIT_TAG, APB_SOURCE_PREFIX } from './calendar-materialise';
+
 export const AI_PLAN_BUILDER_ADMIN_RESET_SECRET_ENV = 'AI_PLAN_BUILDER_ADMIN_RESET_SECRET' as const;
 
 type ResetCounts = {
@@ -15,11 +17,16 @@ type ResetCounts = {
   athleteProfileAis: number;
   intakeEvidence: number;
   intakeResponses: number;
+  calendarItems: number;
+  calendarItemsSkipped: number;
 };
+
+export type AiPlanBuilderResetMode = 'APB_ONLY' | 'APB_AND_CALENDAR';
 
 export type AiPlanBuilderResetAthleteResult = {
   athleteId: string;
   dryRun: boolean;
+  mode: AiPlanBuilderResetMode;
   draftIds: string[];
   proposalIds: string[];
   counts: ResetCounts;
@@ -28,6 +35,7 @@ export type AiPlanBuilderResetAthleteResult = {
 export const aiPlanBuilderResetAthleteSchema = z.object({
   athleteId: z.string().min(1),
   dryRun: z.boolean().optional(),
+  mode: z.enum(['APB_ONLY', 'APB_AND_CALENDAR']).optional(),
 });
 
 const capabilitiesToReset = ['summarizeIntake', 'suggestDraftPlan', 'suggestProposalDiffs'] as const;
@@ -56,9 +64,26 @@ export function requireAiPlanBuilderAdminResetSecret(headers: Headers, env: Node
 export async function resetAiPlanBuilderStateForAthlete(params: {
   athleteId: string;
   dryRun?: boolean;
+  mode?: AiPlanBuilderResetMode;
 }): Promise<AiPlanBuilderResetAthleteResult> {
   const athleteId = String(params.athleteId).trim();
   const dryRun = Boolean(params.dryRun);
+  const mode: AiPlanBuilderResetMode = params.mode ?? 'APB_ONLY';
+
+  const calendarDeleteFilter = {
+    athleteId,
+    origin: APB_CALENDAR_ORIGIN,
+    sourceActivityId: { startsWith: APB_SOURCE_PREFIX },
+    coachEdited: false,
+    NOT: { tags: { has: APB_MANUAL_EDIT_TAG } },
+  };
+
+  const calendarSkipFilter = {
+    athleteId,
+    origin: APB_CALENDAR_ORIGIN,
+    sourceActivityId: { startsWith: APB_SOURCE_PREFIX },
+    OR: [{ coachEdited: true }, { tags: { has: APB_MANUAL_EDIT_TAG } }],
+  };
 
   const draftIds = await prisma.aiPlanDraft
     .findMany({ where: { athleteId }, select: { id: true } })
@@ -101,6 +126,9 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
     const athleteProfileAis = await prisma.athleteProfileAI.count({ where: { athleteId } });
     const intakeEvidence = await prisma.intakeEvidence.count({ where: { athleteId } });
     const intakeResponses = await prisma.athleteIntakeResponse.count({ where: { athleteId } });
+    const calendarItems = mode === 'APB_AND_CALENDAR' ? await prisma.calendarItem.count({ where: calendarDeleteFilter }) : 0;
+    const calendarItemsSkipped =
+      mode === 'APB_AND_CALENDAR' ? await prisma.calendarItem.count({ where: calendarSkipFilter }) : 0;
 
     return {
       planChangeAudits,
@@ -112,11 +140,13 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
       athleteProfileAis,
       intakeEvidence,
       intakeResponses,
+      calendarItems,
+      calendarItemsSkipped,
     };
   })();
 
   if (dryRun) {
-    return { athleteId, dryRun: true, draftIds, proposalIds, counts };
+    return { athleteId, dryRun: true, mode, draftIds, proposalIds, counts };
   }
 
   // Delete in a safe order: audits/proposals first, then drafts (cascade), then intake/profile.
@@ -154,6 +184,9 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
     const intakeEvidence = await tx.intakeEvidence.deleteMany({ where: { athleteId } });
     const intakeResponses = await tx.athleteIntakeResponse.deleteMany({ where: { athleteId } });
 
+    const calendarItems =
+      mode === 'APB_AND_CALENDAR' ? await tx.calendarItem.deleteMany({ where: calendarDeleteFilter }) : { count: 0 };
+
     return {
       planChangeAudits: planChangeAudits.count,
       planChangeProposals: planChangeProposals.count,
@@ -164,12 +197,15 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
       athleteProfileAis: athleteProfileAis.count,
       intakeEvidence: intakeEvidence.count,
       intakeResponses: intakeResponses.count,
+      calendarItems: calendarItems.count,
+      calendarItemsSkipped: counts.calendarItemsSkipped,
     } satisfies ResetCounts;
   });
 
   return {
     athleteId,
     dryRun: false,
+    mode,
     draftIds,
     proposalIds,
     counts: deleted,
