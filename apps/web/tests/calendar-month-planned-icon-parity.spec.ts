@@ -43,12 +43,11 @@ test.describe('Coach calendar month: planned icon parity', () => {
     const coachId = 'dev-coach';
     const athleteId = 'pw-athlete-month-parity';
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const dd = String(tomorrow.getDate()).padStart(2, '0');
-    const dayKey = `${yyyy}-${mm}-${dd}`;
+    const dayKey = await page.evaluate(() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d.toLocaleDateString('en-CA');
+    });
 
     const title = buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'tempo' });
 
