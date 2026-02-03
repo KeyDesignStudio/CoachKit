@@ -170,20 +170,25 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
     const briefParsed = athleteBriefSchema.safeParse(input?.athleteBrief ?? null);
     if (briefParsed.success) {
       const brief = briefParsed.data;
-      const focusLines = [...(brief.coachFocusNotes ?? []), ...(brief.riskFlags ?? [])].filter(Boolean).slice(0, 2);
+      const focusLines = [...(brief.planGuidance?.focusNotes ?? []), ...(brief.risks ?? [])]
+        .filter(Boolean)
+        .slice(0, 2);
       if (focusLines.length) {
         detail.targets.notes = `${detail.targets.notes} Focus: ${focusLines.join(' ')}`.slice(0, 500);
       }
 
-      const cueAdditions = [...(brief.motivationTriggers ?? []), ...(brief.coachingStyleSummary ?? [])]
-        .filter(Boolean)
+      const cueAdditions = [...(brief.planGuidance?.coachingCues ?? []), brief.planGuidance?.tone]
+        .filter((value): value is string => Boolean(value))
         .slice(0, 2);
       if (cueAdditions.length) {
         detail.cues = Array.from(new Set([...(detail.cues ?? []), ...cueAdditions])).slice(0, 3);
       }
 
-      if (brief.riskFlags?.length) {
-        detail.safetyNotes = `${detail.safetyNotes ?? ''} ${brief.riskFlags.join(' ')}`.trim().slice(0, 800);
+      const safetyLines = [...(brief.planGuidance?.safetyNotes ?? []), ...(brief.risks ?? [])]
+        .filter(Boolean)
+        .slice(0, 3);
+      if (safetyLines.length) {
+        detail.safetyNotes = `${detail.safetyNotes ?? ''} ${safetyLines.join(' ')}`.trim().slice(0, 800);
       }
     }
 
@@ -230,17 +235,7 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
 
     const draftJson: Record<string, AiJsonValue> = {
       disciplines: Array.isArray(profile.disciplines) ? profile.disciplines.map(String) : [],
-      primary_goal: profile.goalsText ? String(profile.goalsText) : null,
-      training_plan_frequency: String(profile.trainingPlanFrequency ?? 'AD_HOC'),
-      training_plan_day_of_week:
-        profile.trainingPlanDayOfWeek === null || profile.trainingPlanDayOfWeek === undefined
-          ? null
-          : Number(profile.trainingPlanDayOfWeek),
-      training_plan_week_of_month:
-        profile.trainingPlanWeekOfMonth === null || profile.trainingPlanWeekOfMonth === undefined
-          ? null
-          : Number(profile.trainingPlanWeekOfMonth),
-      coach_notes: profile.coachNotes ? String(profile.coachNotes) : null,
+      goal_details: profile.goalsText ? String(profile.goalsText) : null,
     };
 
     const result: GenerateIntakeFromProfileResult = { draftJson };

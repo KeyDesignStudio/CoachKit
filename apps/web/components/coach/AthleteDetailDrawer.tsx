@@ -16,6 +16,31 @@ import { uiH2, uiMuted } from '@/components/ui/typography';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
+function humanizeEnumLabel(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  return s
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function humanizeDiscipline(value: unknown): string | null {
+  const v = value == null ? '' : String(value).trim().toUpperCase();
+  if (!v) return null;
+  const map: Record<string, string> = {
+    RUN: 'Run',
+    BIKE: 'Bike',
+    SWIM: 'Swim',
+    BRICK: 'Brick',
+    STRENGTH: 'Strength',
+    REST: 'Rest',
+    OTHER: 'Other',
+  };
+  return map[v] ?? humanizeEnumLabel(v);
+}
+
 type AthleteProfile = {
   userId: string;
   coachId: string;
@@ -35,15 +60,48 @@ type AthleteProfile = {
 };
 
 type AthleteBrief = {
-  coachingStyleSummary: string[];
-  motivationTriggers: string[];
-  riskFlags: string[];
-  goalContext: string[];
-  swimProfile: string[];
-  bikeProfile: string[];
-  runProfile: string[];
-  lifeConstraints: string[];
-  coachFocusNotes: string[];
+  version: 'v1';
+  snapshot?: {
+    headline?: string;
+    tags: string[];
+  };
+  goals?: {
+    type?: string;
+    details?: string;
+    timeline?: string;
+    focus?: string;
+  };
+  disciplineProfile?: {
+    experienceLevel?: string;
+    disciplines: string[];
+    weeklyMinutes?: number;
+    recentConsistency?: string;
+    swimConfidence?: number;
+    bikeConfidence?: number;
+    runConfidence?: number;
+  };
+  constraints?: {
+    availabilityDays: string[];
+    scheduleVariability?: string;
+    sleepQuality?: string;
+    injuryStatus?: string;
+    notes?: string;
+  };
+  coaching?: {
+    feedbackStyle?: string;
+    tonePreference?: string;
+    checkinPreference?: string;
+    structurePreference?: number;
+    motivationStyle?: string;
+    notes?: string;
+  };
+  risks: string[];
+  planGuidance?: {
+    tone?: string;
+    focusNotes: string[];
+    coachingCues: string[];
+    safetyNotes: string[];
+  };
 };
 
 type PainHistoryItem = {
@@ -84,17 +142,107 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   const [error, setError] = useState('');
   const [brief, setBrief] = useState<AthleteBrief | null>(null);
 
-  const briefSections = [
-    { title: 'Coaching style', items: brief?.coachingStyleSummary ?? [] },
-    { title: 'Motivation', items: brief?.motivationTriggers ?? [] },
-    { title: 'Risks', items: brief?.riskFlags ?? [] },
-    { title: 'Goal context', items: brief?.goalContext ?? [] },
-    { title: 'Swim', items: brief?.swimProfile ?? [] },
-    { title: 'Bike', items: brief?.bikeProfile ?? [] },
-    { title: 'Run', items: brief?.runProfile ?? [] },
-    { title: 'Life constraints', items: brief?.lifeConstraints ?? [] },
-    { title: 'Coach focus', items: brief?.coachFocusNotes ?? [] },
-  ];
+  const briefSections = (() => {
+    if (!brief) return [] as Array<{ title: string; items: string[] }>;
+    const sections: Array<{ title: string; items: string[] }> = [];
+    const pushLabeled = (items: string[], label: string, value: string | number | null | undefined) => {
+      if (value == null || value === '') return;
+      items.push(`${label}: ${value}`);
+    };
+
+    const snapshotItems: string[] = [];
+    if (brief.snapshot?.headline) snapshotItems.push(brief.snapshot.headline);
+    if (brief.snapshot?.tags?.length) snapshotItems.push(`Tags: ${brief.snapshot.tags.join(', ')}`);
+    if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
+
+    const goalItems: string[] = [];
+    pushLabeled(goalItems, 'Type', humanizeEnumLabel(brief.goals?.type) ?? brief.goals?.type ?? undefined);
+    pushLabeled(goalItems, 'Details', brief.goals?.details ?? undefined);
+    pushLabeled(goalItems, 'Timeline', humanizeEnumLabel(brief.goals?.timeline) ?? brief.goals?.timeline ?? undefined);
+    pushLabeled(goalItems, 'Focus', humanizeEnumLabel(brief.goals?.focus) ?? brief.goals?.focus ?? undefined);
+    if (goalItems.length) sections.push({ title: 'Goals', items: goalItems });
+
+    const trainingItems: string[] = [];
+    pushLabeled(
+      trainingItems,
+      'Experience',
+      humanizeEnumLabel(brief.disciplineProfile?.experienceLevel) ?? brief.disciplineProfile?.experienceLevel
+    );
+    const disciplineList = Array.isArray(brief.disciplineProfile?.disciplines)
+      ? brief.disciplineProfile?.disciplines.map(humanizeDiscipline).filter(Boolean)
+      : [];
+    if (disciplineList.length) trainingItems.push(`Disciplines: ${disciplineList.join(', ')}`);
+    pushLabeled(trainingItems, 'Weekly minutes', brief.disciplineProfile?.weeklyMinutes ?? undefined);
+    pushLabeled(
+      trainingItems,
+      'Recent consistency',
+      humanizeEnumLabel(brief.disciplineProfile?.recentConsistency) ?? brief.disciplineProfile?.recentConsistency
+    );
+    if (brief.disciplineProfile?.swimConfidence) trainingItems.push(`Swim confidence: ${brief.disciplineProfile.swimConfidence}/5`);
+    if (brief.disciplineProfile?.bikeConfidence) trainingItems.push(`Bike confidence: ${brief.disciplineProfile.bikeConfidence}/5`);
+    if (brief.disciplineProfile?.runConfidence) trainingItems.push(`Run confidence: ${brief.disciplineProfile.runConfidence}/5`);
+    if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
+
+    const constraintItems: string[] = [];
+    if (brief.constraints?.availabilityDays?.length) {
+      constraintItems.push(`Available days: ${brief.constraints.availabilityDays.join(', ')}`);
+    }
+    pushLabeled(
+      constraintItems,
+      'Schedule variability',
+      humanizeEnumLabel(brief.constraints?.scheduleVariability) ?? brief.constraints?.scheduleVariability
+    );
+    pushLabeled(
+      constraintItems,
+      'Sleep quality',
+      humanizeEnumLabel(brief.constraints?.sleepQuality) ?? brief.constraints?.sleepQuality
+    );
+    pushLabeled(
+      constraintItems,
+      'Injury status',
+      humanizeEnumLabel(brief.constraints?.injuryStatus) ?? brief.constraints?.injuryStatus
+    );
+    pushLabeled(constraintItems, 'Notes', brief.constraints?.notes ?? undefined);
+    if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
+
+    const coachingItems: string[] = [];
+    pushLabeled(
+      coachingItems,
+      'Feedback style',
+      humanizeEnumLabel(brief.coaching?.feedbackStyle) ?? brief.coaching?.feedbackStyle
+    );
+    pushLabeled(
+      coachingItems,
+      'Tone preference',
+      humanizeEnumLabel(brief.coaching?.tonePreference) ?? brief.coaching?.tonePreference
+    );
+    pushLabeled(
+      coachingItems,
+      'Check-in cadence',
+      humanizeEnumLabel(brief.coaching?.checkinPreference) ?? brief.coaching?.checkinPreference
+    );
+    if (brief.coaching?.structurePreference) coachingItems.push(`Structure preference: ${brief.coaching.structurePreference}/5`);
+    pushLabeled(
+      coachingItems,
+      'Motivation style',
+      humanizeEnumLabel(brief.coaching?.motivationStyle) ?? brief.coaching?.motivationStyle
+    );
+    pushLabeled(coachingItems, 'Notes', brief.coaching?.notes ?? undefined);
+    if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
+
+    const guidanceItems: string[] = [];
+    pushLabeled(guidanceItems, 'Tone', humanizeEnumLabel(brief.planGuidance?.tone) ?? brief.planGuidance?.tone);
+    if (brief.planGuidance?.focusNotes?.length) guidanceItems.push(`Focus notes: ${brief.planGuidance.focusNotes.join(' ')}`);
+    if (brief.planGuidance?.coachingCues?.length)
+      guidanceItems.push(`Coaching cues: ${brief.planGuidance.coachingCues.join(' ')}`);
+    if (brief.planGuidance?.safetyNotes?.length)
+      guidanceItems.push(`Safety notes: ${brief.planGuidance.safetyNotes.join(' ')}`);
+    if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
+
+    if (brief.risks?.length) sections.push({ title: 'Risks', items: brief.risks });
+
+    return sections;
+  })();
 
   // Form state
   const [name, setName] = useState('');

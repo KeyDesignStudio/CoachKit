@@ -65,6 +65,37 @@ function normalizeNumber(value: string, min?: number, max?: number): number | ''
   return clamped;
 }
 
+function isQuestionVisible(question: IntakeQuestion, answers: AnswerMap): boolean {
+  const rule = question.visibleWhen;
+  if (!rule) return true;
+
+  const current = answers[rule.questionKey];
+
+  if (rule.equals !== undefined) {
+    return String(current) === String(rule.equals);
+  }
+
+  if (rule.anyOf?.length) {
+    const candidate = String(current);
+    return rule.anyOf.map(String).includes(candidate);
+  }
+
+  if (rule.includes) {
+    if (Array.isArray(current)) return current.map(String).includes(rule.includes);
+    return String(current) === rule.includes;
+  }
+
+  if (rule.includesAny?.length) {
+    if (Array.isArray(current)) {
+      const set = new Set(current.map(String));
+      return rule.includesAny.some((value) => set.has(value));
+    }
+    return rule.includesAny.includes(String(current));
+  }
+
+  return true;
+}
+
 function renderQuestion(
   question: IntakeQuestion,
   value: unknown,
@@ -175,8 +206,26 @@ export default function AthleteIntakePage() {
     saveDraft({ version: 'v1', answers });
   }, [answers]);
 
-  const section = INTAKE_SECTIONS[sectionIndex];
-  const progress = useMemo(() => ((sectionIndex + 1) / INTAKE_SECTIONS.length) * 100, [sectionIndex]);
+  const visibleSections = useMemo(
+    () =>
+      INTAKE_SECTIONS.map((section) => ({
+        ...section,
+        questions: section.questions.filter((question) => isQuestionVisible(question, answers)),
+      })).filter((section) => section.questions.length > 0),
+    [answers]
+  );
+
+  useEffect(() => {
+    if (sectionIndex >= visibleSections.length) {
+      setSectionIndex(Math.max(0, visibleSections.length - 1));
+    }
+  }, [sectionIndex, visibleSections.length]);
+
+  const section = visibleSections[sectionIndex];
+  const progress = useMemo(
+    () => (visibleSections.length ? ((sectionIndex + 1) / visibleSections.length) * 100 : 0),
+    [sectionIndex, visibleSections.length]
+  );
 
   if (userLoading) {
     return (
@@ -201,7 +250,7 @@ export default function AthleteIntakePage() {
     try {
       const payload = {
         version: 'v1',
-        sections: INTAKE_SECTIONS.map((s) => ({
+        sections: visibleSections.map((s) => ({
           key: s.key,
           title: s.title,
           answers: s.questions
@@ -239,7 +288,7 @@ export default function AthleteIntakePage() {
       <header className="space-y-2">
         <p className={uiEyebrow}>Coaching Intake</p>
         <h1 className={uiH1}>Athlete Intake</h1>
-        <p className={uiMuted}>Answer in your own words — this shapes your coaching plan.</p>
+        <p className={uiMuted}>Short answers only — this shapes your coaching plan.</p>
       </header>
 
       <div className="h-2 w-full rounded-full bg-[var(--bg-structure)]">
@@ -283,8 +332,12 @@ export default function AthleteIntakePage() {
           >
             Back
           </Button>
-          {sectionIndex < INTAKE_SECTIONS.length - 1 ? (
-            <Button type="button" onClick={() => setSectionIndex((prev) => Math.min(INTAKE_SECTIONS.length - 1, prev + 1))} className="min-h-[44px]">
+          {sectionIndex < visibleSections.length - 1 ? (
+            <Button
+              type="button"
+              onClick={() => setSectionIndex((prev) => Math.min(visibleSections.length - 1, prev + 1))}
+              className="min-h-[44px]"
+            >
               Next section
             </Button>
           ) : (

@@ -1,7 +1,7 @@
 {
   "evidence": [
-    { "questionKey": "primary_goal", "answerJson": "Finish a sprint triathlon" },
-    { "questionKey": "weekly_availability_days", "answerJson": [1, 3, 5] }
+    { "questionKey": "goal_details", "answerJson": "Finish a sprint triathlon" },
+    { "questionKey": "availability_days", "answerJson": ["Mon", "Wed", "Fri"] }
   ],
   "coachIntent": {
     "note": "Keep the first two weeks conservative.",

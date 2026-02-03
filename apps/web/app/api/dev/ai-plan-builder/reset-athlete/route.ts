@@ -17,7 +17,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = aiPlanBuilderResetAthleteSchema.parse(await request.json().catch(() => ({})));
-  const result = await resetAiPlanBuilderStateForAthlete({ athleteId: body.athleteId, dryRun: body.dryRun });
+  const result = await resetAiPlanBuilderStateForAthlete({
+    athleteId: body.athleteId,
+    dryRun: body.dryRun,
+    mode: body.mode,
+  });
 
   return NextResponse.json({ ok: true, ...result });
 }
