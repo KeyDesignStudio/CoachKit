@@ -125,9 +125,13 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     const athleteBriefForbidden = [
       'coach_notes:',
       'disciplines:',
-      'training_plan_day_of_week',
-      'training_plan_frequency',
-      'training_plan_week_of_month',
+      'goal_details',
+      'goal_type',
+      'goal_timeline',
+      'goal_focus',
+      'availability_days',
+      'weekly_minutes',
+      'injury_status',
       '[',
       ']',
     ];
