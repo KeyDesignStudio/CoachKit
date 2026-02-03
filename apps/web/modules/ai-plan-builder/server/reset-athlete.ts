@@ -12,6 +12,8 @@ type ResetCounts = {
   planChangeProposals: number;
   aiLlmRateLimitEvents: number;
   aiInvocationAudits: number;
+  athleteBriefs: number;
+  athleteIntakeSubmissions: number;
   aiPlanDrafts: number;
   coachIntents: number;
   athleteProfileAis: number;
@@ -21,7 +23,8 @@ type ResetCounts = {
   calendarItemsSkipped: number;
 };
 
-export type AiPlanBuilderResetMode = 'APB_ONLY' | 'APB_AND_CALENDAR';
+const aiPlanBuilderResetModes = ['APB_ONLY', 'APB_AND_CALENDAR', 'ATHLETE_CONTEXT_AND_APB_AND_CALENDAR'] as const;
+export type AiPlanBuilderResetMode = (typeof aiPlanBuilderResetModes)[number];
 
 export type AiPlanBuilderResetAthleteResult = {
   athleteId: string;
@@ -35,7 +38,7 @@ export type AiPlanBuilderResetAthleteResult = {
 export const aiPlanBuilderResetAthleteSchema = z.object({
   athleteId: z.string().min(1),
   dryRun: z.boolean().optional(),
-  mode: z.enum(['APB_ONLY', 'APB_AND_CALENDAR']).optional(),
+  mode: z.enum(aiPlanBuilderResetModes).optional(),
 });
 
 const capabilitiesToReset = ['summarizeIntake', 'suggestDraftPlan', 'suggestProposalDiffs'] as const;
@@ -69,6 +72,10 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
   const athleteId = String(params.athleteId).trim();
   const dryRun = Boolean(params.dryRun);
   const mode: AiPlanBuilderResetMode = params.mode ?? 'APB_ONLY';
+  const resetOptions = {
+    resetCalendar: mode !== 'APB_ONLY',
+    resetAthleteContext: mode === 'ATHLETE_CONTEXT_AND_APB_AND_CALENDAR',
+  };
 
   const calendarDeleteFilter = {
     athleteId,
@@ -121,20 +128,28 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
       },
     });
 
+    const athleteBriefs = resetOptions.resetAthleteContext
+      ? await (prisma as any).athleteBrief.count({ where: { athleteId } })
+      : 0;
+    const athleteIntakeSubmissions = resetOptions.resetAthleteContext
+      ? await (prisma as any).athleteIntakeSubmission.count({ where: { athleteId } })
+      : 0;
     const aiPlanDrafts = await prisma.aiPlanDraft.count({ where: { athleteId } });
     const coachIntents = await prisma.coachIntent.count({ where: { athleteId } });
     const athleteProfileAis = await prisma.athleteProfileAI.count({ where: { athleteId } });
     const intakeEvidence = await prisma.intakeEvidence.count({ where: { athleteId } });
     const intakeResponses = await prisma.athleteIntakeResponse.count({ where: { athleteId } });
-    const calendarItems = mode === 'APB_AND_CALENDAR' ? await prisma.calendarItem.count({ where: calendarDeleteFilter }) : 0;
+    const calendarItems = resetOptions.resetCalendar ? await prisma.calendarItem.count({ where: calendarDeleteFilter }) : 0;
     const calendarItemsSkipped =
-      mode === 'APB_AND_CALENDAR' ? await prisma.calendarItem.count({ where: calendarSkipFilter }) : 0;
+      resetOptions.resetCalendar ? await prisma.calendarItem.count({ where: calendarSkipFilter }) : 0;
 
     return {
       planChangeAudits,
       planChangeProposals,
       aiLlmRateLimitEvents,
       aiInvocationAudits,
+      athleteBriefs,
+      athleteIntakeSubmissions,
       aiPlanDrafts,
       coachIntents,
       athleteProfileAis,
@@ -176,6 +191,12 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
       },
     });
 
+    const athleteBriefs = resetOptions.resetAthleteContext
+      ? await txAny.athleteBrief.deleteMany({ where: { athleteId } })
+      : { count: 0 };
+    const athleteIntakeSubmissions = resetOptions.resetAthleteContext
+      ? await txAny.athleteIntakeSubmission.deleteMany({ where: { athleteId } })
+      : { count: 0 };
     const aiPlanDrafts = await tx.aiPlanDraft.deleteMany({ where: { athleteId } });
 
     const coachIntents = await tx.coachIntent.deleteMany({ where: { athleteId } });
@@ -184,14 +205,17 @@ export async function resetAiPlanBuilderStateForAthlete(params: {
     const intakeEvidence = await tx.intakeEvidence.deleteMany({ where: { athleteId } });
     const intakeResponses = await tx.athleteIntakeResponse.deleteMany({ where: { athleteId } });
 
-    const calendarItems =
-      mode === 'APB_AND_CALENDAR' ? await tx.calendarItem.deleteMany({ where: calendarDeleteFilter }) : { count: 0 };
+    const calendarItems = resetOptions.resetCalendar
+      ? await tx.calendarItem.deleteMany({ where: calendarDeleteFilter })
+      : { count: 0 };
 
     return {
       planChangeAudits: planChangeAudits.count,
       planChangeProposals: planChangeProposals.count,
       aiLlmRateLimitEvents: aiLlmRateLimitEvents.count,
       aiInvocationAudits: aiInvocationAudits.count,
+      athleteBriefs: athleteBriefs.count,
+      athleteIntakeSubmissions: athleteIntakeSubmissions.count,
       aiPlanDrafts: aiPlanDrafts.count,
       coachIntents: coachIntents.count,
       athleteProfileAis: athleteProfileAis.count,
