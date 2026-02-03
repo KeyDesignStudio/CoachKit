@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { requireAiPlanBuilderAuditAdminUser, getAiInvocationAuditForAdmin } from '@/modules/ai-plan-builder/server/audit-admin';
+import { requireAiPlanBuilderAuditAdminUserPage, getAiInvocationAuditForAdmin } from '@/modules/ai-plan-builder/server/audit-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ function Field(props: { label: string; value: ReactNode }) {
 }
 
 export default async function AdminAiAuditDetailPage(props: { params: { id: string } }) {
-  const requester = await requireAiPlanBuilderAuditAdminUser();
+  const requester = await requireAiPlanBuilderAuditAdminUserPage();
   const audit = await getAiInvocationAuditForAdmin({ id: props.params.id, requester });
 
   return (

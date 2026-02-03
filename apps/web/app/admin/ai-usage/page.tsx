@@ -4,7 +4,7 @@ import type { UrlObject } from 'url';
 
 import { prisma } from '@/lib/prisma';
 
-import { requireAiPlanBuilderAuditAdminUser } from '@/modules/ai-plan-builder/server/audit-admin';
+import { requireAiPlanBuilderAuditAdminUser, requireAiPlanBuilderAuditAdminUserPage } from '@/modules/ai-plan-builder/server/audit-admin';
 import { computeDailyRollups, getUtcDayWindowForLastNDays } from '@/modules/ai-plan-builder/admin/rollups';
 import { evaluateAlerts } from '@/modules/ai-plan-builder/admin/alerts';
 
@@ -33,7 +33,7 @@ function clampInt(v: unknown, def: number, min: number, max: number): number {
 }
 
 export default async function AdminAiUsagePage(props: { searchParams?: Record<string, string | string[] | undefined> }) {
-  const requester = await requireAiPlanBuilderAuditAdminUser();
+  const requester = await requireAiPlanBuilderAuditAdminUserPage();
 
   const sp = props.searchParams ?? {};
   const get = (key: string) => {

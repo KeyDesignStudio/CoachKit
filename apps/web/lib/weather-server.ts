@@ -60,6 +60,13 @@ async function fetchOpenMeteoDailyRange(params: {
       signal: controller.signal,
     });
 
+    if (res.status >= 400 && res.status < 500) {
+      console.info('[Weather] Open-Meteo rejected request', {
+        status: res.status,
+      });
+      return {};
+    }
+
     if (!res.ok) {
       throw new Error(`Open-Meteo request failed (${res.status})`);
     }

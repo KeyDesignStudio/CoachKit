@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { notFound as nextNotFound } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth';
 import { notFound } from '@/lib/errors';
@@ -48,6 +49,26 @@ export async function requireAiPlanBuilderAuditAdminUser(): Promise<{ id: string
 
   if (!isAiPlanBuilderAuditAdminUser(user)) {
     throw notFound('Not found.');
+  }
+
+  return { id: user.id, role: user.role, email: user.email };
+}
+
+export async function requireAiPlanBuilderAuditAdminUserPage(): Promise<{ id: string; role: UserRole; email: string }> {
+  guardAiPlanBuilderRequest();
+
+  const user = await (async () => {
+    try {
+      const ctx = await requireAuth();
+      return ctx.user;
+    } catch {
+      // 404-by-default: avoid leaking admin route existence.
+      nextNotFound();
+    }
+  })();
+
+  if (!user || !isAiPlanBuilderAuditAdminUser(user)) {
+    nextNotFound();
   }
 
   return { id: user.id, role: user.role, email: user.email };
