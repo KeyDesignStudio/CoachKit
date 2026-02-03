@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import type { UrlObject } from 'url';
 
-import { requireAiPlanBuilderAuditAdminUser, normalizeAiAuditListQuery, listAiInvocationAuditsForAdmin } from '@/modules/ai-plan-builder/server/audit-admin';
+import { requireAiPlanBuilderAuditAdminUserPage, normalizeAiAuditListQuery, listAiInvocationAuditsForAdmin } from '@/modules/ai-plan-builder/server/audit-admin';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAiAuditsPage(props: { searchParams?: Record<string, string | string[] | undefined> }) {
-  const requester = await requireAiPlanBuilderAuditAdminUser();
+  const requester = await requireAiPlanBuilderAuditAdminUserPage();
 
   const query = normalizeAiAuditListQuery({ searchParams: props.searchParams ?? {} });
   const { items, page } = await listAiInvocationAuditsForAdmin({ query, requester });

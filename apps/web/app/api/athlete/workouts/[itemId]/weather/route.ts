@@ -31,12 +31,26 @@ type WeatherResponse = WeatherResponseEnabled | WeatherResponseDisabled;
 
 type CacheEntry = {
   expiresAtMs: number;
-  value: WeatherResponseEnabled;
+  value: WeatherResponse;
 };
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const responseCache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<WeatherResponseEnabled>>();
+const inFlight = new Map<string, Promise<WeatherResponse>>();
+
+function isValidCoordinate(value: number, min: number, max: number): boolean {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
+function isValidTimeZone(timeZone: string): boolean {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function formatZonedDateKey(date: Date, timeZone: string): string {
   // en-CA reliably formats to YYYY-MM-DD.
@@ -93,12 +107,18 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
     const lat = profile.defaultLat;
     const lon = profile.defaultLon;
 
+    if (!isValidCoordinate(lat, -90, 90) || !isValidCoordinate(lon, -180, 180)) {
+      const disabled: WeatherResponseDisabled = { enabled: false, reason: 'NO_LOCATION' };
+      return success(disabled, { headers });
+    }
+
     const athleteUser = await prisma.user.findUnique({
       where: { id: item.athleteId },
       select: { timezone: true },
     });
 
-    const athleteTz = athleteUser?.timezone ?? 'UTC';
+    const athleteTzRaw = athleteUser?.timezone ?? 'UTC';
+    const athleteTz = isValidTimeZone(athleteTzRaw) ? athleteTzRaw : 'UTC';
     const dateKey = formatZonedDateKey(item.date, athleteTz);
 
     const latKey = lat.toFixed(4);
@@ -116,7 +136,7 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
       return success(value, { headers });
     }
 
-    const promise: Promise<WeatherResponseEnabled> = (async () => {
+    const promise: Promise<WeatherResponse> = (async () => {
       const map = await getWeatherSummariesForRange({
         lat,
         lon,
@@ -127,7 +147,7 @@ export async function GET(_request: NextRequest, context: { params: { itemId: st
 
       const summary = map[dateKey];
       if (!summary) {
-        throw new Error('Open-Meteo response missing required daily fields.');
+        return { enabled: false, reason: 'NO_LOCATION' } as const;
       }
 
       return {
