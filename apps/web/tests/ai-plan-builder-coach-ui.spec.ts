@@ -66,26 +66,51 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
 
     await prisma.athleteProfile.update({
       where: { userId: athleteId },
-      data: { primaryGoal: 'Legacy goal', trainingPlanSchedule: { frequency: 'WEEKLY', dayOfWeek: 2, weekOfMonth: null } },
+      data: {
+        primaryGoal: 'Legacy goal',
+        disciplines: ['OTHER'],
+        trainingPlanSchedule: { frequency: 'WEEKLY', dayOfWeek: 2, weekOfMonth: null },
+      },
     });
 
     await page.goto('/coach/athletes');
     await page.getByRole('button', { name: /dev-athlete|Test Athlete/i }).click();
 
     await expect(page.getByRole('heading', { name: 'Athlete Profile', exact: true })).toBeVisible();
-    const primaryGoalField = page.getByPlaceholder('Primary goal...');
-    await expect(primaryGoalField).toHaveValue('Legacy goal');
-    const otherDiscipline = page.getByRole('button', { name: 'Other' });
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open full profile' })).toBeVisible();
+    await page.getByRole('button', { name: 'Open full profile' }).click();
+    await page.waitForURL(`/coach/athletes/${athleteId}/profile`);
+    await expect(page.getByRole('tab', { name: 'Personal' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Training Basics' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Current Training Plan' })).toBeVisible();
+    await expect(page.getByText('Loading profile...')).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Current Training Plan' }).click();
+    const otherDiscipline = page.getByRole('button', { name: 'OTHER' });
     const otherSelected = await otherDiscipline.evaluate((el) => el.className.includes('bg-blue-500/10'));
     if (!otherSelected) {
       await otherDiscipline.click();
     }
+    await page.getByRole('tab', { name: 'Training Basics' }).click();
+    const primaryGoalField = page.getByLabel('Primary goal/s');
+    await expect(primaryGoalField).toHaveValue('Legacy goal');
     await primaryGoalField.fill('GOAL TEST 123');
     await expect(primaryGoalField).toHaveValue('GOAL TEST 123');
-    await page.getByRole('button', { name: 'Save Changes' }).click();
-    const response = await page.request.patch(`/api/coach/athletes/${athleteId}`, {
-      data: { primaryGoal: 'GOAL TEST 123' },
-    });
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    const saveResponsePromise = page.waitForResponse(
+      (res) => res.url().includes(`/api/coach/athletes/${athleteId}`) && res.request().method() === 'PATCH'
+    );
+    const refreshResponsePromise = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/coach/athletes/${athleteId}/athlete-brief/refresh`) &&
+        res.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    const saveResponse = await saveResponsePromise;
+    expect(saveResponse.ok()).toBeTruthy();
+    const refreshResponse = await refreshResponsePromise;
+    expect(refreshResponse.ok()).toBeTruthy();
+    const response = await page.request.get(`/api/coach/athletes/${athleteId}`);
     expect(response.ok()).toBeTruthy();
     const savedPayload = await response.json();
     expect(savedPayload?.data?.athlete?.primaryGoal).toBe('GOAL TEST 123');

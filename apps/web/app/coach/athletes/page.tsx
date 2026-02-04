@@ -94,14 +94,6 @@ export default function CoachAthletesPage() {
     setSelectedAthleteId(null);
   };
 
-  const handleSaved = () => {
-    loadAthletes();
-  };
-
-  const handleDeleted = () => {
-    loadAthletes();
-  };
-
   const formatDateOfBirth = (dob: string | null | undefined) => {
     if (!dob) return null;
     const date = new Date(dob);
@@ -254,8 +246,6 @@ export default function CoachAthletesPage() {
         isOpen={drawerOpen}
         athleteId={selectedAthleteId}
         onClose={handleDrawerClose}
-        onSaved={handleSaved}
-        onDeleted={handleDeleted}
       />
 
       {/* Modal */}
