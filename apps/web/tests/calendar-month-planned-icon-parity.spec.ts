@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 
+import { getUtcRangeForLocalDayKeyRange } from '@/lib/calendar-local-day';
+import { formatUtcDayKey, getLocalDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
 import { buildAiPlanBuilderSessionTitle } from '../modules/ai-plan-builder/lib/session-title';
 
 const prisma = new PrismaClient();
@@ -16,21 +18,6 @@ async function setRoleCookie(page: any, role: 'COACH' | 'ATHLETE' | 'ADMIN') {
   ]);
 }
 
-async function openAthleteSelector(page: any) {
-  await page.locator('[data-athlete-selector="button"]').click();
-  const dropdown = page.locator('[data-athlete-selector="dropdown"]');
-  await expect(dropdown).toBeVisible();
-  return dropdown;
-}
-
-async function ensureNoneSelected(dropdown: any) {
-  const selectAll = dropdown.locator('input[data-athlete-selector="select-all"]');
-  if (await selectAll.isChecked()) {
-    await selectAll.click();
-  }
-  await expect(selectAll).not.toBeChecked();
-}
-
 test.describe('Coach calendar month: planned icon parity', () => {
   test.afterAll(async () => {
     await prisma.$disconnect();
@@ -42,37 +29,45 @@ test.describe('Coach calendar month: planned icon parity', () => {
 
     const coachId = 'dev-coach';
     const athleteId = 'pw-athlete-month-parity';
+    const browserTimeZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const dd = String(tomorrow.getDate()).padStart(2, '0');
-    const dayKey = `${yyyy}-${mm}-${dd}`;
+    const todayKey = getLocalDayKey(new Date(), browserTimeZone);
+    const baseDayKey = todayKey;
+    const utcRange = getUtcRangeForLocalDayKeyRange({
+      fromDayKey: baseDayKey,
+      toDayKey: baseDayKey,
+      timeZone: browserTimeZone,
+    });
+    const storedStartUtc = new Date((utcRange.startUtc.getTime() + utcRange.endUtc.getTime()) / 2);
+    const dateKeyUtc = formatUtcDayKey(storedStartUtc);
+    const itemDate = parseDayKeyToUtcDate(dateKeyUtc);
+    const plannedStartTimeLocal = storedStartUtc.toISOString().slice(11, 16);
+    const manualStartUtc = new Date(storedStartUtc.getTime() + 30 * 60 * 1000);
+    const manualStartTimeLocal = (manualStartUtc < utcRange.endUtc ? manualStartUtc : new Date(storedStartUtc.getTime() - 30 * 60 * 1000)).toISOString().slice(11, 16);
 
     const title = buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'tempo' });
 
     // Ensure required dev users exist for DISABLE_AUTH mode.
     await prisma.user.upsert({
       where: { id: coachId },
-      update: { role: 'COACH', timezone: 'UTC', authProviderId: coachId },
+      update: { role: 'COACH', timezone: browserTimeZone, authProviderId: coachId },
       create: {
         id: coachId,
         email: `${coachId}@local`,
         role: 'COACH',
-        timezone: 'UTC',
+        timezone: browserTimeZone,
         authProviderId: coachId,
       },
     });
 
     await prisma.user.upsert({
       where: { id: athleteId },
-      update: { role: 'ATHLETE', timezone: 'UTC', authProviderId: athleteId },
+      update: { role: 'ATHLETE', timezone: browserTimeZone, authProviderId: athleteId },
       create: {
         id: athleteId,
         email: `${athleteId}@local`,
         role: 'ATHLETE',
-        timezone: 'UTC',
+        timezone: browserTimeZone,
         authProviderId: athleteId,
       },
     });
@@ -90,8 +85,8 @@ test.describe('Coach calendar month: planned icon parity', () => {
       data: {
         athleteId,
         coachId,
-        date: new Date(`${dayKey}T00:00:00.000Z`),
-        plannedStartTimeLocal: '06:00',
+        date: itemDate,
+        plannedStartTimeLocal,
         origin: 'AI_PLAN_BUILDER',
         planningStatus: 'PLANNED',
         sourceActivityId: 'apb:pw-month-icon-parity',
@@ -111,8 +106,8 @@ test.describe('Coach calendar month: planned icon parity', () => {
       data: {
         athleteId,
         coachId,
-        date: new Date(`${dayKey}T00:00:00.000Z`),
-        plannedStartTimeLocal: '06:30',
+        date: itemDate,
+        plannedStartTimeLocal: manualStartTimeLocal,
         discipline: 'BIKE',
         title,
         plannedDurationMinutes: 45,
@@ -126,33 +121,21 @@ test.describe('Coach calendar month: planned icon parity', () => {
 
     try {
       await setRoleCookie(page, 'COACH');
+      await page.addInitScript(({ athleteId, coachId }) => {
+        localStorage.setItem('coach-calendar-selected-athletes', JSON.stringify([athleteId]));
+        localStorage.setItem(`coach-calendar-view:${coachId}`, 'month');
+      }, { athleteId, coachId });
 
       await page.goto('/coach/calendar', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('heading', { name: /Weekly Calendar/i })).toBeVisible();
-
-      // Select only our dedicated athlete to avoid day-cell row truncation from other seeded sessions.
-      const dropdown = await openAthleteSelector(page);
-      await ensureNoneSelected(dropdown);
-
-      await dropdown.locator('input[placeholder="Search athletes..."]').fill(athleteId);
-      const athleteCheckbox = dropdown.locator('input[data-athlete-selector="athlete-checkbox"]').first();
-      await athleteCheckbox.click();
-
-      // Close the dropdown so it does not obscure the calendar.
-      const overlay = page.locator('xpath=//div[contains(@class,"fixed") and contains(@class,"inset-0") and contains(@class,"z-[100]")]');
-      if (await overlay.isVisible()) {
-        await overlay.click();
-      }
-      await expect(dropdown).toBeHidden();
-
-      await page.getByRole('button', { name: 'Month' }).click();
       await expect(page.getByRole('heading', { name: /Monthly Calendar/i })).toBeVisible();
+      await expect(page.getByTestId('calendar-month-grid')).toBeVisible();
 
-      const row = page.getByLabel(`Open workout ${String(item.id)}`);
+      const monthGrid = page.getByTestId('calendar-month-grid');
+      const row = monthGrid.getByLabel(`Open workout ${String(item.id)}`);
       await expect(row).toBeVisible();
       await expect(row).toContainText(title);
 
-      const manualRow = page.getByLabel(`Open workout ${String(manualItem.id)}`);
+      const manualRow = monthGrid.getByLabel(`Open workout ${String(manualItem.id)}`);
       await expect(manualRow).toBeVisible();
       await expect(manualRow).toContainText(title);
 
