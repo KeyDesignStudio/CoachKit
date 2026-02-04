@@ -81,10 +81,23 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(page.getByRole('button', { name: 'Open full profile' })).toBeVisible();
     await page.getByRole('button', { name: 'Open full profile' }).click();
     await page.waitForURL(`/coach/athletes/${athleteId}/profile`);
+    await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.getByRole('tab', { name: 'Personal' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Training Basics' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Current Training Plan' })).toBeVisible();
     await expect(page.getByText('Loading profile...')).toHaveCount(0);
+    const firstNameField = page.getByLabel('First Name');
+    const lastNameField = page.getByLabel('Last Name');
+    await expect(firstNameField).toBeVisible();
+    await expect(lastNameField).toBeVisible();
+    const firstBox = await firstNameField.boundingBox();
+    const lastBox = await lastNameField.boundingBox();
+    expect(firstBox).not.toBeNull();
+    expect(lastBox).not.toBeNull();
+    if (firstBox && lastBox) {
+      expect(Math.abs(firstBox.y - lastBox.y)).toBeLessThan(8);
+      expect(Math.abs(firstBox.x - lastBox.x)).toBeGreaterThan(40);
+    }
     await page.getByRole('tab', { name: 'Current Training Plan' }).click();
     const otherDiscipline = page.getByRole('button', { name: 'OTHER' });
     const otherSelected = await otherDiscipline.evaluate((el) => el.className.includes('bg-blue-500/10'));

@@ -7,6 +7,7 @@ import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { FormFieldSpan, FormGrid, FormPageContainer, FormSection } from '@/components/ui/FormLayout';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -67,6 +68,11 @@ type AthleteProfile = {
 
 const TABS = ['Personal', 'Training Basics', 'Current Training Plan'] as const;
 type TabKey = (typeof TABS)[number];
+
+const gridColumns = { base: 1, md: 2, xl: 4 } as const;
+const span1 = { base: 1, md: 1, xl: 1 } as const;
+const span2 = { base: 1, md: 2, xl: 2 } as const;
+const span4 = { base: 1, md: 2, xl: 4 } as const;
 
 export default function AthleteProfilePage() {
   const router = useRouter();
@@ -285,19 +291,21 @@ export default function AthleteProfilePage() {
   }
 
   return (
-    <section className="px-6 py-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className={uiH1}>Athlete Profile</h1>
-          <p className={uiMuted}>Edit athlete details and coaching preferences.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={() => router.push('/coach/athletes')}>
-            Back to athletes
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || loading}>
-            {saving ? 'Saving...' : 'Save changes'}
-          </Button>
+    <FormPageContainer maxWidth="3xl">
+      <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 pb-4 pt-4 md:-mx-6 md:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className={uiH1}>Athlete Profile</h1>
+            <p className={uiMuted}>Edit athlete details and coaching preferences.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => router.push('/coach/athletes')}>
+              Back to athletes
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={saving || loading}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -330,57 +338,87 @@ export default function AthleteProfilePage() {
       </div>
 
       {activeTab === 'Personal' ? (
-        <div role="tabpanel" id="tab-panel-Personal" className="grid gap-4 md:grid-cols-2">
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            First Name
-            <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Last Name
-            <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Gender
-            <Input value={gender} onChange={(e) => setGender(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Date of Birth
-            <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Email
-            <Input value={email} disabled className="bg-[var(--bg-structure)]" />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Mobile phone
-            <Input value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
-          </label>
-          <div className="flex flex-col gap-2 text-sm font-medium">
-            Athlete timezone
-            <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
-          </div>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Training suburb
-            <Input value={trainingSuburb} onChange={(e) => setTrainingSuburb(e.target.value)} />
-          </label>
-        </div>
+        <FormGrid role="tabpanel" id="tab-panel-Personal" columns={gridColumns}>
+          <FormSection title="Identity" />
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              First Name
+              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Last Name
+              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Gender
+              <Input value={gender} onChange={(e) => setGender(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Date of Birth
+              <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+
+          <FormSection title="Contact" className="mt-2" />
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Email
+              <Input value={email} disabled className="bg-[var(--bg-structure)]" />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Mobile phone
+              <Input value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+
+          <FormSection title="Location & Timezone" className="mt-2" />
+          <FormFieldSpan span={span2}>
+            <div className="flex flex-col gap-2 text-sm font-medium">
+              Athlete timezone
+              <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
+            </div>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Training suburb
+              <Input value={trainingSuburb} onChange={(e) => setTrainingSuburb(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+        </FormGrid>
       ) : null}
 
       {activeTab === 'Training Basics' ? (
-        <div role="tabpanel" id="tab-panel-Training-Basics" className="grid gap-4">
-          <div className="grid gap-4 md:grid-cols-2">
+        <FormGrid role="tabpanel" id="tab-panel-Training-Basics" columns={gridColumns}>
+          <FormSection title="Experience & Goals" />
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Experience level
               <Input value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} />
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span4}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Primary goal/s
               <Textarea value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} rows={2} />
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span4}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Secondary goal/s
               <Input value={secondaryGoals} onChange={(e) => setSecondaryGoals(e.target.value)} />
             </label>
+          </FormFieldSpan>
+
+          <FormSection title="Weekly Target & Confidence" className="mt-2" />
+          <FormFieldSpan span={span2}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Weekly minutes target
               <Input
@@ -391,8 +429,8 @@ export default function AthleteProfilePage() {
                 onChange={(e) => setWeeklyMinutesTarget(e.target.value)}
               />
             </label>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Swim confidence level
               <Select value={swimConfidence} onChange={(e) => setSwimConfidence(e.target.value)}>
@@ -404,6 +442,8 @@ export default function AthleteProfilePage() {
                 ))}
               </Select>
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Bike confidence level
               <Select value={bikeConfidence} onChange={(e) => setBikeConfidence(e.target.value)}>
@@ -415,6 +455,8 @@ export default function AthleteProfilePage() {
                 ))}
               </Select>
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Run confidence level
               <Select value={runConfidence} onChange={(e) => setRunConfidence(e.target.value)}>
@@ -426,8 +468,10 @@ export default function AthleteProfilePage() {
                 ))}
               </Select>
             </label>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          </FormFieldSpan>
+
+          <FormSection title="Coaching Preferences & Schedule" className="mt-2" />
+          <FormFieldSpan span={span1}>
             <div className="space-y-2 text-sm font-medium">
               Training Plan Schedule
               <div className="grid gap-3 sm:grid-cols-2">
@@ -494,110 +538,137 @@ export default function AthleteProfilePage() {
                 ) : null}
               </div>
             </div>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Feedback style
               <Input value={feedbackStyle} onChange={(e) => setFeedbackStyle(e.target.value)} />
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Tone preference
               <Input value={tonePreference} onChange={(e) => setTonePreference(e.target.value)} />
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Check-in cadence
               <Input value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)} />
             </label>
-          </div>
-        </div>
+          </FormFieldSpan>
+        </FormGrid>
       ) : null}
 
       {activeTab === 'Current Training Plan' ? (
-        <div role="tabpanel" id="tab-panel-Current-Training-Plan" className="grid gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Focus
-            <Input value={focus} onChange={(e) => setFocus(e.target.value)} />
-          </label>
-          <div className="grid gap-4 md:grid-cols-2">
+        <FormGrid role="tabpanel" id="tab-panel-Current-Training-Plan" columns={gridColumns}>
+          <FormSection title="Plan Focus & Event" />
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Focus
+              <Input value={focus} onChange={(e) => setFocus(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Next event name
               <Input value={eventName} onChange={(e) => setEventName(e.target.value)} />
             </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Next event date
               <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
             </label>
-          </div>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Timeline (weeks)
-            <Input
-              type="number"
-              min={1}
-              max={104}
-              value={timelineWeeks}
-              onChange={(e) => setTimelineWeeks(e.target.value)}
-            />
-          </label>
-          <div className="space-y-2 text-sm font-medium">
-            Disciplines
-            <div className="flex flex-wrap gap-2">
-              {DISCIPLINES.map((discipline) => {
-                const theme = getDisciplineTheme(discipline);
-                const isSelected = selectedDisciplines.includes(discipline);
-                return (
-                  <button
-                    key={discipline}
-                    type="button"
-                    onClick={() => toggleDiscipline(discipline)}
-                    className={cn(
-                      'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
-                      isSelected
-                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
-                    )}
-                  >
-                    <Icon name={theme.iconName} size="sm" className={isSelected ? theme.textClass : ''} />
-                    {discipline}
-                  </button>
-                );
-              })}
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Timeline (weeks)
+              <Input
+                type="number"
+                min={1}
+                max={104}
+                value={timelineWeeks}
+                onChange={(e) => setTimelineWeeks(e.target.value)}
+              />
+            </label>
+          </FormFieldSpan>
+
+          <FormSection title="Disciplines & Availability" className="mt-2" />
+          <FormFieldSpan span={span4}>
+            <div className="space-y-2 text-sm font-medium">
+              Disciplines
+              <div className="flex flex-wrap gap-2">
+                {DISCIPLINES.map((discipline) => {
+                  const theme = getDisciplineTheme(discipline);
+                  const isSelected = selectedDisciplines.includes(discipline);
+                  return (
+                    <button
+                      key={discipline}
+                      type="button"
+                      onClick={() => toggleDiscipline(discipline)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
+                        isSelected
+                          ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
+                      )}
+                    >
+                      <Icon name={theme.iconName} size="sm" className={isSelected ? theme.textClass : ''} />
+                      {discipline}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          <div className="space-y-2 text-sm font-medium">
-            Available days
-            <div className="flex flex-wrap gap-2">
-              {AVAILABLE_DAYS.map((day) => {
-                const isSelected = availableDays.includes(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleAvailableDay(day)}
-                    className={cn(
-                      'rounded-xl border px-3 py-2 text-sm font-medium transition-all',
-                      isSelected
-                        ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
-                    )}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
+          </FormFieldSpan>
+          <FormFieldSpan span={span4}>
+            <div className="space-y-2 text-sm font-medium">
+              Available days
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_DAYS.map((day) => {
+                  const isSelected = availableDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleAvailableDay(day)}
+                      className={cn(
+                        'rounded-xl border px-3 py-2 text-sm font-medium transition-all',
+                        isSelected
+                          ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
+                      )}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Schedule variability
-            <Input value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Injury status
-            <Input value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium">
-            Constraints notes
-            <Textarea value={constraintsNotes} onChange={(e) => setConstraintsNotes(e.target.value)} rows={3} />
-          </label>
-        </div>
+          </FormFieldSpan>
+
+          <FormSection title="Constraints & Risk Notes" className="mt-2" />
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Schedule variability
+              <Input value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Injury status
+              <Input value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span4}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Constraints notes
+              <Textarea value={constraintsNotes} onChange={(e) => setConstraintsNotes(e.target.value)} rows={3} />
+            </label>
+          </FormFieldSpan>
+        </FormGrid>
       ) : null}
-    </section>
+    </FormPageContainer>
   );
 }
