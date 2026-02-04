@@ -46,6 +46,7 @@ describe('AI Plan Builder v1 (PATCH draft-plan notes regression)', () => {
     vi.doUnmock('@/lib/auth');
 
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
     await prisma.user.deleteMany({ where: { id: athleteId } });

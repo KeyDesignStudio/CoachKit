@@ -53,6 +53,7 @@ describe('AI Plan Builder v1 (intake/latest empty state)', () => {
     await prisma.athleteProfileAI.deleteMany({ where: { athleteId, coachId } });
     await prisma.intakeEvidence.deleteMany({ where: { athleteId, coachId } });
     await prisma.athleteIntakeResponse.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
     await prisma.user.deleteMany({ where: { id: athleteId } });

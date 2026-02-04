@@ -178,6 +178,16 @@ function renderQuestion(
     );
   }
 
+  if (question.type === 'date') {
+    return (
+      <Input
+        type="date"
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
   return (
     <Input
       value={typeof value === 'string' ? value : ''}

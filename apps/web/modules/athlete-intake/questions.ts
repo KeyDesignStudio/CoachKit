@@ -1,4 +1,4 @@
-export type IntakeQuestionType = 'text' | 'textarea' | 'select' | 'multi' | 'scale' | 'number';
+export type IntakeQuestionType = 'text' | 'textarea' | 'select' | 'multi' | 'scale' | 'number' | 'date';
 
 export type IntakeQuestionVisibility = {
   questionKey: string;
@@ -28,6 +28,24 @@ export type IntakeSection = {
 
 export const INTAKE_SECTIONS: IntakeSection[] = [
   {
+    key: 'profile-basics',
+    title: 'Profile Basics',
+    intro: 'A few details to personalize your coaching.',
+    questions: [
+      { key: 'first_name', prompt: 'First name', type: 'text' },
+      { key: 'last_name', prompt: 'Last name', type: 'text' },
+      { key: 'date_of_birth', prompt: 'Date of birth', type: 'date' },
+      {
+        key: 'gender',
+        prompt: 'Gender',
+        type: 'select',
+        options: ['Female', 'Male', 'Non-binary', 'Prefer not to say', 'Other'],
+      },
+      { key: 'training_suburb', prompt: 'Where do you usually train?', type: 'text' },
+      { key: 'mobile_phone', prompt: 'Mobile phone', type: 'text' },
+    ],
+  },
+  {
     key: 'goals',
     title: 'Goals & Timeline',
     intro: 'A quick snapshot of what you want to accomplish next.',
@@ -50,6 +68,9 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         type: 'select',
         options: ['Consistency', 'Base fitness', 'Performance', 'Return to training', 'Health & recovery'],
       },
+      { key: 'event_name', prompt: 'Event name (if applicable)', type: 'text' },
+      { key: 'event_date', prompt: 'Event date (if applicable)', type: 'date' },
+      { key: 'secondary_goals', prompt: 'Secondary goals (comma-separated)', type: 'text' },
       { key: 'goal_details', prompt: 'Optional: add any details about your goal', type: 'text' },
     ],
   },
@@ -138,6 +159,8 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         type: 'select',
         options: ['No injuries', 'Managing minor pain', 'Recovering from injury', 'Medical considerations'],
       },
+      { key: 'equipment_access', prompt: 'Equipment access (trainer, gym, pool, etc.)', type: 'text' },
+      { key: 'travel_constraints', prompt: 'Travel or work constraints?', type: 'text' },
       { key: 'constraints_notes', prompt: 'Optional: anything else we should plan around?', type: 'text' },
     ],
   },

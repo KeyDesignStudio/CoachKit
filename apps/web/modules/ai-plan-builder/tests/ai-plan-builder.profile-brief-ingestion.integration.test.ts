@@ -56,6 +56,7 @@ describe('AI Plan Builder v1 (profile + brief canonical ingestion)', () => {
     await prisma.aiPlanDraftSession.deleteMany({ where: { draft: { athleteId, coachId } } });
     await prisma.aiPlanDraftWeek.deleteMany({ where: { draft: { athleteId, coachId } } });
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
     await prisma.user.deleteMany({ where: { id: athleteId } });

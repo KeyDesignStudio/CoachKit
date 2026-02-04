@@ -77,6 +77,7 @@ describe('AI Plan Builder v1 (Prisma integration)', () => {
     await prisma.athleteProfileAI.deleteMany({ where: { athleteId, coachId } });
     await prisma.intakeEvidence.deleteMany({ where: { athleteId, coachId } });
     await prisma.athleteIntakeResponse.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     // These may be used by other test suites; only delete if they match our ids.
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
