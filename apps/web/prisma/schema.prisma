@@ -309,15 +309,62 @@ model WorkoutLibraryUsage {
 model AthleteProfile {
   userId                  String                @id
   coachId                 String
-  disciplines             String[] // e.g. ["RUN","BIKE","SWIM"]
+  // Identity (canonical)
+  firstName        String?
+  lastName         String?
+  dateOfBirth      DateTime?
+  gender           String?
+  timezone         String?
+  trainingSuburb   String?
+  email            String?
+  mobilePhone      String?
+
+  // Sport context
+  disciplines      String[] // e.g. ["RUN","BIKE","SWIM"]
+  primaryGoal      String?
+  secondaryGoals   String[] @default([])
+  focus            String?
+  eventName        String?
+  eventDate        DateTime?
+  timelineWeeks    Int?
+
+  // Training profile
+  experienceLevel     String?
+  weeklyMinutesTarget Int?
+  consistencyLevel    String?
+  swimConfidence      Int?
+  bikeConfidence      Int?
+  runConfidence       Int?
+
+  // Constraints
+  availableDays       String[] @default([])
+  scheduleVariability String?
+  sleepQuality        String?
+  equipmentAccess     String?
+  travelConstraints   String?
+  injuryStatus        String?
+  constraintsNotes    String?
+
+  // Coaching preferences
+  feedbackStyle       String?
+  tonePreference      String?
+  checkInCadence      String?
+  structurePreference Int?
+  motivationStyle     String?
+
+  // Coach-owned fields (never overwritten by intake)
+  trainingPlanSchedule Json?
+  coachNotes           String?
+  painHistory          Json?
+  coachJournal         String?
+
+  // Legacy fields (deprecated)
   goalsText               String?
-  planCadenceDays         Int                   @default(7) // LEGACY: kept for backward compatibility. Do not use in UI. Use trainingPlanFrequency/day/weekOfMonth.
+  planCadenceDays         Int                   @default(7) // LEGACY: kept for backward compatibility. Do not use in UI. Use trainingPlanSchedule.
   trainingPlanFrequency   TrainingPlanFrequency @default(AD_HOC)
   trainingPlanDayOfWeek   Int?
   trainingPlanWeekOfMonth Int?
   zonesJson               Json?
-  coachNotes              String?
-  dateOfBirth             DateTime?
 
   // Calendar Sync (private iCal subscription)
   icalToken          String?   @unique
@@ -893,7 +940,12 @@ model AthleteBrief {
   generatedAt DateTime @default(now())
   inputHash   String
   briefJson   Json
+  summaryText String?
+  riskFlags   String[] @default([])
+  sourcesPresent Json?
   aiMode      String?
+
+  updatedAt DateTime @updatedAt
 
   createdAt DateTime @default(now())
 

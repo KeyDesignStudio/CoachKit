@@ -31,7 +31,10 @@ export function MonthGrid({ children, includeSummaryColumn = false }: MonthGridP
       </div>
 
       {/* Day cells */}
-      <div className={`grid ${includeSummaryColumn ? 'grid-cols-7 md:grid-cols-8' : 'grid-cols-7'} gap-px bg-[var(--bg-structure)]`}>
+      <div
+        data-testid="calendar-month-grid"
+        className={`grid ${includeSummaryColumn ? 'grid-cols-7 md:grid-cols-8' : 'grid-cols-7'} gap-px bg-[var(--bg-structure)]`}
+      >
         {children}
       </div>
     </>

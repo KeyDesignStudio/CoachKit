@@ -3,7 +3,7 @@ import { handleError, success } from '@/lib/http';
 
 import { ensureAthleteBrief } from '@/modules/ai-plan-builder/server/athlete-brief';
 
-export async function GET(_request: Request, context: { params: { athleteId: string } }) {
+export async function POST(_request: Request, context: { params: { athleteId: string } }) {
   try {
     const { user } = await requireCoach();
     await assertCoachOwnsAthlete(context.params.athleteId, user.id);

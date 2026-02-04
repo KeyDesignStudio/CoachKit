@@ -170,23 +170,44 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
     const briefParsed = athleteBriefSchema.safeParse(input?.athleteBrief ?? null);
     if (briefParsed.success) {
       const brief = briefParsed.data;
-      const focusLines = [...(brief.planGuidance?.focusNotes ?? []), ...(brief.risks ?? [])]
-        .filter(Boolean)
-        .slice(0, 2);
+      const riskFlags = brief.version === 'v1.1' ? brief.riskFlags ?? [] : brief.risks ?? [];
+      const focusLines =
+        brief.version === 'v1.1'
+          ? [brief.planGuidance, ...riskFlags].filter(Boolean)
+          : [...(brief.planGuidance?.focusNotes ?? []), ...riskFlags].filter(Boolean);
+
       if (focusLines.length) {
-        detail.targets.notes = `${detail.targets.notes} Focus: ${focusLines.join(' ')}`.slice(0, 500);
+        detail.targets.notes = `${detail.targets.notes} Focus: ${focusLines.slice(0, 2).join(' ')}`.slice(0, 500);
       }
 
-      const cueAdditions = [...(brief.planGuidance?.coachingCues ?? []), brief.planGuidance?.tone]
-        .filter((value): value is string => Boolean(value))
-        .slice(0, 2);
+      const cueAdditions =
+        brief.version === 'v1.1'
+          ? [
+              brief.coachingPreferences?.tone,
+              brief.coachingPreferences?.feedbackStyle,
+              brief.coachingPreferences?.checkinCadence,
+            ]
+              .filter((value): value is string => Boolean(value))
+              .slice(0, 2)
+          : [...(brief.planGuidance?.coachingCues ?? []), brief.planGuidance?.tone]
+              .filter((value): value is string => Boolean(value))
+              .slice(0, 2);
+
       if (cueAdditions.length) {
         detail.cues = Array.from(new Set([...(detail.cues ?? []), ...cueAdditions])).slice(0, 3);
       }
 
-      const safetyLines = [...(brief.planGuidance?.safetyNotes ?? []), ...(brief.risks ?? [])]
-        .filter(Boolean)
-        .slice(0, 3);
+      const safetyLines =
+        brief.version === 'v1.1'
+          ? [
+              brief.constraintsAndSafety?.injuryStatus,
+              ...(brief.constraintsAndSafety?.painHistory ?? []),
+              ...riskFlags,
+            ]
+              .filter(Boolean)
+              .slice(0, 3)
+          : [...(brief.planGuidance?.safetyNotes ?? []), ...riskFlags].filter(Boolean).slice(0, 3);
+
       if (safetyLines.length) {
         detail.safetyNotes = `${detail.safetyNotes ?? ''} ${safetyLines.join(' ')}`.trim().slice(0, 800);
       }
@@ -226,16 +247,44 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
 
     const profile = input?.profile ?? {
       disciplines: [],
-      goalsText: null,
-      trainingPlanFrequency: 'AD_HOC',
-      trainingPlanDayOfWeek: null,
-      trainingPlanWeekOfMonth: null,
+      primaryGoal: null,
+      secondaryGoals: [],
+      focus: null,
+      timelineWeeks: null,
+      experienceLevel: null,
+      weeklyMinutesTarget: null,
+      consistencyLevel: null,
+      availableDays: [],
+      scheduleVariability: null,
+      sleepQuality: null,
+      trainingPlanSchedule: null,
       coachNotes: null,
     };
 
+    const timelineLabel = (() => {
+      if (!profile.timelineWeeks) return null;
+      if (profile.timelineWeeks <= 0) return null;
+      if (profile.timelineWeeks <= 8) return 'In 6–8 weeks';
+      if (profile.timelineWeeks <= 12) return 'In 2–3 months';
+      if (profile.timelineWeeks <= 24) return 'In 3–6 months';
+      if (profile.timelineWeeks <= 48) return 'In 6–12 months';
+      return 'No date in mind';
+    })();
+
+    const shortDay = (day: string) => day.slice(0, 3);
+    const availabilityDays = Array.isArray(profile.availableDays) ? profile.availableDays.map(shortDay) : [];
+
     const draftJson: Record<string, AiJsonValue> = {
       disciplines: Array.isArray(profile.disciplines) ? profile.disciplines.map(String) : [],
-      goal_details: profile.goalsText ? String(profile.goalsText) : null,
+      goal_details: profile.primaryGoal ? String(profile.primaryGoal) : null,
+      goal_focus: profile.focus ? String(profile.focus) : null,
+      goal_timeline: timelineLabel,
+      experience_level: profile.experienceLevel ? String(profile.experienceLevel) : null,
+      weekly_minutes: profile.weeklyMinutesTarget ?? null,
+      recent_consistency: profile.consistencyLevel ? String(profile.consistencyLevel) : null,
+      availability_days: availabilityDays,
+      schedule_variability: profile.scheduleVariability ? String(profile.scheduleVariability) : null,
+      sleep_quality: profile.sleepQuality ? String(profile.sleepQuality) : null,
     };
 
     const result: GenerateIntakeFromProfileResult = { draftJson };
@@ -278,8 +327,7 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
     const startedAt = Date.now();
 
     const brief = buildAthleteBriefDeterministic({
-      intake: input.intake as any,
-      profile: input.profile ?? null,
+      profile: input.athleteProfile ?? null,
     });
 
     const result = { brief };

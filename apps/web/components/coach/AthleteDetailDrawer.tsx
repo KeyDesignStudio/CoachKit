@@ -13,8 +13,10 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { uiH2, uiMuted } from '@/components/ui/typography';
+import type { AthleteBriefJson } from '@/modules/ai/athlete-brief/types';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const AVAILABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
 function humanizeEnumLabel(value: unknown): string | null {
   if (value == null) return null;
@@ -44,11 +46,43 @@ function humanizeDiscipline(value: unknown): string | null {
 type AthleteProfile = {
   userId: string;
   coachId: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  timezone?: string | null;
+  trainingSuburb?: string | null;
+  email?: string | null;
+  mobilePhone?: string | null;
   disciplines: string[];
-  goalsText?: string | null;
-  trainingPlanFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
-  trainingPlanDayOfWeek?: number | null;
-  trainingPlanWeekOfMonth?: 1 | 2 | 3 | 4 | null;
+  primaryGoal?: string | null;
+  secondaryGoals?: string[] | null;
+  focus?: string | null;
+  eventName?: string | null;
+  eventDate?: string | null;
+  timelineWeeks?: number | null;
+  experienceLevel?: string | null;
+  weeklyMinutesTarget?: number | null;
+  consistencyLevel?: string | null;
+  swimConfidence?: number | null;
+  bikeConfidence?: number | null;
+  runConfidence?: number | null;
+  availableDays?: string[] | null;
+  scheduleVariability?: string | null;
+  sleepQuality?: string | null;
+  equipmentAccess?: string | null;
+  travelConstraints?: string | null;
+  injuryStatus?: string | null;
+  constraintsNotes?: string | null;
+  feedbackStyle?: string | null;
+  tonePreference?: string | null;
+  checkInCadence?: string | null;
+  structurePreference?: number | null;
+  motivationStyle?: string | null;
+  trainingPlanSchedule?: {
+    frequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+    dayOfWeek?: number | null;
+    weekOfMonth?: 1 | 2 | 3 | 4 | null;
+  } | null;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
   user: {
@@ -59,50 +93,7 @@ type AthleteProfile = {
   };
 };
 
-type AthleteBrief = {
-  version: 'v1';
-  snapshot?: {
-    headline?: string;
-    tags: string[];
-  };
-  goals?: {
-    type?: string;
-    details?: string;
-    timeline?: string;
-    focus?: string;
-  };
-  disciplineProfile?: {
-    experienceLevel?: string;
-    disciplines: string[];
-    weeklyMinutes?: number;
-    recentConsistency?: string;
-    swimConfidence?: number;
-    bikeConfidence?: number;
-    runConfidence?: number;
-  };
-  constraints?: {
-    availabilityDays: string[];
-    scheduleVariability?: string;
-    sleepQuality?: string;
-    injuryStatus?: string;
-    notes?: string;
-  };
-  coaching?: {
-    feedbackStyle?: string;
-    tonePreference?: string;
-    checkinPreference?: string;
-    structurePreference?: number;
-    motivationStyle?: string;
-    notes?: string;
-  };
-  risks: string[];
-  planGuidance?: {
-    tone?: string;
-    focusNotes: string[];
-    coachingCues: string[];
-    safetyNotes: string[];
-  };
-};
+type AthleteBrief = AthleteBriefJson;
 
 type PainHistoryItem = {
   calendarItemId: string;
@@ -149,6 +140,54 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       if (value == null || value === '') return;
       items.push(`${label}: ${value}`);
     };
+
+    if (brief.version === 'v1.1') {
+      const snapshotItems: string[] = [];
+      pushLabeled(snapshotItems, 'Goal', brief.snapshot?.primaryGoal ?? undefined);
+      pushLabeled(snapshotItems, 'Experience', brief.snapshot?.experienceLabel ?? undefined);
+      if (brief.snapshot?.disciplines?.length) {
+        snapshotItems.push(`Disciplines: ${brief.snapshot.disciplines.map(humanizeDiscipline).join(', ')}`);
+      }
+      if (brief.snapshot?.tags?.length) snapshotItems.push(`Tags: ${brief.snapshot.tags.join(', ')}`);
+      if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
+
+      const trainingItems: string[] = [];
+      pushLabeled(trainingItems, 'Weekly minutes', brief.trainingProfile?.weeklyMinutesTarget ?? undefined);
+      if (brief.trainingProfile?.availabilityDays?.length) {
+        trainingItems.push(`Availability: ${brief.trainingProfile.availabilityDays.join(', ')}`);
+      }
+      pushLabeled(trainingItems, 'Schedule', brief.trainingProfile?.scheduleNotes ?? undefined);
+      pushLabeled(trainingItems, 'Timezone', brief.trainingProfile?.timezone ?? undefined);
+      if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
+
+      const constraintItems: string[] = [];
+      pushLabeled(constraintItems, 'Injury status', brief.constraintsAndSafety?.injuryStatus ?? undefined);
+      if (brief.constraintsAndSafety?.painHistory?.length) {
+        constraintItems.push(`Pain history: ${brief.constraintsAndSafety.painHistory.join('; ')}`);
+      }
+      pushLabeled(constraintItems, 'Sleep quality', brief.constraintsAndSafety?.sleepQuality ?? undefined);
+      pushLabeled(constraintItems, 'Notes', brief.constraintsAndSafety?.notes ?? undefined);
+      if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
+
+      const coachingItems: string[] = [];
+      pushLabeled(coachingItems, 'Tone', brief.coachingPreferences?.tone ?? undefined);
+      pushLabeled(coachingItems, 'Feedback style', brief.coachingPreferences?.feedbackStyle ?? undefined);
+      pushLabeled(coachingItems, 'Check-in cadence', brief.coachingPreferences?.checkinCadence ?? undefined);
+      pushLabeled(coachingItems, 'Structure preference', brief.coachingPreferences?.structurePreference ?? undefined);
+      pushLabeled(coachingItems, 'Motivation style', brief.coachingPreferences?.motivationStyle ?? undefined);
+      if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
+
+      const observationItems: string[] = [];
+      pushLabeled(observationItems, 'Coach notes', brief.coachObservations?.notes ?? undefined);
+      if (observationItems.length) sections.push({ title: 'Coach observations', items: observationItems });
+
+      const guidanceItems: string[] = [];
+      pushLabeled(guidanceItems, 'Plan guidance', brief.planGuidance ?? undefined);
+      if (brief.riskFlags?.length) guidanceItems.push(`Risk flags: ${brief.riskFlags.join(', ')}`);
+      if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
+
+      return sections;
+    }
 
     const snapshotItems: string[] = [];
     if (brief.snapshot?.headline) snapshotItems.push(brief.snapshot.headline);
@@ -233,10 +272,8 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
     const guidanceItems: string[] = [];
     pushLabeled(guidanceItems, 'Tone', humanizeEnumLabel(brief.planGuidance?.tone) ?? brief.planGuidance?.tone);
     if (brief.planGuidance?.focusNotes?.length) guidanceItems.push(`Focus notes: ${brief.planGuidance.focusNotes.join(' ')}`);
-    if (brief.planGuidance?.coachingCues?.length)
-      guidanceItems.push(`Coaching cues: ${brief.planGuidance.coachingCues.join(' ')}`);
-    if (brief.planGuidance?.safetyNotes?.length)
-      guidanceItems.push(`Safety notes: ${brief.planGuidance.safetyNotes.join(' ')}`);
+    if (brief.planGuidance?.coachingCues?.length) guidanceItems.push(`Coaching cues: ${brief.planGuidance.coachingCues.join(' ')}`);
+    if (brief.planGuidance?.safetyNotes?.length) guidanceItems.push(`Safety notes: ${brief.planGuidance.safetyNotes.join(' ')}`);
     if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
 
     if (brief.risks?.length) sections.push({ title: 'Risks', items: brief.risks });
@@ -245,16 +282,41 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   })();
 
   // Form state
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [gender, setGender] = useState('');
+  const [trainingSuburb, setTrainingSuburb] = useState('');
+  const [mobilePhone, setMobilePhone] = useState('');
   const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [trainingPlanFrequency, setTrainingPlanFrequency] = useState<'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC'>(
-    'AD_HOC'
-  );
+  const [trainingPlanFrequency, setTrainingPlanFrequency] = useState<'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC'>('AD_HOC');
   const [trainingPlanDayOfWeek, setTrainingPlanDayOfWeek] = useState<number | null>(null);
   const [trainingPlanWeekOfMonth, setTrainingPlanWeekOfMonth] = useState<1 | 2 | 3 | 4 | null>(null);
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
-  const [goalsText, setGoalsText] = useState('');
+  const [primaryGoal, setPrimaryGoal] = useState('');
+  const [secondaryGoals, setSecondaryGoals] = useState('');
+  const [focus, setFocus] = useState('');
+  const [eventName, setEventName] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [timelineWeeks, setTimelineWeeks] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState('');
+  const [weeklyMinutesTarget, setWeeklyMinutesTarget] = useState('');
+  const [consistencyLevel, setConsistencyLevel] = useState('');
+  const [swimConfidence, setSwimConfidence] = useState('');
+  const [bikeConfidence, setBikeConfidence] = useState('');
+  const [runConfidence, setRunConfidence] = useState('');
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
+  const [scheduleVariability, setScheduleVariability] = useState('');
+  const [sleepQuality, setSleepQuality] = useState('');
+  const [equipmentAccess, setEquipmentAccess] = useState('');
+  const [travelConstraints, setTravelConstraints] = useState('');
+  const [injuryStatus, setInjuryStatus] = useState('');
+  const [constraintsNotes, setConstraintsNotes] = useState('');
+  const [feedbackStyle, setFeedbackStyle] = useState('');
+  const [tonePreference, setTonePreference] = useState('');
+  const [checkInCadence, setCheckInCadence] = useState('');
+  const [structurePreference, setStructurePreference] = useState('');
+  const [motivationStyle, setMotivationStyle] = useState('');
   const [coachNotes, setCoachNotes] = useState('');
   const [timezone, setTimezone] = useState('Australia/Brisbane');
 
@@ -307,19 +369,56 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         setBrief(briefData.brief ?? null);
 
         // Populate form
-        setName(athleteData.athlete.user.name || '');
+        setFirstName(athleteData.athlete.firstName || '');
+        setLastName(athleteData.athlete.lastName || '');
+        setGender(athleteData.athlete.gender || '');
+        setTrainingSuburb(athleteData.athlete.trainingSuburb || '');
+        setMobilePhone(athleteData.athlete.mobilePhone || '');
         setEmail(athleteData.athlete.user.email);
-        setTimezone(athleteData.athlete.user.timezone || 'Australia/Brisbane');
+        setTimezone(athleteData.athlete.timezone || athleteData.athlete.user.timezone || 'Australia/Brisbane');
         setDateOfBirth(athleteData.athlete.dateOfBirth ? athleteData.athlete.dateOfBirth.split('T')[0] : '');
-        setTrainingPlanFrequency(athleteData.athlete.trainingPlanFrequency ?? 'AD_HOC');
+        setTrainingPlanFrequency(athleteData.athlete.trainingPlanSchedule?.frequency ?? 'AD_HOC');
         setTrainingPlanDayOfWeek(
-          athleteData.athlete.trainingPlanDayOfWeek === undefined ? null : (athleteData.athlete.trainingPlanDayOfWeek ?? null)
+          athleteData.athlete.trainingPlanSchedule?.dayOfWeek === undefined
+            ? null
+            : (athleteData.athlete.trainingPlanSchedule?.dayOfWeek ?? null)
         );
         setTrainingPlanWeekOfMonth(
-          athleteData.athlete.trainingPlanWeekOfMonth === undefined ? null : (athleteData.athlete.trainingPlanWeekOfMonth ?? null)
+          athleteData.athlete.trainingPlanSchedule?.weekOfMonth === undefined
+            ? null
+            : (athleteData.athlete.trainingPlanSchedule?.weekOfMonth ?? null)
         );
         setSelectedDisciplines(athleteData.athlete.disciplines);
-        setGoalsText(athleteData.athlete.goalsText || '');
+        setPrimaryGoal(athleteData.athlete.primaryGoal || '');
+        setSecondaryGoals((athleteData.athlete.secondaryGoals ?? []).join(', '));
+        setFocus(athleteData.athlete.focus || '');
+        setEventName(athleteData.athlete.eventName || '');
+        setEventDate(athleteData.athlete.eventDate ? athleteData.athlete.eventDate.split('T')[0] : '');
+        setTimelineWeeks(
+          athleteData.athlete.timelineWeeks != null ? String(athleteData.athlete.timelineWeeks) : ''
+        );
+        setExperienceLevel(athleteData.athlete.experienceLevel || '');
+        setWeeklyMinutesTarget(
+          athleteData.athlete.weeklyMinutesTarget != null ? String(athleteData.athlete.weeklyMinutesTarget) : ''
+        );
+        setConsistencyLevel(athleteData.athlete.consistencyLevel || '');
+        setSwimConfidence(athleteData.athlete.swimConfidence != null ? String(athleteData.athlete.swimConfidence) : '');
+        setBikeConfidence(athleteData.athlete.bikeConfidence != null ? String(athleteData.athlete.bikeConfidence) : '');
+        setRunConfidence(athleteData.athlete.runConfidence != null ? String(athleteData.athlete.runConfidence) : '');
+        setAvailableDays(athleteData.athlete.availableDays ?? []);
+        setScheduleVariability(athleteData.athlete.scheduleVariability || '');
+        setSleepQuality(athleteData.athlete.sleepQuality || '');
+        setEquipmentAccess(athleteData.athlete.equipmentAccess || '');
+        setTravelConstraints(athleteData.athlete.travelConstraints || '');
+        setInjuryStatus(athleteData.athlete.injuryStatus || '');
+        setConstraintsNotes(athleteData.athlete.constraintsNotes || '');
+        setFeedbackStyle(athleteData.athlete.feedbackStyle || '');
+        setTonePreference(athleteData.athlete.tonePreference || '');
+        setCheckInCadence(athleteData.athlete.checkInCadence || '');
+        setStructurePreference(
+          athleteData.athlete.structurePreference != null ? String(athleteData.athlete.structurePreference) : ''
+        );
+        setMotivationStyle(athleteData.athlete.motivationStyle || '');
         setCoachNotes(athleteData.athlete.coachNotes || '');
 
         // Set default journal date to today
@@ -369,9 +468,11 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
         await request(`/api/coach/athletes/${athleteId}`, {
           method: 'PATCH',
           data: {
-            trainingPlanFrequency,
-            trainingPlanDayOfWeek: normalized.trainingPlanDayOfWeek,
-            trainingPlanWeekOfMonth: normalized.trainingPlanWeekOfMonth,
+            trainingPlanSchedule: {
+              frequency: trainingPlanFrequency,
+              dayOfWeek: normalized.trainingPlanDayOfWeek,
+              weekOfMonth: normalized.trainingPlanWeekOfMonth,
+            },
           },
         });
       } catch (err) {
@@ -403,15 +504,45 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       await request(`/api/coach/athletes/${athleteId}`, {
         method: 'PATCH',
         data: {
-          name: name.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          gender: gender.trim() || null,
+          trainingSuburb: trainingSuburb.trim() || null,
+          mobilePhone: mobilePhone.trim() || null,
           timezone,
           disciplines: selectedDisciplines,
-          goalsText: goalsText.trim() || null,
-          trainingPlanFrequency,
-          trainingPlanDayOfWeek:
-            trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
-          trainingPlanWeekOfMonth:
-            trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
+          primaryGoal: primaryGoal.trim() || null,
+          secondaryGoals: secondaryGoals
+            .split(',')
+            .map((g) => g.trim())
+            .filter(Boolean),
+          focus: focus.trim() || null,
+          eventName: eventName.trim() || null,
+          eventDate: eventDate || null,
+          timelineWeeks: timelineWeeks ? Number(timelineWeeks) : null,
+          experienceLevel: experienceLevel.trim() || null,
+          weeklyMinutesTarget: weeklyMinutesTarget ? Number(weeklyMinutesTarget) : null,
+          consistencyLevel: consistencyLevel.trim() || null,
+          swimConfidence: swimConfidence ? Number(swimConfidence) : null,
+          bikeConfidence: bikeConfidence ? Number(bikeConfidence) : null,
+          runConfidence: runConfidence ? Number(runConfidence) : null,
+          availableDays,
+          scheduleVariability: scheduleVariability.trim() || null,
+          sleepQuality: sleepQuality.trim() || null,
+          equipmentAccess: equipmentAccess.trim() || null,
+          travelConstraints: travelConstraints.trim() || null,
+          injuryStatus: injuryStatus.trim() || null,
+          constraintsNotes: constraintsNotes.trim() || null,
+          feedbackStyle: feedbackStyle.trim() || null,
+          tonePreference: tonePreference.trim() || null,
+          checkInCadence: checkInCadence.trim() || null,
+          structurePreference: structurePreference ? Number(structurePreference) : null,
+          motivationStyle: motivationStyle.trim() || null,
+          trainingPlanSchedule: {
+            frequency: trainingPlanFrequency,
+            dayOfWeek: trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
+            weekOfMonth: trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
+          },
           dateOfBirth: dateOfBirth || null,
           coachNotes: coachNotes.trim() || null,
         },
@@ -498,6 +629,8 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
   if (!isOpen) return null;
 
+  const displayName = [firstName, lastName].filter(Boolean).join(' ');
+
   return (
     <>
       {/* Backdrop */}
@@ -514,7 +647,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       >
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
-          <h2 className={`${uiH2} md:text-xl font-semibold`}>{name || 'Athlete Profile'}</h2>
+          <h2 className={`${uiH2} md:text-xl font-semibold`}>{displayName || 'Athlete Profile'}</h2>
           <Button type="button" variant="ghost" onClick={onClose}>
             ✕
           </Button>
@@ -534,13 +667,33 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                 <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                 <h3 className="text-lg font-semibold">Profile</h3>
                 <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Name</label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} required />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">First name</label>
+                      <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Last name</label>
+                      <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Email</label>
                     <Input value={email} disabled className="bg-[var(--bg-structure)]" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Gender</label>
+                      <Input value={gender} onChange={(e) => setGender(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Mobile phone</label>
+                      <Input value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Training suburb</label>
+                    <Input value={trainingSuburb} onChange={(e) => setTrainingSuburb(e.target.value)} />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">Athlete timezone</label>
@@ -651,14 +804,206 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
                       })}
                     </div>
                   </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Primary goal</label>
+                      <Textarea
+                        value={primaryGoal}
+                        onChange={(e) => setPrimaryGoal(e.target.value)}
+                        placeholder="Primary goal..."
+                        rows={2}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Secondary goals</label>
+                      <Input
+                        value={secondaryGoals}
+                        onChange={(e) => setSecondaryGoals(e.target.value)}
+                        placeholder="Comma-separated goals"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Focus</label>
+                      <Input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="Current focus" />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Event name</label>
+                        <Input value={eventName} onChange={(e) => setEventName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Event date</label>
+                        <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Timeline (weeks)</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={104}
+                        value={timelineWeeks}
+                        onChange={(e) => setTimelineWeeks(e.target.value)}
+                        placeholder="e.g. 12"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+                <h3 className="text-lg font-semibold">Training Profile</h3>
+                <div className="space-y-3">
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Goals</label>
+                    <label className="mb-1 block text-sm font-medium">Experience level</label>
+                    <Input value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Weekly minutes target</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={1500}
+                        value={weeklyMinutesTarget}
+                        onChange={(e) => setWeeklyMinutesTarget(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Consistency level</label>
+                      <Input value={consistencyLevel} onChange={(e) => setConsistencyLevel(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Swim confidence</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={swimConfidence}
+                        onChange={(e) => setSwimConfidence(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Bike confidence</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={bikeConfidence}
+                        onChange={(e) => setBikeConfidence(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Run confidence</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={runConfidence}
+                        onChange={(e) => setRunConfidence(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+                <h3 className="text-lg font-semibold">Constraints & Safety</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Available days</label>
+                    <div className="flex flex-wrap gap-2">
+                      {AVAILABLE_DAYS.map((day) => {
+                        const isSelected = availableDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() =>
+                              setAvailableDays((prev) =>
+                                prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                              )
+                            }
+                            className={cn(
+                              'rounded-xl border px-3 py-2 text-sm font-medium transition-all',
+                              isSelected
+                                ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
+                            )}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Schedule variability</label>
+                      <Input value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Sleep quality</label>
+                      <Input value={sleepQuality} onChange={(e) => setSleepQuality(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Equipment access</label>
+                    <Input value={equipmentAccess} onChange={(e) => setEquipmentAccess(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Travel constraints</label>
                     <Textarea
-                      value={goalsText}
-                      onChange={(e) => setGoalsText(e.target.value)}
-                      placeholder="Athlete goals..."
-                      rows={3}
+                      value={travelConstraints}
+                      onChange={(e) => setTravelConstraints(e.target.value)}
+                      rows={2}
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Injury status</label>
+                    <Input value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Constraints notes</label>
+                    <Textarea value={constraintsNotes} onChange={(e) => setConstraintsNotes(e.target.value)} rows={2} />
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+                <h3 className="text-lg font-semibold">Coaching Preferences</h3>
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Feedback style</label>
+                      <Input value={feedbackStyle} onChange={(e) => setFeedbackStyle(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Tone preference</label>
+                      <Input value={tonePreference} onChange={(e) => setTonePreference(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Check-in cadence</label>
+                      <Input value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium">Structure preference (1-5)</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={structurePreference}
+                        onChange={(e) => setStructurePreference(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Motivation style</label>
+                    <Input value={motivationStyle} onChange={(e) => setMotivationStyle(e.target.value)} />
                   </div>
                 </div>
               </section>
@@ -844,7 +1189,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       <ConfirmModal
         isOpen={deleteAthleteConfirm}
         title="Delete Athlete"
-        message={`Delete ${name}? This action cannot be undone.`}
+        message={`Delete ${displayName || 'this athlete'}? This action cannot be undone.`}
         confirmLabel="Delete"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteAthleteConfirm(false)}

@@ -279,10 +279,8 @@ async function main() {
           userId: athlete.id,
           coachId: coach.id,
           disciplines: ['RUN', 'BIKE', 'SWIM'],
-          goalsText: index === 0 ? 'Hit podium at Sunshine Coast 70.3' : 'Build consistency for first half Ironman',
-          trainingPlanFrequency: 'WEEKLY',
-          trainingPlanDayOfWeek: 2,
-          trainingPlanWeekOfMonth: null,
+          primaryGoal: index === 0 ? 'Hit podium at Sunshine Coast 70.3' : 'Build consistency for first half Ironman',
+          trainingPlanSchedule: { frequency: 'WEEKLY', dayOfWeek: 2, weekOfMonth: null },
           planCadenceDays: 7,
           dateOfBirth: index === 0 ? new Date('1988-03-15') : new Date('1992-07-22'),
           coachNotes: index === 0 

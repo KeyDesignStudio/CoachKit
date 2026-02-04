@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 import { sessionDetailV1Schema } from '@/modules/ai-plan-builder/rules/session-detail';
 import { generateAiDraftPlanV1, generateSessionDetailsForDraftPlan } from '@/modules/ai-plan-builder/server/draft-plan';
+import { createAthleteIntakeSubmission } from '@/modules/ai-plan-builder/server/athlete-intake';
 
 import { createAthlete, createCoach } from './seed';
 
@@ -26,6 +27,10 @@ describe('AI Plan Builder v1 (Session detail enrichment)', () => {
 
   afterAll(async () => {
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId, coachId } });
+
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteIntakeSubmission.deleteMany({ where: { athleteId, coachId } });
+    await prisma.painReport.deleteMany({ where: { athleteId } });
 
     await prisma.athleteProfileAI.deleteMany({ where: { athleteId, coachId } });
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
@@ -109,5 +114,62 @@ describe('AI Plan Builder v1 (Session detail enrichment)', () => {
       expect(row.detailInputHash).toBe(prev!.detailInputHash);
       expect(row.detailGeneratedAt?.toISOString()).toBe(prev!.detailGeneratedAt?.toISOString());
     }
+  });
+
+  it('includes safety cues from the athlete brief v1.1', async () => {
+    await prisma.athleteProfile.update({
+      where: { userId: athleteId },
+      data: { primaryGoal: 'Train safely', coachNotes: 'Watch knee discomfort' },
+    });
+
+    await createAthleteIntakeSubmission({
+      athleteId,
+      coachId,
+      payload: {
+        version: 'v1',
+        sections: [
+          {
+            key: 'safety',
+            title: 'Safety',
+            answers: [{ questionKey: 'injury_status', answer: 'Knee pain after hills' }],
+          },
+        ],
+      },
+    });
+
+    await prisma.painReport.create({
+      data: {
+        athleteId,
+        date: new Date('2026-01-15T12:00:00Z'),
+        bodyLocation: 'Knee',
+        severity: 5,
+        notes: 'Sharp pain on descents',
+      },
+    });
+
+    const setup = {
+      eventDate: '2026-08-01',
+      weeksToEvent: 6,
+      weekStart: 'monday' as const,
+      weeklyAvailabilityDays: [1, 3, 5, 6],
+      weeklyAvailabilityMinutes: 300,
+      disciplineEmphasis: 'balanced' as const,
+      riskTolerance: 'low' as const,
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      longSessionDay: 6,
+    };
+
+    const created = (await generateAiDraftPlanV1({ coachId, athleteId, setup })) as any;
+    const sampleSession = await prisma.aiPlanDraftSession.findFirst({
+      where: { draftId: created.id },
+      select: { detailJson: true },
+    });
+
+    const parsed = sessionDetailV1Schema.safeParse(sampleSession?.detailJson ?? null);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.safetyNotes ?? '').toMatch(/knee|pain|injur/i);
   });
 });

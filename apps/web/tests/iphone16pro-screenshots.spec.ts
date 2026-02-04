@@ -199,7 +199,9 @@ test.describe('Mobile screenshots', () => {
       if (await firstWorkout.count()) {
         await firstWorkout.click();
         // Workout detail drawer should open.
-        await expect(page.getByText(/^(Edit Workout|Workout Detail)$/)).toBeVisible();
+          const editHeading = page.getByRole('heading', { name: 'Edit Workout' });
+          const detailHeading = page.getByRole('heading', { name: 'Workout Detail' });
+          await expect(editHeading.or(detailHeading)).toBeVisible();
         // Planned vs actual time should be readable if actual exists.
         // (This assertion is conditional on seeded data.)
       }

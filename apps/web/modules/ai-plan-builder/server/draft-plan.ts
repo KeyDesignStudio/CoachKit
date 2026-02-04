@@ -13,7 +13,7 @@ import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
-import { getLatestAthleteBriefJson } from './athlete-brief';
+import { ensureAthleteBrief, getLatestAthleteBriefSummary, loadAthleteProfileSnapshot } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import {
   buildDeterministicSessionDetailV1,
@@ -21,7 +21,6 @@ import {
   reflowSessionDetailV1ToNewTotal,
   sessionDetailV1Schema,
 } from '../rules/session-detail';
-import { formatAthleteBriefAsSummaryText } from '../rules/athlete-brief';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 
@@ -164,8 +163,22 @@ export async function generateAiDraftPlanV1(params: {
   };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
-  const athleteBrief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
-  const suggestion = await ai.suggestDraftPlan({ setup: setup as any, athleteBrief });
+  const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
+  const athleteProfile =
+    (await loadAthleteProfileSnapshot({ coachId: params.coachId, athleteId: params.athleteId })) ?? ({} as any);
+
+  if (!setup.coachGuidanceText && athleteProfile?.primaryGoal) {
+    const bits = [athleteProfile.primaryGoal, athleteProfile.focus, athleteProfile.timelineWeeks ? `${athleteProfile.timelineWeeks} weeks` : null]
+      .filter(Boolean)
+      .join(' · ');
+    setup.coachGuidanceText = bits;
+  }
+
+  const suggestion = await ai.suggestDraftPlan({
+    setup: setup as any,
+    athleteProfile: athleteProfile as any,
+    athleteBrief: ensured.brief ?? null,
+  });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup, planJson: suggestion.planJson });
   const setupHash = computeStableSha256(setup);
 
@@ -229,31 +242,10 @@ export async function generateAiDraftPlanV1(params: {
 }
 
 async function getAthleteSummaryTextForSessionDetail(params: { coachId: string; athleteId: string; setup: any }) {
-  const brief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
-  if (brief) return formatAthleteBriefAsSummaryText(brief);
-
-  const row = await prisma.athleteProfileAI.findFirst({
-    where: { coachId: params.coachId, athleteId: params.athleteId, status: 'APPROVED' as any },
-    orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
-    select: { extractedSummaryText: true },
-  });
-
-  if (row?.extractedSummaryText) return row.extractedSummaryText;
-
-  const weeklyMinutesTarget = (() => {
-    const v = params.setup?.weeklyAvailabilityMinutes;
-    if (typeof v === 'number') return v;
-    if (v && typeof v === 'object') {
-      return Object.values(v as Record<string, number>).reduce((sum, n) => sum + (Number(n) || 0), 0);
-    }
-    return 0;
-  })();
-
-  const days = Array.isArray(params.setup?.weeklyAvailabilityDays) ? params.setup.weeklyAvailabilityDays.length : 0;
-  const risk = String(params.setup?.riskTolerance ?? 'med');
-  const emphasis = String(params.setup?.disciplineEmphasis ?? 'balanced');
-
-  return `Athlete summary (fallback): ${days} days/week, ~${weeklyMinutesTarget} min/week target, riskTolerance=${risk}, emphasis=${emphasis}.`;
+  const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
+  if (ensured.summaryText) return ensured.summaryText;
+  const summary = await getLatestAthleteBriefSummary({ coachId: params.coachId, athleteId: params.athleteId });
+  return summary ?? '';
 }
 
 export async function generateSessionDetailsForDraftPlan(params: {
@@ -295,7 +287,10 @@ export async function generateSessionDetailsForDraftPlan(params: {
   }
 
   const setup = draft.setupJson as any;
-  const athleteBrief = await getLatestAthleteBriefJson({ coachId: params.coachId, athleteId: params.athleteId });
+  const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
+  const athleteBrief = ensured.brief ?? null;
+  const athleteProfile =
+    (await loadAthleteProfileSnapshot({ coachId: params.coachId, athleteId: params.athleteId })) ?? ({} as any);
   const athleteSummaryText = await getAthleteSummaryTextForSessionDetail({
     coachId: params.coachId,
     athleteId: params.athleteId,
@@ -321,6 +316,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
 
     const input = {
       athleteSummaryText,
+      athleteProfile,
       athleteBrief,
       constraints: {
         riskTolerance: setup?.riskTolerance,

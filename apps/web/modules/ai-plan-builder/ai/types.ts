@@ -1,6 +1,7 @@
 import type { DraftPlanSetupV1, DraftPlanV1 } from '../rules/draft-generator';
 import type { PlanDiffOp } from '../server/adaptation-diff';
 import type { SessionDetailV1 } from '../rules/session-detail';
+import type { AthleteBriefJson, AthleteProfileSnapshot } from '@/modules/ai/athlete-brief/types';
 
 export type AiPlanBuilderAIMode = 'deterministic' | 'llm';
 
@@ -18,51 +19,6 @@ export type AiIntakeEvidenceItem = {
 };
 
 export type AiIntakeFlag = 'injury' | 'pain' | 'marathon' | 'triathlon';
-
-export type AthleteBriefJson = {
-  version: 'v1';
-  snapshot?: {
-    headline?: string;
-    tags: string[];
-  };
-  goals?: {
-    type?: string;
-    details?: string;
-    timeline?: string;
-    focus?: string;
-  };
-  disciplineProfile?: {
-    experienceLevel?: string;
-    disciplines: string[];
-    weeklyMinutes?: number;
-    recentConsistency?: string;
-    swimConfidence?: number;
-    bikeConfidence?: number;
-    runConfidence?: number;
-  };
-  constraints?: {
-    availabilityDays: string[];
-    scheduleVariability?: string;
-    sleepQuality?: string;
-    injuryStatus?: string;
-    notes?: string;
-  };
-  coaching?: {
-    feedbackStyle?: string;
-    tonePreference?: string;
-    checkinPreference?: string;
-    structurePreference?: number;
-    motivationStyle?: string;
-    notes?: string;
-  };
-  risks: string[];
-  planGuidance?: {
-    tone?: string;
-    focusNotes: string[];
-    coachingCues: string[];
-    safetyNotes: string[];
-  };
-};
 
 export type AiCoachIntent = {
   /**
@@ -105,6 +61,9 @@ export type SuggestDraftPlanInput = {
    * Must be fully explicit and deterministic-friendly.
    */
   setup: DraftPlanSetupV1;
+
+  /** Canonical athlete profile snapshot. */
+  athleteProfile: AthleteProfileSnapshot;
 
   /** Athlete brief context (preferred over raw intake). */
   athleteBrief?: AthleteBriefJson | null;
@@ -175,6 +134,9 @@ export type GenerateSessionDetailInput = {
   /** Stable, non-PII summary (from summarizeIntake if present). */
   athleteSummaryText: string;
 
+  /** Canonical athlete profile snapshot. */
+  athleteProfile: AthleteProfileSnapshot;
+
   /** Structured athlete brief context, if available. */
   athleteBrief?: AthleteBriefJson | null;
 
@@ -207,10 +169,23 @@ export type GenerateIntakeFromProfileInput = {
    */
   profile: {
     disciplines: string[];
-    goalsText: string | null;
-    trainingPlanFrequency: string;
-    trainingPlanDayOfWeek: number | null;
-    trainingPlanWeekOfMonth: number | null;
+    primaryGoal: string | null;
+    secondaryGoals: string[];
+    focus: string | null;
+    timelineWeeks: number | null;
+    experienceLevel: string | null;
+    weeklyMinutesTarget: number | null;
+    consistencyLevel: string | null;
+    availableDays: string[];
+    scheduleVariability: string | null;
+    sleepQuality: string | null;
+    trainingPlanSchedule:
+      | {
+          frequency?: string | null;
+          dayOfWeek?: number | null;
+          weekOfMonth?: number | null;
+        }
+      | null;
     coachNotes: string | null;
   };
 };
@@ -224,20 +199,13 @@ export type GenerateIntakeFromProfileResult = {
 };
 
 export type GenerateAthleteBriefFromIntakeInput = {
-  intake: {
+  athleteProfile: AthleteProfileSnapshot;
+  intake?: {
     sections: Array<{
       key: string;
       title?: string | null;
       answers: Array<{ questionKey: string; answer: AiJsonValue }>;
     }>;
-  };
-  profile?: {
-    disciplines: string[];
-    goalsText: string | null;
-    trainingPlanFrequency: string;
-    trainingPlanDayOfWeek: number | null;
-    trainingPlanWeekOfMonth: number | null;
-    coachNotes: string | null;
   } | null;
 };
 

@@ -49,25 +49,6 @@ function formatApiErrorMessage(e: ApiClientError): string {
   return 'Something went wrong.';
 }
 
-function toSingleSentence(input: unknown): string | null {
-  const raw = typeof input === 'string' ? input : input == null ? '' : String(input);
-  const s = raw.replace(/\s+/g, ' ').trim();
-  if (!s) return null;
-
-  const m = s.match(/^(.+?[.!?])\s+/);
-  const first = m?.[1] ? m[1].trim() : s;
-  if (!first) return null;
-  if (/[.!?]$/.test(first)) return first;
-  return `${first}.`;
-}
-
-function stripKeyPrefix(input: unknown): string | null {
-  const raw = typeof input === 'string' ? input : input == null ? '' : String(input);
-  const s = raw.trim();
-  if (!s) return null;
-  return s.replace(/^\s*[a-zA-Z_]+\s*:\s*/, '').trim() || null;
-}
-
 function humanizeEnumLabel(value: unknown): string | null {
   if (value == null) return null;
   const s = String(value).trim();
@@ -211,8 +192,6 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [intakeLatest, setIntakeLatest] = useState<any | null>(null);
-  const [profileLatest, setProfileLatest] = useState<any | null>(null);
   const [briefLatest, setBriefLatest] = useState<any | null>(null);
   const [draftPlanLatest, setDraftPlanLatest] = useState<any | null>(null);
   const [publishStatus, setPublishStatus] = useState<any | null>(null);
@@ -306,22 +285,6 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return setup.weeksToEventOverride ?? derivedWeeksToCompletion ?? 1;
   }, [derivedWeeksToCompletion, setup.weeksToEventOverride]);
 
-  const fetchIntakeLatest = useCallback(async () => {
-    const data = await request<{ intakeResponse: any | null }>(
-      `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`
-    );
-    setIntakeLatest(data.intakeResponse);
-    return data.intakeResponse;
-  }, [athleteId, request]);
-
-  const fetchProfileLatest = useCallback(async () => {
-    const data = await request<{ profile: any | null }>(
-      `/api/coach/athletes/${athleteId}/ai-plan-builder/profile/latest`
-    );
-    setProfileLatest(data.profile);
-    return data.profile;
-  }, [athleteId, request]);
-
   const fetchBriefLatest = useCallback(async () => {
     const data = await request<{ brief: any | null }>(
       `/api/coach/athletes/${athleteId}/athlete-brief/latest`
@@ -354,12 +317,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     (async () => {
       try {
         setError(null);
-        const [intake, profile, brief, draft] = await Promise.all([
-          fetchIntakeLatest(),
-          fetchProfileLatest(),
-          fetchBriefLatest(),
-          fetchDraftPlanLatest(),
-        ]);
+        const [brief, draft] = await Promise.all([fetchBriefLatest(), fetchDraftPlanLatest()]);
 
         if (cancelled) return;
 
@@ -371,21 +329,6 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
         setBriefLatest(brief ?? null);
 
-        // If there is an intake but no AI summary yet, build it automatically.
-        if (intake?.id && !profile?.id) {
-          try {
-            const extracted = await request<{ profile: any | null }>(
-              `/api/coach/athletes/${athleteId}/ai-plan-builder/profile/extract`,
-              {
-                method: 'POST',
-                data: { intakeResponseId: String(intake.id) },
-              }
-            );
-            setProfileLatest(extracted.profile ?? null);
-          } catch {
-            // Non-blocking: the coach can still generate a plan using fallback summary.
-          }
-        }
       } catch (e) {
         if (cancelled) return;
         const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to load.';
@@ -396,30 +339,24 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchBriefLatest, fetchDraftPlanLatest, fetchIntakeLatest, fetchProfileLatest, fetchPublishStatus, request]);
+  }, [athleteId, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, request]);
 
-  const startWithAi = useCallback(async () => {
-    setBusy('generate-intake');
+  const refreshBrief = useCallback(async () => {
+    setBusy('refresh-brief');
     setError(null);
     try {
-      const data = await request<{ intakeResponse: any; profile?: any | null }>(
-        `/api/coach/athletes/${athleteId}/ai-plan-builder/intake/generate`,
+      const data = await request<{ brief: any | null }>(
+        `/api/coach/athletes/${athleteId}/athlete-brief/refresh`,
         { method: 'POST', data: {} }
       );
-
-      setIntakeLatest(data.intakeResponse ?? null);
-      if (data.profile !== undefined) {
-        setProfileLatest(data.profile);
-      } else {
-        await fetchProfileLatest();
-      }
+      setBriefLatest(data.brief ?? null);
     } catch (e) {
-      const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to start.';
+      const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to refresh.';
       setError(message);
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchProfileLatest, request]);
+  }, [athleteId, request]);
 
   const generatePlanPreview = useCallback(async () => {
     setBusy('generate-plan');
@@ -610,8 +547,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     [athleteId, draftPlanLatest?.id, request]
   );
 
-  const canStart = !intakeLatest;
-  const canPlan = Boolean(intakeLatest?.id);
+  const canStart = !briefLatest;
+  const canPlan = Boolean(briefLatest);
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
 
@@ -672,7 +609,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           {!briefLatest ? (
             <div className="text-sm text-[var(--fg-muted)]">No Athlete Brief yet. Ask the athlete to complete intake.</div>
           ) : (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 text-sm" data-testid="apb-athlete-brief-details">
               {(() => {
                 const sections: Array<{ title: string; items: string[] }> = [];
                 const pushLabeled = (items: string[], label: string, value: string | number | null | undefined) => {
@@ -680,109 +617,155 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   items.push(`${label}: ${value}`);
                 };
 
-                const snapshotItems: string[] = [];
-                if (briefLatest.snapshot?.headline) snapshotItems.push(briefLatest.snapshot.headline);
-                if (briefLatest.snapshot?.tags?.length) snapshotItems.push(`Tags: ${briefLatest.snapshot.tags.join(', ')}`);
-                if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
+                if (briefLatest.version === 'v1.1') {
+                  const snapshotItems: string[] = [];
+                  pushLabeled(snapshotItems, 'Goal', briefLatest.snapshot?.primaryGoal ?? undefined);
+                  pushLabeled(snapshotItems, 'Experience', briefLatest.snapshot?.experienceLabel ?? undefined);
+                  if (briefLatest.snapshot?.disciplines?.length) {
+                    snapshotItems.push(`Disciplines: ${briefLatest.snapshot.disciplines.map(humanizeDiscipline).join(', ')}`);
+                  }
+                  if (briefLatest.snapshot?.tags?.length) snapshotItems.push(`Tags: ${briefLatest.snapshot.tags.join(', ')}`);
+                  if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
 
-                const goalItems: string[] = [];
-                pushLabeled(goalItems, 'Type', humanizeEnumLabel(briefLatest.goals?.type) ?? briefLatest.goals?.type ?? undefined);
-                pushLabeled(goalItems, 'Details', briefLatest.goals?.details ?? undefined);
-                pushLabeled(goalItems, 'Timeline', humanizeEnumLabel(briefLatest.goals?.timeline) ?? briefLatest.goals?.timeline ?? undefined);
-                pushLabeled(goalItems, 'Focus', humanizeEnumLabel(briefLatest.goals?.focus) ?? briefLatest.goals?.focus ?? undefined);
-                if (goalItems.length) sections.push({ title: 'Goals', items: goalItems });
+                  const trainingItems: string[] = [];
+                  pushLabeled(trainingItems, 'Weekly minutes', briefLatest.trainingProfile?.weeklyMinutesTarget ?? undefined);
+                  if (briefLatest.trainingProfile?.availabilityDays?.length) {
+                    trainingItems.push(`Availability: ${briefLatest.trainingProfile.availabilityDays.join(', ')}`);
+                  }
+                  pushLabeled(trainingItems, 'Schedule', briefLatest.trainingProfile?.scheduleNotes ?? undefined);
+                  pushLabeled(trainingItems, 'Timezone', briefLatest.trainingProfile?.timezone ?? undefined);
+                  if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
 
-                const trainingItems: string[] = [];
-                pushLabeled(
-                  trainingItems,
-                  'Experience',
-                  humanizeEnumLabel(briefLatest.disciplineProfile?.experienceLevel) ?? briefLatest.disciplineProfile?.experienceLevel
-                );
-                const disciplineList = Array.isArray(briefLatest.disciplineProfile?.disciplines)
-                  ? briefLatest.disciplineProfile?.disciplines.map(humanizeDiscipline).filter(Boolean)
-                  : [];
-                if (disciplineList.length) trainingItems.push(`Disciplines: ${disciplineList.join(', ')}`);
-                pushLabeled(trainingItems, 'Weekly minutes', briefLatest.disciplineProfile?.weeklyMinutes ?? undefined);
-                pushLabeled(
-                  trainingItems,
-                  'Recent consistency',
-                  humanizeEnumLabel(briefLatest.disciplineProfile?.recentConsistency) ??
-                    briefLatest.disciplineProfile?.recentConsistency
-                );
-                if (briefLatest.disciplineProfile?.swimConfidence)
-                  trainingItems.push(`Swim confidence: ${briefLatest.disciplineProfile.swimConfidence}/5`);
-                if (briefLatest.disciplineProfile?.bikeConfidence)
-                  trainingItems.push(`Bike confidence: ${briefLatest.disciplineProfile.bikeConfidence}/5`);
-                if (briefLatest.disciplineProfile?.runConfidence)
-                  trainingItems.push(`Run confidence: ${briefLatest.disciplineProfile.runConfidence}/5`);
-                if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
+                  const constraintItems: string[] = [];
+                  pushLabeled(constraintItems, 'Injury status', briefLatest.constraintsAndSafety?.injuryStatus ?? undefined);
+                  if (briefLatest.constraintsAndSafety?.painHistory?.length) {
+                    constraintItems.push(`Pain history: ${briefLatest.constraintsAndSafety.painHistory.join('; ')}`);
+                  }
+                  pushLabeled(constraintItems, 'Sleep quality', briefLatest.constraintsAndSafety?.sleepQuality ?? undefined);
+                  pushLabeled(constraintItems, 'Notes', briefLatest.constraintsAndSafety?.notes ?? undefined);
+                  if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
 
-                const constraintItems: string[] = [];
-                if (briefLatest.constraints?.availabilityDays?.length) {
-                  constraintItems.push(`Available days: ${briefLatest.constraints.availabilityDays.join(', ')}`);
+                  const coachingItems: string[] = [];
+                  pushLabeled(coachingItems, 'Tone', briefLatest.coachingPreferences?.tone ?? undefined);
+                  pushLabeled(coachingItems, 'Feedback style', briefLatest.coachingPreferences?.feedbackStyle ?? undefined);
+                  pushLabeled(coachingItems, 'Check-in cadence', briefLatest.coachingPreferences?.checkinCadence ?? undefined);
+                  pushLabeled(coachingItems, 'Structure preference', briefLatest.coachingPreferences?.structurePreference ?? undefined);
+                  pushLabeled(coachingItems, 'Motivation style', briefLatest.coachingPreferences?.motivationStyle ?? undefined);
+                  if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
+
+                  const observationItems: string[] = [];
+                  pushLabeled(observationItems, 'Coach notes', briefLatest.coachObservations?.notes ?? undefined);
+                  if (observationItems.length) sections.push({ title: 'Coach observations', items: observationItems });
+
+                  const guidanceItems: string[] = [];
+                  pushLabeled(guidanceItems, 'Plan guidance', briefLatest.planGuidance ?? undefined);
+                  if (briefLatest.riskFlags?.length) guidanceItems.push(`Risk flags: ${briefLatest.riskFlags.join(', ')}`);
+                  if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
+                } else {
+                  const snapshotItems: string[] = [];
+                  if (briefLatest.snapshot?.headline) snapshotItems.push(briefLatest.snapshot.headline);
+                  if (briefLatest.snapshot?.tags?.length) snapshotItems.push(`Tags: ${briefLatest.snapshot.tags.join(', ')}`);
+                  if (snapshotItems.length) sections.push({ title: 'Snapshot', items: snapshotItems });
+
+                  const goalItems: string[] = [];
+                  pushLabeled(goalItems, 'Type', humanizeEnumLabel(briefLatest.goals?.type) ?? briefLatest.goals?.type ?? undefined);
+                  pushLabeled(goalItems, 'Details', briefLatest.goals?.details ?? undefined);
+                  pushLabeled(goalItems, 'Timeline', humanizeEnumLabel(briefLatest.goals?.timeline) ?? briefLatest.goals?.timeline ?? undefined);
+                  pushLabeled(goalItems, 'Focus', humanizeEnumLabel(briefLatest.goals?.focus) ?? briefLatest.goals?.focus ?? undefined);
+                  if (goalItems.length) sections.push({ title: 'Goals', items: goalItems });
+
+                  const trainingItems: string[] = [];
+                  pushLabeled(
+                    trainingItems,
+                    'Experience',
+                    humanizeEnumLabel(briefLatest.disciplineProfile?.experienceLevel) ?? briefLatest.disciplineProfile?.experienceLevel
+                  );
+                  const disciplineList = Array.isArray(briefLatest.disciplineProfile?.disciplines)
+                    ? briefLatest.disciplineProfile?.disciplines.map(humanizeDiscipline).filter(Boolean)
+                    : [];
+                  if (disciplineList.length) trainingItems.push(`Disciplines: ${disciplineList.join(', ')}`);
+                  pushLabeled(trainingItems, 'Weekly minutes', briefLatest.disciplineProfile?.weeklyMinutes ?? undefined);
+                  pushLabeled(
+                    trainingItems,
+                    'Recent consistency',
+                    humanizeEnumLabel(briefLatest.disciplineProfile?.recentConsistency) ??
+                      briefLatest.disciplineProfile?.recentConsistency
+                  );
+                  if (briefLatest.disciplineProfile?.swimConfidence)
+                    trainingItems.push(`Swim confidence: ${briefLatest.disciplineProfile.swimConfidence}/5`);
+                  if (briefLatest.disciplineProfile?.bikeConfidence)
+                    trainingItems.push(`Bike confidence: ${briefLatest.disciplineProfile.bikeConfidence}/5`);
+                  if (briefLatest.disciplineProfile?.runConfidence)
+                    trainingItems.push(`Run confidence: ${briefLatest.disciplineProfile.runConfidence}/5`);
+                  if (trainingItems.length) sections.push({ title: 'Training profile', items: trainingItems });
+
+                  const constraintItems: string[] = [];
+                  if (briefLatest.constraints?.availabilityDays?.length) {
+                    constraintItems.push(`Available days: ${briefLatest.constraints.availabilityDays.join(', ')}`);
+                  }
+                  pushLabeled(
+                    constraintItems,
+                    'Schedule variability',
+                    humanizeEnumLabel(briefLatest.constraints?.scheduleVariability) ?? briefLatest.constraints?.scheduleVariability
+                  );
+                  pushLabeled(
+                    constraintItems,
+                    'Sleep quality',
+                    humanizeEnumLabel(briefLatest.constraints?.sleepQuality) ?? briefLatest.constraints?.sleepQuality
+                  );
+                  pushLabeled(
+                    constraintItems,
+                    'Injury status',
+                    humanizeEnumLabel(briefLatest.constraints?.injuryStatus) ?? briefLatest.constraints?.injuryStatus
+                  );
+                  pushLabeled(constraintItems, 'Notes', briefLatest.constraints?.notes ?? undefined);
+                  if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
+
+                  const coachingItems: string[] = [];
+                  pushLabeled(
+                    coachingItems,
+                    'Feedback style',
+                    humanizeEnumLabel(briefLatest.coaching?.feedbackStyle) ?? briefLatest.coaching?.feedbackStyle
+                  );
+                  pushLabeled(
+                    coachingItems,
+                    'Tone preference',
+                    humanizeEnumLabel(briefLatest.coaching?.tonePreference) ?? briefLatest.coaching?.tonePreference
+                  );
+                  pushLabeled(
+                    coachingItems,
+                    'Check-in cadence',
+                    humanizeEnumLabel(briefLatest.coaching?.checkinPreference) ?? briefLatest.coaching?.checkinPreference
+                  );
+                  if (briefLatest.coaching?.structurePreference)
+                    coachingItems.push(`Structure preference: ${briefLatest.coaching.structurePreference}/5`);
+                  pushLabeled(
+                    coachingItems,
+                    'Motivation style',
+                    humanizeEnumLabel(briefLatest.coaching?.motivationStyle) ?? briefLatest.coaching?.motivationStyle
+                  );
+                  pushLabeled(coachingItems, 'Notes', briefLatest.coaching?.notes ?? undefined);
+                  if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
+
+                  const guidanceItems: string[] = [];
+                  pushLabeled(
+                    guidanceItems,
+                    'Tone',
+                    humanizeEnumLabel(briefLatest.planGuidance?.tone) ?? briefLatest.planGuidance?.tone
+                  );
+                  if (briefLatest.planGuidance?.focusNotes?.length) {
+                    guidanceItems.push(`Focus notes: ${briefLatest.planGuidance.focusNotes.join(' ')}`);
+                  }
+                  if (briefLatest.planGuidance?.coachingCues?.length) {
+                    guidanceItems.push(`Coaching cues: ${briefLatest.planGuidance.coachingCues.join(' ')}`);
+                  }
+                  if (briefLatest.planGuidance?.safetyNotes?.length) {
+                    guidanceItems.push(`Safety notes: ${briefLatest.planGuidance.safetyNotes.join(' ')}`);
+                  }
+                  if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
+
+                  if (briefLatest.risks?.length) sections.push({ title: 'Risks', items: briefLatest.risks });
                 }
-                pushLabeled(
-                  constraintItems,
-                  'Schedule variability',
-                  humanizeEnumLabel(briefLatest.constraints?.scheduleVariability) ?? briefLatest.constraints?.scheduleVariability
-                );
-                pushLabeled(
-                  constraintItems,
-                  'Sleep quality',
-                  humanizeEnumLabel(briefLatest.constraints?.sleepQuality) ?? briefLatest.constraints?.sleepQuality
-                );
-                pushLabeled(
-                  constraintItems,
-                  'Injury status',
-                  humanizeEnumLabel(briefLatest.constraints?.injuryStatus) ?? briefLatest.constraints?.injuryStatus
-                );
-                pushLabeled(constraintItems, 'Notes', briefLatest.constraints?.notes ?? undefined);
-                if (constraintItems.length) sections.push({ title: 'Constraints & safety', items: constraintItems });
-
-                const coachingItems: string[] = [];
-                pushLabeled(
-                  coachingItems,
-                  'Feedback style',
-                  humanizeEnumLabel(briefLatest.coaching?.feedbackStyle) ?? briefLatest.coaching?.feedbackStyle
-                );
-                pushLabeled(
-                  coachingItems,
-                  'Tone preference',
-                  humanizeEnumLabel(briefLatest.coaching?.tonePreference) ?? briefLatest.coaching?.tonePreference
-                );
-                pushLabeled(
-                  coachingItems,
-                  'Check-in cadence',
-                  humanizeEnumLabel(briefLatest.coaching?.checkinPreference) ?? briefLatest.coaching?.checkinPreference
-                );
-                if (briefLatest.coaching?.structurePreference)
-                  coachingItems.push(`Structure preference: ${briefLatest.coaching.structurePreference}/5`);
-                pushLabeled(
-                  coachingItems,
-                  'Motivation style',
-                  humanizeEnumLabel(briefLatest.coaching?.motivationStyle) ?? briefLatest.coaching?.motivationStyle
-                );
-                pushLabeled(coachingItems, 'Notes', briefLatest.coaching?.notes ?? undefined);
-                if (coachingItems.length) sections.push({ title: 'Coaching preferences', items: coachingItems });
-
-                const guidanceItems: string[] = [];
-                pushLabeled(
-                  guidanceItems,
-                  'Tone',
-                  humanizeEnumLabel(briefLatest.planGuidance?.tone) ?? briefLatest.planGuidance?.tone
-                );
-                if (briefLatest.planGuidance?.focusNotes?.length) {
-                  guidanceItems.push(`Focus notes: ${briefLatest.planGuidance.focusNotes.join(' ')}`);
-                }
-                if (briefLatest.planGuidance?.coachingCues?.length) {
-                  guidanceItems.push(`Coaching cues: ${briefLatest.planGuidance.coachingCues.join(' ')}`);
-                }
-                if (briefLatest.planGuidance?.safetyNotes?.length) {
-                  guidanceItems.push(`Safety notes: ${briefLatest.planGuidance.safetyNotes.join(' ')}`);
-                }
-                if (guidanceItems.length) sections.push({ title: 'Plan guidance', items: guidanceItems });
-
-                if (briefLatest.risks?.length) sections.push({ title: 'Risks', items: briefLatest.risks });
 
                 return sections.map((section) => (
                   <div key={section.title}>
@@ -799,110 +782,28 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           )}
         </Block>
 
-        <Block title="1) Athlete Info">
+        <Block title="1) Athlete Brief">
           <div className="space-y-3">
-            {canStart ? (
-              <>
-                <div className="text-sm text-[var(--fg-muted)]">
-                  Build an athlete brief for planning.
-                </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={busy != null}
-                  data-testid="apb-generate-intake-ai"
-                  onClick={startWithAi}
-                >
-                  {busy === 'generate-intake' ? 'Preparing…' : 'Generate athlete info'}
-                </Button>
-              </>
-            ) : (
-              <div className="text-sm text-[var(--fg-muted)]">Athlete info is ready.</div>
-            )}
+            <div className="text-sm text-[var(--fg-muted)]">
+              Refresh the Athlete Brief using the latest intake + coach profile fields.
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={busy != null}
+              data-testid="apb-refresh-brief"
+              onClick={refreshBrief}
+            >
+              {busy === 'refresh-brief' ? 'Refreshing…' : canStart ? 'Build Athlete Brief' : 'Refresh Athlete Brief'}
+            </Button>
 
             {!canPlan ? (
-              <div className="text-sm text-[var(--fg-muted)]">Generate athlete info to continue.</div>
+              <div className="text-sm text-[var(--fg-muted)]">Athlete Brief required to continue.</div>
             ) : (
-              (() => {
-                const raw =
-                  (profileLatest as any)?.coachOverridesJson ??
-                  (profileLatest as any)?.extractedProfileJson ??
-                  (intakeLatest as any)?.draftJson ??
-                  null;
-
-                const goalDetails = toSingleSentence((raw as any)?.goal_details ?? (raw as any)?.goalDetails ?? null);
-                const goalType = humanizeEnumLabel((raw as any)?.goal_type ?? (raw as any)?.goalType ?? null);
-                const goalFocus = humanizeEnumLabel((raw as any)?.goal_focus ?? (raw as any)?.goalFocus ?? null);
-                const goalTimeline = humanizeEnumLabel((raw as any)?.goal_timeline ?? (raw as any)?.goalTimeline ?? null);
-                const disciplines = Array.isArray((raw as any)?.disciplines)
-                  ? (raw as any).disciplines.map(humanizeDiscipline).filter(Boolean)
-                  : [];
-                const weeklyMinutes = Number.isFinite(Number((raw as any)?.weekly_minutes))
-                  ? Number((raw as any)?.weekly_minutes)
-                  : null;
-                const availabilityDays = Array.isArray((raw as any)?.availability_days)
-                  ? (raw as any).availability_days.map(String)
-                  : [];
-                const injuryStatus = humanizeEnumLabel((raw as any)?.injury_status ?? (raw as any)?.injuryStatus ?? null);
-                const coachNotes = stripKeyPrefix((raw as any)?.coaching_notes ?? (raw as any)?.coachNotes ?? null);
-
-                const hasAny = Boolean(
-                  goalDetails || goalType || goalFocus || goalTimeline || disciplines.length || weeklyMinutes || availabilityDays.length ||
-                    injuryStatus || coachNotes
-                );
-
-                if (!hasAny) {
-                  return <div className="text-sm text-[var(--fg-muted)]">Preparing athlete brief…</div>;
-                }
-
-                return (
-                  <div
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3"
-                    data-testid="apb-athlete-brief"
-                  >
-                    <div className="text-sm font-semibold">Athlete Brief</div>
-
-                    <div className="mt-3 space-y-3 text-sm">
-                      {goalDetails || goalType || goalFocus || goalTimeline ? (
-                        <div>
-                          <div className="font-medium">Goals</div>
-                          <div className="space-y-1 text-[var(--fg)]">
-                            {goalType ? <div>Type: {goalType}</div> : null}
-                            {goalDetails ? <div>Details: {goalDetails}</div> : null}
-                            {goalTimeline ? <div>Timeline: {goalTimeline}</div> : null}
-                            {goalFocus ? <div>Focus: {goalFocus}</div> : null}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {disciplines.length ? (
-                        <div>
-                          <div className="font-medium">Disciplines</div>
-                          <div className="text-[var(--fg)]">{disciplines.join(', ')}</div>
-                        </div>
-                      ) : null}
-
-                      {weeklyMinutes || availabilityDays.length || injuryStatus ? (
-                        <div>
-                          <div className="font-medium">Constraints</div>
-                          <div className="space-y-1 text-[var(--fg)]">
-                            {weeklyMinutes ? <div>Weekly minutes: {weeklyMinutes}</div> : null}
-                            {availabilityDays.length ? <div>Available days: {availabilityDays.join(', ')}</div> : null}
-                            {injuryStatus ? <div>Injury status: {injuryStatus}</div> : null}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {coachNotes ? (
-                        <div>
-                          <div className="font-medium">Coach notes</div>
-                          <div className="text-[var(--fg)]">{coachNotes}</div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })()
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3" data-testid="apb-athlete-brief">
+                <div className="text-sm font-semibold">Athlete Brief</div>
+                <div className="mt-2 text-sm text-[var(--fg-muted)]">Ready for plan generation.</div>
+              </div>
             )}
           </div>
         </Block>

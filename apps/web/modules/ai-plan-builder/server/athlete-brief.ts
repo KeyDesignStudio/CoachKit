@@ -1,135 +1,123 @@
-import { Prisma } from '@prisma/client';
-
 import { prisma } from '@/lib/prisma';
-import { ApiError } from '@/lib/errors';
 
-import { computeStableSha256 } from '../rules/stable-hash';
-import { athleteBriefSchema, type AthleteBriefJson, type AthleteIntakeSubmissionPayload } from '../rules/athlete-brief';
-import { getAiPlanBuilderAIWithHooks } from '../ai/factory';
-import { consumeLlmRateLimitOrThrow } from './llm-rate-limit';
-import { recordAiInvocationAudit } from './ai-invocation-audit';
+import { type AthleteBriefJson, type AthleteProfileSnapshot } from '@/modules/ai/athlete-brief/types';
+import { ensureAthleteBriefFromSources } from '@/modules/ai/athlete-brief/store';
+import { formatAthleteBriefAsSummaryText } from '../rules/athlete-brief';
 
 export async function getLatestAthleteBrief(params: { coachId: string; athleteId: string }) {
-  return (prisma as any).athleteBrief.findFirst({
-    where: { coachId: params.coachId, athleteId: params.athleteId },
-    orderBy: [{ generatedAt: 'desc' }, { createdAt: 'desc' }],
-  });
+  return ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
 }
 
 export async function getLatestAthleteBriefJson(params: { coachId: string; athleteId: string }): Promise<AthleteBriefJson | null> {
-  const row = await getLatestAthleteBrief(params);
-  if (!row?.briefJson) return null;
-  const parsed = athleteBriefSchema.safeParse(row.briefJson);
-  return parsed.success ? parsed.data : null;
+  const generated = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
+  return generated.brief ?? null;
+}
+
+export async function getLatestAthleteBriefSummary(params: { coachId: string; athleteId: string }): Promise<string | null> {
+  const generated = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
+  if (generated.summaryText) return generated.summaryText;
+  if (!generated.brief) return null;
+  return formatAthleteBriefAsSummaryText(generated.brief);
+}
+
+export async function loadAthleteProfileSnapshot(params: {
+  coachId: string;
+  athleteId: string;
+}): Promise<AthleteProfileSnapshot | null> {
+  const profile = await prisma.athleteProfile.findUnique({
+    where: { userId: params.athleteId },
+    select: {
+      firstName: true,
+      lastName: true,
+      gender: true,
+      timezone: true,
+      trainingSuburb: true,
+      email: true,
+      mobilePhone: true,
+      dateOfBirth: true,
+      disciplines: true,
+      primaryGoal: true,
+      secondaryGoals: true,
+      focus: true,
+      eventName: true,
+      eventDate: true,
+      timelineWeeks: true,
+      experienceLevel: true,
+      weeklyMinutesTarget: true,
+      consistencyLevel: true,
+      swimConfidence: true,
+      bikeConfidence: true,
+      runConfidence: true,
+      availableDays: true,
+      scheduleVariability: true,
+      sleepQuality: true,
+      equipmentAccess: true,
+      travelConstraints: true,
+      injuryStatus: true,
+      constraintsNotes: true,
+      feedbackStyle: true,
+      tonePreference: true,
+      checkInCadence: true,
+      structurePreference: true,
+      motivationStyle: true,
+      trainingPlanSchedule: true,
+      coachNotes: true,
+      painHistory: true,
+      coachJournal: true,
+    },
+  });
+
+  if (!profile) return null;
+
+  return {
+    firstName: profile.firstName ?? null,
+    lastName: profile.lastName ?? null,
+    gender: profile.gender ?? null,
+    timezone: profile.timezone ?? null,
+    trainingSuburb: profile.trainingSuburb ?? null,
+    email: profile.email ?? null,
+    mobilePhone: profile.mobilePhone ?? null,
+    dateOfBirth: profile.dateOfBirth ? profile.dateOfBirth.toISOString().split('T')[0] : null,
+    disciplines: profile.disciplines ?? [],
+    primaryGoal: profile.primaryGoal ?? null,
+    secondaryGoals: profile.secondaryGoals ?? [],
+    focus: profile.focus ?? null,
+    eventName: profile.eventName ?? null,
+    eventDate: profile.eventDate ? profile.eventDate.toISOString().split('T')[0] : null,
+    timelineWeeks: profile.timelineWeeks ?? null,
+    experienceLevel: profile.experienceLevel ?? null,
+    weeklyMinutesTarget: profile.weeklyMinutesTarget ?? null,
+    consistencyLevel: profile.consistencyLevel ?? null,
+    swimConfidence: profile.swimConfidence ?? null,
+    bikeConfidence: profile.bikeConfidence ?? null,
+    runConfidence: profile.runConfidence ?? null,
+    availableDays: profile.availableDays ?? [],
+    scheduleVariability: profile.scheduleVariability ?? null,
+    sleepQuality: profile.sleepQuality ?? null,
+    equipmentAccess: profile.equipmentAccess ?? null,
+    travelConstraints: profile.travelConstraints ?? null,
+    injuryStatus: profile.injuryStatus ?? null,
+    constraintsNotes: profile.constraintsNotes ?? null,
+    feedbackStyle: profile.feedbackStyle ?? null,
+    tonePreference: profile.tonePreference ?? null,
+    checkInCadence: profile.checkInCadence ?? null,
+    structurePreference: profile.structurePreference ?? null,
+    motivationStyle: profile.motivationStyle ?? null,
+    trainingPlanSchedule: (profile.trainingPlanSchedule as AthleteProfileSnapshot['trainingPlanSchedule']) ?? null,
+    coachNotes: profile.coachNotes ?? null,
+    painHistory: Array.isArray(profile.painHistory) ? (profile.painHistory as string[]) : null,
+    coachJournal: profile.coachJournal ?? null,
+  };
 }
 
 export async function ensureAthleteBrief(params: {
   coachId: string;
   athleteId: string;
-  intake: AthleteIntakeSubmissionPayload;
-}): Promise<{ brief: AthleteBriefJson; briefRowId: string; inputHash: string; aiMode: string }> {
-  const profile = await prisma.athleteProfile.findUnique({
-    where: { userId: params.athleteId },
-    select: {
-      disciplines: true,
-      goalsText: true,
-      trainingPlanFrequency: true,
-      trainingPlanDayOfWeek: true,
-      trainingPlanWeekOfMonth: true,
-      coachNotes: true,
-    },
-  });
-
-  const input = {
-    intake: params.intake,
-    profile: profile
-      ? {
-          disciplines: profile.disciplines ?? [],
-          goalsText: profile.goalsText ?? null,
-          trainingPlanFrequency: String(profile.trainingPlanFrequency ?? 'AD_HOC'),
-          trainingPlanDayOfWeek: profile.trainingPlanDayOfWeek ?? null,
-          trainingPlanWeekOfMonth: profile.trainingPlanWeekOfMonth ?? null,
-          coachNotes: profile.coachNotes ?? null,
-        }
-      : null,
-  };
-
-  const inputHash = computeStableSha256(input);
-
-  const existing = await (prisma as any).athleteBrief.findUnique({
-    where: { athleteId_inputHash: { athleteId: params.athleteId, inputHash } },
-  });
-
-  if (existing) {
-    const parsed = athleteBriefSchema.safeParse(existing.briefJson);
-    if (!parsed.success) {
-      throw new ApiError(500, 'INVALID_BRIEF', 'Stored Athlete Brief failed validation.');
-    }
-    return {
-      brief: parsed.data,
-      briefRowId: existing.id,
-      inputHash,
-      aiMode: existing.aiMode ?? 'unknown',
-    };
-  }
-
-  let invocationMeta: { effectiveMode: 'deterministic' | 'llm'; fallbackUsed: boolean } | null = null;
-  const ctx = {
-    actorType: 'ATHLETE' as const,
-    actorId: params.athleteId,
-    coachId: params.coachId,
+}) {
+  const profile = await loadAthleteProfileSnapshot({ coachId: params.coachId, athleteId: params.athleteId });
+  return ensureAthleteBriefFromSources({
     athleteId: params.athleteId,
-  };
-
-  const ai = getAiPlanBuilderAIWithHooks({
-    beforeLlmCall: async ({ capability }) => {
-      await consumeLlmRateLimitOrThrow({
-        actorType: ctx.actorType,
-        actorId: ctx.actorId,
-        capability,
-        coachId: ctx.coachId,
-        athleteId: ctx.athleteId,
-      });
-    },
-    onInvocation: async (meta) => {
-      invocationMeta = meta as any;
-      try {
-        await recordAiInvocationAudit(meta, ctx);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('AI_INVOCATION_AUDIT_FAILED', {
-          capability: meta.capability,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
+    coachId: params.coachId,
+    athleteProfile: profile,
   });
-
-  const generated = await ai.generateAthleteBriefFromIntake(input as any);
-  const parsed = athleteBriefSchema.safeParse((generated as any)?.brief);
-  if (!parsed.success) {
-    throw new ApiError(500, 'INVALID_BRIEF', 'Athlete Brief validation failed.');
-  }
-
-  const aiMode = (() => {
-    const meta = invocationMeta as any;
-    if (!meta) return 'unknown';
-    if (meta.effectiveMode === 'deterministic') return 'deterministic_fallback';
-    if (meta.effectiveMode === 'llm' && meta.fallbackUsed) return 'deterministic_fallback';
-    if (meta.effectiveMode === 'llm') return 'llm';
-    return String(meta.effectiveMode);
-  })();
-
-  const created = await (prisma as any).athleteBrief.create({
-    data: {
-      athleteId: params.athleteId,
-      coachId: params.coachId,
-      generatedAt: new Date(),
-      inputHash,
-      aiMode,
-      briefJson: parsed.data as unknown as Prisma.InputJsonValue,
-    },
-  });
-
-  return { brief: parsed.data, briefRowId: created.id, inputHash, aiMode };
 }
