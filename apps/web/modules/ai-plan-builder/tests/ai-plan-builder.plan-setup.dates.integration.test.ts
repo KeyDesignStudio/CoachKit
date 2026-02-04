@@ -25,6 +25,7 @@ describe('AI Plan Builder v1 (plan setup dates persisted + derived)', () => {
 
   afterAll(async () => {
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
     await prisma.user.deleteMany({ where: { id: athleteId } });

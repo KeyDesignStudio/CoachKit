@@ -66,6 +66,19 @@ function normalizeNumber(value: unknown): number | null {
   return Math.max(0, Math.round(n));
 }
 
+function normalizeDate(value: unknown): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return new Date(`${trimmed}T00:00:00.000Z`);
+    }
+  }
+  return null;
+}
+
 function normalizeList(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((v) => normalizeText(v)).filter((v): v is string => Boolean(v));
@@ -83,6 +96,7 @@ export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmission
   const get = (key: string) => normalizeText(answers[key]);
   const getList = (key: string) => normalizeList(answers[key]);
   const getNumber = (key: string) => normalizeNumber(answers[key]);
+  const getDate = (key: string) => normalizeDate(answers[key]);
 
   const goalType = get('goal_type');
   const goalDetails = get('goal_details');
@@ -92,9 +106,18 @@ export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmission
   const availabilityDays = getList('availability_days').map((d) => DAY_LABELS[d] ?? d);
 
   return {
+    firstName: get('first_name'),
+    lastName: get('last_name'),
+    gender: get('gender'),
+    trainingSuburb: get('training_suburb'),
+    mobilePhone: get('mobile_phone'),
+    dateOfBirth: getDate('date_of_birth'),
     disciplines: getList('disciplines'),
     primaryGoal: goalDetails ?? goalType,
+    secondaryGoals: getList('secondary_goals'),
     focus: goalFocus,
+    eventName: get('event_name'),
+    eventDate: getDate('event_date'),
     timelineWeeks: goalTimeline ? GOAL_TIMELINE_WEEKS[goalTimeline] ?? null : null,
     experienceLevel: get('experience_level'),
     weeklyMinutesTarget: getNumber('weekly_minutes'),
@@ -105,6 +128,8 @@ export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmission
     availableDays: availabilityDays,
     scheduleVariability: get('schedule_variability'),
     sleepQuality: get('sleep_quality'),
+    equipmentAccess: get('equipment_access'),
+    travelConstraints: get('travel_constraints'),
     injuryStatus: get('injury_status'),
     constraintsNotes: get('constraints_notes'),
     feedbackStyle: get('feedback_style'),

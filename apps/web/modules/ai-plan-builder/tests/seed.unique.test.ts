@@ -16,6 +16,7 @@ describe('AI Plan Builder test seeding helpers', () => {
     });
 
     if (coaches.length) {
+      await prisma.athleteBrief.deleteMany({ where: { coachId: { in: coaches.map((c) => c.id) } } });
       await prisma.athleteProfile.deleteMany({ where: { coachId: { in: coaches.map((c) => c.id) } } });
       await prisma.user.deleteMany({ where: { id: { in: coaches.map((c) => c.id) } } });
     }

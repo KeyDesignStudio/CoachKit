@@ -1,6 +1,8 @@
+
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -120,9 +122,17 @@ type AthleteDetailDrawerProps = {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  variant?: 'drawer' | 'page';
 };
 
-export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDeleted }: AthleteDetailDrawerProps) {
+export function AthleteDetailDrawer({
+  isOpen,
+  athleteId,
+  onClose,
+  onSaved,
+  onDeleted,
+  variant = 'drawer',
+}: AthleteDetailDrawerProps) {
   const { request } = useApi();
   const [athlete, setAthlete] = useState<AthleteProfile | null>(null);
   const [painHistory, setPainHistory] = useState<PainHistoryItem[]>([]);
@@ -336,7 +346,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
   const [deleteJournalId, setDeleteJournalId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen || !athleteId) {
+    if ((variant === 'drawer' && !isOpen) || !athleteId) {
       setAthlete(null);
       setPainHistory([]);
       setJournalEntries([]);
@@ -439,7 +449,7 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
 
   // Autosave training plan schedule changes
   useEffect(() => {
-    if (!isOpen || !athleteId) return;
+    if ((variant === 'drawer' && !isOpen) || !athleteId) return;
     if (!scheduleHydratedRef.current) return;
 
     setScheduleError('');
@@ -549,7 +559,9 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
       });
 
       onSaved();
-      onClose();
+      if (variant === 'drawer') {
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
@@ -627,30 +639,47 @@ export function AthleteDetailDrawer({ isOpen, athleteId, onClose, onSaved, onDel
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && variant === 'drawer') return null;
 
   const displayName = [firstName, lastName].filter(Boolean).join(' ');
 
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      {variant === 'drawer' ? (
+        <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      ) : null}
 
       {/* Drawer */}
       <div
         className={cn(
-          'fixed right-0 top-0 z-50 h-full overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl transition-transform',
+          variant === 'drawer'
+            ? 'fixed right-0 top-0 z-50 h-full overflow-y-auto border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-2xl transition-transform'
+            : 'relative w-full',
           'w-full',
-          'lg:w-[50vw] lg:max-w-[840px]',
-          isOpen ? 'translate-x-0' : 'translate-x-full'
+          variant === 'drawer' ? 'lg:w-[50vw] lg:max-w-[840px]' : null,
+          variant === 'drawer' ? (isOpen ? 'translate-x-0' : 'translate-x-full') : null
         )}
       >
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6 py-4">
           <h2 className={`${uiH2} md:text-xl font-semibold`}>{displayName || 'Athlete Profile'}</h2>
-          <Button type="button" variant="ghost" onClick={onClose}>
-            ✕
-          </Button>
+          <div className="flex items-center gap-2">
+            {variant === 'drawer' && athleteId ? (
+              <Link href={`/coach/athletes/${athleteId}/profile`} className="text-sm text-[var(--fg)] hover:underline">
+                Open full profile
+              </Link>
+            ) : null}
+            {variant === 'page' ? (
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Back to athletes
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" onClick={onClose}>
+                ✕
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Content */}

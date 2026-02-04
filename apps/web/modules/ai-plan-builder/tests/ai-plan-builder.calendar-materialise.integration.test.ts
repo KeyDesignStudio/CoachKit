@@ -69,6 +69,7 @@ describe('AI Plan Builder v1 (calendar materialisation on approve-and-publish)',
     await prisma.planChangeProposal.deleteMany({ where: { athleteId, coachId } });
     await prisma.aiPlanDraftPublishSnapshot.deleteMany({ where: { athleteId, coachId } });
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId, coachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId, coachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: athleteId, coachId } });
     await prisma.user.deleteMany({ where: { id: athleteId } });
@@ -406,6 +407,7 @@ describe('Workflow separation (manual planner vs AI planner)', () => {
     await prisma.planChangeProposal.deleteMany({ where: { athleteId: devAthleteId, coachId: devCoachId } });
     await prisma.aiPlanDraftPublishSnapshot.deleteMany({ where: { athleteId: devAthleteId, coachId: devCoachId } });
     await prisma.aiPlanDraft.deleteMany({ where: { athleteId: devAthleteId, coachId: devCoachId } });
+    await prisma.athleteBrief.deleteMany({ where: { athleteId: devAthleteId, coachId: devCoachId } });
 
     await prisma.athleteProfile.deleteMany({ where: { userId: devAthleteId, coachId: devCoachId } });
     await prisma.user.deleteMany({ where: { id: devAthleteId } });
