@@ -21,6 +21,113 @@ export const athleteIntakeSubmissionSchema = z.object({
 
 export type AthleteIntakeSubmissionPayload = z.infer<typeof athleteIntakeSubmissionSchema>;
 
+const DAY_LABELS: Record<string, string> = {
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+  Sat: 'Saturday',
+  Sun: 'Sunday',
+};
+
+const GOAL_TIMELINE_WEEKS: Record<string, number | null> = {
+  'No date in mind': null,
+  'In 6–8 weeks': 8,
+  'In 2–3 months': 12,
+  'In 3–6 months': 24,
+  'In 6–12 months': 48,
+};
+
+function flattenIntakeAnswers(payload: AthleteIntakeSubmissionPayload): Record<string, unknown> {
+  const map: Record<string, unknown> = {};
+  for (const section of payload.sections ?? []) {
+    for (const answer of section.answers ?? []) {
+      map[String(answer.questionKey)] = answer.answer as unknown;
+    }
+  }
+  return map;
+}
+
+function normalizeText(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.round(n));
+}
+
+function normalizeList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => normalizeText(v)).filter((v): v is string => Boolean(v));
+  }
+  const text = normalizeText(value);
+  if (!text) return [];
+  return text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmissionPayload) {
+  const answers = flattenIntakeAnswers(payload);
+  const get = (key: string) => normalizeText(answers[key]);
+  const getList = (key: string) => normalizeList(answers[key]);
+  const getNumber = (key: string) => normalizeNumber(answers[key]);
+
+  const goalType = get('goal_type');
+  const goalDetails = get('goal_details');
+  const goalFocus = get('goal_focus');
+  const goalTimeline = get('goal_timeline');
+
+  const availabilityDays = getList('availability_days').map((d) => DAY_LABELS[d] ?? d);
+
+  return {
+    disciplines: getList('disciplines'),
+    primaryGoal: goalDetails ?? goalType,
+    focus: goalFocus,
+    timelineWeeks: goalTimeline ? GOAL_TIMELINE_WEEKS[goalTimeline] ?? null : null,
+    experienceLevel: get('experience_level'),
+    weeklyMinutesTarget: getNumber('weekly_minutes'),
+    consistencyLevel: get('recent_consistency'),
+    swimConfidence: getNumber('swim_confidence'),
+    bikeConfidence: getNumber('bike_confidence'),
+    runConfidence: getNumber('run_confidence'),
+    availableDays: availabilityDays,
+    scheduleVariability: get('schedule_variability'),
+    sleepQuality: get('sleep_quality'),
+    injuryStatus: get('injury_status'),
+    constraintsNotes: get('constraints_notes'),
+    feedbackStyle: get('feedback_style'),
+    tonePreference: get('tone_preference'),
+    checkInCadence: get('checkin_preference'),
+    structurePreference: getNumber('structure_preference'),
+    motivationStyle: get('motivation_style'),
+  };
+}
+
+export async function applyIntakeToAthleteProfile(params: {
+  athleteId: string;
+  coachId: string;
+  payload: AthleteIntakeSubmissionPayload;
+}) {
+  const updates = mapIntakeToAthleteProfileUpdate(params.payload);
+
+  return prisma.athleteProfile.update({
+    where: { userId: params.athleteId },
+    data: updates,
+  });
+}
+
 export async function createAthleteIntakeSubmission(params: {
   athleteId: string;
   coachId: string;
@@ -28,7 +135,7 @@ export async function createAthleteIntakeSubmission(params: {
 }) {
   const payload = athleteIntakeSubmissionSchema.parse(params.payload);
 
-  return (prisma as any).athleteIntakeSubmission.create({
+  const submission = await (prisma as any).athleteIntakeSubmission.create({
     data: {
       athleteId: params.athleteId,
       coachId: params.coachId,
@@ -36,6 +143,10 @@ export async function createAthleteIntakeSubmission(params: {
       submittedAt: new Date(),
     },
   });
+
+  await applyIntakeToAthleteProfile({ athleteId: params.athleteId, coachId: params.coachId, payload });
+
+  return submission;
 }
 
 export async function getLatestAthleteIntakeSubmission(params: {

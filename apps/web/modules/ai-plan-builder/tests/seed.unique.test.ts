@@ -10,7 +10,15 @@ describe('AI Plan Builder test seeding helpers', () => {
   });
 
   afterAll(async () => {
-    await prisma.user.deleteMany({ where: { email: { endsWith: '@local' }, name: 'Test Coach' } });
+    const coaches = await prisma.user.findMany({
+      where: { email: { endsWith: '@local' }, name: 'Test Coach' },
+      select: { id: true },
+    });
+
+    if (coaches.length) {
+      await prisma.athleteProfile.deleteMany({ where: { coachId: { in: coaches.map((c) => c.id) } } });
+      await prisma.user.deleteMany({ where: { id: { in: coaches.map((c) => c.id) } } });
+    }
     await prisma.$disconnect();
   });
 

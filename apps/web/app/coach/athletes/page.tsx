@@ -16,11 +16,15 @@ import { uiH2, uiMuted } from '@/components/ui/typography';
 interface AthleteRecord {
   userId: string;
   coachId: string;
+  firstName?: string | null;
+  lastName?: string | null;
   disciplines: string[];
-  trainingPlanFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
-  trainingPlanDayOfWeek: number | null;
-  trainingPlanWeekOfMonth: 1 | 2 | 3 | 4 | null;
-  goalsText?: string | null;
+  trainingPlanSchedule?: {
+    frequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+    dayOfWeek?: number | null;
+    weekOfMonth?: 1 | 2 | 3 | 4 | null;
+  } | null;
+  primaryGoal?: string | null;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
   user: {
@@ -117,16 +121,17 @@ export default function CoachAthletesPage() {
   };
 
   const formatTrainingPlanLine = (athlete: AthleteRecord) => {
-    const freq = athlete.trainingPlanFrequency;
+    const schedule = athlete.trainingPlanSchedule;
+    const freq = schedule?.frequency ?? 'AD_HOC';
     if (freq === 'AD_HOC') return 'Training Plans: Ad hoc';
 
-    const day = athlete.trainingPlanDayOfWeek;
+    const day = schedule?.dayOfWeek ?? null;
     if (day === null || day === undefined) return 'Training Plans: Ad hoc';
 
     if (freq === 'WEEKLY') return `Training Plans: Weekly on ${dayName(day)}`;
     if (freq === 'FORTNIGHTLY') return `Training Plans: Fortnightly on ${dayName(day)}`;
 
-    const week = athlete.trainingPlanWeekOfMonth;
+    const week = schedule?.weekOfMonth ?? null;
     if (!week) return 'Training Plans: Ad hoc';
     return `Training Plans: Monthly (Week ${week}) on ${dayName(day)}`;
   };
@@ -191,12 +196,12 @@ export default function CoachAthletesPage() {
                 {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                     <button 
+                    <button 
                         type="button" 
                         onClick={() => handleAthleteClick(athlete.userId)}
                         className="font-medium truncate hover:underline text-left"
                       >
-                       {athlete.user.name || 'Unnamed Athlete'}
+                       {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
                      </button>
                     <a
                       href={`/coach/notifications?athleteId=${athlete.userId}`}
@@ -211,9 +216,9 @@ export default function CoachAthletesPage() {
                   {athlete.dateOfBirth ? (
                     <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
                   ) : null}
-                  {athlete.goalsText ? (
+                  {athlete.primaryGoal ? (
                      <div className="text-xs text-[var(--muted)] mt-1 truncate">
-                        <span className="font-medium">Goals:</span> {athlete.goalsText}
+                      <span className="font-medium">Goal:</span> {athlete.primaryGoal}
                      </div>
                   ) : null}
                 </div>

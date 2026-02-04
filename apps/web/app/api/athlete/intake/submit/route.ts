@@ -24,11 +24,7 @@ export async function POST(request: Request) {
       payload: payload.data,
     });
 
-    const brief = await ensureAthleteBrief({
-      athleteId: user.id,
-      coachId,
-      intake: payload.data as any,
-    });
+    const brief = await ensureAthleteBrief({ athleteId: user.id, coachId });
 
     return success({ submission, brief: brief.brief });
   } catch (error) {

@@ -28,8 +28,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
   const [trainingPlanDayOfWeek, setTrainingPlanDayOfWeek] = useState<number | null>(2); // Tuesday
   const [trainingPlanWeekOfMonth, setTrainingPlanWeekOfMonth] = useState<1 | 2 | 3 | 4 | null>(1);
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [coachNotes, setCoachNotes] = useState('');
-  const [goalsText, setGoalsText] = useState('');
+  const [primaryGoal, setPrimaryGoal] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,13 +62,16 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       name: name.trim(),
       timezone: timezone.trim(),
       disciplines: selectedDisciplines,
-      trainingPlanFrequency,
-      trainingPlanDayOfWeek: trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
-      trainingPlanWeekOfMonth: trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
+      dateOfBirth: dateOfBirth || null,
+      trainingPlanSchedule: {
+        frequency: trainingPlanFrequency,
+        dayOfWeek: trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
+        weekOfMonth: trainingPlanFrequency === 'MONTHLY' ? trainingPlanWeekOfMonth : null,
+      },
     };
 
-    if (goalsText.trim()) {
-      payload.goalsText = goalsText.trim();
+    if (primaryGoal.trim()) {
+      payload.primaryGoal = primaryGoal.trim();
     }
 
     setCreating(true);
@@ -84,8 +86,7 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
       setTrainingPlanDayOfWeek(2);
       setTrainingPlanWeekOfMonth(1);
       setDateOfBirth('');
-      setCoachNotes('');
-      setGoalsText('');
+      setPrimaryGoal('');
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create athlete');
@@ -265,20 +266,10 @@ export function CreateAthleteModal({ isOpen, onClose, onCreate }: CreateAthleteM
           <div>
             <label className="mb-1 block text-sm font-medium">Goals</label>
             <Textarea
-              value={goalsText}
-              onChange={(e) => setGoalsText(e.target.value)}
-              placeholder="Athlete goals..."
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Coach Notes</label>
-            <Textarea
-              value={coachNotes}
-              onChange={(e) => setCoachNotes(e.target.value)}
-              placeholder="Private notes..."
-              rows={3}
+              value={primaryGoal}
+              onChange={(e) => setPrimaryGoal(e.target.value)}
+              placeholder="Primary goal..."
+              rows={2}
             />
           </div>
 

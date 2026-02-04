@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { TrainingPlanFrequency, UserRole } from '@prisma/client';
 import { z } from 'zod';
 
@@ -12,17 +13,27 @@ const createAthleteSchema = z
   .object({
     email: z.string().email(),
     name: z.string().trim().min(1),
+    firstName: z.string().trim().min(1).optional(),
+    lastName: z.string().trim().min(1).optional(),
     timezone: z.string().trim().min(1),
     disciplines: z.array(z.string().trim().min(1)).min(1),
-    goalsText: z.string().trim().max(2000).optional(),
-    trainingPlanFrequency: z.nativeEnum(TrainingPlanFrequency).optional().default(TrainingPlanFrequency.WEEKLY),
-    trainingPlanDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
-    trainingPlanWeekOfMonth: z.number().int().min(1).max(4).nullable().optional(),
+    primaryGoal: z.string().trim().max(2000).optional(),
+    focus: z.string().trim().max(2000).optional(),
+    timelineWeeks: z.number().int().min(1).max(104).nullable().optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD').nullable().optional(),
+    trainingPlanSchedule: z
+      .object({
+        frequency: z.nativeEnum(TrainingPlanFrequency),
+        dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+        weekOfMonth: z.number().int().min(1).max(4).nullable().optional(),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
-    const freq = data.trainingPlanFrequency;
-    const day = data.trainingPlanDayOfWeek ?? null;
-    const week = data.trainingPlanWeekOfMonth ?? null;
+    const schedule = data.trainingPlanSchedule ?? { frequency: TrainingPlanFrequency.WEEKLY };
+    const freq = schedule.frequency;
+    const day = schedule.dayOfWeek ?? null;
+    const week = schedule.weekOfMonth ?? null;
 
     if (freq === TrainingPlanFrequency.AD_HOC) {
       if (day !== null || week !== null) {
@@ -96,16 +107,24 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      const [defaultFirst, ...defaultRest] = payload.name.split(' ').filter(Boolean);
+      const firstName = payload.firstName ?? defaultFirst ?? null;
+      const lastName = payload.lastName ?? defaultRest.join(' ') ?? null;
+
       return tx.athleteProfile.create({
         data: {
           userId: athleteUser.id,
           coachId: user.id,
           disciplines: payload.disciplines,
-          goalsText: payload.goalsText,
-          trainingPlanFrequency: payload.trainingPlanFrequency,
-          trainingPlanDayOfWeek: payload.trainingPlanDayOfWeek ?? null,
-          trainingPlanWeekOfMonth: payload.trainingPlanWeekOfMonth ?? null,
-          // NOTE: The legacy schedule field is intentionally not written by the coach UI.
+          firstName,
+          lastName,
+          timezone: payload.timezone,
+          email: payload.email,
+          dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth + 'T00:00:00.000Z') : null,
+          primaryGoal: payload.primaryGoal ?? null,
+          focus: payload.focus ?? null,
+          timelineWeeks: payload.timelineWeeks ?? null,
+          trainingPlanSchedule: (payload.trainingPlanSchedule ?? null) as Prisma.InputJsonValue,
         },
         include: { user: true },
       });
