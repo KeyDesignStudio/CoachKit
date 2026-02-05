@@ -23,6 +23,9 @@ type CalendarContextMenuProps = {
   position: Position;
   type: 'session' | 'day';
   canPaste: boolean;
+  canCopy?: boolean;
+  copyDisabledLabel?: string;
+  pasteDisabledLabel?: string;
   onClose: () => void;
   onAction: (action: ContextMenuAction, payload?: any) => void;
   libraryItems?: GroupSessionItem[];
@@ -34,6 +37,9 @@ export function CalendarContextMenu({
   position,
   type,
   canPaste,
+  canCopy = true,
+  copyDisabledLabel,
+  pasteDisabledLabel,
   onClose,
   onAction,
   libraryItems = [],
@@ -77,13 +83,23 @@ export function CalendarContextMenu({
     const list: Array<{ label: string; icon: IconName; action: ContextMenuAction; disabled?: boolean; variant?: 'default' | 'danger' }> = [];
 
     if (type === 'session') {
-      list.push({ label: 'Copy session', icon: 'copyWeek', action: 'copy' });
+      list.push({
+        label: canCopy ? 'Copy session' : copyDisabledLabel ?? 'Copy session',
+        icon: 'copyWeek',
+        action: 'copy',
+        disabled: !canCopy,
+      });
       list.push({ label: 'Delete session', icon: 'delete', action: 'delete', variant: 'danger' });
     } else if (type === 'day') {
       if (canPaste) {
         list.push({ label: 'Paste session', action: 'paste', icon: 'paste' });
       } else {
-        list.push({ label: 'Paste session', action: 'paste', disabled: true, icon: 'paste' });
+        list.push({
+          label: pasteDisabledLabel ?? 'Paste session',
+          action: 'paste',
+          disabled: true,
+          icon: 'paste',
+        });
       }
       
       if (!showLibraryList && showLibraryInsert) {

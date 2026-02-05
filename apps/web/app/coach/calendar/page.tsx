@@ -227,6 +227,11 @@ function buildCalendarItemCreatePayload(
   };
 }
 
+function isManualCalendarItem(item: CalendarItem | null | undefined): boolean {
+  const origin = item?.origin ?? null;
+  return origin == null || origin === 'MANUAL';
+}
+
 export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -265,6 +270,7 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+  const [pasteToast, setPasteToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Context Menu & Clipboard
   const [contextMenu, setContextMenu] = useState<{
@@ -801,6 +807,10 @@ export default function CoachCalendarPage() {
     closeContextMenu();
 
     if (action === 'copy' && type === 'session') {
+      if (!isManualCalendarItem(contextData)) {
+        setPasteToast({ type: 'error', message: 'Only manual sessions can be copied.' });
+        return;
+      }
       setClipboard(contextData);
     } else if (action === 'delete' && type === 'session') {
        try {
@@ -813,7 +823,15 @@ export default function CoachCalendarPage() {
          setLoading(false);
        }
     } else if (action === 'paste' && type === 'day') {
-      if (!clipboard) return;
+      if (!clipboard) {
+        setPasteToast({ type: 'error', message: 'Copy a manual session before pasting.' });
+        return;
+      }
+
+      if (!isManualCalendarItem(clipboard)) {
+        setPasteToast({ type: 'error', message: 'Only manual sessions can be pasted.' });
+        return;
+      }
       
       const targetAthleteId = contextData.athleteId || effectiveAthleteId || singleAthleteId;
       if (!targetAthleteId) {
@@ -827,9 +845,10 @@ export default function CoachCalendarPage() {
         setLoading(true);
         await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
         await loadCalendar();
+        setPasteToast({ type: 'success', message: 'Session pasted.' });
       } catch(e) {
-         setError('Couldn’t paste session. Please try copying again.');
-         console.debug('Paste failure', e);
+        setPasteToast({ type: 'error', message: 'Couldn’t paste session. Please try copying again.' });
+        console.debug('Paste failure', e);
       } finally {
          setLoading(false);
       }
@@ -866,6 +885,10 @@ export default function CoachCalendarPage() {
       }
     }
   }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar, groupSessions]);
+
+  const canCopySession = contextMenu.type === 'session' ? isManualCalendarItem(contextMenu.data) : true;
+  const clipboardIsManual = isManualCalendarItem(clipboard);
+  const canPasteSession = Boolean(clipboard) && clipboardIsManual;
 
   const openCreateDrawerForAthlete = (athleteId: string, date: string) => {
     setDrawerAthleteId(athleteId);
@@ -1882,7 +1905,10 @@ export default function CoachCalendarPage() {
         isOpen={contextMenu.isOpen}
         position={contextMenu.position}
         type={contextMenu.type}
-        canPaste={!!clipboard}
+        canPaste={canPasteSession}
+        canCopy={canCopySession}
+        copyDisabledLabel="Copy session (manual only)"
+        pasteDisabledLabel={clipboard && !clipboardIsManual ? 'Paste session (manual only)' : undefined}
         onClose={closeContextMenu}
         onAction={handleMenuAction}
         libraryItems={groupSessions}
@@ -1896,6 +1922,23 @@ export default function CoachCalendarPage() {
             <Icon name="info" size="sm" className="text-white/90" />
             {error}
             <button onClick={() => setError('')} className="ml-2 text-white/80 hover:text-white">
+              <Icon name="close" size="sm" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pasteToast && (
+        <div className="fixed bottom-6 left-1/2 z-[101] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2">
+          <div
+            className={cn(
+              'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg',
+              pasteToast.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'
+            )}
+          >
+            <Icon name="info" size="sm" className="text-white/90" />
+            {pasteToast.message}
+            <button onClick={() => setPasteToast(null)} className="ml-2 text-white/80 hover:text-white">
               <Icon name="close" size="sm" />
             </button>
           </div>
