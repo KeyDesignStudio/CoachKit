@@ -987,6 +987,9 @@ model AiPlanDraft {
   setupJson Json?
   setupHash String?
 
+  // Plan reasoning derived from profile + setup (deterministic, no LLM).
+  reasoningJson Json?
+
   // Tranche 4: publish visibility (AI-domain only; no coupling to existing plan tables).
   visibilityStatus         AiPlanDraftVisibilityStatus @default(DRAFT)
   publishedAt              DateTime?

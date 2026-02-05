@@ -289,6 +289,11 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(firstWeek).toBeVisible({ timeout: 60_000 });
     await expect(firstWeek.getByTestId('apb-week-commencing')).toContainText('Commencing');
 
+    const planReasoning = page.getByTestId('apb-plan-reasoning');
+    await expect(planReasoning).toBeVisible({ timeout: 60_000 });
+    await expect(planReasoning).toContainText('Plan Reasoning');
+    await expect(planReasoning).toContainText('Priorities', { timeout: 60_000 });
+
     const firstSession = firstWeek.getByTestId('apb-session').first();
     await expect(firstSession.getByTestId('apb-session-day')).toBeVisible({ timeout: 60_000 });
     await expect(firstSession.getByTestId('apb-session-day')).toContainText(/\d/);
