@@ -3,7 +3,7 @@ import type { PlanReasoningV1 } from '@/lib/ai/plan-reasoning/types';
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Block } from '@/components/ui/Block';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +33,161 @@ type SetupState = {
   longSessionDay: number | null;
   coachGuidanceText: string;
 };
+
+type AthleteProfileSummary = {
+  weeklyMinutesTarget?: number | null;
+  availableDays?: string[] | null;
+  disciplines?: string[] | null;
+  experienceLevel?: string | null;
+};
+
+const DAY_NAME_TO_INDEX: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+function normalizeDayIndices(days: string[] | null | undefined): number[] {
+  if (!Array.isArray(days)) return [];
+  return days
+    .map((d) => DAY_NAME_TO_INDEX[String(d).trim()] ?? null)
+    .filter((d): d is number => typeof d === 'number')
+    .filter((d, idx, arr) => arr.indexOf(d) === idx)
+    .sort((a, b) => a - b);
+}
+
+function deriveDisciplineEmphasis(disciplines: string[] | null | undefined): SetupState['disciplineEmphasis'] {
+  const set = new Set((disciplines ?? []).map((d) => String(d).toUpperCase()));
+  const hasRun = set.has('RUN');
+  const hasBike = set.has('BIKE');
+  const hasSwim = set.has('SWIM');
+  if ((hasRun && hasBike) || (hasRun && hasSwim) || (hasBike && hasSwim)) return 'balanced';
+  if (hasRun) return 'run';
+  if (hasBike) return 'bike';
+  if (hasSwim) return 'swim';
+  return 'balanced';
+}
+
+function defaultLongSessionDay(availableDays: number[]): number | null {
+  if (!availableDays.length) return null;
+  if (availableDays.includes(6)) return 6;
+  if (availableDays.includes(0)) return 0;
+  return availableDays[availableDays.length - 1] ?? null;
+}
+
+function buildSetupFromProfile(profile: AthleteProfileSummary | null): SetupState {
+  const today = new Date().toISOString().slice(0, 10);
+  const availableDays = normalizeDayIndices(profile?.availableDays ?? null);
+  const weeklyMinutesTarget = typeof profile?.weeklyMinutesTarget === 'number' ? profile.weeklyMinutesTarget : 0;
+
+  return {
+    weekStart: 'monday',
+    startDate: today,
+    completionDate: today,
+    weeksToEventOverride: null,
+    weeklyAvailabilityDays: availableDays,
+    weeklyAvailabilityMinutes: weeklyMinutesTarget,
+    disciplineEmphasis: deriveDisciplineEmphasis(profile?.disciplines ?? null),
+    riskTolerance: 'med',
+    maxIntensityDaysPerWeek: 1,
+    maxDoublesPerWeek: 0,
+    longSessionDay: defaultLongSessionDay(availableDays),
+    coachGuidanceText: '',
+  };
+}
+
+function isIntensitySessionType(type: string): boolean {
+  const t = String(type || '').toLowerCase();
+  return t.includes('tempo') || t.includes('threshold') || t.includes('interval') || t.includes('vo2') || t.includes('speed') || t.includes('hill');
+}
+
+function formatWeekIntentLabel(intent: string): string {
+  const map: Record<string, string> = {
+    build: 'Build',
+    consolidate: 'Consolidation',
+    deload: 'Recovery',
+    taper: 'Taper',
+    race: 'Race',
+  };
+  return map[intent] ?? intent;
+}
+
+function summarizeWeekDelta(deltaPct: number): string {
+  if (!Number.isFinite(deltaPct)) return 'Focus on consistency.';
+  if (deltaPct >= 8) return 'Increase from last week, focusing on building load.';
+  if (deltaPct >= 2) return 'Slight increase from last week, focusing on consistency.';
+  if (deltaPct <= -8) return 'Reduced for recovery and freshness.';
+  if (deltaPct <= -2) return 'Slight reduction for recovery.';
+  return 'Similar volume to last week, focusing on consistency.';
+}
+
+function deriveDisciplineBalance(split: Record<string, number | undefined>): string {
+  const entries = Object.entries(split).filter(([, v]) => typeof v === 'number' && (v as number) > 0) as Array<[string, number]>;
+  if (!entries.length) return 'Balanced';
+  const total = entries.reduce((sum, [, v]) => sum + v, 0);
+  if (total <= 0) return 'Balanced';
+  const [topKey, topVal] = entries.sort((a, b) => b[1] - a[1])[0];
+  const pct = topVal / total;
+  if (pct >= 0.55) return `${topKey[0].toUpperCase() + topKey.slice(1)}-heavy`;
+  return 'Balanced';
+}
+
+type WeekSummaryProps = {
+  week: PlanReasoningV1['weeks'][number];
+  weekSessions: any[];
+};
+
+function WeekSummaryCard({ week, weekSessions }: WeekSummaryProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const totalSessions = weekSessions.length;
+  const keySessions = weekSessions.filter((s) => isIntensitySessionType(String(s.type ?? ''))).length;
+  const longSession = weekSessions.reduce(
+    (acc, s) => (Number(s.durationMinutes ?? 0) > Number(acc?.durationMinutes ?? 0) ? s : acc),
+    null as any
+  );
+  const longSessionLabel = longSession
+    ? `${String(longSession.discipline ?? '').toLowerCase()} · ${DAY_NAMES_SUN0[Number(longSession.dayOfWeek ?? 0)] ?? 'Day'}`
+    : '—';
+  const balance = deriveDisciplineBalance(week.disciplineSplitMinutes ?? {});
+  const splitEntries = Object.entries(week.disciplineSplitMinutes)
+    .filter(([, v]) => typeof v === 'number' && v > 0)
+    .map(([k, v]) => `${k}: ${v}m`)
+    .join(', ');
+
+  return (
+    <div
+      className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2"
+      data-testid={`apb-week-summary-${week.weekIndex}`}
+    >
+      <div className="text-xs font-medium">Week {week.weekIndex + 1} — {formatWeekIntentLabel(week.weekIntent)}</div>
+      <div className="mt-1 text-xs text-[var(--fg-muted)]">
+        {summarizeWeekDelta(week.volumeDeltaPct)}
+      </div>
+      <div className="mt-1 text-xs text-[var(--fg-muted)]">
+        Sessions: {totalSessions} total • Key sessions: {keySessions} • Long session: {longSessionLabel}
+      </div>
+      <div className="mt-1 text-xs text-[var(--fg-muted)]">Discipline balance: {balance}</div>
+      <details
+        className="mt-2 text-xs text-[var(--fg-muted)]"
+        onToggle={(event) => setDetailsOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer">Show details</summary>
+        {detailsOpen ? (
+          <div className="mt-1 space-y-1">
+            <div>
+              Volume: {week.volumeMinutesPlanned}m{week.volumeDeltaPct ? ` (${week.volumeDeltaPct >= 0 ? '+' : ''}${week.volumeDeltaPct}%)` : ''}
+            </div>
+            <div>Split: {splitEntries || '—'}</div>
+          </div>
+        ) : null}
+      </details>
+    </div>
+  );
+}
 
 function formatApiErrorMessage(e: ApiClientError): string {
   if (e.status === 429 && e.code === 'LLM_RATE_LIMITED') {
@@ -211,20 +366,11 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     >
   >({});
 
-  const [setup, setSetup] = useState<SetupState>(() => ({
-    weekStart: 'monday',
-    startDate: new Date().toISOString().slice(0, 10),
-    completionDate: new Date().toISOString().slice(0, 10),
-    weeksToEventOverride: null,
-    weeklyAvailabilityDays: [1, 2, 3, 5, 6],
-    weeklyAvailabilityMinutes: 360,
-    disciplineEmphasis: 'balanced',
-    riskTolerance: 'med',
-    maxIntensityDaysPerWeek: 2,
-    maxDoublesPerWeek: 1,
-    longSessionDay: 6,
-    coachGuidanceText: '',
-  }));
+  const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
+  const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
+  const [buildProgress, setBuildProgress] = useState<string | null>(null);
+  const buildProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const setupSeededForAthlete = useRef<string | null>(null);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -242,6 +388,12 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       return 'UTC';
     }
   }, [draftPlanLatest]);
+
+  useEffect(() => {
+    setupSeededForAthlete.current = null;
+    setSetup(buildSetupFromProfile(null));
+    setAthleteProfile(null);
+  }, [athleteId]);
 
   // Hydrate setup defaults from latest draft setupJson when available.
   useEffect(() => {
@@ -263,15 +415,48 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           ? Math.max(1, Math.min(52, Math.round(weeksToEventOverrideRaw)))
           : null;
 
+      const nextDays = Array.isArray((setupJson as any)?.weeklyAvailabilityDays)
+        ? stableDayList((setupJson as any).weeklyAvailabilityDays)
+        : prev.weeklyAvailabilityDays;
+
+      const nextMinutes =
+        typeof (setupJson as any)?.weeklyAvailabilityMinutes === 'number'
+          ? Number((setupJson as any).weeklyAvailabilityMinutes)
+          : prev.weeklyAvailabilityMinutes;
+
       return {
         ...prev,
         weekStart,
         startDate: nextStart,
         completionDate: nextCompletion,
         weeksToEventOverride: nextOverride,
+        weeklyAvailabilityDays: nextDays,
+        weeklyAvailabilityMinutes: nextMinutes,
+        disciplineEmphasis: (setupJson as any)?.disciplineEmphasis ?? prev.disciplineEmphasis,
+        riskTolerance: (setupJson as any)?.riskTolerance ?? prev.riskTolerance,
+        maxIntensityDaysPerWeek:
+          typeof (setupJson as any)?.maxIntensityDaysPerWeek === 'number'
+            ? Number((setupJson as any).maxIntensityDaysPerWeek)
+            : prev.maxIntensityDaysPerWeek,
+        maxDoublesPerWeek:
+          typeof (setupJson as any)?.maxDoublesPerWeek === 'number'
+            ? Number((setupJson as any).maxDoublesPerWeek)
+            : prev.maxDoublesPerWeek,
+        longSessionDay:
+          typeof (setupJson as any)?.longSessionDay === 'number' ? Number((setupJson as any).longSessionDay) : prev.longSessionDay,
+        coachGuidanceText: typeof (setupJson as any)?.coachGuidanceText === 'string' ? (setupJson as any).coachGuidanceText : prev.coachGuidanceText,
       };
     });
   }, [draftPlanLatest]);
+
+  const hasDraft = Boolean(draftPlanLatest?.id);
+
+  useEffect(() => {
+    if (!athleteProfile || hasDraft) return;
+    if (setupSeededForAthlete.current === athleteId) return;
+    setSetup(buildSetupFromProfile(athleteProfile));
+    setupSeededForAthlete.current = athleteId;
+  }, [athleteId, athleteProfile, hasDraft]);
 
   const derivedWeeksToCompletion = useMemo(() => {
     const w = deriveWeeksToCompletionFromDates({
@@ -301,6 +486,12 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return data.brief;
   }, [athleteId, request]);
 
+  const fetchAthleteProfile = useCallback(async () => {
+    const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
+    setAthleteProfile(data.athlete ?? null);
+    return data.athlete ?? null;
+  }, [athleteId, request]);
+
   const fetchDraftPlanLatest = useCallback(async () => {
     const data = await request<{ draftPlan: any | null }>(
       `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/latest`
@@ -325,7 +516,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     (async () => {
       try {
         setError(null);
-        const [brief, draft] = await Promise.all([fetchBriefLatest(), fetchDraftPlanLatest()]);
+        const [brief, draft] = await Promise.all([fetchBriefLatest(), fetchDraftPlanLatest(), fetchAthleteProfile()]);
 
         if (cancelled) return;
 
@@ -347,7 +538,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, request]);
+  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, request]);
 
   const refreshBrief = useCallback(async () => {
     setBusy('refresh-brief');
@@ -366,9 +557,29 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     }
   }, [athleteId, request]);
 
+  const startBuildProgress = useCallback(() => {
+    const steps = ['Building weekly structure…', 'Allocating sessions…', 'Preparing session details…'];
+    let idx = 0;
+    setBuildProgress(steps[idx]);
+    if (buildProgressTimer.current) clearInterval(buildProgressTimer.current);
+    buildProgressTimer.current = setInterval(() => {
+      idx = (idx + 1) % steps.length;
+      setBuildProgress(steps[idx]);
+    }, 1200);
+  }, []);
+
+  const stopBuildProgress = useCallback(() => {
+    if (buildProgressTimer.current) {
+      clearInterval(buildProgressTimer.current);
+      buildProgressTimer.current = null;
+    }
+    setBuildProgress(null);
+  }, []);
+
   const generatePlanPreview = useCallback(async () => {
     setBusy('generate-plan');
     setError(null);
+    startBuildProgress();
     try {
       const startDate = isDayKey(setup.startDate) ? setup.startDate : null;
       const completionDate = isDayKey(setup.completionDate) ? setup.completionDate : null;
@@ -377,6 +588,12 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       }
       if (!completionDate) {
         throw new ApiClientError(400, 'VALIDATION_ERROR', 'Completion date is required.');
+      }
+      if (!Array.isArray(setup.weeklyAvailabilityDays) || setup.weeklyAvailabilityDays.length === 0) {
+        throw new ApiClientError(400, 'VALIDATION_ERROR', 'Select at least one available day.');
+      }
+      if (!Number.isFinite(Number(setup.weeklyAvailabilityMinutes)) || Number(setup.weeklyAvailabilityMinutes) <= 0) {
+        throw new ApiClientError(400, 'VALIDATION_ERROR', 'Weekly time budget must be greater than zero.');
       }
 
       const payload = {
@@ -410,8 +627,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       setError(message);
     } finally {
       setBusy(null);
+      stopBuildProgress();
     }
-  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup]);
+  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup, startBuildProgress, stopBuildProgress]);
 
   const publishPlan = useCallback(async () => {
     const id = String(draftPlanLatest?.id ?? '');
@@ -557,7 +775,6 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
   const canStart = !briefLatest;
   const canPlan = Boolean(briefLatest);
-  const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
 
   const sessionsByWeek = useMemo(() => {
@@ -580,6 +797,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
     return Array.from(byWeek.entries()).sort(([a], [b]) => a - b);
   }, [draftPlanLatest?.sessions, effectiveWeekStart]);
+
+  const sessionsByWeekMap = useMemo(() => new Map(sessionsByWeek), [sessionsByWeek]);
 
   const weekLockedByIndex = useMemo(() => {
     const weeks = Array.isArray(draftPlanLatest?.weeks) ? draftPlanLatest.weeks : [];
@@ -831,6 +1050,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </Button>
           }
         >
+          <div className="mb-3 text-xs text-[var(--fg-muted)]">
+            Defaults come from the Athlete Profile. Changes here apply to this plan only.
+          </div>
+          {buildProgress ? (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2 text-sm" data-testid="apb-build-progress">
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--fg-muted)] border-t-transparent" />
+              <span className="text-[var(--text)]">{buildProgress}</span>
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
               <div className="mb-1 text-sm font-medium">Coach guidance (optional)</div>
@@ -908,9 +1136,6 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   data-testid="apb-weeks-to-completion"
                 />
 
-                <div className="text-xs text-[var(--fg-muted)]">
-                  Derived from dates: {derivedWeeksToCompletion ?? '—'} week{(derivedWeeksToCompletion ?? 0) === 1 ? '' : 's'}
-                </div>
               </div>
             </div>
 
@@ -1100,20 +1325,13 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       <div className="text-xs font-medium text-[var(--fg-muted)]">Weekly intent</div>
                       <div className="mt-2 grid gap-2 md:grid-cols-2">
                         {planReasoning.weeks.map((week) => {
-                          const splitEntries = Object.entries(week.disciplineSplitMinutes)
-                            .filter(([, v]) => typeof v === 'number' && v > 0)
-                            .map(([k, v]) => `${k}: ${v}m`)
-                            .join(', ');
+                          const weekSessions = sessionsByWeekMap.get(week.weekIndex) ?? [];
                           return (
-                            <div key={week.weekIndex} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
-                              <div className="text-xs font-medium">Week {week.weekIndex + 1}: {week.weekIntent}</div>
-                              <div className="mt-1 text-xs text-[var(--fg-muted)]">
-                                {week.volumeMinutesPlanned}m ({week.volumeDeltaPct >= 0 ? '+' : ''}{week.volumeDeltaPct}%) · {week.intensityDaysPlanned} intensity day(s)
-                              </div>
-                              <div className="mt-1 text-xs text-[var(--fg-muted)]">
-                                Split: {splitEntries || '—'}
-                              </div>
-                            </div>
+                            <WeekSummaryCard
+                              key={week.weekIndex}
+                              week={week}
+                              weekSessions={weekSessions}
+                            />
                           );
                         })}
                       </div>

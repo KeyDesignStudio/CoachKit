@@ -41,8 +41,8 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         type: 'select',
         options: ['Female', 'Male', 'Non-binary', 'Prefer not to say', 'Other'],
       },
-      { key: 'training_suburb', prompt: 'Where do you usually train?', type: 'text' },
       { key: 'mobile_phone', prompt: 'Mobile phone', type: 'text' },
+      { key: 'training_suburb', prompt: 'Suburb you usually do your training in?', type: 'text' },
     ],
   },
   {
@@ -92,11 +92,16 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         options: ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'],
       },
       {
-        key: 'weekly_minutes',
-        prompt: 'Typical weekly minutes available',
-        type: 'number',
-        min: 0,
-        max: 1500,
+        key: 'weekly_hours_per_day',
+        prompt: 'On a typical training day, how many hours can you train?',
+        type: 'select',
+        options: ['0.5', '1', '1.5', '2', '2.5+'],
+      },
+      {
+        key: 'weekly_days_per_week',
+        prompt: 'How many days per week can you usually train?',
+        type: 'select',
+        options: ['2', '3', '4', '5', '6', '7'],
       },
       {
         key: 'recent_consistency',
@@ -106,7 +111,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
       },
       {
         key: 'swim_confidence',
-        prompt: 'Swim confidence',
+        prompt: 'Swim confidence (1–5, 1 lowest, 5 highest)',
         type: 'scale',
         min: 1,
         max: 5,
@@ -114,7 +119,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
       },
       {
         key: 'bike_confidence',
-        prompt: 'Bike confidence',
+        prompt: 'Bike confidence (1–5, 1 lowest, 5 highest)',
         type: 'scale',
         min: 1,
         max: 5,
@@ -122,7 +127,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
       },
       {
         key: 'run_confidence',
-        prompt: 'Run confidence',
+        prompt: 'Run confidence (1–5, 1 lowest, 5 highest)',
         type: 'scale',
         min: 1,
         max: 5,
@@ -189,7 +194,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
       },
       {
         key: 'structure_preference',
-        prompt: 'How much structure do you want in training weeks?',
+        prompt: 'How much structure do you want in training weeks? (1 very flexible, 5 highly structured)',
         type: 'scale',
         min: 1,
         max: 5,
