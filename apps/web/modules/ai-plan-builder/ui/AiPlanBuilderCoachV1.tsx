@@ -1,3 +1,4 @@
+import type { PlanReasoningV1 } from '@/lib/ai/plan-reasoning/types';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 'use client';
@@ -284,6 +285,13 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const effectiveWeeksToCompletion = useMemo(() => {
     return setup.weeksToEventOverride ?? derivedWeeksToCompletion ?? 1;
   }, [derivedWeeksToCompletion, setup.weeksToEventOverride]);
+
+  const planReasoning = useMemo(() => {
+    const raw = (draftPlanLatest as any)?.reasoningJson;
+    if (!raw || typeof raw !== 'object') return null;
+    if ((raw as any)?.version !== 'v1') return null;
+    return raw as PlanReasoningV1;
+  }, [draftPlanLatest]);
 
   const fetchBriefLatest = useCallback(async () => {
     const data = await request<{ brief: any | null }>(
@@ -992,6 +1000,93 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             <div className="text-sm text-[var(--fg-muted)]">Generate a plan preview to see sessions.</div>
           ) : (
             <div className="space-y-4">
+              <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3" data-testid="apb-plan-reasoning">
+                <div className="text-sm font-semibold">Plan Reasoning</div>
+                {!planReasoning ? (
+                  <p className="mt-2 text-xs text-[var(--fg-muted)]">Plan reasoning will appear once the draft is generated.</p>
+                ) : (
+                  <div className="mt-3 space-y-3 text-sm">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Priorities</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {planReasoning.priorities.map((p) => (
+                            <li key={p.key}>{p.label}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Constraints</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {planReasoning.constraints.map((c) => (
+                            <li key={c.key}>{c.label}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Risks</div>
+                        {planReasoning.risks.length ? (
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {planReasoning.risks.map((r) => (
+                              <li key={r.key}>
+                                {r.label}{' '}
+                                <span className="text-[10px] uppercase text-[var(--fg-muted)]">({r.severity})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="mt-1 text-xs text-[var(--fg-muted)]">No material risks flagged.</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Targets</div>
+                        <ul className="mt-1 space-y-1 text-xs text-[var(--fg-muted)]">
+                          <li>Weekly minutes target: <span className="text-[var(--text)]">{planReasoning.targets.weeklyMinutesTarget}</span></li>
+                          <li>Max intensity days/week: <span className="text-[var(--text)]">{planReasoning.targets.maxIntensityDaysPerWeek}</span></li>
+                          <li>Max doubles/week: <span className="text-[var(--text)]">{planReasoning.targets.maxDoublesPerWeek}</span></li>
+                          <li>Long session day: <span className="text-[var(--text)]">{planReasoning.targets.longSessionDay == null ? '—' : DAY_NAMES_SUN0[planReasoning.targets.longSessionDay] ?? planReasoning.targets.longSessionDay}</span></li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-medium text-[var(--fg-muted)]">Explanations</div>
+                      <ul className="mt-1 list-disc space-y-1 pl-4">
+                        {planReasoning.explanations.map((explanation, idx) => (
+                          <li key={`ex-${idx}`}>{explanation}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-medium text-[var(--fg-muted)]">Weekly intent</div>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {planReasoning.weeks.map((week) => {
+                          const splitEntries = Object.entries(week.disciplineSplitMinutes)
+                            .filter(([, v]) => typeof v === 'number' && v > 0)
+                            .map(([k, v]) => `${k}: ${v}m`)
+                            .join(', ');
+                          return (
+                            <div key={week.weekIndex} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
+                              <div className="text-xs font-medium">Week {week.weekIndex + 1}: {week.weekIntent}</div>
+                              <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                                {week.volumeMinutesPlanned}m ({week.volumeDeltaPct >= 0 ? '+' : ''}{week.volumeDeltaPct}%) · {week.intensityDaysPlanned} intensity day(s)
+                              </div>
+                              <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                                Split: {splitEntries || '—'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {sessionsByWeek.map(([weekIndex, sessions]) => (
                 <div key={weekIndex} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3" data-testid="apb-week">
                   {(() => {

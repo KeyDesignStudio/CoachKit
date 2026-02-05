@@ -15,6 +15,7 @@ import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import { ensureAthleteBrief, getLatestAthleteBriefSummary, loadAthleteProfileSnapshot } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { buildPlanReasoningV1 } from '@/lib/ai/plan-reasoning/buildPlanReasoningV1';
 import {
   buildDeterministicSessionDetailV1,
   normalizeSessionDetailV1DurationsToTotal,
@@ -181,6 +182,11 @@ export async function generateAiDraftPlanV1(params: {
   });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup, planJson: suggestion.planJson });
   const setupHash = computeStableSha256(setup);
+  const reasoning = buildPlanReasoningV1({
+    athleteProfile: athleteProfile as any,
+    setup,
+    draftPlanJson: draft as any,
+  });
 
   const created = await prisma.aiPlanDraft.create({
     data: {
@@ -191,6 +197,7 @@ export async function generateAiDraftPlanV1(params: {
       planJson: draft as unknown as Prisma.InputJsonValue,
       setupJson: setup as unknown as Prisma.InputJsonValue,
       setupHash,
+      reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
       weeks: {
         create: draft.weeks.map((w) => ({
           weekIndex: w.weekIndex,
