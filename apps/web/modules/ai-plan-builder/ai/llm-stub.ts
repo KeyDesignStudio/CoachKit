@@ -53,6 +53,27 @@ const draftPlanSetupSchema = z
     maxIntensityDaysPerWeek: z.number().int().min(1).max(3),
     maxDoublesPerWeek: z.number().int().min(0).max(3),
     longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
+    weeklyMinutesByWeek: z.array(z.number().int().min(0).max(10_000)).optional(),
+    disciplineSplitTargets: z
+      .object({
+        swim: z.number().min(0).optional(),
+        bike: z.number().min(0).optional(),
+        run: z.number().min(0).optional(),
+        strength: z.number().min(0).optional(),
+      })
+      .optional(),
+    sessionTypeDistribution: z
+      .object({
+        technique: z.number().min(0).optional(),
+        endurance: z.number().min(0).optional(),
+        tempo: z.number().min(0).optional(),
+        threshold: z.number().min(0).optional(),
+        recovery: z.number().min(0).optional(),
+      })
+      .optional(),
+    recoveryEveryNWeeks: z.number().int().min(2).max(8).optional(),
+    recoveryWeekMultiplier: z.number().min(0.5).max(0.95).optional(),
+    sessionsPerWeekOverride: z.number().int().min(3).max(10).optional(),
   })
   .strict();
 

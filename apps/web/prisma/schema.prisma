@@ -118,6 +118,82 @@ enum AiPlanDraftVisibilityStatus {
   PUBLISHED
 }
 
+// --- PlanSource (v1) ---
+enum PlanSourceType {
+  PDF
+  URL
+  TEXT
+}
+
+enum PlanSport {
+  TRIATHLON
+  DUATHLON
+  RUN
+  BIKE
+  SWIM
+}
+
+enum PlanDistance {
+  SPRINT
+  OLYMPIC
+  HALF_IRONMAN
+  IRONMAN
+  DUATHLON_STD
+  DUATHLON_SPRINT
+  FIVE_K
+  TEN_K
+  HALF_MARATHON
+  MARATHON
+  OTHER
+}
+
+enum PlanLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PlanSeason {
+  IN_SEASON
+  BASE
+  WINTER
+  BUILD
+  PEAK
+  TAPER
+}
+
+enum PlanPhase {
+  BASE
+  BUILD
+  PEAK
+  TAPER
+  RACE
+  RECOVERY
+}
+
+enum RuleType {
+  DISCIPLINE_SPLIT
+  WEEKLY_VOLUME
+  LONG_SESSION
+  INTENSITY_DENSITY
+  BRICKS
+  DELoad
+  FREQUENCY
+  REST_DAYS
+  PROGRESSION_CAP
+  EQUIPMENT_ASSUMPTIONS
+  RISK_GUARDS
+  NOTES_STYLE
+}
+
+enum PlanSourceDiscipline {
+  SWIM
+  BIKE
+  RUN
+  STRENGTH
+  REST
+}
+
 enum PlanChangeProposalStatus {
   DRAFT
   PROPOSED
@@ -545,6 +621,99 @@ model AthletePlanInstanceItem {
 
   @@unique([athletePlanInstanceId, planTemplateScheduleRowId])
   @@index([calendarItemId])
+}
+
+model PlanSource {
+  id             String         @id @default(cuid())
+  type           PlanSourceType
+  title          String
+  sport          PlanSport
+  distance       PlanDistance
+  level          PlanLevel
+  durationWeeks  Int
+  season         PlanSeason?
+  author         String?
+  publisher      String?
+  licenseText    String?
+  sourceUrl      String?
+  sourceFilePath String?
+  checksumSha256 String         @unique
+  isActive       Boolean        @default(false)
+  rawText        String
+  rawJson        Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  versions PlanSourceVersion[]
+}
+
+model PlanSourceVersion {
+  id                 String   @id @default(cuid())
+  planSourceId       String
+  version            Int
+  extractionMetaJson Json
+  createdAt          DateTime @default(now())
+
+  planSource PlanSource             @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
+  weeks      PlanSourceWeekTemplate[]
+  rules      PlanSourceRule[]
+
+  @@unique([planSourceId, version])
+  @@index([planSourceId, version])
+}
+
+model PlanSourceWeekTemplate {
+  id                  String   @id @default(cuid())
+  planSourceVersionId String
+  weekIndex           Int
+  phase               PlanPhase?
+  totalMinutes        Int?
+  totalSessions       Int?
+  notes               String?
+
+  planSourceVersion PlanSourceVersion          @relation(fields: [planSourceVersionId], references: [id], onDelete: Cascade)
+  sessions          PlanSourceSessionTemplate[]
+
+  @@unique([planSourceVersionId, weekIndex])
+  @@index([planSourceVersionId, weekIndex])
+}
+
+model PlanSourceSessionTemplate {
+  id                      String   @id @default(cuid())
+  planSourceWeekTemplateId String
+  ordinal                 Int
+  dayOfWeek               Int?
+  discipline              PlanSourceDiscipline
+  sessionType             String
+  title                   String?
+  durationMinutes         Int?
+  distanceKm              Float?
+  intensityType           String?
+  intensityTargetJson     Json?
+  structureJson           Json?
+  notes                   String?
+
+  planSourceWeekTemplate PlanSourceWeekTemplate @relation(fields: [planSourceWeekTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([planSourceWeekTemplateId, ordinal])
+  @@index([planSourceWeekTemplateId, dayOfWeek])
+}
+
+model PlanSourceRule {
+  id                  String    @id @default(cuid())
+  planSourceVersionId String
+  ruleType            RuleType
+  phase               PlanPhase?
+  appliesJson         Json
+  ruleJson            Json
+  explanation         String
+  priority            Int       @default(1)
+  createdAt           DateTime  @default(now())
+
+  planSourceVersion PlanSourceVersion @relation(fields: [planSourceVersionId], references: [id], onDelete: Cascade)
+
+  @@index([planSourceVersionId, ruleType])
+  @@index([planSourceVersionId, phase])
 }
 
 model GroupSession {
@@ -989,6 +1158,9 @@ model AiPlanDraft {
 
   // Plan reasoning derived from profile + setup (deterministic, no LLM).
   reasoningJson Json?
+
+  // Plan library selection metadata.
+  planSourceSelectionJson Json?
 
   // Tranche 4: publish visibility (AI-domain only; no coupling to existing plan tables).
   visibilityStatus         AiPlanDraftVisibilityStatus @default(DRAFT)

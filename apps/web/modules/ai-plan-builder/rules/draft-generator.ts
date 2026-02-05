@@ -21,6 +21,18 @@ export type DraftPlanSetupV1 = {
   maxDoublesPerWeek: number; // 0-3
   longSessionDay?: number | null; // 0=Sun..6=Sat
   coachGuidanceText?: string; // plain-English coach guidance; optional
+  weeklyMinutesByWeek?: number[]; // optional per-week override
+  disciplineSplitTargets?: { swim?: number; bike?: number; run?: number; strength?: number };
+  sessionTypeDistribution?: {
+    technique?: number;
+    endurance?: number;
+    tempo?: number;
+    threshold?: number;
+    recovery?: number;
+  };
+  recoveryEveryNWeeks?: number;
+  recoveryWeekMultiplier?: number;
+  sessionsPerWeekOverride?: number;
 };
 
 export type DraftWeekV1 = {
@@ -58,7 +70,89 @@ function availabilityTotalMinutes(availability: DraftPlanSetupV1['weeklyAvailabi
   return entries.reduce((sum, [, v]) => sum + (typeof v === 'number' ? Math.max(0, Math.round(v)) : 0), 0);
 }
 
+function normalizeWeights<T extends Record<string, number | undefined>>(weights: T) {
+  const entries = Object.entries(weights).filter(([, v]) => typeof v === 'number' && (v as number) > 0) as Array<[string, number]>;
+  const total = entries.reduce((sum, [, v]) => sum + v, 0);
+  if (!total) return null;
+  return entries.map(([k, v]) => [k, v / total] as const);
+}
+
+function buildWeightedSequence(keys: Array<readonly [string, number]>, totalCount: number) {
+  if (!keys.length || totalCount <= 0) return [] as string[];
+  const counts = keys.map(([key, weight]) => ({
+    key,
+    count: Math.max(0, Math.round(weight * totalCount)),
+  }));
+
+  let assigned = counts.reduce((sum, c) => sum + c.count, 0);
+  let guard = 0;
+  while (assigned < totalCount && guard++ < 100) {
+    counts.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+    counts[0].count += 1;
+    assigned += 1;
+  }
+  guard = 0;
+  while (assigned > totalCount && guard++ < 100) {
+    counts.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+    const target = counts.find((c) => c.count > 0);
+    if (!target) break;
+    target.count -= 1;
+    assigned -= 1;
+  }
+
+  const sequence: string[] = [];
+  const queue = counts
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+
+  while (sequence.length < totalCount && queue.length) {
+    for (const item of queue) {
+      if (item.count <= 0) continue;
+      sequence.push(item.key);
+      item.count -= 1;
+      if (sequence.length >= totalCount) break;
+    }
+  }
+
+  return sequence;
+}
+
+function disciplineSequence(setup: DraftPlanSetupV1, totalSessions: number) {
+  const weights = normalizeWeights({
+    swim: setup.disciplineSplitTargets?.swim,
+    bike: setup.disciplineSplitTargets?.bike,
+    run: setup.disciplineSplitTargets?.run,
+    strength: setup.disciplineSplitTargets?.strength,
+  });
+
+  if (!weights) return null;
+  return buildWeightedSequence(weights, totalSessions).map((d) => d as DraftDiscipline);
+}
+
+function sessionTypeQueues(setup: DraftPlanSetupV1) {
+  const weights = normalizeWeights({
+    technique: setup.sessionTypeDistribution?.technique,
+    endurance: setup.sessionTypeDistribution?.endurance,
+    tempo: setup.sessionTypeDistribution?.tempo,
+    threshold: setup.sessionTypeDistribution?.threshold,
+    recovery: setup.sessionTypeDistribution?.recovery,
+  });
+
+  if (!weights) return null;
+
+  const intensityWeights = weights.filter(([key]) => key === 'tempo' || key === 'threshold');
+  const easyWeights = weights.filter(([key]) => key === 'technique' || key === 'endurance' || key === 'recovery');
+
+  return {
+    intensity: buildWeightedSequence(intensityWeights, 6),
+    easy: buildWeightedSequence(easyWeights, 6),
+  };
+}
+
 function sessionsPerWeek(setup: DraftPlanSetupV1, daysCount: number) {
+  if (typeof setup.sessionsPerWeekOverride === 'number' && Number.isFinite(setup.sessionsPerWeekOverride)) {
+    return clampInt(setup.sessionsPerWeekOverride, 3, Math.max(3, daysCount + clampInt(setup.maxDoublesPerWeek, 0, 3)));
+  }
   // Conservative defaults: keep it useful, not "clever".
   const base = setup.riskTolerance === 'low' ? 5 : setup.riskTolerance === 'med' ? 6 : 8;
   const minBase = setup.riskTolerance === 'low' ? 4 : setup.riskTolerance === 'med' ? 5 : 6;
@@ -196,12 +290,26 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
   const totalMinutesBase = availabilityTotalMinutes(setup.weeklyAvailabilityMinutes);
   const targetSessions = sessionsPerWeek(setup, days.length);
   const longDay = pickLongDay(setup, days);
+  const disciplineQueue = disciplineSequence(setup, targetSessions);
+  const typeQueues = sessionTypeQueues(setup);
 
   const weeks: DraftWeekV1[] = [];
 
   for (let weekIndex = 0; weekIndex < weeksToEvent; weekIndex++) {
+    const baseMinutesFromSource = Array.isArray(setup.weeklyMinutesByWeek)
+      ? setup.weeklyMinutesByWeek[weekIndex]
+      : undefined;
     const multiplier = taperMultiplier(setup, weekIndex);
-    const weekTotalMinutes = clampInt(totalMinutesBase * multiplier, 60, Math.max(60, totalMinutesBase));
+    let weekTotalMinutes = clampInt(totalMinutesBase * multiplier, 60, Math.max(60, totalMinutesBase));
+
+    if (typeof baseMinutesFromSource === 'number' && Number.isFinite(baseMinutesFromSource)) {
+      weekTotalMinutes = clampInt(baseMinutesFromSource, 60, Math.max(60, baseMinutesFromSource));
+    }
+
+    if (setup.recoveryEveryNWeeks && setup.recoveryEveryNWeeks > 1 && (weekIndex + 1) % setup.recoveryEveryNWeeks === 0) {
+      const recoveryMultiplier = typeof setup.recoveryWeekMultiplier === 'number' ? setup.recoveryWeekMultiplier : 0.8;
+      weekTotalMinutes = clampInt(weekTotalMinutes * recoveryMultiplier, 60, Math.max(60, weekTotalMinutes));
+    }
 
     // Assign sessions deterministically across available days.
     // Build a day->slots list (1 per day, plus doubles on earliest days).
@@ -283,17 +391,24 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       const day = weekSlots[sessions.length % weekSlots.length];
       const isIntensity = intensityDays.includes(day);
 
-      const discipline: DraftDiscipline =
-        setup.disciplineEmphasis === 'balanced'
+      const discipline: DraftDiscipline = disciplineQueue
+        ? disciplineQueue[sessions.length % disciplineQueue.length]
+        : setup.disciplineEmphasis === 'balanced'
           ? (sessions.length % 3 === 0 ? 'run' : sessions.length % 3 === 1 ? 'bike' : includesSwim(setup) ? 'swim' : 'run')
           : preferredMain;
 
-      const type: DraftSessionType =
-        discipline === 'swim'
-          ? 'technique'
-          : isIntensity
-            ? (setup.riskTolerance === 'high' ? 'threshold' : 'tempo')
-            : 'endurance';
+      const type: DraftSessionType = (() => {
+        if (discipline === 'swim') return 'technique';
+        if (typeQueues) {
+          const queue = isIntensity ? typeQueues.intensity : typeQueues.easy;
+          const entry = queue[sessions.length % queue.length];
+          if (entry === 'threshold' || entry === 'tempo') return entry;
+          if (entry === 'recovery') return 'recovery';
+          if (entry === 'technique') return 'technique';
+          if (entry === 'endurance') return 'endurance';
+        }
+        return isIntensity ? (setup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
+      })();
 
       sessions.push({
         weekIndex,

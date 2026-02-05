@@ -117,4 +117,20 @@ describe('buildPlanReasoningV1', () => {
     expect(reasoning.constraints.some((c) => c.key === 'variability')).toBe(true);
     expect(reasoning.explanations.some((note) => note.toLowerCase().includes('variability'))).toBe(true);
   });
+
+  it('includes plan source references and influence notes when provided', () => {
+    const reasoning = buildPlanReasoningV1({
+      athleteProfile: baseProfile,
+      setup: baseSetup,
+      draftPlanJson,
+      planSources: [
+        { planSourceVersionId: 'psv_1', title: 'Olympic Beginner 12wk', reasons: ['distance match', 'level match'] },
+      ],
+      planSourceInfluence: { notes: ['Discipline split aligned with plan source.'] },
+    });
+
+    expect(reasoning.sources?.length).toBe(1);
+    expect(reasoning.sources?.[0].title).toBe('Olympic Beginner 12wk');
+    expect(reasoning.explanations.some((note) => note.includes('Plan source influence'))).toBe(true);
+  });
 });

@@ -34,6 +34,12 @@ export type WeekReasoningV1 = {
   notes: string[];
 };
 
+export type PlanReasoningSource = {
+  planSourceVersionId: string;
+  title: string;
+  summary: string;
+};
+
 export type PlanReasoningV1 = {
   version: 'v1';
   generatedAt: string;
@@ -42,6 +48,12 @@ export type PlanReasoningV1 = {
   constraints: PlanReasoningItem[];
   risks: PlanReasoningRisk[];
   targets: PlanReasoningTargets;
+  sources?: PlanReasoningSource[];
+  planSourceInfluence?: {
+    confidence: PlanReasoningSeverity;
+    archetype?: string | null;
+    notes: string[];
+  };
   explanations: string[];
   weeks: WeekReasoningV1[];
 };

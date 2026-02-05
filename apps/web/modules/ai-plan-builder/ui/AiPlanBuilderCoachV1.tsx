@@ -1006,6 +1006,41 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   <p className="mt-2 text-xs text-[var(--fg-muted)]">Plan reasoning will appear once the draft is generated.</p>
                 ) : (
                   <div className="mt-3 space-y-3 text-sm">
+                    {planReasoning.sources?.length ? (
+                      <div>
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Based on Plan Library sources</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          {planReasoning.sources.map((source) => (
+                            <li key={source.planSourceVersionId}>
+                              <span className="font-medium">{source.title}</span> · {source.summary}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {planReasoning.planSourceInfluence ? (
+                      <div data-testid="apb-plan-source-influence">
+                        <div className="text-xs font-medium text-[var(--fg-muted)]">Plan source influence</div>
+                        <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                          Confidence:{' '}
+                          <span className="uppercase text-[var(--text)]">
+                            {planReasoning.planSourceInfluence.confidence}
+                          </span>
+                          {planReasoning.planSourceInfluence.archetype ? (
+                            <> · Archetype: <span className="text-[var(--text)]">{planReasoning.planSourceInfluence.archetype}</span></>
+                          ) : null}
+                        </div>
+                        {planReasoning.planSourceInfluence.notes?.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm">
+                            {planReasoning.planSourceInfluence.notes.map((note, idx) => (
+                              <li key={`psi-${idx}`}>{note}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
                         <div className="text-xs font-medium text-[var(--fg-muted)]">Priorities</div>
