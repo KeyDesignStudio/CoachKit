@@ -29,4 +29,9 @@ describe('AI Plan Builder v1 session titles', () => {
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'run', type: '' })).toBe('Planned Run');
     expect(buildAiPlanBuilderSessionTitle({ discipline: 'unknown', type: '' })).toBe('Planned Workout');
   });
+
+  it('strips duration tokens from free-text types', () => {
+    expect(buildAiPlanBuilderSessionTitle({ discipline: 'run', type: 'Endurance (50 min)' })).toBe('Endurance Run');
+    expect(buildAiPlanBuilderSessionTitle({ discipline: 'bike', type: 'Tempo 45 min' })).toBe('Tempo Ride');
+  });
 });

@@ -9,7 +9,7 @@ import {
 describe('workoutDetailRenderer (canonical SessionDetailV1 -> text)', () => {
   it('renders objective + WARMUP/MAIN/COOLDOWN lines in the required format', () => {
     const detail = sessionDetailV1Schema.parse({
-      objective: 'Aerobic endurance (60 min).',
+      objective: 'Aerobic endurance',
       structure: [
         { blockType: 'warmup', durationMinutes: 10, steps: 'Easy warmup.' },
         { blockType: 'main', durationMinutes: 45, steps: 'Steady aerobic.' },
@@ -22,7 +22,8 @@ describe('workoutDetailRenderer (canonical SessionDetailV1 -> text)', () => {
     assertNormalizedSessionDetailMatchesTotal({ detail, totalMinutes: 60, incrementMinutes: 5 });
 
     const text = renderWorkoutDetailFromSessionDetailV1(detail);
-    expect(text.split('\n')[0]).toBe('Aerobic endurance (60 min).');
+    expect(text.split('\n')[0]).toBe('Aerobic endurance');
+    expect(text.split('\n')[0]).not.toMatch(/\(\s*\d+\s*min\s*\)/i);
     expect(text).toContain('\n\nWARMUP: 10 min – Easy warmup.');
     expect(text).toContain('\nMAIN: 45 min – Steady aerobic.');
     expect(text).toContain('\nCOOLDOWN: 5 min – Easy jog + stretch.');

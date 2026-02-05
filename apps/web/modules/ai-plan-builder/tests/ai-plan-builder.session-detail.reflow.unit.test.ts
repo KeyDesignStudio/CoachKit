@@ -9,7 +9,7 @@ import {
 describe('AI Plan Builder v1 (Session detail: rounding + reflow)', () => {
   it('normalizes odd block minutes to 5-min increments and preserves total', () => {
     const detail = sessionDetailV1Schema.parse({
-      objective: 'Technique swim session (60 min).',
+      objective: 'Technique swim session',
       structure: [
         { blockType: 'warmup', durationMinutes: 9, intensity: { rpe: 2, zone: 'Z1', notes: 'Easy' }, steps: 'Warm up.' },
         { blockType: 'main', durationMinutes: 45, intensity: { rpe: 4, zone: 'Z2', notes: 'Steady' }, steps: 'Main set.' },
@@ -41,7 +41,7 @@ describe('AI Plan Builder v1 (Session detail: rounding + reflow)', () => {
 
   it('reflows detail when total duration changes (50 → 40) and keeps sums consistent', () => {
     const detail = sessionDetailV1Schema.parse({
-      objective: 'Endurance run session (50 min).',
+      objective: 'Endurance run session',
       structure: [
         { blockType: 'warmup', durationMinutes: 10, intensity: { rpe: 2, zone: 'Z1', notes: 'Easy' }, steps: 'Easy jog.' },
         { blockType: 'main', durationMinutes: 35, intensity: { rpe: 4, zone: 'Z2', notes: 'Steady' }, steps: 'Steady aerobic.' },
@@ -60,6 +60,6 @@ describe('AI Plan Builder v1 (Session detail: rounding + reflow)', () => {
     }
     expect(mins.reduce((a, b) => a + b, 0)).toBe(40);
 
-    expect(reflowed.objective).toContain('(40 min)');
+    expect(reflowed.objective).toBe('Endurance run session');
   });
 });
