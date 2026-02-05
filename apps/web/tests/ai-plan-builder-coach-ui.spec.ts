@@ -209,6 +209,90 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       },
     });
 
+    const planSource = await prisma.planSource.create({
+      data: {
+        type: 'TEXT',
+        title: `PlanSource UI Proof ${runTag}`,
+        sport: 'TRIATHLON',
+        distance: 'OLYMPIC',
+        level: 'BEGINNER',
+        durationWeeks: 4,
+        season: 'BASE',
+        checksumSha256: nextTestId('checksum_ui'),
+        rawText: 'Week 1 Bike endurance 60 min',
+        rawJson: null,
+        isActive: true,
+      },
+    });
+
+    const planSourceVersion = await prisma.planSourceVersion.create({
+      data: {
+        planSourceId: planSource.id,
+        version: 1,
+        extractionMetaJson: { confidence: 0.6, warnings: ['UI seed'] } as any,
+      },
+    });
+
+    const weekTemplate = await prisma.planSourceWeekTemplate.create({
+      data: {
+        planSourceVersionId: planSourceVersion.id,
+        weekIndex: 0,
+        totalMinutes: 240,
+        totalSessions: 5,
+      },
+    });
+
+    await prisma.planSourceSessionTemplate.createMany({
+      data: [
+        {
+          planSourceWeekTemplateId: weekTemplate.id,
+          ordinal: 1,
+          discipline: 'BIKE',
+          sessionType: 'technique',
+          durationMinutes: 45,
+        },
+        {
+          planSourceWeekTemplateId: weekTemplate.id,
+          ordinal: 2,
+          discipline: 'BIKE',
+          sessionType: 'endurance',
+          durationMinutes: 60,
+        },
+      ],
+    });
+
+    await prisma.planSourceRule.createMany({
+      data: [
+        {
+          planSourceVersionId: planSourceVersion.id,
+          ruleType: 'DISCIPLINE_SPLIT',
+          phase: null,
+          appliesJson: {} as any,
+          ruleJson: { swimPct: 0.2, bikePct: 0.6, runPct: 0.2 } as any,
+          explanation: 'Bike heavy',
+          priority: 1,
+        },
+        {
+          planSourceVersionId: planSourceVersion.id,
+          ruleType: 'INTENSITY_DENSITY',
+          phase: null,
+          appliesJson: {} as any,
+          ruleJson: { maxIntensityDaysPerWeek: 1 } as any,
+          explanation: 'Cap intensity',
+          priority: 1,
+        },
+      ],
+    });
+
+    await prisma.athleteProfile.update({
+      where: { userId: athleteId },
+      data: {
+        disciplines: ['SWIM', 'BIKE', 'RUN'],
+        experienceLevel: 'Beginner',
+        primaryGoal: 'Olympic',
+      },
+    });
+
     await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
     await expect(page.getByText('Plan Builder')).toBeVisible();
 
@@ -293,6 +377,9 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(planReasoning).toBeVisible({ timeout: 60_000 });
     await expect(planReasoning).toContainText('Plan Reasoning');
     await expect(planReasoning).toContainText('Priorities', { timeout: 60_000 });
+    await expect(planReasoning).toContainText(`PlanSource UI Proof ${runTag}`);
+    await expect(planReasoning.getByTestId('apb-plan-source-influence')).toContainText(/confidence/i);
+    await expect(planReasoning.getByTestId('apb-plan-source-influence')).toContainText(/influence|bike|intensity/i);
 
     const firstSession = firstWeek.getByTestId('apb-session').first();
     await expect(firstSession.getByTestId('apb-session-day')).toBeVisible({ timeout: 60_000 });
@@ -488,7 +575,12 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await page.screenshot({ path: testInfo.outputPath('session-inputs-editable.png'), fullPage: true });
 
     const requestedDuration = 42;
-    const expectedRoundedDuration = String(Math.floor(requestedDuration / 5) * 5);
+    const previousDuration = Number(firstSessionFromDraft.durationMinutes ?? 0);
+    const expectedRoundedDuration = String(
+      requestedDuration > previousDuration
+        ? Math.ceil(requestedDuration / 5) * 5
+        : Math.floor(requestedDuration / 5) * 5
+    );
     await durationInput.fill(String(requestedDuration));
     // Wait for any successful draft-plan PATCH, then validate persistence against the returned draft.
     const saveResPromise = page.waitForResponse(

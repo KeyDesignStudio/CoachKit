@@ -16,6 +16,8 @@ import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import { ensureAthleteBrief, getLatestAthleteBriefSummary, loadAthleteProfileSnapshot } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import { buildPlanReasoningV1 } from '@/lib/ai/plan-reasoning/buildPlanReasoningV1';
+import { selectPlanSources } from '@/modules/plan-library/server/select';
+import { applyPlanSourceToDraftInput } from '@/modules/plan-library/server/apply';
 import {
   buildDeterministicSessionDetailV1,
   normalizeSessionDetailV1DurationsToTotal,
@@ -175,17 +177,62 @@ export async function generateAiDraftPlanV1(params: {
     setup.coachGuidanceText = bits;
   }
 
+  const planSourceMatches = await selectPlanSources({
+    athleteProfile: athleteProfile as any,
+    durationWeeks: setup.weeksToEvent,
+  });
+
+  const selectedPlanSourceVersionId = planSourceMatches[0]?.planSourceVersionId;
+  const selectedPlanSource = selectedPlanSourceVersionId
+    ? await prisma.planSourceVersion.findUnique({
+        where: { id: selectedPlanSourceVersionId },
+        include: {
+          planSource: {
+            select: {
+              id: true,
+              title: true,
+              distance: true,
+              level: true,
+              durationWeeks: true,
+              checksumSha256: true,
+            },
+          },
+          weeks: { select: { totalMinutes: true, sessions: true } },
+          rules: true,
+        },
+      })
+    : null;
+
+  const selectedPlanSourceForApply = selectedPlanSource
+    ? {
+        ...selectedPlanSource,
+        sessions: selectedPlanSource.weeks.flatMap((w) => w.sessions ?? []),
+      }
+    : null;
+
+  const applied = applyPlanSourceToDraftInput({
+    athleteProfile: athleteProfile as any,
+    athleteBrief: ensured.brief ?? null,
+    apbSetup: setup as any,
+    baseDraftInput: setup as any,
+    selectedPlanSource: selectedPlanSourceForApply as any,
+  });
+
+  const adjustedSetup = applied.adjustedDraftInput as any;
+
   const suggestion = await ai.suggestDraftPlan({
-    setup: setup as any,
+    setup: adjustedSetup,
     athleteProfile: athleteProfile as any,
     athleteBrief: ensured.brief ?? null,
   });
-  const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup, planJson: suggestion.planJson });
-  const setupHash = computeStableSha256(setup);
+  const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
+  const setupHash = computeStableSha256(adjustedSetup);
   const reasoning = buildPlanReasoningV1({
     athleteProfile: athleteProfile as any,
-    setup,
+    setup: adjustedSetup,
     draftPlanJson: draft as any,
+    planSources: planSourceMatches,
+    planSourceInfluence: applied.influenceSummary,
   });
 
   const created = await prisma.aiPlanDraft.create({
@@ -195,9 +242,30 @@ export async function generateAiDraftPlanV1(params: {
       source: 'AI_DRAFT',
       status: 'DRAFT',
       planJson: draft as unknown as Prisma.InputJsonValue,
-      setupJson: setup as unknown as Prisma.InputJsonValue,
+      setupJson: adjustedSetup as unknown as Prisma.InputJsonValue,
       setupHash,
       reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
+      planSourceSelectionJson: {
+        selectedPlanSourceVersionIds: planSourceMatches.map((m) => m.planSourceVersionId),
+        selectedPlanSource: selectedPlanSource
+          ? {
+              planSourceId: selectedPlanSource.planSource.id,
+              planSourceVersionId: selectedPlanSource.id,
+              planSourceVersion: selectedPlanSource.version,
+              title: selectedPlanSource.planSource.title,
+              checksumSha256: selectedPlanSource.planSource.checksumSha256,
+              archetype: applied.ruleBundle?.planArchetype ?? null,
+            }
+          : null,
+        matchScores: planSourceMatches.map((m) => ({
+          planSourceVersionId: m.planSourceVersionId,
+          planSourceId: m.planSourceId,
+          title: m.title,
+          score: m.score,
+          reasons: m.reasons,
+        })),
+        influenceSummary: applied.influenceSummary,
+      } as unknown as Prisma.InputJsonValue,
       weeks: {
         create: draft.weeks.map((w) => ({
           weekIndex: w.weekIndex,

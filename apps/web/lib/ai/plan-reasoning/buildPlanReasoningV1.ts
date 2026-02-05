@@ -26,6 +26,16 @@ type ReasoningInput = {
   athleteProfile: AthleteProfileSnapshot;
   setup: Record<string, any>;
   draftPlanJson: DraftPlanJsonV1;
+  planSources?: Array<{
+    planSourceVersionId: string;
+    title: string;
+    reasons?: string[];
+  }>;
+  planSourceInfluence?: {
+    confidence?: string;
+    notes?: string[];
+    archetype?: string | null;
+  };
 };
 
 const DAY_NAMES_SUN0 = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -143,6 +153,18 @@ export function buildPlanReasoningV1(input: ReasoningInput): PlanReasoningV1 {
   const profile = input.athleteProfile ?? ({} as AthleteProfileSnapshot);
   const setup = input.setup ?? {};
   const draftPlanJson = input.draftPlanJson;
+  const sources = (input.planSources ?? []).map((source) => ({
+    planSourceVersionId: source.planSourceVersionId,
+    title: source.title,
+    summary: source.reasons?.length ? source.reasons.join(' · ') : 'Plan library source',
+  }));
+  const influenceNotes = Array.isArray(input.planSourceInfluence?.notes) ? input.planSourceInfluence?.notes ?? [] : [];
+  const influenceConfidence = normalizeLower(input.planSourceInfluence?.confidence) as
+    | 'low'
+    | 'med'
+    | 'high'
+    | '';
+  const influenceArchetype = normalizeText(input.planSourceInfluence?.archetype);
 
   const inputsHash = computeStableSha256({
     profile: {
@@ -254,6 +276,16 @@ export function buildPlanReasoningV1(input: ReasoningInput): PlanReasoningV1 {
     explanations.push('High variability drives a more conservative week-to-week progression.');
   }
 
+  if (influenceArchetype) {
+    explanations.push(`Plan source archetype: ${influenceArchetype}.`);
+  }
+  if (influenceConfidence) {
+    explanations.push(`Plan source influence confidence: ${influenceConfidence}.`);
+  }
+  if (influenceNotes.length) {
+    explanations.push(...influenceNotes.slice(0, 3).map((note) => `Plan source influence: ${note}`));
+  }
+
   const weeks: WeekReasoningV1[] = draftPlanJson.weeks.map((week, idx) => {
     const totalMinutes = week.sessions.reduce((sum, s) => sum + (Number(s.durationMinutes) || 0), 0);
     const prevWeek = draftPlanJson.weeks[idx - 1];
@@ -306,6 +338,15 @@ export function buildPlanReasoningV1(input: ReasoningInput): PlanReasoningV1 {
     constraints,
     risks,
     targets,
+    sources: sources.length ? sources : undefined,
+    planSourceInfluence:
+      influenceConfidence || influenceArchetype || influenceNotes.length
+        ? {
+            confidence: (influenceConfidence || 'low') as any,
+            archetype: influenceArchetype || null,
+            notes: influenceNotes.slice(0, 3),
+          }
+        : undefined,
     explanations,
     weeks,
   };

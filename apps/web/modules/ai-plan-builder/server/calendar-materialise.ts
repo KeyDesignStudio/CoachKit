@@ -96,7 +96,15 @@ export async function materialisePublishedAiPlanToCalendar(params: {
   const run = async () => {
     const draft = await prisma.aiPlanDraft.findUnique({
       where: { id: params.aiPlanDraftId },
-      select: { id: true, athleteId: true, coachId: true, setupJson: true, planJson: true, visibilityStatus: true },
+      select: {
+        id: true,
+        athleteId: true,
+        coachId: true,
+        setupJson: true,
+        planJson: true,
+        visibilityStatus: true,
+        planSourceSelectionJson: true,
+      },
     });
 
     if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
@@ -228,6 +236,24 @@ export async function materialisePublishedAiPlanToCalendar(params: {
 
       const title = buildAiPlanBuilderSessionTitle({ discipline: s.discipline, type: s.type });
 
+      const planSourceMeta = (draft.planSourceSelectionJson ?? null) as any;
+      const planSourceVersionIds = Array.isArray(planSourceMeta?.selectedPlanSourceVersionIds)
+        ? planSourceMeta.selectedPlanSourceVersionIds
+        : [];
+      const selectedPlanSource = planSourceMeta?.selectedPlanSource ?? null;
+      const attachmentsJson: Prisma.InputJsonValue = {
+        aiPlanDraftId: draft.id,
+        aiPlanDraftSessionId: s.id,
+        planSourceVersionIds,
+        planSourceId: selectedPlanSource?.planSourceId ?? null,
+        planSourceVersionId: selectedPlanSource?.planSourceVersionId ?? null,
+        planSourceVersion: selectedPlanSource?.planSourceVersion ?? null,
+        planSourceTitle: selectedPlanSource?.title ?? null,
+        planSourceArchetype: selectedPlanSource?.archetype ?? null,
+        planSourceHash: selectedPlanSource?.checksumSha256 ?? null,
+        planSourceInfluence: planSourceMeta?.influenceSummary ?? null,
+      };
+
       const dayKey = computeSessionDayKey({
         startDate,
         completionDate,
@@ -259,6 +285,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         notes: s.notes ?? null,
         workoutDetail,
         workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
+        attachmentsJson,
       };
 
       await prisma.calendarItem.upsert({
@@ -291,7 +318,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           workoutDetail,
           intensityType: null,
           intensityTargetJson: Prisma.DbNull,
-          attachmentsJson: Prisma.DbNull,
+          attachmentsJson,
           status: CalendarItemStatus.PLANNED,
           deletedAt: null,
           deletedByUserId: null,
