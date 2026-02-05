@@ -105,7 +105,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       await otherDiscipline.click();
     }
     await page.getByRole('tab', { name: 'Training Basics' }).click();
-    const primaryGoalField = page.getByLabel('Primary goal/s');
+    const primaryGoalField = page.getByLabel('Primary goal');
     await expect(primaryGoalField).toHaveValue('Legacy goal');
     await primaryGoalField.fill('GOAL TEST 123');
     await expect(primaryGoalField).toHaveValue('GOAL TEST 123');
@@ -348,7 +348,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
 
     await setDateInput(page.getByTestId('apb-start-date'), startDate);
     await setDateInput(page.getByTestId('apb-completion-date'), completionDate);
-    await expect(page.getByText(/Derived from dates:\s*\d+/)).toBeVisible();
+    await expect(page.getByText(/Derived from dates:/)).toHaveCount(0);
     const weeksToggle = page.getByTestId('apb-weeks-auto-toggle');
     if ((await weeksToggle.textContent())?.includes('Auto')) {
       await weeksToggle.click();
@@ -367,6 +367,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
       { timeout: 90_000 }
     );
     await page.getByTestId('apb-generate-plan').click();
+    await expect(page.getByTestId('apb-build-progress')).toBeVisible({ timeout: 10_000 });
     await draftOk;
 
     const firstWeek = page.getByTestId('apb-week').first();
@@ -380,6 +381,10 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(planReasoning).toContainText(`PlanSource UI Proof ${runTag}`);
     await expect(planReasoning.getByTestId('apb-plan-source-influence')).toContainText(/confidence/i);
     await expect(planReasoning.getByTestId('apb-plan-source-influence')).toContainText(/influence|bike|intensity/i);
+    const weekSummary = planReasoning.getByTestId('apb-week-summary-0');
+    await expect(weekSummary).toContainText(/Sessions:/i);
+    await expect(weekSummary).not.toContainText('Split:');
+    await expect(weekSummary).not.toContainText(/\(\+?\d+%\)/);
 
     const firstSession = firstWeek.getByTestId('apb-session').first();
     await expect(firstSession.getByTestId('apb-session-day')).toBeVisible({ timeout: 60_000 });
@@ -388,7 +393,8 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     await expect(firstSession.getByTestId('apb-session-objective-input')).not.toHaveValue('');
     const preview = firstSession.getByTestId('apb-session-workout-detail-preview');
     await expect(preview).toBeVisible();
-    await expect(preview).toContainText(/pain|injury/i);
+    await expect(preview).toContainText(/WARMUP/i);
+    await expect(preview).not.toContainText(/weekly mins|weekly minutes|available days/i);
     await expect(firstSession.getByTestId('apb-session-block-steps-0')).toBeVisible();
 
     // Save bottom-left; Lock session bottom-right.

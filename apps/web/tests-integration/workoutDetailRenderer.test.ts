@@ -26,6 +26,9 @@ describe('workoutDetailRenderer (canonical SessionDetailV1 -> text)', () => {
     expect(text).toContain('\n\nWARMUP: 10 min – Easy warmup.');
     expect(text).toContain('\nMAIN: 45 min – Steady aerobic.');
     expect(text).toContain('\nCOOLDOWN: 5 min – Easy jog + stretch.');
+    expect(text).not.toContain('TARGETS:');
+    expect(text).not.toContain('CUES:');
+    expect(text).not.toContain('SAFETY:');
   });
 
   it('fails if block minutes do not sum to the planned total', () => {

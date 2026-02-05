@@ -84,13 +84,9 @@ function withObjectiveDuration(objective: string, durationMinutes: number): stri
   const d = clampInt(durationMinutes, 0, 10_000);
   const s = String(objective || '').trim();
   if (!s) return `Session (${d} min).`;
-  const replaced = s.replace(/\(\s*\d+\s*min\s*\)\.?\s*$/i, `(${d} min).`);
-  if (replaced !== s) return replaced;
-  if (/\.?\s*$/.test(s)) {
-    const trimmed = s.replace(/\.*\s*$/, '').trim();
-    return `${trimmed} (${d} min).`;
-  }
-  return `${s} (${d} min).`;
+  const stripped = s.replace(/\(\s*\d+\s*min\s*\)\.?/gi, '').replace(/\s{2,}/g, ' ').trim();
+  const base = stripped || 'Session';
+  return `${base} (${d} min).`;
 }
 
 export function normalizeSessionDetailV1DurationsToTotal(params: {
@@ -341,7 +337,7 @@ export function buildDeterministicSessionDetailV1(params: {
       blockType: 'warmup',
       durationMinutes: warmup,
       intensity: { zone: 'Z1', rpe: 2, notes: 'Easy' },
-      steps: `Easy ${displayDiscipline.toLowerCase()} + mobility.`,
+      steps: `Easy ${displayDiscipline.toLowerCase()} + dynamic warm-up.`,
     });
   }
 

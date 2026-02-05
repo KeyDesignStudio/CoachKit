@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
+import { computeWeeklyMinutesTarget, normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
+
 export const athleteIntakeAnswerSchema = z.object({
   questionKey: z.string().min(1),
   answer: z.unknown(),
@@ -66,6 +68,13 @@ function normalizeNumber(value: unknown): number | null {
   return Math.max(0, Math.round(n));
 }
 
+function normalizeFloat(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, n);
+}
+
 function normalizeDate(value: unknown): Date | null {
   if (value == null) return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -105,12 +114,28 @@ export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmission
 
   const availabilityDays = getList('availability_days').map((d) => DAY_LABELS[d] ?? d);
 
+  const weeklyMinutes = getNumber('weekly_minutes');
+  const weeklyMinutesComputed = computeWeeklyMinutesTarget({
+    hoursPerDay: normalizeFloat(answers['weekly_hours_per_day']) ?? undefined,
+    daysPerWeek: getNumber('weekly_days_per_week') ?? undefined,
+  });
+
+  const mobileRaw = answers['mobile_phone'];
+  const mobileNormalized = normalizeAustralianMobile(mobileRaw);
+  if (mobileRaw != null && String(mobileRaw).trim().length > 0 && !mobileNormalized) {
+    throw new ApiError(
+      400,
+      'INVALID_MOBILE_PHONE',
+      'Enter an Australian mobile number, e.g. 04xx xxx xxx or +614xx xxx xxx.'
+    );
+  }
+
   return {
     firstName: get('first_name'),
     lastName: get('last_name'),
     gender: get('gender'),
     trainingSuburb: get('training_suburb'),
-    mobilePhone: get('mobile_phone'),
+    mobilePhone: mobileNormalized,
     dateOfBirth: getDate('date_of_birth'),
     disciplines: getList('disciplines'),
     primaryGoal: goalDetails ?? goalType,
@@ -120,7 +145,7 @@ export function mapIntakeToAthleteProfileUpdate(payload: AthleteIntakeSubmission
     eventDate: getDate('event_date'),
     timelineWeeks: goalTimeline ? GOAL_TIMELINE_WEEKS[goalTimeline] ?? null : null,
     experienceLevel: get('experience_level'),
-    weeklyMinutesTarget: getNumber('weekly_minutes'),
+    weeklyMinutesTarget: weeklyMinutes ?? weeklyMinutesComputed,
     consistencyLevel: get('recent_consistency'),
     swimConfidence: getNumber('swim_confidence'),
     bikeConfidence: getNumber('bike_confidence'),

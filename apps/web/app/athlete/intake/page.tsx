@@ -13,6 +13,7 @@ import { Block } from '@/components/ui/Block';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 
 import { INTAKE_SECTIONS, type IntakeQuestion } from '@/modules/athlete-intake/questions';
+import { computeWeeklyMinutesTarget, normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
 
 const STORAGE_KEY = 'athlete-intake-draft-v1';
 
@@ -206,6 +207,7 @@ export default function AthleteIntakePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [mobileValidationError, setMobileValidationError] = useState('');
 
   useEffect(() => {
     const draft = loadDraft();
@@ -237,6 +239,40 @@ export default function AthleteIntakePage() {
     [sectionIndex, visibleSections.length]
   );
 
+  const weeklyHours = useMemo(() => {
+    const raw = answers['weekly_hours_per_day'];
+    if (raw == null || raw === '') return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return null;
+    if (trimmed.endsWith('+')) {
+      const n = Number(trimmed.replace('+', ''));
+      return Number.isFinite(n) ? n : null;
+    }
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
+  }, [answers]);
+
+  const weeklyDays = useMemo(() => {
+    const raw = answers['weekly_days_per_week'];
+    if (raw == null || raw === '') return null;
+    const n = Number(String(raw).trim());
+    return Number.isFinite(n) ? n : null;
+  }, [answers]);
+
+  const computedWeeklyMinutes = useMemo(
+    () => computeWeeklyMinutesTarget({ hoursPerDay: weeklyHours ?? undefined, daysPerWeek: weeklyDays ?? undefined }),
+    [weeklyHours, weeklyDays]
+  );
+
+  useEffect(() => {
+    if (computedWeeklyMinutes == null) return;
+    setAnswers((prev) => {
+      const existing = typeof prev.weekly_minutes === 'number' ? prev.weekly_minutes : null;
+      if (existing === computedWeeklyMinutes) return prev;
+      return { ...prev, weekly_minutes: computedWeeklyMinutes };
+    });
+  }, [computedWeeklyMinutes]);
+
   if (userLoading) {
     return (
       <div className="px-6 pt-6">
@@ -256,6 +292,17 @@ export default function AthleteIntakePage() {
   const onSubmit = async () => {
     setSubmitting(true);
     setError('');
+    setMobileValidationError('');
+
+    const mobileRaw = answers['mobile_phone'];
+    const mobileNormalized = normalizeAustralianMobile(mobileRaw);
+    if (mobileRaw != null && String(mobileRaw).trim().length > 0 && !mobileNormalized) {
+      const message = 'Enter an Australian mobile number, e.g. 04xx xxx xxx or +614xx xxx xxx';
+      setMobileValidationError(message);
+      setError(message);
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const payload = {
@@ -315,8 +362,20 @@ export default function AthleteIntakePage() {
               {renderQuestion(question, answers[question.key], (next) =>
                 setAnswers((prev) => ({ ...prev, [question.key]: next }))
               )}
+              {question.key === 'mobile_phone' && mobileValidationError ? (
+                <span className="text-xs text-rose-600">{mobileValidationError}</span>
+              ) : null}
             </label>
           ))}
+
+          {section.key === 'training-profile' ? (
+            <div className="rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2 text-sm">
+              <div className="text-xs font-medium text-[var(--muted)]">Estimated weekly minutes</div>
+              <div className="mt-1 text-[var(--text)]">
+                {computedWeeklyMinutes == null ? 'Select hours + days to estimate.' : `${computedWeeklyMinutes} minutes`}
+              </div>
+            </div>
+          ) : null}
         </div>
       </Block>
 

@@ -397,28 +397,15 @@ export default function AthleteProfilePage() {
 
       {activeTab === 'Training Basics' ? (
         <FormGrid role="tabpanel" id="tab-panel-Training-Basics" columns={gridColumns}>
-          <FormSection title="Experience & Goals" />
+          <FormSection title="Training Basics" />
+
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Experience level
               <Input value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} />
             </label>
           </FormFieldSpan>
-          <FormFieldSpan span={span4}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Primary goal/s
-              <Textarea value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} rows={2} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span4}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Secondary goal/s
-              <Input value={secondaryGoals} onChange={(e) => setSecondaryGoals(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-
-          <FormSection title="Weekly Target & Confidence" className="mt-2" />
-          <FormFieldSpan span={span2}>
+          <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Weekly minutes target
               <Input
@@ -432,7 +419,7 @@ export default function AthleteProfilePage() {
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              Swim confidence level
+              Swim confidence
               <Select value={swimConfidence} onChange={(e) => setSwimConfidence(e.target.value)}>
                 <option value="">Select…</option>
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -445,7 +432,7 @@ export default function AthleteProfilePage() {
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              Bike confidence level
+              Bike confidence
               <Select value={bikeConfidence} onChange={(e) => setBikeConfidence(e.target.value)}>
                 <option value="">Select…</option>
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -456,9 +443,10 @@ export default function AthleteProfilePage() {
               </Select>
             </label>
           </FormFieldSpan>
+
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
-              Run confidence level
+              Run confidence
               <Select value={runConfidence} onChange={(e) => setRunConfidence(e.target.value)}>
                 <option value="">Select…</option>
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -469,76 +457,88 @@ export default function AthleteProfilePage() {
               </Select>
             </label>
           </FormFieldSpan>
-
-          <FormSection title="Coaching Preferences & Schedule" className="mt-2" />
           <FormFieldSpan span={span1}>
-            <div className="space-y-2 text-sm font-medium">
-              Training Plan Schedule
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 text-xs font-medium text-[var(--muted)]">
-                  Frequency
-                  <Select
-                    value={trainingPlanFrequency}
-                    onChange={(e) => {
-                      const next = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
-                      setTrainingPlanFrequency(next);
-                      if (next === 'AD_HOC') {
-                        setTrainingPlanDayOfWeek(null);
-                        setTrainingPlanWeekOfMonth(null);
-                      } else if (next === 'MONTHLY') {
-                        setTrainingPlanWeekOfMonth((trainingPlanWeekOfMonth ?? 1) as 1 | 2 | 3 | 4);
-                        setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 1);
-                      } else {
-                        setTrainingPlanWeekOfMonth(null);
-                        setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 2);
-                      }
-                    }}
-                    disabled={saving}
-                  >
-                    <option value="WEEKLY">Weekly</option>
-                    <option value="FORTNIGHTLY">Fortnightly</option>
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="AD_HOC">Ad hoc</option>
-                  </Select>
-                </label>
-
-                {trainingPlanFrequency === 'MONTHLY' ? (
-                  <label className="flex flex-col gap-2 text-xs font-medium text-[var(--muted)]">
-                    Week of month
-                    <Select
-                      value={trainingPlanWeekOfMonth ?? ''}
-                      onChange={(e) => setTrainingPlanWeekOfMonth((Number(e.target.value) as 1 | 2 | 3 | 4) || null)}
-                      disabled={saving}
-                    >
-                      <option value="1">1st</option>
-                      <option value="2">2nd</option>
-                      <option value="3">3rd</option>
-                      <option value="4">4th</option>
-                    </Select>
-                  </label>
-                ) : null}
-
-                {trainingPlanFrequency !== 'AD_HOC' ? (
-                  <label className="flex flex-col gap-2 text-xs font-medium text-[var(--muted)]">
-                    Day
-                    <Select
-                      value={trainingPlanDayOfWeek ?? ''}
-                      onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
-                      disabled={saving}
-                    >
-                      <option value="0">Sunday</option>
-                      <option value="1">Monday</option>
-                      <option value="2">Tuesday</option>
-                      <option value="3">Wednesday</option>
-                      <option value="4">Thursday</option>
-                      <option value="5">Friday</option>
-                      <option value="6">Saturday</option>
-                    </Select>
-                  </label>
-                ) : null}
-              </div>
-            </div>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Training plan schedule frequency
+              <Select
+                value={trainingPlanFrequency}
+                onChange={(e) => {
+                  const next = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'AD_HOC';
+                  setTrainingPlanFrequency(next);
+                  if (next === 'AD_HOC') {
+                    setTrainingPlanDayOfWeek(null);
+                    setTrainingPlanWeekOfMonth(null);
+                  } else if (next === 'MONTHLY') {
+                    setTrainingPlanWeekOfMonth((trainingPlanWeekOfMonth ?? 1) as 1 | 2 | 3 | 4);
+                    setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 1);
+                  } else {
+                    setTrainingPlanWeekOfMonth(null);
+                    setTrainingPlanDayOfWeek(trainingPlanDayOfWeek ?? 2);
+                  }
+                }}
+                disabled={saving}
+              >
+                <option value="WEEKLY">Weekly</option>
+                <option value="FORTNIGHTLY">Fortnightly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="AD_HOC">Ad hoc</option>
+              </Select>
+            </label>
+            {trainingPlanFrequency === 'MONTHLY' ? (
+              <label className="mt-2 flex flex-col gap-2 text-xs font-medium text-[var(--muted)]">
+                Week of month
+                <Select
+                  value={trainingPlanWeekOfMonth ?? ''}
+                  onChange={(e) => setTrainingPlanWeekOfMonth((Number(e.target.value) as 1 | 2 | 3 | 4) || null)}
+                  disabled={saving}
+                >
+                  <option value="1">1st</option>
+                  <option value="2">2nd</option>
+                  <option value="3">3rd</option>
+                  <option value="4">4th</option>
+                </Select>
+              </label>
+            ) : null}
           </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Training plan schedule day
+              <Select
+                value={trainingPlanDayOfWeek ?? ''}
+                onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
+                disabled={saving || trainingPlanFrequency === 'AD_HOC'}
+              >
+                <option value="">Select…</option>
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </Select>
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Check-in cadence
+              <Input value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Primary goal
+              <Textarea value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} rows={2} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Secondary goals
+              <Input value={secondaryGoals} onChange={(e) => setSecondaryGoals(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Feedback style
@@ -549,12 +549,6 @@ export default function AthleteProfilePage() {
             <label className="flex flex-col gap-2 text-sm font-medium">
               Tone preference
               <Input value={tonePreference} onChange={(e) => setTonePreference(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span1}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Check-in cadence
-              <Input value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)} />
             </label>
           </FormFieldSpan>
         </FormGrid>

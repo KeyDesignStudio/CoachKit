@@ -126,11 +126,16 @@ describe('buildPlanReasoningV1', () => {
       planSources: [
         { planSourceVersionId: 'psv_1', title: 'Olympic Beginner 12wk', reasons: ['distance match', 'level match'] },
       ],
-      planSourceInfluence: { notes: ['Discipline split aligned with plan source.'] },
+      planSourceInfluence: {
+        notes: ['Discipline split aligned with plan source.'],
+        confidence: 'med',
+        archetype: 'Olympic Beginner 12wk (12wk)'
+      },
     });
 
     expect(reasoning.sources?.length).toBe(1);
     expect(reasoning.sources?.[0].title).toBe('Olympic Beginner 12wk');
     expect(reasoning.explanations.some((note) => note.includes('Plan source influence'))).toBe(true);
+    expect(reasoning.planSourceInfluence?.confidence).toBe('med');
   });
 });

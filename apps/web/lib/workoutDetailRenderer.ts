@@ -60,27 +60,11 @@ export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1):
     })
     .filter((x): x is string => Boolean(x));
 
-  const extraLines: string[] = [];
-  const targets = String((detail as any)?.targets?.notes ?? '').trim();
-  if (targets) extraLines.push(`TARGETS: ${targets}`);
-
-  const cues = Array.isArray((detail as any)?.cues)
-    ? (detail as any).cues.map((c: any) => String(c ?? '').trim()).filter(Boolean)
-    : [];
-  if (cues.length) extraLines.push(`CUES: ${cues.join(' | ')}`);
-
-  const safety = String((detail as any)?.safetyNotes ?? '').trim();
-  if (safety) extraLines.push(`SAFETY: ${safety}`);
-
   const lines: string[] = [];
   if (objective) lines.push(objective);
   if (blockLines.length) {
     if (lines.length) lines.push('');
     lines.push(...blockLines);
-  }
-  if (extraLines.length) {
-    if (lines.length) lines.push('');
-    lines.push(...extraLines);
   }
 
   return lines.join('\n').trim();
