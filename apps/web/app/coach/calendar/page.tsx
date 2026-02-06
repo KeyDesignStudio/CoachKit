@@ -27,7 +27,8 @@ import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/compone
 import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
-import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
+import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
+import { getRangeCompletionSummary } from '@/lib/calendar/completion';
 import { cn } from '@/lib/cn';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
@@ -1567,19 +1568,18 @@ export default function CoachCalendarPage() {
               {Array.from({ length: 6 }, (_, weekIndex) => {
                 const start = weekIndex * 7;
                 const week = monthDays.slice(start, start + 7);
-                const weekWorkoutCount = week.reduce((acc, d) => acc + (d.items as any[]).filter((i) => selectedAthleteIds.has(i.athleteId ?? '') && !!i.latestCompletedActivity?.confirmedAt).length, 0);
                 const weekStart = week[0]?.dateStr ?? '';
                 const weekEnd = week[6]?.dateStr ?? '';
                 const weekSummary = weekStart && weekEnd
-                  ? getRangeDisciplineSummary({
+                  ? getRangeCompletionSummary({
                       items,
                       timeZone: athleteTimezone,
                       fromDayKey: weekStart,
                       toDayKey: weekEnd,
-                      includePlannedFallback: false,
-                      filter: (it: any) => selectedAthleteIds.has((it as any).athleteId ?? '') && !!(it as any).latestCompletedActivity?.confirmedAt,
+                      filter: (it: any) => selectedAthleteIds.has((it as any).athleteId ?? ''),
                     })
                   : null;
+                const weekWorkoutCount = weekSummary?.workoutCount ?? 0;
                 const weekTopDisciplines = weekSummary
                   ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
                   : [];

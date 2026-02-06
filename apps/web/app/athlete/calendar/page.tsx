@@ -25,7 +25,8 @@ import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
-import { formatKmCompact, formatKcal, formatMinutesCompact, getRangeDisciplineSummary } from '@/lib/calendar/discipline-summary';
+import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
+import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calendar/completion';
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 
@@ -566,20 +567,18 @@ export default function AthleteCalendarPage() {
                     <div className="text-sm font-semibold text-[var(--text)]">
                       {items.filter((i) => {
                         const dateKey = getLocalDayKey(i.date, athleteTimezone);
-                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6) && !!i.latestCompletedActivity?.confirmedAt;
+                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6) && isCompletedCalendarItem(i);
                       }).length}
                     </div>
                   </div>
 
                   {(() => {
                     const toDayKey = addDaysToDayKey(weekStartKey, 6);
-                    const summary = getRangeDisciplineSummary({
+                    const summary = getRangeCompletionSummary({
                       items,
                       timeZone: athleteTimezone,
                       fromDayKey: weekStartKey,
                       toDayKey,
-                      includePlannedFallback: false,
-                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
                     });
                     const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
 
@@ -627,17 +626,15 @@ export default function AthleteCalendarPage() {
               {Array.from({ length: 6 }, (_, weekIndex) => {
                 const start = weekIndex * 7;
                 const week = monthDays.slice(start, start + 7);
-                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => !!i.latestCompletedActivity?.confirmedAt).length, 0);
+                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => isCompletedCalendarItem(i)).length, 0);
                 const weekStart = week[0]?.dateStr ?? '';
                 const weekEnd = week[6]?.dateStr ?? '';
                 const weekSummary = weekStart && weekEnd
-                  ? getRangeDisciplineSummary({
+                  ? getRangeCompletionSummary({
                       items,
                       timeZone: athleteTimezone,
                       fromDayKey: weekStart,
                       toDayKey: weekEnd,
-                      includePlannedFallback: false,
-                      filter: (i: any) => !!i.latestCompletedActivity?.confirmedAt,
                     })
                   : null;
                 const weekTopDisciplines = weekSummary
