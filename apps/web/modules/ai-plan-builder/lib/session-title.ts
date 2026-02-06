@@ -3,6 +3,14 @@ export type AiPlanBuilderSessionTitleInput = {
   type?: string | null;
 };
 
+function stripDurationTokens(value: string): string {
+  return value
+    .replace(/\(\s*\d+\s*min(?:s|utes)?\s*\)/gi, '')
+    .replace(/\b\d+\s*min(?:s|utes)?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function toWords(value: string): string[] {
   // Keep only letters/numbers; split on whitespace/punctuation.
   return value
@@ -90,7 +98,7 @@ function includesSportWord(words: string[], sport: string): boolean {
  */
 export function buildAiPlanBuilderSessionTitle(input: AiPlanBuilderSessionTitleInput): string {
   const discipline = normalizeDiscipline(String(input.discipline ?? ''));
-  const rawType = String(input.type ?? '').trim();
+  const rawType = stripDurationTokens(String(input.type ?? '').trim());
 
   // Strong special-cases.
   if (discipline === 'rest' || rawType.trim().toLowerCase() === 'rest') return 'Rest Day';

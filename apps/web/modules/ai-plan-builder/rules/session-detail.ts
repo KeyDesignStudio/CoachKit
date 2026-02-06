@@ -80,13 +80,15 @@ function findMainIndex(structure: SessionDetailV1['structure']): number {
   return idx >= 0 ? idx : 0;
 }
 
-function withObjectiveDuration(objective: string, durationMinutes: number): string {
-  const d = clampInt(durationMinutes, 0, 10_000);
+function stripObjectiveDuration(objective: string): string {
   const s = String(objective || '').trim();
-  if (!s) return `Session (${d} min).`;
-  const stripped = s.replace(/\(\s*\d+\s*min\s*\)\.?/gi, '').replace(/\s{2,}/g, ' ').trim();
-  const base = stripped || 'Session';
-  return `${base} (${d} min).`;
+  if (!s) return '';
+  return s.replace(/\(\s*\d+\s*min\s*\)\.?/gi, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+function normalizeObjectiveText(objective: string): string {
+  const stripped = stripObjectiveDuration(objective);
+  return stripped || 'Session';
 }
 
 export function normalizeSessionDetailV1DurationsToTotal(params: {
@@ -96,7 +98,7 @@ export function normalizeSessionDetailV1DurationsToTotal(params: {
   const totalMinutes = clampInt(params.totalMinutes, 0, 10_000);
   const detail: SessionDetailV1 = {
     ...params.detail,
-    objective: withObjectiveDuration(params.detail.objective, totalMinutes),
+    objective: normalizeObjectiveText(params.detail.objective),
     structure: params.detail.structure.map((b) => ({ ...b })),
   };
 
@@ -126,7 +128,7 @@ export function normalizeSessionDetailV1DurationsToTotal(params: {
 
     return {
       ...detail,
-      objective: withObjectiveDuration(detail.objective, totalMinutes),
+      objective: normalizeObjectiveText(detail.objective),
     };
   }
 
@@ -237,7 +239,7 @@ export function normalizeSessionDetailV1DurationsToTotal(params: {
 
   return {
     ...detail,
-    objective: withObjectiveDuration(detail.objective, totalMinutes),
+    objective: normalizeObjectiveText(detail.objective),
   };
 }
 
@@ -361,7 +363,7 @@ export function buildDeterministicSessionDetailV1(params: {
   }
 
   return {
-    objective: `${displayType} ${displayDiscipline.toLowerCase()} session (${durationMinutes} min).`,
+    objective: `${displayType} ${displayDiscipline.toLowerCase()} session`.trim(),
     structure,
     targets: {
       primaryMetric: 'RPE',

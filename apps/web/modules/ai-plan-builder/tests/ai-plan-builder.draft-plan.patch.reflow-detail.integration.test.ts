@@ -106,7 +106,7 @@ describe('AI Plan Builder v1 (PATCH draft-plan duration reflows detailJson)', ()
         if (m > 0) expect(m % 5).toBe(0);
       }
       expect(mins.reduce((a, b) => a + b, 0)).toBe(newDuration);
-      expect(parsed.data.objective).toContain(`(${newDuration} min)`);
+      expect(parsed.data.objective).not.toMatch(/\(\s*\d+\s*min\s*\)/i);
     }
 
     const { GET } = await import('@/app/api/coach/athletes/[athleteId]/ai-plan-builder/draft-plan/latest/route');
@@ -126,7 +126,7 @@ describe('AI Plan Builder v1 (PATCH draft-plan duration reflows detailJson)', ()
     if (latestDetail.success) {
       const mins = latestDetail.data.structure.map((b) => b.durationMinutes ?? 0);
       expect(mins.reduce((a, b) => a + b, 0)).toBe(newDuration);
-      expect(latestDetail.data.objective).toContain(`(${newDuration} min)`);
+      expect(latestDetail.data.objective).not.toMatch(/\(\s*\d+\s*min\s*\)/i);
     }
 
     const dbSession = await prisma.aiPlanDraftSession.findUniqueOrThrow({

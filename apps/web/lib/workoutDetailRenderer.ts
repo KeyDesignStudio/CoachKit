@@ -22,6 +22,14 @@ function toIntMinutes(value: unknown): number {
   return Math.max(0, Math.round(value));
 }
 
+function stripDurationTokens(value: string): string {
+  return value
+    .replace(/\(\s*\d+\s*min(?:s|utes)?\s*\)\.?/gi, '')
+    .replace(/\b\d+\s*min(?:s|utes)?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export function assertNormalizedSessionDetailMatchesTotal(params: {
   detail: SessionDetailV1;
   totalMinutes: number;
@@ -48,7 +56,7 @@ export function assertNormalizedSessionDetailMatchesTotal(params: {
 }
 
 export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1): string {
-  const objective = String(detail.objective ?? '').trim();
+  const objective = stripDurationTokens(String(detail.objective ?? '').trim());
 
   const blockLines = (detail.structure ?? [])
     .map((block) => {

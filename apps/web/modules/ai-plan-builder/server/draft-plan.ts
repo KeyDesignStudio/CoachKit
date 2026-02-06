@@ -135,6 +135,14 @@ export const updateDraftPlanV1Schema = z.object({
     .optional(),
 });
 
+function stripDurationTokens(value: string): string {
+  return value
+    .replace(/\(\s*\d+\s*min(?:s|utes)?\s*\)\.?/gi, '')
+    .replace(/\b\d+\s*min(?:s|utes)?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export async function createAiDraftPlan(params: { coachId: string; athleteId: string; planJson: unknown }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -652,7 +660,7 @@ export async function updateAiDraftPlan(params: {
 
           if (edit.objective !== undefined) {
             const v = edit.objective === null ? '' : String(edit.objective);
-            const trimmed = v.trim();
+            const trimmed = stripDurationTokens(v);
             if (trimmed) {
               updatedDetail = { ...updatedDetail, objective: trimmed };
             }
