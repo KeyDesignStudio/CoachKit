@@ -32,7 +32,9 @@ export default async function AdminStravaSyncPage() {
     <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
       <div className="pt-6">
         <h1 className={tokens.typography.h1}>Strava Sync Monitor</h1>
-        <p className={cn(tokens.typography.bodyMuted, 'mt-2')}>Last 20 cron runs for Strava autosync.</p>
+        <p className={cn(tokens.typography.bodyMuted, 'mt-2')}>
+          Daily sync (Hobby-safe). Last 20 cron runs for Strava autosync.
+        </p>
       </div>
 
       {showWarning ? (

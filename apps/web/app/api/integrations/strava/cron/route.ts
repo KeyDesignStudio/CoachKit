@@ -95,8 +95,10 @@ async function runCron(request: NextRequest) {
 
   const url = new URL(request.url);
   const athleteId = url.searchParams.get('athleteId');
-  const forceDays = parseForceDays(url.searchParams.get('forceDays'));
+  const forceDaysParam = url.searchParams.get('forceDays');
+  const forceDays = parseForceDays(forceDaysParam) ?? 3;
   const mode = parseMode(url.searchParams.get('mode'));
+  const autoBackfill = url.searchParams.get('autoBackfill') !== '0';
 
   const now = new Date();
   const maxIntentsPerRun = 50;
@@ -233,7 +235,7 @@ async function runCron(request: NextRequest) {
   }
 
   // Optional bounded backfill safety net.
-  if (!rateLimited && forceDays !== null && (mode === 'backfill' || drainedCount === 0)) {
+  if (!rateLimited && forceDays !== null && (mode === 'backfill' || (autoBackfill && mode === 'intents'))) {
     const connections = await prisma.athleteProfile.findMany({
       where: {
         ...(athleteId ? { userId: athleteId } : {}),
