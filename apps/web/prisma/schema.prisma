@@ -833,6 +833,10 @@ model CompletedActivity {
   painFlag           Boolean          @default(false)
   confirmedAt        DateTime?
   metricsJson        Json?
+  matchConfidence    String?
+  matchScore         Int?
+  matchDayDiff       Int?
+  matchTimeDiffMinutes Int?
   fileUrl            String?
   createdAt          DateTime         @default(now())
 
@@ -1008,6 +1012,27 @@ model StravaSyncIntent {
   @@unique([athleteId, stravaActivityId])
   @@index([status, createdAt])
   @@index([athleteId, status])
+}
+
+model CronRun {
+  id               String   @id @default(cuid())
+  kind             String
+  status           String
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  durationMs       Int?
+  processedAthletes Int?
+  importedActivities Int?
+  matchedActivities Int?
+  unplannedActivities Int?
+  errorCount       Int?
+  firstError       String?
+  summaryJson      Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([kind, startedAt])
+  @@index([status, startedAt])
 }
 
 model AthleteIntakeResponse {

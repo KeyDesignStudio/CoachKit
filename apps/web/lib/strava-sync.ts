@@ -3,6 +3,7 @@ import { CalendarItemStatus, CompletionSource } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { addDaysToDayKey, getLocalDayKey, parseDayKeyToUtcDate, toAthleteLocalDayKey } from '@/lib/day-key';
 
 export type PollSummary = {
   polledAthletes: number;
@@ -190,20 +191,26 @@ function getZonedParts(date: Date, timeZone: string) {
   };
 }
 
-function toNaiveUtcDateOnlyFromZone(instant: Date, timeZone: string) {
-  const p = getZonedParts(instant, timeZone);
-  return new Date(Date.UTC(p.y, p.m - 1, p.d, 0, 0, 0, 0));
-}
-
 function toZonedMinutes(instant: Date, timeZone: string) {
   const p = getZonedParts(instant, timeZone);
   return p.hh * 60 + p.mm;
 }
 
-function addDaysUtc(date: Date, days: number) {
-  const clone = new Date(date);
-  clone.setUTCDate(clone.getUTCDate() + days);
-  return clone;
+function formatLocalDateTime(instant: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return formatter.format(instant);
+}
+
+function isStravaSyncDebugEnabled() {
+  return process.env.STRAVA_SYNC_DEBUG === '1' || process.env.STRAVA_SYNC_DEBUG === 'true';
 }
 
 async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['connection']) {
@@ -272,6 +279,7 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
 
 async function fetchRecentActivities(accessToken: string, afterUnixSeconds: number) {
   if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
+    const scenario = process.env.STRAVA_STUB_SCENARIO ?? '';
     const now = new Date();
     const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
 
@@ -288,17 +296,24 @@ async function fetchRecentActivities(accessToken: string, afterUnixSeconds: numb
       total_elevation_gain: 0,
     });
 
-    const activities: StravaActivity[] = [
-      // Always-present control activity used by existing Playwright coverage.
-      mk(999, 'PW Unscheduled Strength', 'Hike', new Date(base.getTime() + 12 * 60 * 60_000), 3600, 0),
+    const activities: StravaActivity[] = scenario === 'timezone-daykey'
+      ? [
+          mk(2001, 'Fixture Swim Planned', 'Swim', new Date('2026-02-05T05:35:00.000Z'), 3600, 2000),
+          mk(2002, 'Fixture Bike Unplanned', 'Ride', new Date('2026-02-06T08:06:00.000Z'), 5400, 40000),
+          // Midnight-boundary case: just after midnight local (Brisbane).
+          mk(2003, 'Fixture Late Night Run', 'Run', new Date('2026-02-05T14:30:00.000Z'), 1800, 5000),
+        ]
+      : [
+          // Always-present control activity used by existing Playwright coverage.
+          mk(999, 'PW Unscheduled Strength', 'Hike', new Date(base.getTime() + 12 * 60 * 60_000), 3600, 0),
 
-      // Matching scenarios.
-      mk(1000, 'PW Run Time Shift', 'Run', new Date(base.getTime() + (6 * 60 + 20) * 60_000), 2700, 8000),
-      mk(1001, 'PW Strength Fuzzy', 'Workout', new Date(base.getTime() + (14 * 60 + 10) * 60_000), 3600, 0),
-      mk(1002, 'PW Run Ambiguous', 'Run', new Date(base.getTime() + (8 * 60 + 5) * 60_000), 2400, 6000),
-      // Midnight-boundary case: just after midnight the next day.
-      mk(1003, 'PW Run Midnight', 'Run', new Date(base.getTime() + 24 * 60 * 60_000 + 10 * 60_000), 1800, 5000),
-    ];
+          // Matching scenarios.
+          mk(1000, 'PW Run Time Shift', 'Run', new Date(base.getTime() + (6 * 60 + 20) * 60_000), 2700, 8000),
+          mk(1001, 'PW Strength Fuzzy', 'Workout', new Date(base.getTime() + (14 * 60 + 10) * 60_000), 3600, 0),
+          mk(1002, 'PW Run Ambiguous', 'Run', new Date(base.getTime() + (8 * 60 + 5) * 60_000), 2400, 6000),
+          // Midnight-boundary case: just after midnight the next day.
+          mk(1003, 'PW Run Midnight', 'Run', new Date(base.getTime() + 24 * 60 * 60_000 + 10 * 60_000), 1800, 5000),
+        ];
 
     return activities.filter((a) => {
       const t = a.start_date ? Math.floor(new Date(a.start_date).getTime() / 1000) : 0;
@@ -376,13 +391,14 @@ async function fetchActivityById(accessToken: string, activityId: string) {
 
 async function matchAndLinkCalendarItem(params: {
   athleteId: string;
-  activityDateOnly: Date;
+  activityDayKey: string;
   activityMinutes: number;
+  athleteTimezone: string;
   discipline: string;
   completedActivityId: string;
   confirmedAt: Date | null;
 }) {
-  const { athleteId, activityDateOnly, activityMinutes, discipline, completedActivityId, confirmedAt } = params;
+  const { athleteId, activityDayKey, activityMinutes, athleteTimezone, discipline, completedActivityId, confirmedAt } = params;
 
   function normalizeDiscipline(value: string) {
     const upper = String(value ?? '').trim().toUpperCase();
@@ -390,10 +406,22 @@ async function matchAndLinkCalendarItem(params: {
     return upper;
   }
 
-  function minutesDiffCircular(a: number, b: number) {
-    const diff = Math.abs(a - b);
-    return Math.min(diff, 1440 - diff);
+  function minutesDiffAcrossDays(plannedMinutes: number, actualMinutes: number, dayDiff: number) {
+    if (dayDiff === 0) return Math.abs(actualMinutes - plannedMinutes);
+    if (dayDiff === 1) return Math.abs((plannedMinutes + 1440) - actualMinutes);
+    if (dayDiff === -1) return Math.abs((actualMinutes + 1440) - plannedMinutes);
+    return Math.abs(actualMinutes - plannedMinutes);
   }
+
+  function dayKeyDiff(a: string, b: string) {
+    const aDate = parseDayKeyToUtcDate(a);
+    const bDate = parseDayKeyToUtcDate(b);
+    return Math.round((aDate.getTime() - bDate.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  const midnightToleranceMinutes = 4 * 60;
+  const isNearMidnight = activityMinutes <= midnightToleranceMinutes || activityMinutes >= 1440 - midnightToleranceMinutes;
+  const maxTimeWindowMinutes = 6 * 60;
 
   function scoreCandidate(candidate: { item: { discipline: string; plannedStartTimeLocal: string | null; date: Date } }) {
     const itemDiscipline = normalizeDiscipline(candidate.item.discipline);
@@ -403,17 +431,27 @@ async function matchAndLinkCalendarItem(params: {
     const plannedMinutes = candidate.item.plannedStartTimeLocal
       ? parseTimeToMinutes(candidate.item.plannedStartTimeLocal)
       : null;
-    const timeDiff = plannedMinutes == null ? null : minutesDiffCircular(plannedMinutes, activityMinutes);
+    const candidateDayKey = getLocalDayKey(candidate.item.date, athleteTimezone);
+    const dayDiff = dayKeyDiff(candidateDayKey, activityDayKey);
+    const dayDistance = Math.abs(dayDiff);
+
+    if (dayDistance > 1) {
+      return { total: -1, plannedMinutes, timeDiff: null, dayDiff, dayKey: candidateDayKey };
+    }
+
+    if (dayDistance === 1 && !isNearMidnight) {
+      return { total: -1, plannedMinutes, timeDiff: null, dayDiff, dayKey: candidateDayKey };
+    }
+
+    const timeDiff = plannedMinutes == null ? null : minutesDiffAcrossDays(plannedMinutes, activityMinutes, dayDiff);
+    if (timeDiff != null && timeDiff > maxTimeWindowMinutes) {
+      return { total: -1, plannedMinutes, timeDiff, dayDiff, dayKey: candidateDayKey };
+    }
 
     // Prefer closer times and avoid weak auto-links.
-    // 0 min => 40 points, 90m+ => 0 points
-    const maxMinutes = 90;
-    const timeScore = timeDiff == null ? 0 : Math.max(0, Math.round(40 * (1 - Math.min(timeDiff, maxMinutes) / maxMinutes)));
-
-    const dayKey = candidate.item.date.toISOString().slice(0, 10);
-    const targetKey = activityDateOnly.toISOString().slice(0, 10);
-    const dayDistance = dayKey === targetKey ? 0 : 1;
-    const dayScore = dayDistance === 0 ? 20 : 0;
+    // 0 min => 40 points, 6h+ => 0 points
+    const timeScore = timeDiff == null ? 0 : Math.max(0, Math.round(40 * (1 - Math.min(timeDiff, maxTimeWindowMinutes) / maxTimeWindowMinutes)));
+    const dayScore = dayDistance === 0 ? 20 : 10;
 
     const total = disciplineScore + timeScore + dayScore;
 
@@ -421,12 +459,13 @@ async function matchAndLinkCalendarItem(params: {
       total,
       plannedMinutes,
       timeDiff,
-      dayDistance,
+      dayDiff,
+      dayKey: candidateDayKey,
     };
   }
 
-  const rangeStart = addDaysUtc(activityDateOnly, -1);
-  const rangeEnd = addDaysUtc(activityDateOnly, 1);
+  const rangeStart = parseDayKeyToUtcDate(addDaysToDayKey(activityDayKey, -1));
+  const rangeEnd = parseDayKeyToUtcDate(addDaysToDayKey(activityDayKey, 1));
 
   const items = await prisma.calendarItem.findMany({
     where: {
@@ -456,11 +495,12 @@ async function matchAndLinkCalendarItem(params: {
       return {
         item,
         score: s.total,
-        dayDistance: s.dayDistance,
+        dayDiff: s.dayDiff,
         timeDiff: s.timeDiff,
+        dayKey: s.dayKey,
       };
     })
-    .filter((c) => c.dayDistance <= 1)
+    .filter((c) => c.score >= 0)
     .sort((a, b) => b.score - a.score);
 
   const best = scored[0] ?? null;
@@ -470,11 +510,13 @@ async function matchAndLinkCalendarItem(params: {
   // Require a strong match and avoid ambiguous auto-links.
   // If it's close, prefer creating an unplanned STRAVA item instead.
   const minScoreToMatch = 70;
-  const minLead = 10;
+  const minLead = 5;
   if (best.score < minScoreToMatch) return { matched: false as const };
   if (second && best.score - second.score < minLead) return { matched: false as const };
 
   const nextStatus = confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
+
+  const confidence = best.score >= 90 ? 'HIGH' : best.score >= 80 ? 'MEDIUM' : 'LOW';
 
   await prisma.$transaction([
     prisma.calendarItem.update({
@@ -483,11 +525,28 @@ async function matchAndLinkCalendarItem(params: {
     }),
     prisma.completedActivity.update({
       where: { id: completedActivityId },
-      data: { calendarItemId: best.item.id },
+      data: {
+        calendarItemId: best.item.id,
+        matchConfidence: confidence,
+        matchScore: best.score,
+        matchDayDiff: best.dayDiff ?? null,
+        matchTimeDiffMinutes: typeof best.timeDiff === 'number' ? Math.round(best.timeDiff) : null,
+      },
     }),
   ]);
 
-  return { matched: true as const, calendarItemId: best.item.id };
+  return {
+    matched: true as const,
+    calendarItemId: best.item.id,
+    debug: {
+      confidence,
+      score: best.score,
+      dayDiff: best.dayDiff ?? null,
+      timeDiffMinutes: typeof best.timeDiff === 'number' ? Math.round(best.timeDiff) : null,
+      matchedDayKey: best.dayKey ?? null,
+      plannedStartTimeLocal: best.item.plannedStartTimeLocal ?? null,
+    },
+  };
 }
 
 async function ensureCalendarItemStatusForSyncedCompletion(params: { calendarItemId: string; confirmedAt: Date | null }) {
@@ -564,7 +623,8 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
 
     const discipline = mapStravaDiscipline(activity);
     const startInstant = new Date(activity.start_date);
-    const activityDateOnly = toNaiveUtcDateOnlyFromZone(startInstant, entry.athleteTimezone);
+    const activityDayKey = toAthleteLocalDayKey(startInstant, entry.athleteTimezone);
+    const activityDateOnly = parseDayKeyToUtcDate(activityDayKey);
     const activityMinutes = toZonedMinutes(startInstant, entry.athleteTimezone);
     const durationMinutes = secondsToMinutesRounded(activity.elapsed_time);
     const distanceKm = typeof activity.distance === 'number' ? metersToKm(activity.distance) : null;
@@ -624,6 +684,18 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     const canonicalStartUtc = (stravaMetrics as any)?.startDateUtc ?? activity.start_date;
     const canonicalStart = new Date(canonicalStartUtc);
     const startTime = !Number.isNaN(canonicalStart.getTime()) ? canonicalStart : startInstant;
+
+    if (isStravaSyncDebugEnabled()) {
+      console.info('[strava-sync] activity placement', {
+        athleteId: entry.athleteId,
+        athleteTimezone: entry.athleteTimezone,
+        stravaActivityId: externalActivityId,
+        startDateUtc: activity.start_date,
+        startDateLocal: activity.start_date_local,
+        derivedLocalDateTime: formatLocalDateTime(startInstant, entry.athleteTimezone),
+        derivedDayKey: activityDayKey,
+      });
+    }
 
     let completed: any;
 
@@ -746,8 +818,9 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     if (!calendarItemId) {
       const match = await matchAndLinkCalendarItem({
         athleteId: entry.athleteId,
-        activityDateOnly,
+        activityDayKey,
         activityMinutes,
+        athleteTimezone: entry.athleteTimezone,
         discipline,
         completedActivityId: completed.id,
         confirmedAt: completed.confirmedAt ?? null,
@@ -756,6 +829,15 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       if (match.matched) {
         summary.matched += 1;
         calendarItemId = match.calendarItemId;
+
+        if (isStravaSyncDebugEnabled()) {
+          console.info('[strava-sync] matched activity', {
+            athleteId: entry.athleteId,
+            stravaActivityId: externalActivityId,
+            calendarItemId: match.calendarItemId,
+            match: match.debug ?? null,
+          });
+        }
       }
     }
 
@@ -825,6 +907,16 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       summary.createdCalendarItems += 1;
       summary.linkedCalendarItems += 1;
       calendarItemId = item.id;
+
+      if (isStravaSyncDebugEnabled()) {
+        console.info('[strava-sync] unplanned activity', {
+          athleteId: entry.athleteId,
+          stravaActivityId: externalActivityId,
+          calendarItemId,
+          dayKey: activityDayKey,
+          plannedStartTimeLocal,
+        });
+      }
     }
   }
 }
