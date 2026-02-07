@@ -68,14 +68,37 @@ async function runCron(request: NextRequest) {
   const authResponse = requireCronAuth(request);
   if (authResponse) return authResponse;
 
-  if (!isAutosyncEnabled()) {
-    return NextResponse.json({ ok: true, disabled: true }, { status: 200 });
-  }
+  const startedAt = new Date();
+  const cronRun = await prisma.cronRun.create({
+    data: {
+      kind: 'STRAVA_SYNC',
+      status: 'RUNNING',
+      startedAt,
+    },
+    select: { id: true },
+  });
+
+  try {
+    if (!isAutosyncEnabled()) {
+      await prisma.cronRun.update({
+        where: { id: cronRun.id },
+        data: {
+          status: 'SKIPPED',
+          finishedAt: new Date(),
+          durationMs: 0,
+          summaryJson: { disabled: true },
+        },
+      });
+
+      return NextResponse.json({ ok: true, disabled: true }, { status: 200 });
+    }
 
   const url = new URL(request.url);
   const athleteId = url.searchParams.get('athleteId');
-  const forceDays = parseForceDays(url.searchParams.get('forceDays'));
+  const forceDaysParam = url.searchParams.get('forceDays');
+  const forceDays = parseForceDays(forceDaysParam) ?? 3;
   const mode = parseMode(url.searchParams.get('mode'));
+  const autoBackfill = url.searchParams.get('autoBackfill') !== '0';
 
   const now = new Date();
   const maxIntentsPerRun = 50;
@@ -212,7 +235,7 @@ async function runCron(request: NextRequest) {
   }
 
   // Optional bounded backfill safety net.
-  if (!rateLimited && forceDays !== null && (mode === 'backfill' || drainedCount === 0)) {
+  if (!rateLimited && forceDays !== null && (mode === 'backfill' || (autoBackfill && mode === 'intents'))) {
     const connections = await prisma.athleteProfile.findMany({
       where: {
         ...(athleteId ? { userId: athleteId } : {}),
@@ -292,33 +315,85 @@ async function runCron(request: NextRequest) {
     rateLimited,
   });
 
-  return NextResponse.json(
-    {
-      ok: true,
-      mode,
-      forceDays,
-      athleteId,
-      drainedCount,
-      doneCount,
-      failedCount,
-      pendingRemaining,
-      createdCalendarItems,
-      matchedCompletions,
-      skippedDuplicates,
-      athletesConsidered,
-      stravaConnectionsFound,
-      activitiesFetched,
-      activitiesInWindow,
-      activitiesUpserted,
-      activitiesSkipped: activitiesSkippedByReason,
-      calendarItemsLinked,
-      calendarItemLinksExisting,
-      calendarItemLinksClearedDeleted,
-      errors,
-      rateLimited,
-    },
-    { status: 200 }
-  );
+    await prisma.cronRun.update({
+      where: { id: cronRun.id },
+      data: {
+        status: errors.length ? 'FAILED' : 'SUCCEEDED',
+        finishedAt: new Date(),
+        durationMs: Math.max(0, Date.now() - startedAt.getTime()),
+        processedAthletes: athletesConsidered,
+        importedActivities: activitiesUpserted,
+        matchedActivities: matchedCompletions,
+        unplannedActivities: createdCalendarItems,
+        errorCount: errors.length,
+        firstError: errors[0]?.message ?? null,
+        summaryJson: {
+          mode,
+          forceDays,
+          athleteId,
+          drainedCount,
+          doneCount,
+          failedCount,
+          pendingRemaining,
+          createdCalendarItems,
+          matchedCompletions,
+          skippedDuplicates,
+          athletesConsidered,
+          stravaConnectionsFound,
+          activitiesFetched,
+          activitiesInWindow,
+          activitiesUpserted,
+          activitiesSkipped: activitiesSkippedByReason,
+          calendarItemsLinked,
+          calendarItemLinksExisting,
+          calendarItemLinksClearedDeleted,
+          errors,
+          rateLimited,
+        },
+      },
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        mode,
+        forceDays,
+        athleteId,
+        drainedCount,
+        doneCount,
+        failedCount,
+        pendingRemaining,
+        createdCalendarItems,
+        matchedCompletions,
+        skippedDuplicates,
+        athletesConsidered,
+        stravaConnectionsFound,
+        activitiesFetched,
+        activitiesInWindow,
+        activitiesUpserted,
+        activitiesSkipped: activitiesSkippedByReason,
+        calendarItemsLinked,
+        calendarItemLinksExisting,
+        calendarItemLinksClearedDeleted,
+        errors,
+        rateLimited,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    await prisma.cronRun.update({
+      where: { id: cronRun.id },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        durationMs: Math.max(0, Date.now() - startedAt.getTime()),
+        errorCount: 1,
+        firstError: error instanceof Error ? error.message : 'Strava cron failed.',
+      },
+    });
+
+    throw error;
+  }
 }
 
 export async function GET(request: NextRequest) {

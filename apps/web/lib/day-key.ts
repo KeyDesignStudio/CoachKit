@@ -42,6 +42,10 @@ export function getLocalDayKey(input: Date | string, timeZone?: string): string 
   return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
+export function toAthleteLocalDayKey(input: Date | string, timeZone: string): string {
+  return getLocalDayKey(input, timeZone);
+}
+
 /**
  * Formats a Date as a YYYY-MM-DD key using UTC calendar fields.
  *

@@ -20,6 +20,18 @@ export async function GET(_request: NextRequest) {
       _max: { updatedAt: true },
     });
 
+    const lastRun = await prisma.cronRun.findFirst({
+      where: { kind: 'STRAVA_SYNC' },
+      orderBy: { startedAt: 'desc' },
+      select: { status: true, startedAt: true, finishedAt: true, errorCount: true },
+    });
+
+    const lastSuccess = await prisma.cronRun.findFirst({
+      where: { kind: 'STRAVA_SYNC', status: 'SUCCEEDED' },
+      orderBy: { startedAt: 'desc' },
+      select: { startedAt: true },
+    });
+
     return NextResponse.json(
       {
         ok: true,
@@ -35,6 +47,10 @@ export async function GET(_request: NextRequest) {
           count: intentAgg._count.id,
           oldestCreatedAt: intentAgg._min.createdAt,
           lastUpdatedAt: intentAgg._max.updatedAt,
+        },
+        cron: {
+          lastRun,
+          lastSuccessAt: lastSuccess?.startedAt ?? null,
         },
       },
       { status: 200 }
