@@ -18,6 +18,7 @@ export type RangeSummaryItem = {
     durationMinutes?: number | null;
     distanceKm?: number | null;
     caloriesKcal?: number | null;
+    kilojoules?: number | null;
   } | null;
 };
 
@@ -41,6 +42,8 @@ export type RangeSummary = {
     completedDistanceKm: number;
     plannedCaloriesKcal: number | null;
     completedCaloriesKcal: number;
+    completedCaloriesMethod: 'actual' | 'estimated' | 'mixed';
+    completedCaloriesEstimatedCount: number;
     workoutsPlanned: number;
     workoutsCompleted: number;
     workoutsSkipped: number;
@@ -109,9 +112,10 @@ export function getAthleteRangeSummary(params: {
   fromDayKey: string;
   toDayKey: string;
   todayDayKey: string;
+  weightKg?: number | null;
   filter?: (item: RangeSummaryItem) => boolean;
 }): RangeSummary {
-  const { items, timeZone, fromDayKey, toDayKey, todayDayKey, filter } = params;
+  const { items, timeZone, fromDayKey, toDayKey, todayDayKey, weightKg, filter } = params;
 
   const map = new Map<string, RangeSummaryRow>();
   let plannedTotalMinutes = 0;
@@ -121,6 +125,8 @@ export function getAthleteRangeSummary(params: {
   let plannedCaloriesTotal = 0;
   let plannedCaloriesAvailable = false;
   let completedCaloriesTotal = 0;
+  let completedCaloriesEstimatedCount = 0;
+  let completedCaloriesActualCount = 0;
 
   let workoutsPlanned = 0;
   let workoutsCompleted = 0;
@@ -132,6 +138,37 @@ export function getAthleteRangeSummary(params: {
   let skippedItemCount = 0;
 
   const caloriesByDay = new Map<string, { completed: number; planned: number | null }>();
+
+  function estimateCalories(params: {
+    discipline: string;
+    distanceKm: number;
+    durationMinutes: number;
+  }): number | null {
+    const weight = typeof weightKg === 'number' && Number.isFinite(weightKg) && weightKg > 0 ? weightKg : 75;
+    const discipline = normalizeDiscipline(params.discipline);
+    const distanceKm = Math.max(0, params.distanceKm);
+    const durationMinutes = Math.max(0, params.durationMinutes);
+
+    if (distanceKm > 0) {
+      if (discipline === 'RUN') return distanceKm * weight * 1.0;
+      if (discipline === 'BIKE') return distanceKm * weight * 0.3;
+    }
+
+    if (durationMinutes > 0) {
+      const basePerMinute =
+        discipline === 'RUN'
+          ? 11
+          : discipline === 'BIKE'
+            ? 8
+            : discipline === 'SWIM'
+              ? 10
+              : 7;
+      const weightFactor = weight / 75;
+      return durationMinutes * basePerMinute * weightFactor;
+    }
+
+    return null;
+  }
 
   for (const item of items) {
     if (filter && !filter(item)) continue;
@@ -145,7 +182,23 @@ export function getAthleteRangeSummary(params: {
     const plannedCalories = getPlannedCaloriesKcal(item);
     const completedMinutes = Math.max(0, getCompletionMinutes(item) ?? 0);
     const completedDistanceKm = Math.max(0, getCompletionDistanceKm(item) ?? 0);
-    const completedCalories = Math.max(0, getCompletionCaloriesKcal(item) ?? 0);
+    const directCalories = getCompletionCaloriesKcal(item);
+    const directKilojoules = safeNumber(item.latestCompletedActivity?.kilojoules);
+    const convertedCalories = directKilojoules ? directKilojoules / 4.184 : null;
+    let completedCalories = Math.max(0, directCalories ?? convertedCalories ?? 0);
+    let usedEstimate = false;
+
+    if (completedCalories <= 0 && isCompletedCalendarItem(item)) {
+      const estimate = estimateCalories({
+        discipline: item.discipline ?? 'OTHER',
+        distanceKm: completedDistanceKm,
+        durationMinutes: completedMinutes,
+      });
+      if (estimate && estimate > 0) {
+        completedCalories = estimate;
+        usedEstimate = true;
+      }
+    }
 
     const isPlanned = plannedMinutes > 0 || plannedDistanceKm > 0 || plannedCalories != null || status === 'PLANNED';
     const isCompleted = isCompletedCalendarItem(item);
@@ -177,7 +230,14 @@ export function getAthleteRangeSummary(params: {
 
     if (completedMinutes > 0) completedTotalMinutes += completedMinutes;
     if (completedDistanceKm > 0) completedTotalDistance += completedDistanceKm;
-    if (completedCalories > 0) completedCaloriesTotal += completedCalories;
+    if (completedCalories > 0) {
+      completedCaloriesTotal += completedCalories;
+      if (usedEstimate) {
+        completedCaloriesEstimatedCount += 1;
+      } else if (directCalories || convertedCalories) {
+        completedCaloriesActualCount += 1;
+      }
+    }
 
     if (completedCalories > 0 || plannedCalories != null) {
       const existing = caloriesByDay.get(localDayKey) ?? { completed: 0, planned: null };
@@ -243,6 +303,13 @@ export function getAthleteRangeSummary(params: {
       completedDistanceKm: completedTotalDistance,
       plannedCaloriesKcal: plannedCaloriesAvailable ? plannedCaloriesTotal : null,
       completedCaloriesKcal: completedCaloriesTotal,
+      completedCaloriesMethod:
+        completedCaloriesEstimatedCount > 0 && completedCaloriesActualCount > 0
+          ? 'mixed'
+          : completedCaloriesEstimatedCount > 0
+            ? 'estimated'
+            : 'actual',
+      completedCaloriesEstimatedCount,
       workoutsPlanned,
       workoutsCompleted,
       workoutsSkipped,
