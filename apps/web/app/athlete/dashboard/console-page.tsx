@@ -16,7 +16,6 @@ import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayT
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
-import { CumulativeTrainingChart } from '@/components/athlete/CumulativeTrainingChart';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -33,7 +32,16 @@ type AthleteDashboardResponse = {
     painFlagWorkouts?: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
+  weeklySummary: {
+    fromDayKey: string;
+    toDayKey: string;
+    plannedTotalMinutes: number;
+    completedTotalMinutes: number;
+    byDiscipline: Array<{ discipline: string; plannedMinutes: number; completedMinutes: number }>;
+  };
 };
+
+type WeeklySummaryMode = 'ACTUAL' | 'PLANNED' | 'BOTH';
 
 function NeedsAttentionItem({
   label,
@@ -104,6 +112,7 @@ export default function AthleteDashboardConsolePage() {
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
+  const [weeklyMode, setWeeklyMode] = useState<WeeklySummaryMode>('BOTH');
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -385,12 +394,98 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             <div className="mt-6">
-              <CumulativeTrainingChart
-                from={dateRange.from}
-                to={dateRange.to}
-                discipline={discipline}
-                athleteTimeZone={athleteTimeZone}
-              />
+              <Block
+                title="This week"
+                showHeaderDivider={false}
+                rightAction={(
+                  <div className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1">
+                    {(['ACTUAL', 'PLANNED', 'BOTH'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        data-testid={`athlete-weekly-summary-toggle-${mode.toLowerCase()}`}
+                        onClick={() => setWeeklyMode(mode)}
+                        className={cn(
+                          'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                          weeklyMode === mode
+                            ? 'bg-[var(--bg-card)] text-[var(--text)] shadow-sm'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                        )}
+                      >
+                        {mode === 'ACTUAL' ? 'Actual' : mode === 'PLANNED' ? 'Planned' : 'Both'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                className="min-h-[260px]"
+                data-testid="athlete-weekly-summary-card"
+              >
+                {(() => {
+                  const weekly = data?.weeklySummary;
+                  const plannedTotal = weekly?.plannedTotalMinutes ?? 0;
+                  const completedTotal = weekly?.completedTotalMinutes ?? 0;
+                  const plannedLabel = formatMinutes(plannedTotal);
+                  const completedLabel = formatMinutes(completedTotal);
+                  const percent = plannedTotal > 0 ? Math.min(100, Math.round((completedTotal / plannedTotal) * 100)) : 0;
+                  const rows = (weekly?.byDiscipline ?? []).filter((row) => row.plannedMinutes > 0 || row.completedMinutes > 0);
+
+                  return (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-1" data-testid="athlete-weekly-summary-primary">
+                        {weeklyMode === 'ACTUAL' ? (
+                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel}</div>
+                        ) : weeklyMode === 'PLANNED' ? (
+                          <div className="text-sm text-[var(--muted)]">Planned {plannedLabel}</div>
+                        ) : plannedTotal > 0 ? (
+                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel} of Planned {plannedLabel}</div>
+                        ) : completedTotal > 0 ? (
+                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel} · No planned sessions this week</div>
+                        ) : (
+                          <div className="text-sm text-[var(--muted)]">No planned sessions this week</div>
+                        )}
+                        {weeklyMode === 'BOTH' ? (
+                          <div className="text-xs text-[var(--muted)]">{plannedTotal > 0 ? `${percent}% of plan` : '0% of plan'}</div>
+                        ) : (
+                          <div className="text-xs text-[var(--muted)] opacity-0">Placeholder</div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[var(--bar-fill)] transition-[width] duration-200"
+                            style={{ width: weeklyMode === 'BOTH' && plannedTotal > 0 ? `${percent}%` : weeklyMode === 'BOTH' && completedTotal > 0 ? '100%' : '0%' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 min-h-[120px]">
+                        {rows.length === 0 ? (
+                          <div className="text-xs text-[var(--muted)]">No sessions logged for this week.</div>
+                        ) : (
+                          rows.map((row) => {
+                            const rowPlanned = formatMinutes(row.plannedMinutes);
+                            const rowCompleted = formatMinutes(row.completedMinutes);
+                            const label = row.discipline.toUpperCase();
+                            return (
+                              <div key={row.discipline} className="flex items-center justify-between gap-3 text-xs">
+                                <span className="font-medium text-[var(--text)] truncate">{label}</span>
+                                <span className="tabular-nums text-[var(--muted)]">
+                                  {weeklyMode === 'ACTUAL'
+                                    ? rowCompleted
+                                    : weeklyMode === 'PLANNED'
+                                      ? rowPlanned
+                                      : `${rowCompleted} / ${rowPlanned}`}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Block>
             </div>
 
           {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}

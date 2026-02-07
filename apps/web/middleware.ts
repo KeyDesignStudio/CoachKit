@@ -86,7 +86,13 @@ const authMiddleware = DISABLE_AUTH
         if (!userId) {
           const signInUrl = new URL('/sign-in', request.url);
           signInUrl.searchParams.set('redirect_url', pathname);
-          return NextResponse.redirect(signInUrl);
+          const response = NextResponse.redirect(signInUrl);
+          response.cookies.set('coachkit-redirect', pathname, {
+            path: '/',
+            sameSite: 'lax',
+            maxAge: 300,
+          });
+          return response;
         }
       }
 
