@@ -204,6 +204,24 @@ test.describe('Mobile smoke', () => {
         expect(selectionBox.y).toBeLessThan(attentionBox.y);
         expect(attentionBox.y).toBeLessThan(glanceBox.y);
       }
+
+      const caloriesCumulative = page.getByTestId('athlete-calories-cumulative');
+      const caloriesDiscipline = page.getByTestId('athlete-calories-discipline');
+      const caloriesSessions = page.getByTestId('athlete-calories-sessions');
+      await expect(caloriesCumulative).toBeVisible();
+      await expect(caloriesDiscipline).toBeVisible();
+      await expect(caloriesSessions).toBeVisible();
+
+      const cumulativeBox = await caloriesCumulative.boundingBox();
+      const disciplineBox = await caloriesDiscipline.boundingBox();
+      const sessionsBox = await caloriesSessions.boundingBox();
+      expect(cumulativeBox, 'Cumulative calories section should have a bounding box').toBeTruthy();
+      expect(disciplineBox, 'Discipline calories section should have a bounding box').toBeTruthy();
+      expect(sessionsBox, 'Sessions calories section should have a bounding box').toBeTruthy();
+      if (cumulativeBox && disciplineBox && sessionsBox) {
+        expect(cumulativeBox.y).toBeLessThan(disciplineBox.y);
+        expect(disciplineBox.y).toBeLessThan(sessionsBox.y);
+      }
     }
 
     const rangeDisplay = page.getByTestId('athlete-dashboard-range-display');

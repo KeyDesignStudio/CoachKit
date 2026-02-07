@@ -79,9 +79,11 @@ export async function GET(request: NextRequest) {
 
     const rangeSummary = getAthleteRangeSummary({
       items: items.map((item) => ({
+        id: item.id,
         date: item.date.toISOString(),
         discipline: item.discipline,
         status: item.status,
+        title: item.title,
         plannedDurationMinutes: item.plannedDurationMinutes,
         plannedDistanceKm: item.plannedDistanceKm,
         latestCompletedActivity: item.completedActivities?.[0]

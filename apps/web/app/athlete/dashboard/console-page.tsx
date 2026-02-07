@@ -51,7 +51,17 @@ type AthleteDashboardResponse = {
       plannedCaloriesKcal: number | null;
       completedCaloriesKcal: number;
     }>;
-    caloriesByDay: Array<{ dayKey: string; completedCaloriesKcal: number; plannedCaloriesKcal: number | null }>;
+    caloriesByDiscipline: Array<{ discipline: string; completedCaloriesKcal: number }>;
+    caloriesByDay: Array<{
+      dayKey: string;
+      completedCaloriesKcal: number;
+      sessions: Array<{
+        id?: string;
+        title?: string | null;
+        discipline: string;
+        caloriesKcal: number;
+      }>;
+    }>;
   };
   nextUp: Array<{
     id: string;
@@ -425,7 +435,12 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="athlete-dashboard-range-panels">
-              <Block title="Planned vs Completed" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-planned-card">
+              <Block
+                title="Planned vs Completed"
+                showHeaderDivider={false}
+                className="min-h-[280px] order-2"
+                data-testid="athlete-range-planned-card"
+              >
                 {(() => {
                   const summary = data?.rangeSummary;
                   const plannedTotal = summary?.totals.plannedMinutes ?? 0;
@@ -486,47 +501,169 @@ export default function AthleteDashboardConsolePage() {
                 })()}
               </Block>
 
-              <Block title="Calories" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-calories-card">
+              <Block
+                title="Calories"
+                showHeaderDivider={false}
+                className="min-h-[280px] md:col-span-2 xl:col-span-3 order-1"
+                data-testid="athlete-range-calories-card"
+              >
                 {(() => {
                   const summary = data?.rangeSummary;
                   const completedCalories = summary?.totals.completedCaloriesKcal ?? 0;
                   const completedMethod = summary?.totals.completedCaloriesMethod ?? 'actual';
-                  const plannedCalories = summary?.totals.plannedCaloriesKcal ?? null;
                   const points = summary?.caloriesByDay ?? [];
-                  const maxCalories = Math.max(1, ...points.map((p) => p.completedCaloriesKcal));
                   const completedSuffix = completedMethod === 'estimated' ? ' (est.)' : completedMethod === 'mixed' ? ' (some est.)' : '';
+                  const cumulativePoints = (() => {
+                    let runningTotal = 0;
+                    return points.map((point) => {
+                      runningTotal += point.completedCaloriesKcal;
+                      return {
+                        ...point,
+                        cumulativeCaloriesKcal: runningTotal,
+                      };
+                    });
+                  })();
+                  const maxCumulative = Math.max(1, ...cumulativePoints.map((point) => point.cumulativeCaloriesKcal));
+                  const chartPoints = cumulativePoints.map((point, index) => {
+                    const x = cumulativePoints.length <= 1 ? 50 : (index / (cumulativePoints.length - 1)) * 100;
+                    const y = 100 - Math.round((point.cumulativeCaloriesKcal / maxCumulative) * 100);
+                    return { x, y, point };
+                  });
+
+                  const linePath = chartPoints
+                    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+                    .join(' ');
+                  const areaPath =
+                    chartPoints.length > 0
+                      ? `M ${chartPoints[0].x} 100 ${linePath.replace('M', 'L')} L ${chartPoints[chartPoints.length - 1].x} 100 Z`
+                      : '';
+
+                  const disciplineOrder = ['SWIM', 'BIKE', 'RUN', 'STRENGTH', 'OTHER'];
+                  const disciplineTotals = disciplineOrder.map((disciplineKey) => {
+                    const hit = summary?.caloriesByDiscipline?.find((row) => row.discipline === disciplineKey);
+                    return { discipline: disciplineKey, completedCaloriesKcal: hit?.completedCaloriesKcal ?? 0 };
+                  });
+                  const maxDisciplineCalories = Math.max(1, ...disciplineTotals.map((row) => row.completedCaloriesKcal));
+
+                  const sessionItems = points.flatMap((point) =>
+                    point.sessions.map((session) => ({
+                      ...session,
+                      dayKey: point.dayKey,
+                    }))
+                  );
+                  sessionItems.sort((a, b) => b.caloriesKcal - a.caloriesKcal);
+                  const topSessions = sessionItems.slice(0, 6);
+                  const remainingSessions = Math.max(0, sessionItems.length - topSessions.length);
+
+                  const buildTooltip = (point: typeof cumulativePoints[number]) => {
+                    const dateLabel = formatDisplayInTimeZone(point.dayKey, athleteTimeZone);
+                    const header = `${dateLabel} · ${formatCalories(point.completedCaloriesKcal)}`;
+                    if (point.sessions.length === 0) return `${header}\nNo completed sessions`;
+                    const sessionLines = point.sessions.map((session) => {
+                      const label = session.title || 'Completed session';
+                      const disciplineLabel = session.discipline.toUpperCase();
+                      return `${disciplineLabel} · ${label} · ${formatCalories(session.caloriesKcal)}`;
+                    });
+                    return [header, ...sessionLines].join('\n');
+                  };
 
                   return (
                     <div className="flex h-full flex-col gap-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="text-sm text-[var(--muted)]">Completed {formatCalories(completedCalories)}{completedSuffix}</div>
-                        <div className="text-xs text-[var(--muted)]">Planned {formatCalories(plannedCalories)}</div>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div className="text-sm text-[var(--muted)]">
+                          Completed {formatCalories(completedCalories)}{completedSuffix}
+                        </div>
+                        <div className="text-xs text-[var(--muted)]">In this range</div>
                       </div>
 
-                      <div className="flex min-h-[140px] items-end gap-1 rounded-2xl bg-[var(--bg-structure)]/40 p-3">
-                        {points.length === 0 ? (
-                          <div className="text-xs text-[var(--muted)]">No calorie data in this range.</div>
-                        ) : (
-                          points.map((point) => {
-                            const height = Math.max(4, Math.round((point.completedCaloriesKcal / maxCalories) * 100));
-                            return (
-                              <div key={point.dayKey} className="flex h-full flex-1 items-end">
-                                <div
-                                  className="w-full rounded-full bg-[var(--bar-fill)]/70"
-                                  style={{ height: `${height}%` }}
-                                  title={`${formatDisplayInTimeZone(point.dayKey, athleteTimeZone)} · ${formatCalories(point.completedCaloriesKcal)}`}
-                                />
-                              </div>
-                            );
-                          })
-                        )}
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="athlete-calories-grid">
+                        <div className="flex flex-col gap-3 min-w-0" data-testid="athlete-calories-cumulative">
+                          <div className="text-xs uppercase tracking-wide text-[var(--muted)]">Cumulative calories</div>
+                          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3 min-h-[180px] flex items-center">
+                            {cumulativePoints.length === 0 ? (
+                              <div className="text-xs text-[var(--muted)]">No completed calories in this range.</div>
+                            ) : (
+                              <svg viewBox="0 0 100 100" className="w-full h-[160px]" role="img" aria-label="Cumulative calories chart">
+                                <path d={areaPath} className="fill-[var(--bar-fill)]/15" />
+                                <path d={linePath} className="stroke-[var(--bar-fill)] stroke-[2.5] fill-none" />
+                                {chartPoints.map(({ x, y, point }) => (
+                                  <g key={point.dayKey}>
+                                    <circle cx={x} cy={y} r={2.6} className="fill-[var(--bar-fill)]" />
+                                    <title>{buildTooltip(point)}</title>
+                                  </g>
+                                ))}
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-w-0" data-testid="athlete-calories-discipline">
+                          <div className="text-xs uppercase tracking-wide text-[var(--muted)]">Discipline breakdown</div>
+                          <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3 min-h-[180px]">
+                            {disciplineTotals.map((row) => {
+                              const theme = getDisciplineTheme(row.discipline);
+                              const width = row.completedCaloriesKcal > 0 ? Math.round((row.completedCaloriesKcal / maxDisciplineCalories) * 100) : 0;
+                              const label = `${row.discipline} · ${formatCalories(row.completedCaloriesKcal)}`;
+                              return (
+                                <div key={row.discipline} className="flex flex-col gap-2">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                                      <span className="font-medium text-[var(--text)]">{row.discipline}</span>
+                                    </div>
+                                    <span className="text-[var(--muted)] tabular-nums">{label}</span>
+                                  </div>
+                                  <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                                    <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${width}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 min-w-0" data-testid="athlete-calories-sessions">
+                          <div className="text-xs uppercase tracking-wide text-[var(--muted)]">Sessions that moved the needle</div>
+                          <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3 min-h-[180px]">
+                            {topSessions.length === 0 ? (
+                              <div className="text-xs text-[var(--muted)]">No completed sessions in this range.</div>
+                            ) : (
+                              <>
+                                {topSessions.map((session) => {
+                                  const theme = getDisciplineTheme(session.discipline);
+                                  const dayLabel = formatDisplayInTimeZone(session.dayKey, athleteTimeZone);
+                                  return (
+                                    <div key={`${session.dayKey}-${session.id ?? session.title ?? 'session'}`} className="flex items-start justify-between gap-3 text-xs">
+                                      <div className="flex min-w-0 items-start gap-2">
+                                        <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                                        <div className="min-w-0">
+                                          <div className="font-medium text-[var(--text)] truncate">{session.title || 'Completed session'}</div>
+                                          <div className="text-[var(--muted)] truncate">{dayLabel}</div>
+                                        </div>
+                                      </div>
+                                      <div className="text-[var(--muted)] tabular-nums whitespace-nowrap">{formatCalories(session.caloriesKcal)}</div>
+                                    </div>
+                                  );
+                                })}
+                                {remainingSessions > 0 ? (
+                                  <div className="text-xs text-[var(--muted)]">+{remainingSessions} more sessions</div>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
                 })()}
               </Block>
 
-              <Block title="Next up" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-nextup-card">
+              <Block
+                title="Next up"
+                showHeaderDivider={false}
+                className="min-h-[280px] order-3"
+                data-testid="athlete-range-nextup-card"
+              >
                 {(() => {
                   const sessions = data?.nextUp ?? [];
 

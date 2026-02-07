@@ -7,9 +7,11 @@ import {
 } from '@/lib/calendar/completion';
 
 export type RangeSummaryItem = {
+  id?: string;
   date: string;
   discipline?: string | null;
   status?: string | null;
+  title?: string | null;
   plannedDurationMinutes?: number | null;
   plannedDistanceKm?: number | null;
   plannedCaloriesKcal?: number | null;
@@ -32,6 +34,13 @@ export type RangeSummaryRow = {
   completedCaloriesKcal: number;
 };
 
+export type RangeSummarySession = {
+  id?: string;
+  title?: string | null;
+  discipline: string;
+  caloriesKcal: number;
+};
+
 export type RangeSummary = {
   fromDayKey: string;
   toDayKey: string;
@@ -50,10 +59,14 @@ export type RangeSummary = {
     workoutsMissed: number;
   };
   byDiscipline: RangeSummaryRow[];
+  caloriesByDiscipline: Array<{
+    discipline: string;
+    completedCaloriesKcal: number;
+  }>;
   caloriesByDay: Array<{
     dayKey: string;
     completedCaloriesKcal: number;
-    plannedCaloriesKcal: number | null;
+    sessions: RangeSummarySession[];
   }>;
   meta: {
     timeZone: string;
@@ -137,7 +150,7 @@ export function getAthleteRangeSummary(params: {
   let completedItemCount = 0;
   let skippedItemCount = 0;
 
-  const caloriesByDay = new Map<string, { completed: number; planned: number | null }>();
+  const caloriesByDay = new Map<string, { completed: number; sessions: RangeSummarySession[] }>();
 
   function estimateCalories(params: {
     discipline: string;
@@ -239,12 +252,15 @@ export function getAthleteRangeSummary(params: {
       }
     }
 
-    if (completedCalories > 0 || plannedCalories != null) {
-      const existing = caloriesByDay.get(localDayKey) ?? { completed: 0, planned: null };
+    if (completedCalories > 0 && isCompleted) {
+      const existing = caloriesByDay.get(localDayKey) ?? { completed: 0, sessions: [] };
       existing.completed += completedCalories;
-      if (plannedCalories != null) {
-        existing.planned = (existing.planned ?? 0) + plannedCalories;
-      }
+      existing.sessions.push({
+        id: item.id,
+        title: item.title ?? null,
+        discipline: normalizeDiscipline(item.discipline),
+        caloriesKcal: completedCalories,
+      });
       caloriesByDay.set(localDayKey, existing);
     }
 
@@ -286,12 +302,22 @@ export function getAthleteRangeSummary(params: {
   const dayKeys = getDayKeysInclusive(fromDayKey, toDayKey);
   const caloriesSeries = dayKeys.map((dayKey) => {
     const entry = caloriesByDay.get(dayKey);
+    const sessions = entry?.sessions ? [...entry.sessions] : [];
+    sessions.sort((a, b) => b.caloriesKcal - a.caloriesKcal);
     return {
       dayKey,
       completedCaloriesKcal: Math.max(0, entry?.completed ?? 0),
-      plannedCaloriesKcal: entry?.planned ?? null,
+      sessions,
     };
   });
+
+  const caloriesByDiscipline = Array.from(map.values())
+    .map((row) => ({
+      discipline: row.discipline,
+      completedCaloriesKcal: row.completedCaloriesKcal,
+    }))
+    .filter((row) => row.completedCaloriesKcal > 0)
+    .sort((a, b) => b.completedCaloriesKcal - a.completedCaloriesKcal);
 
   return {
     fromDayKey,
@@ -316,6 +342,7 @@ export function getAthleteRangeSummary(params: {
       workoutsMissed,
     },
     byDiscipline,
+    caloriesByDiscipline,
     caloriesByDay: caloriesSeries,
     meta: {
       timeZone,
