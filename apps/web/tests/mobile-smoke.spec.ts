@@ -156,6 +156,13 @@ test.describe('Mobile smoke', () => {
     await assertNoHorizontalScroll(page);
   });
 
+  test('Athlete role redirects to dashboard by default', async ({ page }) => {
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.waitForURL('**/athlete/dashboard');
+    await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
+  });
+
   test('Athlete dashboard loads and no horizontal scroll', async ({ page }) => {
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
@@ -170,6 +177,36 @@ test.describe('Mobile smoke', () => {
 
     // Notifications block removed from dashboard (redundant).
     await expect(page.getByTestId('athlete-dashboard-notifications')).toHaveCount(0);
+
+    const summaryCard = page.getByTestId('athlete-weekly-summary-card');
+    await expect(summaryCard).toBeVisible();
+    const initialBox = await summaryCard.boundingBox();
+    expect(initialBox, 'Weekly summary card should have a bounding box').toBeTruthy();
+
+    const primaryLine = page.getByTestId('athlete-weekly-summary-primary');
+    await expect(primaryLine).toBeVisible();
+
+    const toggleActual = page.getByTestId('athlete-weekly-summary-toggle-actual');
+    const togglePlanned = page.getByTestId('athlete-weekly-summary-toggle-planned');
+    const toggleBoth = page.getByTestId('athlete-weekly-summary-toggle-both');
+
+    await toggleActual.click();
+    await expect(primaryLine).toContainText('Completed');
+    const actualBox = await summaryCard.boundingBox();
+
+    await togglePlanned.click();
+    await expect(primaryLine).toContainText('Planned');
+    const plannedBox = await summaryCard.boundingBox();
+
+    await toggleBoth.click();
+    await expect(primaryLine).toContainText(/Completed|No planned sessions this week/);
+    const bothBox = await summaryCard.boundingBox();
+
+    const boxes = [initialBox, actualBox, plannedBox, bothBox].filter(Boolean) as NonNullable<typeof initialBox>[];
+    for (const box of boxes) {
+      expect(Math.abs(box.height - boxes[0].height)).toBeLessThanOrEqual(2);
+      expect(Math.abs(box.width - boxes[0].width)).toBeLessThanOrEqual(2);
+    }
 
     await assertNoHorizontalScroll(page);
   });

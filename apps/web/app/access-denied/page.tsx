@@ -43,7 +43,7 @@ export default async function AccessDeniedPage({
       redirect('/admin/ai-usage');
     }
     if (user.role === 'COACH') redirect('/coach/dashboard');
-    if (user.role === 'ATHLETE') redirect('/athlete/calendar');
+    if (user.role === 'ATHLETE') redirect('/athlete/dashboard');
 
     // Unknown role: treat as not invited.
     return (

@@ -8,6 +8,8 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
+import { addDaysToDayKey, startOfWeekDayKey } from '@/lib/day-key';
+import { getWeeklyPlannedCompletedSummary } from '@/lib/calendar/weekly-summary';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +55,9 @@ export async function GET(request: NextRequest) {
     const fromKey = (params.from ?? '').trim() || todayKey;
     const toKey = (params.to ?? '').trim() || todayKey;
 
+    const weekStartKey = startOfWeekDayKey(todayKey);
+    const weekEndKey = addDaysToDayKey(weekStartKey, 6);
+
     const fromDate = parseDateOnly(fromKey, 'from');
     const toDate = parseDateOnly(toKey, 'to');
     assertValidDateRange(fromDate, toDate);
@@ -62,7 +67,10 @@ export async function GET(request: NextRequest) {
     const rangeFilter = { date: { gte: fromDate, lte: toDate } };
     const disciplineFilter = discipline ? { discipline } : {};
 
-    const [completedCount, skippedCount, pendingConfirmationCount] = await Promise.all([
+    const weekFromDate = parseDateOnly(weekStartKey, 'from');
+    const weekToDate = parseDateOnly(weekEndKey, 'to');
+
+    const [completedCount, skippedCount, pendingConfirmationCount, weeklyItems] = await Promise.all([
       prisma.calendarItem.count({
         where: {
           athleteId: user.id,
@@ -88,6 +96,24 @@ export async function GET(request: NextRequest) {
           ...rangeFilter,
           ...disciplineFilter,
           status: CalendarItemStatus.COMPLETED_SYNCED_DRAFT,
+        },
+      }),
+      prisma.calendarItem.findMany({
+        where: {
+          athleteId: user.id,
+          deletedAt: null,
+          date: { gte: weekFromDate, lte: weekToDate },
+        },
+        select: {
+          date: true,
+          discipline: true,
+          status: true,
+          plannedDurationMinutes: true,
+          completedActivities: {
+            orderBy: [{ startTime: 'desc' as const }],
+            take: 1,
+            select: { durationMinutes: true },
+          },
         },
       }),
     ]);
@@ -165,6 +191,21 @@ export async function GET(request: NextRequest) {
       return { discipline: disc, totalMinutes: v.totalMinutes, totalDistanceKm: v.totalDistanceKm };
     });
 
+    const weeklySummary = getWeeklyPlannedCompletedSummary({
+      items: weeklyItems.map((item) => ({
+        date: item.date.toISOString(),
+        discipline: item.discipline,
+        status: item.status,
+        plannedDurationMinutes: item.plannedDurationMinutes,
+        latestCompletedActivity: item.completedActivities?.[0]
+          ? { durationMinutes: item.completedActivities[0].durationMinutes }
+          : null,
+      })),
+      timeZone: user.timezone,
+      fromDayKey: weekStartKey,
+      toDayKey: weekEndKey,
+    });
+
     return success(
       {
         kpis: {
@@ -179,6 +220,7 @@ export async function GET(request: NextRequest) {
           painFlagWorkouts,
         },
         disciplineLoad,
+        weeklySummary,
       },
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
