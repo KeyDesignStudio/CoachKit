@@ -181,4 +181,43 @@ describe('getAthleteRangeSummary', () => {
     expect(summary.totals.completedCaloriesKcal).toBe(200);
     expect(summary.totals.completedMinutes).toBe(30);
   });
+
+  it('aggregates completed calories by discipline and session', () => {
+    const summary = getAthleteRangeSummary({
+      items: [
+        {
+          ...baseItem,
+          id: 'run-1',
+          title: 'Track Session',
+          date: '2026-02-06',
+          status: 'COMPLETED_SYNCED',
+          discipline: 'RUN',
+          latestCompletedActivity: { durationMinutes: 40, caloriesKcal: 480 },
+        },
+        {
+          ...baseItem,
+          id: 'bike-1',
+          title: 'Trainer Ride',
+          date: '2026-02-06',
+          status: 'COMPLETED_SYNCED',
+          discipline: 'BIKE',
+          latestCompletedActivity: { durationMinutes: 60, caloriesKcal: 600 },
+        },
+      ],
+      timeZone: 'UTC',
+      fromDayKey: '2026-02-01',
+      toDayKey: '2026-02-07',
+      todayDayKey: '2026-02-07',
+    });
+
+    const runRow = summary.caloriesByDiscipline.find((row) => row.discipline === 'RUN');
+    const bikeRow = summary.caloriesByDiscipline.find((row) => row.discipline === 'BIKE');
+    expect(runRow?.completedCaloriesKcal).toBe(480);
+    expect(bikeRow?.completedCaloriesKcal).toBe(600);
+
+    const day = summary.caloriesByDay.find((row) => row.dayKey === '2026-02-06');
+    expect(day?.completedCaloriesKcal).toBe(1080);
+    expect(day?.sessions).toHaveLength(2);
+    expect(day?.sessions?.map((session) => session.title)).toContain('Track Session');
+  });
 });

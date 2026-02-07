@@ -33,7 +33,8 @@ test('Athlete dashboard panels align on desktop viewport', async ({ page }) => {
   expect(nextUpBox, 'Next up card should have a bounding box').toBeTruthy();
 
   if (plannedBox && caloriesBox && nextUpBox) {
-    expect(Math.abs(plannedBox.y - caloriesBox.y)).toBeLessThanOrEqual(4);
+    expect(caloriesBox.y).toBeLessThanOrEqual(plannedBox.y + 4);
     expect(Math.abs(plannedBox.y - nextUpBox.y)).toBeLessThanOrEqual(4);
+    expect(caloriesBox.width).toBeGreaterThan(plannedBox.width);
   }
 });
