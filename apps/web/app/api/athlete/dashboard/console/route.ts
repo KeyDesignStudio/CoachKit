@@ -10,7 +10,7 @@ import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { getLocalDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
-import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
+import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
               durationMinutes: item.completedActivities[0].durationMinutes,
               distanceKm: item.completedActivities[0].distanceKm,
               caloriesKcal: getStravaCaloriesKcal(item.completedActivities[0].metricsJson),
+              kilojoules: getStravaKilojoules(item.completedActivities[0].metricsJson),
               confirmedAt: item.completedActivities[0].confirmedAt ? item.completedActivities[0].confirmedAt.toISOString() : null,
             }
           : null,
@@ -97,6 +98,7 @@ export async function GET(request: NextRequest) {
       fromDayKey: fromKey,
       toDayKey: toKey,
       todayDayKey: todayKey,
+      weightKg: null,
     });
 
     const pendingConfirmationCount = items.filter(

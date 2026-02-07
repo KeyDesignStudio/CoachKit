@@ -35,6 +35,8 @@ type AthleteDashboardResponse = {
       completedDistanceKm: number;
       plannedCaloriesKcal: number | null;
       completedCaloriesKcal: number;
+      completedCaloriesMethod: 'actual' | 'estimated' | 'mixed';
+      completedCaloriesEstimatedCount: number;
       workoutsPlanned: number;
       workoutsCompleted: number;
       workoutsSkipped: number;
@@ -488,14 +490,16 @@ export default function AthleteDashboardConsolePage() {
                 {(() => {
                   const summary = data?.rangeSummary;
                   const completedCalories = summary?.totals.completedCaloriesKcal ?? 0;
+                  const completedMethod = summary?.totals.completedCaloriesMethod ?? 'actual';
                   const plannedCalories = summary?.totals.plannedCaloriesKcal ?? null;
                   const points = summary?.caloriesByDay ?? [];
                   const maxCalories = Math.max(1, ...points.map((p) => p.completedCaloriesKcal));
+                  const completedSuffix = completedMethod === 'estimated' ? ' (est.)' : completedMethod === 'mixed' ? ' (some est.)' : '';
 
                   return (
                     <div className="flex h-full flex-col gap-4">
                       <div className="flex flex-col gap-1">
-                        <div className="text-sm text-[var(--muted)]">Completed {formatCalories(completedCalories)}</div>
+                        <div className="text-sm text-[var(--muted)]">Completed {formatCalories(completedCalories)}{completedSuffix}</div>
                         <div className="text-xs text-[var(--muted)]">Planned {formatCalories(plannedCalories)}</div>
                       </div>
 
