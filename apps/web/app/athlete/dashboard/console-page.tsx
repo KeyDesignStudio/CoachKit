@@ -7,7 +7,6 @@ import { useAuthUser } from '@/components/use-auth-user';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
-import { uiH1 } from '@/components/ui/typography';
 import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
@@ -16,32 +15,50 @@ import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayT
 import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
+import { formatKcal } from '@/lib/calendar/discipline-summary';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
 type AthleteDashboardResponse = {
-  kpis: {
-    workoutsCompleted: number;
-    workoutsSkipped: number;
-    totalTrainingMinutes: number;
-    totalDistanceKm: number;
-  };
   attention: {
     pendingConfirmation: number;
     workoutsMissed: number;
     painFlagWorkouts?: number;
   };
-  disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
-  weeklySummary: {
+  rangeSummary: {
     fromDayKey: string;
     toDayKey: string;
-    plannedTotalMinutes: number;
-    completedTotalMinutes: number;
-    byDiscipline: Array<{ discipline: string; plannedMinutes: number; completedMinutes: number }>;
+    totals: {
+      plannedMinutes: number;
+      completedMinutes: number;
+      plannedDistanceKm: number;
+      completedDistanceKm: number;
+      plannedCaloriesKcal: number | null;
+      completedCaloriesKcal: number;
+      workoutsPlanned: number;
+      workoutsCompleted: number;
+      workoutsSkipped: number;
+      workoutsMissed: number;
+    };
+    byDiscipline: Array<{
+      discipline: string;
+      plannedMinutes: number;
+      completedMinutes: number;
+      plannedDistanceKm: number;
+      completedDistanceKm: number;
+      plannedCaloriesKcal: number | null;
+      completedCaloriesKcal: number;
+    }>;
+    caloriesByDay: Array<{ dayKey: string; completedCaloriesKcal: number; plannedCaloriesKcal: number | null }>;
   };
+  nextUp: Array<{
+    id: string;
+    date: string;
+    title: string | null;
+    discipline: string | null;
+    plannedStartTimeLocal: string | null;
+  }>;
 };
-
-type WeeklySummaryMode = 'ACTUAL' | 'PLANNED' | 'BOTH';
 
 function NeedsAttentionItem({
   label,
@@ -97,6 +114,11 @@ function formatDistanceKm(km: number): string {
   return `${Math.round(value)}km`;
 }
 
+function formatCalories(kcal: number | null): string {
+  if (kcal == null) return '—';
+  return formatKcal(kcal).replace(' kcal', 'kcal');
+}
+
 function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string) {
   const todayKey = getZonedDateKeyForNow(athleteTimeZone);
   const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
@@ -112,7 +134,6 @@ export default function AthleteDashboardConsolePage() {
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
-  const [weeklyMode, setWeeklyMode] = useState<WeeklySummaryMode>('BOTH');
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -283,6 +304,7 @@ export default function AthleteDashboardConsolePage() {
                           className="min-h-[44px] w-full"
                           value={timeRange}
                           onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
+                          data-testid="athlete-dashboard-time-range"
                         >
                           <option value="LAST_7">Last 7 days</option>
                           <option value="LAST_14">Last 14 days</option>
@@ -292,7 +314,10 @@ export default function AthleteDashboardConsolePage() {
 
                       <div className="min-w-0 col-start-2 row-start-2">
                         <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                        <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75")}>
+                        <div
+                          className={cn("min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75")}
+                          data-testid="athlete-dashboard-range-display"
+                        >
                           <div className={cn("truncate", tokens.typography.body)}>
                             {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                           </div>
@@ -314,7 +339,7 @@ export default function AthleteDashboardConsolePage() {
                 >
                   <div className="flex items-end justify-between gap-3 mb-2">
                     <BlockTitle>At a glance</BlockTitle>
-                    <div className="text-xs text-[var(--muted)]" aria-hidden="true" />
+                    <div className="text-xs text-[var(--muted)]">In this range</div>
                   </div>
 
                   <div
@@ -325,10 +350,10 @@ export default function AthleteDashboardConsolePage() {
                     <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-at-a-glance-stats">
                       <div className={cn("grid", tokens.spacing.widgetGap)}>
                         {[
-                          { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                          { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                          { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                          { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+                          { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
+                          { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
+                          { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
+                          { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
                         ].map((row, idx) => (
                           <div
                             key={row.label}
@@ -354,7 +379,11 @@ export default function AthleteDashboardConsolePage() {
                     <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="athlete-dashboard-discipline-load">
                       <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
                         {(() => {
-                          const rows = data?.disciplineLoad ?? [];
+                          const rows = (data?.rangeSummary?.byDiscipline ?? []).map((row) => ({
+                            discipline: row.discipline,
+                            totalMinutes: row.completedMinutes,
+                            totalDistanceKm: row.completedDistanceKm,
+                          }));
                           const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
                           return (
                             <>
@@ -393,60 +422,32 @@ export default function AthleteDashboardConsolePage() {
               </div>
             </div>
 
-            <div className="mt-6">
-              <Block
-                title="This week"
-                showHeaderDivider={false}
-                rightAction={(
-                  <div className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1">
-                    {(['ACTUAL', 'PLANNED', 'BOTH'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        data-testid={`athlete-weekly-summary-toggle-${mode.toLowerCase()}`}
-                        onClick={() => setWeeklyMode(mode)}
-                        className={cn(
-                          'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                          weeklyMode === mode
-                            ? 'bg-[var(--bg-card)] text-[var(--text)] shadow-sm'
-                            : 'text-[var(--muted)] hover:text-[var(--text)]'
-                        )}
-                      >
-                        {mode === 'ACTUAL' ? 'Actual' : mode === 'PLANNED' ? 'Planned' : 'Both'}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                className="min-h-[260px]"
-                data-testid="athlete-weekly-summary-card"
-              >
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="athlete-dashboard-range-panels">
+              <Block title="Planned vs Completed" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-planned-card">
                 {(() => {
-                  const weekly = data?.weeklySummary;
-                  const plannedTotal = weekly?.plannedTotalMinutes ?? 0;
-                  const completedTotal = weekly?.completedTotalMinutes ?? 0;
+                  const summary = data?.rangeSummary;
+                  const plannedTotal = summary?.totals.plannedMinutes ?? 0;
+                  const completedTotal = summary?.totals.completedMinutes ?? 0;
                   const plannedLabel = formatMinutes(plannedTotal);
                   const completedLabel = formatMinutes(completedTotal);
                   const percent = plannedTotal > 0 ? Math.min(100, Math.round((completedTotal / plannedTotal) * 100)) : 0;
-                  const rows = (weekly?.byDiscipline ?? []).filter((row) => row.plannedMinutes > 0 || row.completedMinutes > 0);
+                  const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedMinutes > 0 || row.completedMinutes > 0);
 
                   return (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-1" data-testid="athlete-weekly-summary-primary">
-                        {weeklyMode === 'ACTUAL' ? (
-                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel}</div>
-                        ) : weeklyMode === 'PLANNED' ? (
-                          <div className="text-sm text-[var(--muted)]">Planned {plannedLabel}</div>
-                        ) : plannedTotal > 0 ? (
-                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel} of Planned {plannedLabel}</div>
+                    <div className="flex h-full flex-col gap-4">
+                      <div className="flex flex-col gap-1" data-testid="athlete-range-summary-primary">
+                        {plannedTotal > 0 ? (
+                          <>
+                            <div className="text-sm text-[var(--muted)]">Completed {completedLabel} of Planned {plannedLabel}</div>
+                            <div className="text-xs text-[var(--muted)]">{percent}% of plan</div>
+                          </>
                         ) : completedTotal > 0 ? (
-                          <div className="text-sm text-[var(--muted)]">Completed {completedLabel} · No planned sessions this week</div>
+                          <>
+                            <div className="text-sm text-[var(--muted)]">Completed {completedLabel}</div>
+                            <div className="text-xs text-[var(--muted)]">No planned sessions in this range</div>
+                          </>
                         ) : (
-                          <div className="text-sm text-[var(--muted)]">No planned sessions this week</div>
-                        )}
-                        {weeklyMode === 'BOTH' ? (
-                          <div className="text-xs text-[var(--muted)]">{plannedTotal > 0 ? `${percent}% of plan` : '0% of plan'}</div>
-                        ) : (
-                          <div className="text-xs text-[var(--muted)] opacity-0">Placeholder</div>
+                          <div className="text-sm text-[var(--muted)]">No planned sessions in this range</div>
                         )}
                       </div>
 
@@ -454,14 +455,14 @@ export default function AthleteDashboardConsolePage() {
                         <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
                           <div
                             className="h-full rounded-full bg-[var(--bar-fill)] transition-[width] duration-200"
-                            style={{ width: weeklyMode === 'BOTH' && plannedTotal > 0 ? `${percent}%` : weeklyMode === 'BOTH' && completedTotal > 0 ? '100%' : '0%' }}
+                            style={{ width: plannedTotal > 0 ? `${percent}%` : completedTotal > 0 ? '100%' : '0%' }}
                           />
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-2 min-h-[120px]">
                         {rows.length === 0 ? (
-                          <div className="text-xs text-[var(--muted)]">No sessions logged for this week.</div>
+                          <div className="text-xs text-[var(--muted)]">No sessions logged for this range.</div>
                         ) : (
                           rows.map((row) => {
                             const rowPlanned = formatMinutes(row.plannedMinutes);
@@ -471,17 +472,85 @@ export default function AthleteDashboardConsolePage() {
                               <div key={row.discipline} className="flex items-center justify-between gap-3 text-xs">
                                 <span className="font-medium text-[var(--text)] truncate">{label}</span>
                                 <span className="tabular-nums text-[var(--muted)]">
-                                  {weeklyMode === 'ACTUAL'
-                                    ? rowCompleted
-                                    : weeklyMode === 'PLANNED'
-                                      ? rowPlanned
-                                      : `${rowCompleted} / ${rowPlanned}`}
+                                  {row.plannedMinutes > 0 ? `${rowCompleted} / ${rowPlanned}` : rowCompleted}
                                 </span>
                               </div>
                             );
                           })
                         )}
                       </div>
+                    </div>
+                  );
+                })()}
+              </Block>
+
+              <Block title="Calories" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-calories-card">
+                {(() => {
+                  const summary = data?.rangeSummary;
+                  const completedCalories = summary?.totals.completedCaloriesKcal ?? 0;
+                  const plannedCalories = summary?.totals.plannedCaloriesKcal ?? null;
+                  const points = summary?.caloriesByDay ?? [];
+                  const maxCalories = Math.max(1, ...points.map((p) => p.completedCaloriesKcal));
+
+                  return (
+                    <div className="flex h-full flex-col gap-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="text-sm text-[var(--muted)]">Completed {formatCalories(completedCalories)}</div>
+                        <div className="text-xs text-[var(--muted)]">Planned {formatCalories(plannedCalories)}</div>
+                      </div>
+
+                      <div className="flex min-h-[140px] items-end gap-1 rounded-2xl bg-[var(--bg-structure)]/40 p-3">
+                        {points.length === 0 ? (
+                          <div className="text-xs text-[var(--muted)]">No calorie data in this range.</div>
+                        ) : (
+                          points.map((point) => {
+                            const height = Math.max(4, Math.round((point.completedCaloriesKcal / maxCalories) * 100));
+                            return (
+                              <div key={point.dayKey} className="flex h-full flex-1 items-end">
+                                <div
+                                  className="w-full rounded-full bg-[var(--bar-fill)]/70"
+                                  style={{ height: `${height}%` }}
+                                  title={`${formatDisplayInTimeZone(point.dayKey, athleteTimeZone)} · ${formatCalories(point.completedCaloriesKcal)}`}
+                                />
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Block>
+
+              <Block title="Next up" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-range-nextup-card">
+                {(() => {
+                  const sessions = data?.nextUp ?? [];
+
+                  if (sessions.length === 0) {
+                    return <div className="text-sm text-[var(--muted)]">No planned sessions in this range.</div>;
+                  }
+
+                  return (
+                    <div className="flex flex-col gap-3">
+                      {sessions.map((session) => {
+                        const theme = getDisciplineTheme(session.discipline);
+                        const dayLabel = formatDisplayInTimeZone(session.date, athleteTimeZone);
+                        const timeLabel = session.plannedStartTimeLocal ?? 'Anytime';
+                        return (
+                          <div key={session.id} className="flex items-start justify-between gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3">
+                            <div className="flex min-w-0 items-start gap-2">
+                              <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-[var(--text)] truncate">{session.title || 'Planned session'}</div>
+                                <div className="text-xs text-[var(--muted)] truncate">{dayLabel} · {timeLabel}</div>
+                              </div>
+                            </div>
+                            <div className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                              {(session.discipline || 'Other').toUpperCase()}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })()}

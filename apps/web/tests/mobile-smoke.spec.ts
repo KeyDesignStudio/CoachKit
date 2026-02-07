@@ -178,35 +178,21 @@ test.describe('Mobile smoke', () => {
     // Notifications block removed from dashboard (redundant).
     await expect(page.getByTestId('athlete-dashboard-notifications')).toHaveCount(0);
 
-    const summaryCard = page.getByTestId('athlete-weekly-summary-card');
-    await expect(summaryCard).toBeVisible();
-    const initialBox = await summaryCard.boundingBox();
-    expect(initialBox, 'Weekly summary card should have a bounding box').toBeTruthy();
+    const plannedCard = page.getByTestId('athlete-range-planned-card');
+    const caloriesCard = page.getByTestId('athlete-range-calories-card');
+    const nextUpCard = page.getByTestId('athlete-range-nextup-card');
+    await expect(plannedCard).toBeVisible();
+    await expect(caloriesCard).toBeVisible();
+    await expect(nextUpCard).toBeVisible();
 
-    const primaryLine = page.getByTestId('athlete-weekly-summary-primary');
-    await expect(primaryLine).toBeVisible();
-
-    const toggleActual = page.getByTestId('athlete-weekly-summary-toggle-actual');
-    const togglePlanned = page.getByTestId('athlete-weekly-summary-toggle-planned');
-    const toggleBoth = page.getByTestId('athlete-weekly-summary-toggle-both');
-
-    await toggleActual.click();
-    await expect(primaryLine).toContainText('Completed');
-    const actualBox = await summaryCard.boundingBox();
-
-    await togglePlanned.click();
-    await expect(primaryLine).toContainText('Planned');
-    const plannedBox = await summaryCard.boundingBox();
-
-    await toggleBoth.click();
-    await expect(primaryLine).toContainText(/Completed|No planned sessions this week/);
-    const bothBox = await summaryCard.boundingBox();
-
-    const boxes = [initialBox, actualBox, plannedBox, bothBox].filter(Boolean) as NonNullable<typeof initialBox>[];
-    for (const box of boxes) {
-      expect(Math.abs(box.height - boxes[0].height)).toBeLessThanOrEqual(2);
-      expect(Math.abs(box.width - boxes[0].width)).toBeLessThanOrEqual(2);
-    }
+    const rangeDisplay = page.getByTestId('athlete-dashboard-range-display');
+    const initialRange = await rangeDisplay.textContent();
+    const rangeSelect = page.getByTestId('athlete-dashboard-time-range');
+    const rangeResponse = page.waitForResponse((resp) => resp.url().includes('/api/athlete/dashboard/console') && resp.request().method() === 'GET');
+    await rangeSelect.selectOption('LAST_14');
+    await rangeResponse;
+    const updatedRange = await rangeDisplay.textContent();
+    expect(updatedRange).not.toEqual(initialRange);
 
     await assertNoHorizontalScroll(page);
   });
