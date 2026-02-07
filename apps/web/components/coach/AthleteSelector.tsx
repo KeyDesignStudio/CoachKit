@@ -119,8 +119,8 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                 className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
-            <div className="p-2 border-b border-[var(--border-subtle)]">
-              <label className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer">
+            <div className="border-b border-[var(--border-subtle)]">
+              <label className="flex w-full min-h-[44px] items-center gap-3 px-3 py-2 hover:bg-[var(--bg-structure)] cursor-pointer">
                 <input
                   ref={selectAllRef}
                   type="checkbox"

@@ -556,13 +556,13 @@ export default function AthleteCalendarPage() {
               })}
 
               {/* Weekly summary column (desktop: right of Sunday) */}
-              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border border-[var(--border-subtle)]">
-                <div className="border-b border-[var(--border-subtle)] px-3 py-1.5">
+              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border-2 border-white">
+                <div className="px-3 py-1.5">
                   <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
                   <p className="text-sm font-medium truncate">This week</p>
                 </div>
                 <div className="flex flex-col gap-2 p-2">
-                  <div className="rounded border border-[var(--border-subtle)] p-2">
+                  <div className="rounded p-2">
                     <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
                     <div className="text-sm font-semibold text-[var(--text)]">
                       {items.filter((i) => {
@@ -584,7 +584,7 @@ export default function AthleteCalendarPage() {
 
                     return (
                       <>
-                        <div className="rounded border border-[var(--border-subtle)] p-2">
+                        <div className="rounded p-2">
                           <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
                           <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
                             {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
@@ -592,7 +592,7 @@ export default function AthleteCalendarPage() {
                           <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
                         </div>
 
-                        <div className="rounded border border-[var(--border-subtle)] p-2">
+                        <div className="rounded p-2">
                           <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
                           {top.length === 0 ? (
                             <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>

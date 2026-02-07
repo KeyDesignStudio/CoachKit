@@ -552,6 +552,7 @@ export default function CoachDashboardConsolePage() {
               <Block
                 title="Needs your attention"
                 rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>}
+                showHeaderDivider={false}
               >
                 <div className={cn("grid", tokens.spacing.widgetGap)}>
                   <AttentionItem
@@ -594,6 +595,7 @@ export default function CoachDashboardConsolePage() {
               title="Make your selection"
               className="flex flex-col justify-between"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+              showHeaderDivider={false}
             >
               <div>
                 <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
@@ -791,7 +793,7 @@ export default function CoachDashboardConsolePage() {
               <div className="h-4" />
             </div>
 
-            <Block title="Review inbox" padding={false}>
+            <Block title="Review inbox" padding={false} showHeaderDivider={false}>
               <div
                 className={cn(
                   "flex items-center justify-between border-b border-[var(--border-subtle)]",

@@ -36,7 +36,6 @@ type SessionFormState = {
   startTimeLocal: string;
   durationMinutes: string;
   description: string;
-  optionalFlag: boolean;
   selectedDays: string[];
   visibilityType: GroupVisibility;
   targetAthleteIds: string[];
@@ -69,7 +68,6 @@ type GroupSessionRecord = {
   description: string | null;
   recurrenceRule: string;
   visibilityType: GroupVisibility;
-  optionalFlag: boolean;
   targets: GroupSessionTarget[];
 };
 
@@ -123,7 +121,6 @@ function sessionToForm(session: GroupSessionRecord): SessionFormState {
     startTimeLocal: session.startTimeLocal,
     durationMinutes: String(session.durationMinutes),
     description: session.description ?? '',
-    optionalFlag: session.optionalFlag,
     selectedDays: selectedDays.length ? selectedDays : ['MO'],
     visibilityType: session.visibilityType,
     targetAthleteIds: session.targets
@@ -145,7 +142,6 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
       startTimeLocal: '05:30',
       durationMinutes: '60',
       description: '',
-      optionalFlag: false,
       selectedDays: ['MO'],
       visibilityType: 'ALL',
       targetAthleteIds: [],
@@ -203,7 +199,6 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
       durationMinutes,
       recurrenceRule: buildWeeklyRule(form.selectedDays),
       visibilityType: form.visibilityType,
-      optionalFlag: form.optionalFlag,
       location: form.location.trim() || null,
       description: form.description.trim() || null,
     };
@@ -360,14 +355,6 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
                   />
                 </label>
 
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.optionalFlag}
-                    onChange={(e) => setForm({ ...form, optionalFlag: e.target.checked })}
-                  />
-                  <span>Optional (athletes can mark as missed)</span>
-                </label>
               </div>
             </div>
 

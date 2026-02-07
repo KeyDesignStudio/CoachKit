@@ -16,7 +16,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
 
-const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const;
 const AVAILABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
 type AthleteProfile = {
@@ -457,6 +457,7 @@ export default function AthleteProfilePage() {
               </Select>
             </label>
           </FormFieldSpan>
+
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Training plan schedule frequency
@@ -526,19 +527,6 @@ export default function AthleteProfilePage() {
             </label>
           </FormFieldSpan>
 
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Primary goal
-              <Textarea value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} rows={2} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Secondary goals
-              <Input value={secondaryGoals} onChange={(e) => setSecondaryGoals(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Feedback style
@@ -549,6 +537,19 @@ export default function AthleteProfilePage() {
             <label className="flex flex-col gap-2 text-sm font-medium">
               Tone preference
               <Input value={tonePreference} onChange={(e) => setTonePreference(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Primary goal
+              <Textarea value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} rows={2} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Secondary goals
+              <Input value={secondaryGoals} onChange={(e) => setSecondaryGoals(e.target.value)} />
             </label>
           </FormFieldSpan>
         </FormGrid>

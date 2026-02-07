@@ -41,7 +41,6 @@ type SessionFormState = {
   workoutStructure: unknown | null;
   notes: string;
   description: string;
-  optionalFlag: boolean;
   selectedDays: string[];
   visibilityType: GroupVisibility;
   targetAthleteIds: string[];
@@ -83,7 +82,6 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       workoutStructure: null,
       notes: '',
       description: '',
-      optionalFlag: false,
       selectedDays: ['MO'],
       visibilityType: 'ALL',
       targetAthleteIds: [],
@@ -150,7 +148,6 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       notes: form.notes.trim() ? form.notes.trim() : undefined,
       recurrenceRule: buildWeeklyRule(form.selectedDays),
       visibilityType: form.visibilityType,
-      optionalFlag: form.optionalFlag,
     };
 
     if (form.location.trim()) {
@@ -195,7 +192,6 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
         workoutStructure: null,
         notes: '',
         description: '',
-        optionalFlag: false,
         selectedDays: ['MO'],
         visibilityType: 'ALL',
         targetAthleteIds: [],
@@ -305,14 +301,6 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
                   />
                 </label>
 
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.optionalFlag}
-                    onChange={(e) => setForm({ ...form, optionalFlag: e.target.checked })}
-                  />
-                  <span>Optional (athletes can mark as missed)</span>
-                </label>
               </div>
             </div>
 

@@ -45,7 +45,6 @@ type GroupSessionRecord = {
   description: string | null;
   recurrenceRule: string;
   visibilityType: GroupVisibility;
-  optionalFlag: boolean;
   targets: GroupSessionTarget[];
 };
 

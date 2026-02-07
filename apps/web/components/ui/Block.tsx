@@ -8,9 +8,10 @@ type BlockProps = React.HTMLAttributes<HTMLDivElement> & {
   title?: string;
   rightAction?: React.ReactNode;
   padding?: boolean;
+  showHeaderDivider?: boolean;
 };
 
-export function Block({ title, rightAction, children, className, padding = true, ...props }: BlockProps) {
+export function Block({ title, rightAction, children, className, padding = true, showHeaderDivider = true, ...props }: BlockProps) {
   return (
     <div
       className={cn(
@@ -28,7 +29,8 @@ export function Block({ title, rightAction, children, className, padding = true,
           className={cn(
             'flex min-w-0 items-center justify-between',
             tokens.spacing.blockPaddingX,
-            'py-3 border-b border-[var(--border-subtle)]'
+            'py-3',
+            showHeaderDivider && 'border-b border-[var(--border-subtle)]'
           )}
         >
           {title && (
