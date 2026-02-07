@@ -36,7 +36,6 @@ const updateGroupSessionSchema = z
     description: z.string().trim().max(20000).optional().nullable(),
     recurrenceRule: nonEmptyString.optional(),
     visibilityType: z.nativeEnum(GroupVisibilityType).optional(),
-    optionalFlag: z.boolean().optional(),
     targetAthleteIds: z.array(idSchema).optional(),
     targetSquadIds: z.array(idSchema).optional(),
   })
@@ -137,10 +136,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (payload.visibilityType !== undefined) {
       patchData.visibilityType = payload.visibilityType;
-    }
-
-    if (payload.optionalFlag !== undefined) {
-      patchData.optionalFlag = payload.optionalFlag;
     }
 
     const shouldReplaceTargets =

@@ -32,8 +32,8 @@ export function WeekSummaryColumn({
   const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
 
   return (
-    <div 
-       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border border-white/40", className)}
+     <div 
+       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border-2 border-white", className)}
        style={style}
     >
       <div className="px-3 py-1.5">

@@ -210,6 +210,7 @@ export default function AthleteDashboardConsolePage() {
                   <Block
                     title="Needs your attention"
                     rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
+                    showHeaderDivider={false}
                   >
                     <div className={cn("grid", tokens.spacing.widgetGap)}>
                       {typeof data?.attention.painFlagWorkouts === 'number' ? (
@@ -245,6 +246,7 @@ export default function AthleteDashboardConsolePage() {
                   title="Make your selection"
                   className="flex flex-col justify-between"
                   style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
+                  showHeaderDivider={false}
                 >
                   <div>
                     <div className={cn("grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4", tokens.spacing.gridGap)}>

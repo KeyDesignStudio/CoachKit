@@ -45,7 +45,6 @@ type GroupSessionRecord = {
   description: string | null;
   recurrenceRule: string;
   visibilityType: GroupVisibility;
-  optionalFlag: boolean;
   targets: GroupSessionTarget[];
 };
 
@@ -95,7 +94,7 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
     formatTargets(session),
   ];
 
-  const metaLine = session.optionalFlag ? `${metaParts.join(' • ')} • Optional` : metaParts.join(' • ');
+  const metaLine = metaParts.join(' • ');
 
   return (
     <button
@@ -121,7 +120,6 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
           <p className="mt-1 text-xs text-[var(--muted)] truncate min-h-[16px]">
             {session.location ? (
               <>
-                <Icon name="info" size="sm" className="inline mr-1" />
                 {session.location}
               </>
             ) : (

@@ -733,7 +733,6 @@ model GroupSession {
   description      String?
   recurrenceRule   String // iCal RRULE string
   visibilityType   GroupVisibilityType @default(ALL)
-  optionalFlag     Boolean             @default(false)
   createdAt        DateTime            @default(now())
 
   coach         User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)

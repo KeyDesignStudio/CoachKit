@@ -35,7 +35,6 @@ const createGroupSessionSchema = z.object({
   description: z.string().trim().max(20000).optional(),
   recurrenceRule: nonEmptyString,
   visibilityType: z.nativeEnum(GroupVisibilityType).default(GroupVisibilityType.ALL),
-  optionalFlag: z.boolean().optional().default(false),
   targetAthleteIds: z.array(idSchema).optional(),
   targetSquadIds: z.array(idSchema).optional(),
 });
@@ -102,7 +101,6 @@ export async function POST(request: NextRequest) {
           description: payload.description ?? null,
           recurrenceRule: payload.recurrenceRule,
           visibilityType: payload.visibilityType,
-          optionalFlag: payload.optionalFlag ?? false,
         },
       });
 

@@ -39,7 +39,7 @@ export function CoachCalendarHelp() {
       {helpOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/10" onClick={() => setHelpOpen(false)} />
-          <div className="absolute right-0 top-10 z-50 w-72 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+          <div className="absolute right-0 top-9 z-50 w-72 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200 origin-top-right">
             <h3 className="font-semibold text-sm mb-3 text-[var(--text)] flex items-center gap-2">
               <Icon name="idea" size="sm" className="text-[var(--primary)]" />
               Calendar Tips
@@ -54,8 +54,16 @@ export function CoachCalendarHelp() {
                  <span>Paste, Add from Library</span>
                </li>
                <li className="flex gap-2">
+                 <span className="font-medium text-[var(--text)] whitespace-nowrap">Publish weekly schedule:</span>
+                 <span>Select a single athlete.</span>
+               </li>
+               <li className="flex gap-2">
                  <span className="font-medium text-[var(--text)] whitespace-nowrap">Bricks:</span>
                  <span>Multi-step sessions show distinct sections (e.g. Run + Bike).</span>
+               </li>
+               <li className="flex gap-2">
+                 <span className="font-medium text-[var(--text)] whitespace-nowrap">Draft vs Published:</span>
+                 <span>Drafts are editable; Published is locked and shared with the athlete.</span>
                </li>
             </ul>
             <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] text-right">
