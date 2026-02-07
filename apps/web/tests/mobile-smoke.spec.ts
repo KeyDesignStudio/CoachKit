@@ -185,6 +185,27 @@ test.describe('Mobile smoke', () => {
     await expect(caloriesCard).toBeVisible();
     await expect(nextUpCard).toBeVisible();
 
+    const viewportWidth = page.viewportSize()?.width ?? 0;
+    if (viewportWidth > 0 && viewportWidth <= 520) {
+      const selectionHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
+      const attentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
+      const glanceHeading = page.getByRole('heading', { level: 2, name: 'At a glance' });
+      await expect(selectionHeading).toBeVisible();
+      await expect(attentionHeading).toBeVisible();
+      await expect(glanceHeading).toBeVisible();
+
+      const selectionBox = await selectionHeading.boundingBox();
+      const attentionBox = await attentionHeading.boundingBox();
+      const glanceBox = await glanceHeading.boundingBox();
+      expect(selectionBox, 'Selection heading should have bounding box').toBeTruthy();
+      expect(attentionBox, 'Attention heading should have bounding box').toBeTruthy();
+      expect(glanceBox, 'At a glance heading should have bounding box').toBeTruthy();
+      if (selectionBox && attentionBox && glanceBox) {
+        expect(selectionBox.y).toBeLessThan(attentionBox.y);
+        expect(attentionBox.y).toBeLessThan(glanceBox.y);
+      }
+    }
+
     const rangeDisplay = page.getByTestId('athlete-dashboard-range-display');
     const initialRange = await rangeDisplay.textContent();
     const rangeSelect = page.getByTestId('athlete-dashboard-time-range');

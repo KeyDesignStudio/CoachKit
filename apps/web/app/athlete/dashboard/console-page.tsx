@@ -331,7 +331,7 @@ export default function AthleteDashboardConsolePage() {
               </div>
 
               {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
-              <div className="min-w-0 md:order-3 md:col-span-2 xl:col-span-1">
+              <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
                 <div
                   className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
                   data-testid="athlete-dashboard-at-a-glance"
