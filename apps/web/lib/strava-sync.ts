@@ -12,7 +12,10 @@ export type PollSummary = {
   created: number;
   updated: number;
   matched: number;
+  plannedSessionsMatched: number;
   createdCalendarItems: number;
+  calendarItemsCreated: number;
+  calendarItemsUpdated: number;
   linkedCalendarItems: number;
   existingCalendarItemLinks: number;
   clearedDeletedCalendarItemLinks: number;
@@ -277,9 +280,9 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
   return updated;
 }
 
-async function fetchRecentActivities(accessToken: string, afterUnixSeconds: number) {
+async function fetchRecentActivities(accessToken: string, afterUnixSeconds: number, scenarioOverride?: string) {
   if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
-    const scenario = process.env.STRAVA_STUB_SCENARIO ?? '';
+    const scenario = scenarioOverride ?? process.env.STRAVA_STUB_SCENARIO ?? '';
     const now = new Date();
     const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
 
@@ -350,9 +353,9 @@ async function fetchRecentActivities(accessToken: string, afterUnixSeconds: numb
   return payload as StravaActivity[];
 }
 
-async function fetchActivityById(accessToken: string, activityId: string) {
+async function fetchActivityById(accessToken: string, activityId: string, scenarioOverride?: string) {
   if (process.env.STRAVA_STUB === 'true' && process.env.DISABLE_AUTH === 'true') {
-    const activities = await fetchRecentActivities(accessToken, 0);
+    const activities = await fetchRecentActivities(accessToken, 0, scenarioOverride);
     const match = activities.find((a) => String(a.id) === String(activityId));
     if (match) return match;
     return {
@@ -549,37 +552,56 @@ async function matchAndLinkCalendarItem(params: {
   };
 }
 
-async function ensureCalendarItemStatusForSyncedCompletion(params: { calendarItemId: string; confirmedAt: Date | null }) {
-  const { calendarItemId, confirmedAt } = params;
+async function applySyncedCompletionToCalendarItem(params: {
+  calendarItemId: string;
+  confirmedAt: Date | null;
+  activityDayKey: string;
+  activityMinutes: number;
+}): Promise<{ updated: boolean }> {
+  const { calendarItemId, confirmedAt, activityDayKey, activityMinutes } = params;
 
   const item = await prisma.calendarItem.findUnique({
     where: { id: calendarItemId },
-    select: { status: true },
+    select: { status: true, date: true, plannedStartTimeLocal: true, origin: true },
   });
 
-  if (!item) return;
+  if (!item) return { updated: false };
+  if (item.status === CalendarItemStatus.COMPLETED_MANUAL) return { updated: false };
 
-  if (!confirmedAt) {
-    if (
-      item.status === CalendarItemStatus.PLANNED ||
-      item.status === CalendarItemStatus.MODIFIED ||
-      item.status === CalendarItemStatus.COMPLETED_SYNCED
-    ) {
-      await prisma.calendarItem.update({
-        where: { id: calendarItemId },
-        data: { status: CalendarItemStatus.COMPLETED_SYNCED_DRAFT },
-      });
+  const nextStatus = confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
+  const nextDate = parseDayKeyToUtcDate(activityDayKey);
+  const nextStartTimeLocal = minutesToTimeString(activityMinutes);
+  const currentDayKey = item.date.toISOString().slice(0, 10);
+  const isNearMidnight = activityMinutes <= 4 * 60 || activityMinutes >= 20 * 60;
+
+  const update: Record<string, any> = {};
+
+  if (
+    item.status === CalendarItemStatus.PLANNED ||
+    item.status === CalendarItemStatus.MODIFIED ||
+    item.status === CalendarItemStatus.COMPLETED_SYNCED ||
+    item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT
+  ) {
+    if (item.status !== nextStatus) update.status = nextStatus;
+  }
+
+  if (item.origin == null || item.origin === 'STRAVA') {
+    if (currentDayKey !== activityDayKey && (!isNearMidnight || item.origin === 'STRAVA')) {
+      update.date = nextDate;
     }
-
-    return;
+    if ((item.plannedStartTimeLocal ?? null) !== nextStartTimeLocal) {
+      update.plannedStartTimeLocal = nextStartTimeLocal;
+    }
   }
 
-  if (item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT) {
-    await prisma.calendarItem.update({
-      where: { id: calendarItemId },
-      data: { status: CalendarItemStatus.COMPLETED_SYNCED },
-    });
-  }
+  if (Object.keys(update).length === 0) return { updated: false };
+
+  await prisma.calendarItem.update({
+    where: { id: calendarItemId },
+    data: update,
+  });
+
+  return { updated: true };
 }
 
 async function ingestActivities(entry: StravaConnectionEntry, activities: StravaActivity[], summary: PollSummary) {
@@ -698,6 +720,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     }
 
     let completed: any;
+    let activityUpdated = false;
 
     try {
       completed = await prisma.completedActivity.create({
@@ -723,6 +746,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
           distanceKm: true,
           startTime: true,
           confirmedAt: true,
+          matchDayDiff: true,
         },
       });
       summary.created += 1;
@@ -745,6 +769,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
           startTime: true,
           confirmedAt: true,
           metricsJson: true,
+          matchDayDiff: true,
         },
       });
 
@@ -783,16 +808,22 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
             distanceKm: true,
             startTime: true,
             confirmedAt: true,
+            matchDayDiff: true,
           },
         });
         summary.updated += 1;
+        activityUpdated = true;
       }
     }
 
     const initialCalendarItemId: string | null = completed?.calendarItemId ?? null;
     let calendarItemId: string | null = initialCalendarItemId;
+    let calendarItemUpdated = false;
 
     if (calendarItemId) {
+      if (activityUpdated) {
+        calendarItemUpdated = true;
+      }
       summary.existingCalendarItemLinks += 1;
 
       // If the completion is linked to a deleted/missing item (e.g. coach deleted a planned session),
@@ -815,6 +846,8 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       }
     }
 
+    let placementDayKey = activityDayKey;
+
     if (!calendarItemId) {
       const match = await matchAndLinkCalendarItem({
         athleteId: entry.athleteId,
@@ -828,7 +861,10 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
 
       if (match.matched) {
         summary.matched += 1;
+        summary.plannedSessionsMatched += 1;
         calendarItemId = match.calendarItemId;
+        calendarItemUpdated = true;
+        placementDayKey = match.debug?.matchedDayKey ?? activityDayKey;
 
         if (isStravaSyncDebugEnabled()) {
           console.info('[strava-sync] matched activity', {
@@ -842,10 +878,23 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
     }
 
     if (calendarItemId) {
-      await ensureCalendarItemStatusForSyncedCompletion({
+      if (typeof completed?.matchDayDiff === 'number') {
+        placementDayKey = addDaysToDayKey(activityDayKey, completed.matchDayDiff);
+      }
+      const placement = await applySyncedCompletionToCalendarItem({
         calendarItemId,
         confirmedAt: completed.confirmedAt ?? null,
+        activityDayKey: placementDayKey,
+        activityMinutes,
       });
+
+      if (placement.updated) {
+        calendarItemUpdated = true;
+      }
+
+      if (calendarItemUpdated) {
+        summary.calendarItemsUpdated += 1;
+      }
 
       summary.linkedCalendarItems += 1;
     }
@@ -905,6 +954,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       });
 
       summary.createdCalendarItems += 1;
+      summary.calendarItemsCreated += 1;
       summary.linkedCalendarItems += 1;
       calendarItemId = item.id;
 
@@ -928,6 +978,7 @@ export async function syncStravaForConnections(
     overrideAfterUnixSeconds?: number;
     deep?: boolean;
     deepConcurrency?: number;
+    stubScenario?: string;
   }
 ): Promise<PollSummary> {
   const forceDays = options?.forceDays ?? null;
@@ -941,7 +992,10 @@ export async function syncStravaForConnections(
     created: 0,
     updated: 0,
     matched: 0,
+    plannedSessionsMatched: 0,
     createdCalendarItems: 0,
+    calendarItemsCreated: 0,
+    calendarItemsUpdated: 0,
     linkedCalendarItems: 0,
     existingCalendarItemLinks: 0,
     clearedDeletedCalendarItemLinks: 0,
@@ -977,13 +1031,13 @@ export async function syncStravaForConnections(
           ? options.overrideAfterUnixSeconds
           : Math.max(0, Math.floor(afterDate.getTime() / 1000));
 
-      const activities = await fetchRecentActivities(refreshed.accessToken, afterUnixSeconds);
+      const activities = await fetchRecentActivities(refreshed.accessToken, afterUnixSeconds, options?.stubScenario);
 
       const effectiveActivities = deep
         ? await mapWithConcurrency(
             activities,
             deepConcurrency,
-            async (activity) => await fetchActivityById(refreshed.accessToken, String(activity.id))
+            async (activity) => await fetchActivityById(refreshed.accessToken, String(activity.id), options?.stubScenario)
           )
         : activities;
 
@@ -1018,7 +1072,11 @@ export async function syncStravaForConnections(
   return summary;
 }
 
-async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, activityId: string): Promise<PollSummary> {
+async function syncStravaActivityByIdForEntry(
+  entry: StravaConnectionEntry,
+  activityId: string,
+  scenarioOverride?: string
+): Promise<PollSummary> {
   const summary: PollSummary = {
     polledAthletes: 1,
     fetched: 0,
@@ -1026,7 +1084,10 @@ async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, acti
     created: 0,
     updated: 0,
     matched: 0,
+    plannedSessionsMatched: 0,
     createdCalendarItems: 0,
+    calendarItemsCreated: 0,
+    calendarItemsUpdated: 0,
     linkedCalendarItems: 0,
     existingCalendarItemLinks: 0,
     clearedDeletedCalendarItemLinks: 0,
@@ -1037,7 +1098,7 @@ async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, acti
 
   try {
     const refreshed = await refreshStravaTokenIfNeeded(entry.connection);
-    const activity = await fetchActivityById(refreshed.accessToken, activityId);
+    const activity = await fetchActivityById(refreshed.accessToken, activityId, scenarioOverride);
     await ingestActivities({ ...entry, connection: refreshed }, [activity], summary);
 
     await prisma.stravaConnection.update({
@@ -1057,6 +1118,7 @@ async function syncStravaActivityByIdForEntry(entry: StravaConnectionEntry, acti
 export async function syncStravaActivityById(params: {
   athleteId: string;
   stravaActivityId: string;
+  stubScenario?: string;
 }): Promise<PollSummary> {
   const athlete = await prisma.athleteProfile.findUnique({
     where: { userId: params.athleteId },
@@ -1089,5 +1151,5 @@ export async function syncStravaActivityById(params: {
     connection: connection as any,
   };
 
-  return syncStravaActivityByIdForEntry(entry, params.stravaActivityId);
+  return syncStravaActivityByIdForEntry(entry, params.stravaActivityId, params.stubScenario);
 }

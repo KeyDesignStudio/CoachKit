@@ -130,6 +130,9 @@ async function runCron(request: NextRequest) {
   let calendarItemsLinked = 0;
   let calendarItemLinksExisting = 0;
   let calendarItemLinksClearedDeleted = 0;
+  let calendarItemsUpdated = 0;
+  let plannedSessionsMatched = 0;
+  let calendarItemsCreated = 0;
   const errors: Array<{ athleteId?: string; message: string }> = [];
 
   if (mode === 'intents') {
@@ -173,11 +176,14 @@ async function runCron(request: NextRequest) {
         });
 
         createdCalendarItems += summary.createdCalendarItems;
+        calendarItemsCreated += summary.calendarItemsCreated;
         matchedCompletions += summary.matched;
+        plannedSessionsMatched += summary.plannedSessionsMatched;
         skippedDuplicates += summary.skippedExisting;
         activitiesFetched += summary.fetched;
         activitiesInWindow += summary.inWindow;
         activitiesUpserted += summary.created + summary.updated;
+        calendarItemsUpdated += summary.calendarItemsUpdated;
         calendarItemsLinked += summary.linkedCalendarItems;
         calendarItemLinksExisting += summary.existingCalendarItemLinks;
         calendarItemLinksClearedDeleted += summary.clearedDeletedCalendarItemLinks;
@@ -336,7 +342,10 @@ async function runCron(request: NextRequest) {
           failedCount,
           pendingRemaining,
           createdCalendarItems,
+          calendarItemsCreated,
+          calendarItemsUpdated,
           matchedCompletions,
+          plannedSessionsMatched,
           skippedDuplicates,
           athletesConsidered,
           stravaConnectionsFound,
@@ -364,7 +373,10 @@ async function runCron(request: NextRequest) {
         failedCount,
         pendingRemaining,
         createdCalendarItems,
+        calendarItemsCreated,
+        calendarItemsUpdated,
         matchedCompletions,
+        plannedSessionsMatched,
         skippedDuplicates,
         athletesConsidered,
         stravaConnectionsFound,

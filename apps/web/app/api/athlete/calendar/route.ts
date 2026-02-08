@@ -38,6 +38,7 @@ const includeRefs = {
       durationMinutes: true,
       distanceKm: true,
       metricsJson: true,
+      matchDayDiff: true,
     },
   },
 };
@@ -46,11 +47,16 @@ function getEffectiveActualStartUtc(completion: {
   source: CompletionSource | string;
   startTime: Date;
   metricsJson?: any;
+  matchDayDiff?: number | null;
 }): Date {
   if (completion.source === CompletionSource.STRAVA) {
     const candidate = completion.metricsJson?.strava?.startDateUtc;
     const parsed = candidate ? new Date(candidate) : null;
-    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+    const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
+    if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
+      return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
+    }
+    return base;
   }
 
   return completion.startTime;
@@ -110,21 +116,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Filter down to items whose stored start time falls within the requested local-day range.
-    const filteredItems = items
-      .map((item: any) => ({
-        item,
-        storedStartUtc: combineDateWithLocalTime(item.date, item.plannedStartTimeLocal),
-      }))
-      .filter(({ storedStartUtc }) => isStoredStartInUtcRange(storedStartUtc, utcRange))
-      .sort((a, b) => a.storedStartUtc.getTime() - b.storedStartUtc.getTime())
-      .map(({ item }) => item);
-
-    // Format items to include latestCompletedActivity.
-    // We prefer STRAVA for metrics (duration/distance/calories) because manual completions
-    // are often used for notes/pain flags on top of a synced activity.
-    const formattedItems = filteredItems.map((item: any) => {
-      const storedStartUtc = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+    const preparedItems = items.map((item: any) => {
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
         painFlag: boolean;
@@ -134,12 +126,29 @@ export async function GET(request: NextRequest) {
         durationMinutes?: number | null;
         distanceKm?: number | null;
         metricsJson?: any;
+        matchDayDiff?: number | null;
       }>;
 
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
-
       const metricsCompletion = latestStrava ?? latestManual;
+
+      const effectiveStartUtc = metricsCompletion
+        ? getEffectiveActualStartUtc(metricsCompletion)
+        : combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+
+      return { item, completions, latestManual, latestStrava, metricsCompletion, effectiveStartUtc };
+    });
+
+    // Filter down to items whose effective start time falls within the requested local-day range.
+    const filteredItems = preparedItems
+      .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange))
+      .sort((a, b) => a.effectiveStartUtc.getTime() - b.effectiveStartUtc.getTime());
+
+    // Format items to include latestCompletedActivity.
+    // We prefer STRAVA for metrics (duration/distance/calories) because manual completions
+    // are often used for notes/pain flags on top of a synced activity.
+    const formattedItems = filteredItems.map(({ item, latestManual, latestStrava, metricsCompletion, effectiveStartUtc }) => {
       const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
 
       const latestCompletedActivity = metricsCompletion
@@ -171,7 +180,7 @@ export async function GET(request: NextRequest) {
       return {
         ...item,
         // IMPORTANT: return a local-day key so the UI groups items by the athlete's timezone.
-        date: getLocalDayKey(storedStartUtc, athleteTimezone),
+        date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
         latestCompletedActivity,
         completedActivities: undefined,
       };

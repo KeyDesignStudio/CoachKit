@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/auth';
 import { cn } from '@/lib/cn';
+import { combineDateWithLocalTime } from '@/lib/date';
+import { getLocalDayKey } from '@/lib/day-key';
 import { tokens } from '@/components/ui/tokens';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +29,36 @@ export default async function AdminStravaSyncPage() {
   const lastSuccess = runs.find((run) => run.status === 'SUCCEEDED') ?? null;
   const lastSuccessAgeMs = lastSuccess ? Date.now() - lastSuccess.startedAt.getTime() : null;
   const showWarning = lastSuccessAgeMs == null || lastSuccessAgeMs > 24 * 60 * 60 * 1000;
+
+  const recentActivities = await prisma.completedActivity.findMany({
+    where: { source: 'STRAVA' },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      id: true,
+      externalActivityId: true,
+      startTime: true,
+      matchDayDiff: true,
+      matchTimeDiffMinutes: true,
+      metricsJson: true,
+      calendarItemId: true,
+      calendarItem: {
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          plannedStartTimeLocal: true,
+          origin: true,
+        },
+      },
+      athlete: {
+        select: {
+          userId: true,
+          timezone: true,
+        },
+      },
+    },
+  });
 
   return (
     <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
@@ -87,6 +119,66 @@ export default async function AdminStravaSyncPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6">
+        <h2 className={cn(tokens.typography.h2, 'mb-2')}>Recent Strava activity placement</h2>
+        <p className={cn(tokens.typography.bodyMuted, 'mb-4')}>
+          Last 5 synced activities with athlete-local day keys and linked calendar items.
+        </p>
+
+        <div className="overflow-x-auto rounded-2xl border border-[var(--border-subtle)]">
+          <table className="w-full text-sm">
+            <thead className="bg-[var(--bg-structure)]/40 text-[var(--muted)]">
+              <tr>
+                <th className="px-3 py-2 text-left">Strava Activity</th>
+                <th className="px-3 py-2 text-left">Strava Start (UTC)</th>
+                <th className="px-3 py-2 text-left">Athlete Local Day</th>
+                <th className="px-3 py-2 text-left">Calendar Item</th>
+                <th className="px-3 py-2 text-left">Calendar Day</th>
+                <th className="px-3 py-2 text-left">Materialised</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentActivities.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-4 text-[var(--muted)]" colSpan={6}>
+                    No Strava activities found yet.
+                  </td>
+                </tr>
+              ) : (
+                recentActivities.map((activity) => {
+                  const timeZone = activity.athlete?.timezone ?? 'UTC';
+                  const stravaStartUtcRaw = (activity.metricsJson as any)?.strava?.startDateUtc;
+                  const stravaStartUtc = stravaStartUtcRaw ? new Date(stravaStartUtcRaw) : activity.startTime;
+                  const stravaStartLabel = stravaStartUtc.toISOString().replace('T', ' ').slice(0, 19);
+                  const activityDayKey = getLocalDayKey(stravaStartUtc, timeZone);
+
+                  const calendarItem = activity.calendarItem;
+                  const calendarStartUtc = calendarItem
+                    ? combineDateWithLocalTime(calendarItem.date, calendarItem.plannedStartTimeLocal)
+                    : null;
+                  const calendarDayKey = calendarStartUtc ? getLocalDayKey(calendarStartUtc, timeZone) : '—';
+                  const materialised = calendarDayKey !== '—' && calendarDayKey === activityDayKey ? 'Yes' : 'No';
+                  const calendarLabel = calendarItem
+                    ? `${calendarItem.title ?? 'Planned session'} · ${calendarItem.origin ?? 'PLANNED'}`
+                    : '—';
+
+                  return (
+                    <tr key={activity.id} className="border-t border-[var(--border-subtle)]">
+                      <td className="px-3 py-2 tabular-nums">{activity.externalActivityId ?? '—'}</td>
+                      <td className="px-3 py-2 tabular-nums">{stravaStartLabel}</td>
+                      <td className="px-3 py-2 tabular-nums">{activityDayKey}</td>
+                      <td className="px-3 py-2">{calendarLabel}</td>
+                      <td className="px-3 py-2 tabular-nums">{calendarDayKey}</td>
+                      <td className="px-3 py-2 font-medium">{materialised}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );
