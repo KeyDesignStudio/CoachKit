@@ -25,10 +25,16 @@ async function assertNoHorizontalScroll(page: any) {
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 async function getCalendarHeaderLines(page: any, testId: string) {
-  const header = page.getByTestId(testId).first();
+  const header = page.locator(`[data-testid="${testId}"]:visible`).first();
   await expect(header).toBeVisible();
   const lines = (await header.locator('p').allTextContents()).map((text) => text.trim());
   return { weekday: lines[0] ?? '', dateLine: lines[1] ?? '' };
+}
+
+async function getCalendarHeaderHeight(page: any, testId: string) {
+  const header = page.locator(`[data-testid="${testId}"]:visible`).first();
+  await expect(header).toBeVisible();
+  return header.evaluate((el) => Math.round(el.getBoundingClientRect().height * 10) / 10);
 }
 
 function assertCalendarHeaderFormat(weekday: string, dateLine: string) {
@@ -176,6 +182,21 @@ test.describe('Mobile smoke', () => {
     const { weekday, dateLine } = await getCalendarHeaderLines(page, 'athlete-calendar-date-header');
     assertCalendarHeaderFormat(weekday, dateLine);
     await assertNoHorizontalScroll(page);
+  });
+
+  test('Coach and athlete calendar header heights match', async ({ page }) => {
+    await setRoleCookie(page, 'COACH');
+    await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /^Week$/ }).click();
+    const coachHeight = await getCalendarHeaderHeight(page, 'coach-calendar-date-header');
+
+    await setRoleCookie(page, 'ATHLETE');
+    await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /^Week$/ }).click();
+    const athleteHeight = await getCalendarHeaderHeight(page, 'athlete-calendar-date-header');
+
+    const diff = Math.abs(coachHeight - athleteHeight);
+    expect(diff, `Header heights should match within 1px (coach=${coachHeight}, athlete=${athleteHeight})`).toBeLessThanOrEqual(1);
   });
 
   test('Athlete role redirects to dashboard by default', async ({ page }) => {
