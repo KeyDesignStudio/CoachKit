@@ -39,27 +39,28 @@ export function formatDayMonthYearInTimeZone(dateIso: string, timeZone?: string)
   const date = new Date(`${dateIso}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return dateIso;
 
-  const parts = new Intl.DateTimeFormat('en-GB', {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: timeZone || undefined,
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).formatToParts(date);
+  });
+
+  const parts = formatter.formatToParts(date);
 
   const day = parts.find((p) => p.type === 'day')?.value;
   const month = parts.find((p) => p.type === 'month')?.value;
   const year = parts.find((p) => p.type === 'year')?.value;
 
-  if (!day || !month || !year) {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone: timeZone || undefined,
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
-  }
+  const fallback = formatter.format(date);
+  const formatted = day && month && year ? `${day} ${month} ${year}` : fallback;
+  const weekday = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timeZone || undefined,
+    weekday: 'short',
+  }).format(date);
 
-  return `${day} ${month} ${year}`;
+  const stripped = formatted.replace(new RegExp(`^${weekday}\\s+`, 'i'), '').trim();
+  return /\b\d{4}\b/.test(stripped) || !(day && month && year) ? stripped : `${day} ${month} ${year}`;
 }
 
 function getOrdinalSuffix(day: number): string {
