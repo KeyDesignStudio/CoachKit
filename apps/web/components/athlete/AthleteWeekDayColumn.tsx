@@ -86,7 +86,11 @@ export function AthleteWeekDayColumn({
     >
       <WeatherTooltip weather={dayWeather}>
         <div
-          className={cn('flex items-center justify-between gap-2 self-start', headerClassName)}
+          className={cn(
+            'flex w-full items-center justify-between gap-2',
+            useSubgrid ? 'self-start' : 'self-stretch',
+            headerClassName
+          )}
           data-testid={headerTestId}
           tabIndex={headerNeedsTabStop ? 0 : undefined}
           aria-label={headerNeedsTabStop ? `${dayName} ${formattedDate}` : undefined}
