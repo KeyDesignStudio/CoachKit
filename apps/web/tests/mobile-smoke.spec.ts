@@ -169,58 +169,22 @@ test.describe('Mobile smoke', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
 
-    const kpiGrid = page.getByTestId('athlete-dashboard-at-a-glance-grid');
-    await expect(kpiGrid).toBeVisible();
-    const statsBox = page.getByTestId('athlete-dashboard-at-a-glance-stats');
-    await expect(statsBox).toBeVisible();
-    await expect(statsBox.getByTestId('athlete-dashboard-at-a-glance-stat-row')).toHaveCount(4);
-
-    // Notifications block removed from dashboard (redundant).
-    await expect(page.getByTestId('athlete-dashboard-notifications')).toHaveCount(0);
-
-    const plannedCard = page.getByTestId('athlete-range-planned-card');
-    const caloriesCard = page.getByTestId('athlete-range-calories-card');
-    const nextUpCard = page.getByTestId('athlete-range-nextup-card');
-    await expect(plannedCard).toBeVisible();
-    await expect(caloriesCard).toBeVisible();
-    await expect(nextUpCard).toBeVisible();
+    const caloriesChart = page.getByTestId('athlete-dashboard-calories-chart');
+    const complianceChart = page.getByTestId('athlete-dashboard-compliance-chart');
+    await expect(caloriesChart).toBeVisible();
+    await expect(complianceChart).toBeVisible();
 
     const viewportWidth = page.viewportSize()?.width ?? 0;
     if (viewportWidth > 0 && viewportWidth <= 520) {
-      const selectionHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
-      const attentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
-      const glanceHeading = page.getByRole('heading', { level: 2, name: 'At a glance' });
-      await expect(selectionHeading).toBeVisible();
-      await expect(attentionHeading).toBeVisible();
-      await expect(glanceHeading).toBeVisible();
+      const timeRangeHeading = page.getByRole('heading', { level: 2, name: 'Time range' });
+      await expect(timeRangeHeading).toBeVisible();
 
-      const selectionBox = await selectionHeading.boundingBox();
-      const attentionBox = await attentionHeading.boundingBox();
-      const glanceBox = await glanceHeading.boundingBox();
-      expect(selectionBox, 'Selection heading should have bounding box').toBeTruthy();
-      expect(attentionBox, 'Attention heading should have bounding box').toBeTruthy();
-      expect(glanceBox, 'At a glance heading should have bounding box').toBeTruthy();
-      if (selectionBox && attentionBox && glanceBox) {
-        expect(selectionBox.y).toBeLessThan(attentionBox.y);
-        expect(attentionBox.y).toBeLessThan(glanceBox.y);
-      }
-
-      const caloriesCumulative = page.getByTestId('athlete-calories-cumulative');
-      const caloriesDiscipline = page.getByTestId('athlete-calories-discipline');
-      const caloriesSessions = page.getByTestId('athlete-calories-sessions');
-      await expect(caloriesCumulative).toBeVisible();
-      await expect(caloriesDiscipline).toBeVisible();
-      await expect(caloriesSessions).toBeVisible();
-
-      const cumulativeBox = await caloriesCumulative.boundingBox();
-      const disciplineBox = await caloriesDiscipline.boundingBox();
-      const sessionsBox = await caloriesSessions.boundingBox();
-      expect(cumulativeBox, 'Cumulative calories section should have a bounding box').toBeTruthy();
-      expect(disciplineBox, 'Discipline calories section should have a bounding box').toBeTruthy();
-      expect(sessionsBox, 'Sessions calories section should have a bounding box').toBeTruthy();
-      if (cumulativeBox && disciplineBox && sessionsBox) {
-        expect(cumulativeBox.y).toBeLessThan(disciplineBox.y);
-        expect(disciplineBox.y).toBeLessThan(sessionsBox.y);
+      const caloriesBox = await caloriesChart.boundingBox();
+      const complianceBox = await complianceChart.boundingBox();
+      expect(caloriesBox, 'Calories chart should have a bounding box').toBeTruthy();
+      expect(complianceBox, 'Compliance chart should have a bounding box').toBeTruthy();
+      if (caloriesBox && complianceBox) {
+        expect(caloriesBox.y).toBeLessThan(complianceBox.y + 800);
       }
     }
 

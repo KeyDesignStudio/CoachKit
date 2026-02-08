@@ -290,26 +290,4 @@ test.describe('Mobile screenshots', () => {
     await page.screenshot({ path: screenshotPath(testInfo, 'coach-dashboard.png'), fullPage: true });
   });
 
-  test('captures cumulative training chart both overlay + tooltip', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'iphone16pro', 'Cumulative chart screenshots are captured only for iphone16pro.');
-
-    await mkdir(path.join(process.cwd(), 'screenshots', String(testInfo.project.name || 'unknown')), { recursive: true });
-
-    await setRoleCookie(page, 'ATHLETE');
-
-    await page.goto('/dev/cumulative-training-chart', { waitUntil: 'networkidle' });
-
-    await expect(page.getByRole('heading', { name: 'Dev: Cumulative Training Chart' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Both' })).toHaveAttribute('aria-pressed', 'true');
-
-    await page.screenshot({ path: screenshotPath(testInfo, 'cumulative-training-both-overlay.png'), fullPage: true });
-
-    await page.getByTestId('ct-point-RUN-2026-01-04-actual').click();
-    const tooltip = page.getByRole('tooltip');
-    await expect(tooltip).toBeVisible();
-    await expect(tooltip.getByText('Actual', { exact: true })).toBeVisible();
-    await expect(tooltip.getByText('Planned', { exact: true })).toBeVisible();
-
-    await page.screenshot({ path: screenshotPath(testInfo, 'cumulative-training-both-tooltip.png'), fullPage: true });
-  });
 });

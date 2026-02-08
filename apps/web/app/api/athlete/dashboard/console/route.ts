@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { CalendarItemStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -8,7 +7,7 @@ import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
-import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
+import { addDaysToDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
 import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
@@ -26,7 +25,6 @@ const querySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD.' })
     .optional()
     .nullable(),
-  discipline: z.string().optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -37,7 +35,6 @@ export async function GET(request: NextRequest) {
     const params = querySchema.parse({
       from: searchParams.get('from'),
       to: searchParams.get('to'),
-      discipline: searchParams.get('discipline'),
     });
 
     const todayKey = getZonedDateKeyForNow(user.timezone);
@@ -48,12 +45,9 @@ export async function GET(request: NextRequest) {
     const toDate = parseDateOnly(toKey, 'to');
     assertValidDateRange(fromDate, toDate);
 
-    const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
-
     const candidateFromDate = parseDateOnly(addDaysToDayKey(fromKey, -1), 'from');
     const candidateToDate = parseDateOnly(addDaysToDayKey(toKey, 1), 'to');
     const rangeFilter = { date: { gte: candidateFromDate, lte: candidateToDate } };
-    const disciplineFilter = discipline ? { discipline } : {};
     const utcRange = getUtcRangeForLocalDayKeyRange({
       fromDayKey: fromKey,
       toDayKey: toKey,
@@ -65,7 +59,6 @@ export async function GET(request: NextRequest) {
         athleteId: user.id,
         deletedAt: null,
         ...rangeFilter,
-        ...disciplineFilter,
       },
       select: {
         id: true,
@@ -139,41 +132,9 @@ export async function GET(request: NextRequest) {
       weightKg: null,
     });
 
-    const pendingConfirmationCount = filteredItems.map(({ item }) => item).filter(
-      (item) => item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT
-    ).length;
-
-    const painFlagWorkouts = filteredItems.map(({ item }) => item).filter((item) => item.completedActivities?.[0]?.painFlag).length;
-
-    const nextUp = filteredItems.map(({ item }) => item)
-      .filter((item) => item.status === CalendarItemStatus.PLANNED)
-      .filter((item) => getLocalDayKey(item.date, user.timezone) >= todayKey)
-      .sort((a, b) => {
-        const dayA = a.date.getTime();
-        const dayB = b.date.getTime();
-        if (dayA !== dayB) return dayA - dayB;
-        const timeA = a.plannedStartTimeLocal ?? '99:99';
-        const timeB = b.plannedStartTimeLocal ?? '99:99';
-        return timeA.localeCompare(timeB);
-      })
-      .slice(0, 3)
-      .map((item) => ({
-        id: item.id,
-        date: item.date.toISOString().slice(0, 10),
-        title: item.title,
-        discipline: item.discipline,
-        plannedStartTimeLocal: item.plannedStartTimeLocal,
-      }));
-
     return success(
       {
-        attention: {
-          pendingConfirmation: pendingConfirmationCount,
-          workoutsMissed: rangeSummary.totals.workoutsMissed,
-          painFlagWorkouts,
-        },
         rangeSummary,
-        nextUp,
       },
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
