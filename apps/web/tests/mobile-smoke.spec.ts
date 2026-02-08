@@ -169,6 +169,18 @@ test.describe('Mobile smoke', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
 
+    const selectionHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
+    const attentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
+    const glanceHeading = page.getByRole('heading', { level: 2, name: 'At a glance' });
+    const caloriesHeading = page.getByRole('heading', { level: 2, name: 'Calories' });
+    const plannedHeading = page.getByRole('heading', { level: 2, name: 'Planned vs Completed' });
+
+    await expect(selectionHeading).toBeVisible();
+    await expect(attentionHeading).toBeVisible();
+    await expect(glanceHeading).toBeVisible();
+    await expect(caloriesHeading).toBeVisible();
+    await expect(plannedHeading).toBeVisible();
+
     const caloriesChart = page.getByTestId('athlete-dashboard-calories-chart');
     const complianceChart = page.getByTestId('athlete-dashboard-compliance-chart');
     await expect(caloriesChart).toBeVisible();
@@ -176,8 +188,24 @@ test.describe('Mobile smoke', () => {
 
     const viewportWidth = page.viewportSize()?.width ?? 0;
     if (viewportWidth > 0 && viewportWidth <= 520) {
-      const timeRangeHeading = page.getByRole('heading', { level: 2, name: 'Time range' });
-      await expect(timeRangeHeading).toBeVisible();
+      const selectionBox = await selectionHeading.boundingBox();
+      const attentionBox = await attentionHeading.boundingBox();
+      const glanceBox = await glanceHeading.boundingBox();
+      const caloriesHeadingBox = await caloriesHeading.boundingBox();
+      const plannedHeadingBox = await plannedHeading.boundingBox();
+
+      expect(selectionBox, 'Make your selection should have a bounding box').toBeTruthy();
+      expect(attentionBox, 'Needs your attention should have a bounding box').toBeTruthy();
+      expect(glanceBox, 'At a glance should have a bounding box').toBeTruthy();
+      expect(caloriesHeadingBox, 'Calories should have a bounding box').toBeTruthy();
+      expect(plannedHeadingBox, 'Planned vs Completed should have a bounding box').toBeTruthy();
+
+      if (selectionBox && attentionBox && glanceBox && caloriesHeadingBox && plannedHeadingBox) {
+        expect(selectionBox.y).toBeLessThan(attentionBox.y);
+        expect(attentionBox.y).toBeLessThan(glanceBox.y);
+        expect(glanceBox.y).toBeLessThan(caloriesHeadingBox.y);
+        expect(caloriesHeadingBox.y).toBeLessThan(plannedHeadingBox.y);
+      }
 
       const caloriesBox = await caloriesChart.boundingBox();
       const complianceBox = await complianceChart.boundingBox();

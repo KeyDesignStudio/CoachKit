@@ -16,6 +16,12 @@ test('Athlete dashboard panels align on desktop viewport', async ({ page }) => {
   await setRoleCookie(page, 'ATHLETE');
   await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
 
+  await expect(page.getByRole('heading', { level: 2, name: 'Make your selection' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Needs your attention' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Calories' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Planned vs Completed' })).toBeVisible();
+
   const caloriesCard = page.getByTestId('athlete-dashboard-calories-chart');
   const complianceCard = page.getByTestId('athlete-dashboard-compliance-chart');
 
