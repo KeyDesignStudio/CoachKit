@@ -1385,7 +1385,6 @@ export default function CoachCalendarPage() {
                       dayWeather={day.weather}
                       isEmpty={false}
                       isToday={isDayToday}
-                      headerDensity="compact"
                       headerTestId="coach-calendar-date-header"
                       onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey })}
                     >
@@ -1480,7 +1479,6 @@ export default function CoachCalendarPage() {
                       dayWeather={day.weather}
                       isEmpty={false}
                       isToday={isDayToday}
-                      headerDensity="compact"
                       headerTestId="coach-calendar-date-header"
                       onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey })}
                       useSubgrid
