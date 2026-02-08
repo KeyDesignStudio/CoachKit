@@ -19,6 +19,7 @@ type AthleteWeekDayColumnProps = {
   headerTestId?: string;
   addButtonTestId?: string;
   density?: 'default' | 'compact';
+  headerDensity?: 'default' | 'compact';
   children: ReactNode;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
@@ -35,13 +36,15 @@ export function AthleteWeekDayColumn({
   headerTestId,
   addButtonTestId,
   density = 'default',
+  headerDensity,
   children,
   onContextMenu,
   useSubgrid = false,
   style,
 }: AthleteWeekDayColumnProps & { useSubgrid?: boolean; style?: React.CSSProperties }) {
+  const resolvedHeaderDensity = headerDensity ?? density;
   const headerClassName =
-    density === 'compact'
+    resolvedHeaderDensity === 'compact'
       ? 'bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] px-3 py-1 md:py-1.5'
       : cn('bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]', mobileHeaderPadding);
 
