@@ -5,12 +5,14 @@ import { syncStravaForConnections } from '@/lib/strava-sync';
 
 type EnvSnapshot = {
   STRAVA_STUB?: string;
+  STRAVA_STUB_SCENARIO?: string;
   DISABLE_AUTH?: string;
 };
 
 function envSnapshot(): EnvSnapshot {
   return {
     STRAVA_STUB: process.env.STRAVA_STUB,
+    STRAVA_STUB_SCENARIO: process.env.STRAVA_STUB_SCENARIO,
     DISABLE_AUTH: process.env.DISABLE_AUTH,
   };
 }
@@ -18,6 +20,9 @@ function envSnapshot(): EnvSnapshot {
 function restoreEnv(snapshot: EnvSnapshot) {
   if (snapshot.STRAVA_STUB === undefined) delete process.env.STRAVA_STUB;
   else process.env.STRAVA_STUB = snapshot.STRAVA_STUB;
+
+  if (snapshot.STRAVA_STUB_SCENARIO === undefined) delete process.env.STRAVA_STUB_SCENARIO;
+  else process.env.STRAVA_STUB_SCENARIO = snapshot.STRAVA_STUB_SCENARIO;
 
   if (snapshot.DISABLE_AUTH === undefined) delete process.env.DISABLE_AUTH;
   else process.env.DISABLE_AUTH = snapshot.DISABLE_AUTH;
@@ -40,6 +45,7 @@ describe('strava sync (unmatched + dedupe)', () => {
 
   beforeAll(async () => {
     process.env.STRAVA_STUB = 'true';
+    process.env.STRAVA_STUB_SCENARIO = '';
     process.env.DISABLE_AUTH = 'true';
 
     await prisma.user.upsert({

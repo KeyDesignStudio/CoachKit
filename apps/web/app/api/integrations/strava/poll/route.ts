@@ -17,6 +17,9 @@ function emptySummary() {
     updated: 0,
     matched: 0,
     createdCalendarItems: 0,
+    calendarItemsCreated: 0,
+    calendarItemsUpdated: 0,
+    plannedSessionsMatched: 0,
     skippedExisting: 0,
     errors: [],
   };

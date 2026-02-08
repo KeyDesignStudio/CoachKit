@@ -14,6 +14,7 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getTimezoneLabel, TIMEZONE_VALUES } from '@/lib/timezones';
 import { WeatherLocationSelect } from '@/components/WeatherLocationSelect';
 import { useThemePreference } from '@/components/theme-preference';
+import { cn } from '@/lib/cn';
 
 type StravaStatusResponse = {
   connected: boolean;
@@ -32,6 +33,10 @@ type PollSummary = {
   created: number;
   updated: number;
   matched: number;
+  plannedSessionsMatched: number;
+  createdCalendarItems: number;
+  calendarItemsCreated: number;
+  calendarItemsUpdated: number;
   skippedExisting: number;
   errors: Array<{ athleteId?: string; message: string }>;
 };
@@ -315,30 +320,51 @@ export default function AthleteSettingsPage() {
               {loadingStatus ? <p className="text-sm text-[var(--muted)]">Loading status…</p> : null}
               {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
-              {lastSync ? (
-                <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-success)] p-4 text-sm text-[var(--text-success)]">
-                  <p className="font-medium">Strava sync complete</p>
-                  <p className="opacity-80">{new Date(lastSync.at).toLocaleString()}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <p>Fetched: <span className="font-medium">{lastSync.summary.fetched}</span></p>
-                    <p>Matched: <span className="font-medium">{lastSync.summary.matched}</span></p>
-                    <p>Created: <span className="font-medium">{lastSync.summary.created}</span></p>
-                    <p>Updated: <span className="font-medium">{lastSync.summary.updated}</span></p>
-                    <p>Skipped: <span className="font-medium">{lastSync.summary.skippedExisting}</span></p>
-                    <p>Errors: <span className="font-medium">{lastSync.summary.errors.length}</span></p>
-                  </div>
-                  {lastSync.summary.errors.length ? (
-                    <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-rose-700 dark:text-rose-300">
-                      <p className="font-medium">Some activities failed to sync</p>
-                      <ul className="mt-2 list-disc pl-5">
-                        {lastSync.summary.errors.slice(0, 3).map((e, idx) => (
-                          <li key={idx}>{e.message}</li>
-                        ))}
-                      </ul>
+              {lastSync ? (() => {
+                const summary = lastSync.summary;
+                const calendarItemsCreated = summary.calendarItemsCreated ?? summary.createdCalendarItems ?? 0;
+                const calendarItemsUpdated = summary.calendarItemsUpdated ?? 0;
+                const plannedSessionsMatched = summary.plannedSessionsMatched ?? summary.matched ?? 0;
+                const calendarChanges = calendarItemsCreated + calendarItemsUpdated + plannedSessionsMatched;
+                const hasCalendarChanges = calendarChanges > 0;
+
+                return (
+                  <div
+                    className={cn(
+                      'rounded-2xl border border-[var(--border-subtle)] p-4 text-sm',
+                      hasCalendarChanges ? 'bg-[var(--bg-success)] text-[var(--text-success)]' : 'bg-amber-50 text-amber-800'
+                    )}
+                  >
+                    <p className="font-medium">
+                      {hasCalendarChanges ? 'Strava sync complete' : 'Strava sync finished with no calendar changes'}
+                    </p>
+                    <p className="opacity-80">{new Date(lastSync.at).toLocaleString()}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <p>Fetched: <span className="font-medium">{summary.fetched}</span></p>
+                      <p>Activities updated: <span className="font-medium">{summary.updated}</span></p>
+                      <p>Calendar items created: <span className="font-medium">{calendarItemsCreated}</span></p>
+                      <p>Calendar items updated: <span className="font-medium">{calendarItemsUpdated}</span></p>
+                      <p>Planned sessions matched: <span className="font-medium">{plannedSessionsMatched}</span></p>
+                      <p>Errors: <span className="font-medium">{summary.errors.length}</span></p>
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
+                    {!hasCalendarChanges ? (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-100/60 p-3 text-sm text-amber-800">
+                        No calendar updates were applied. If you expected changes, contact support.
+                      </div>
+                    ) : null}
+                    {summary.errors.length ? (
+                      <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-rose-700 dark:text-rose-300">
+                        <p className="font-medium">Some activities failed to sync</p>
+                        <ul className="mt-2 list-disc pl-5">
+                          {summary.errors.slice(0, 3).map((e, idx) => (
+                            <li key={idx}>{e.message}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })() : null}
 
               {connected && status?.connection?.scope ? (
                 <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[var(--muted)]">

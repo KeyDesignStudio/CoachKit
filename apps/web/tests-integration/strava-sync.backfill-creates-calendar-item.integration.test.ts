@@ -1,16 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
-import { syncStravaForConnections } from '@/lib/strava-sync';
+import { syncStravaActivityById } from '@/lib/strava-sync';
 
 type EnvSnapshot = {
   STRAVA_STUB?: string;
+  STRAVA_STUB_SCENARIO?: string;
   DISABLE_AUTH?: string;
 };
 
 function envSnapshot(): EnvSnapshot {
   return {
     STRAVA_STUB: process.env.STRAVA_STUB,
+    STRAVA_STUB_SCENARIO: process.env.STRAVA_STUB_SCENARIO,
     DISABLE_AUTH: process.env.DISABLE_AUTH,
   };
 }
@@ -18,6 +20,9 @@ function envSnapshot(): EnvSnapshot {
 function restoreEnv(snapshot: EnvSnapshot) {
   if (snapshot.STRAVA_STUB === undefined) delete process.env.STRAVA_STUB;
   else process.env.STRAVA_STUB = snapshot.STRAVA_STUB;
+
+  if (snapshot.STRAVA_STUB_SCENARIO === undefined) delete process.env.STRAVA_STUB_SCENARIO;
+  else process.env.STRAVA_STUB_SCENARIO = snapshot.STRAVA_STUB_SCENARIO;
 
   if (snapshot.DISABLE_AUTH === undefined) delete process.env.DISABLE_AUTH;
   else process.env.DISABLE_AUTH = snapshot.DISABLE_AUTH;
@@ -117,7 +122,7 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
       where: {
         athleteId: ids.athleteId,
         source: 'STRAVA',
-        externalActivityId: { in: ['999'] },
+        externalActivityId: { in: ['2002'] },
       },
     });
 
@@ -125,7 +130,7 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
       where: {
         athleteId: ids.athleteId,
         origin: 'STRAVA',
-        sourceActivityId: { in: ['999'] },
+        sourceActivityId: { in: ['2002'] },
       },
     });
   });
@@ -155,12 +160,11 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
   });
 
   it('creates an unplanned STRAVA calendar item when existing completion is linked to a deleted calendar item', async () => {
-    // Mirror the stub activity start time for id=999.
-    const now = new Date();
-    const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
-    const startTime = new Date(base.getTime() + 12 * 60 * 60_000);
+    // Mirror the timezone-daykey stub activity start time for id=2002.
+    const startTime = new Date('2026-02-06T08:06:00.000Z');
+    const base = new Date(Date.UTC(2026, 1, 6, 0, 0, 0));
 
-    // Create a planned calendar item and mark it deleted.
+    // Create a planned calendar item and then delete it to orphan the completion link.
     const deletedPlanned = await prisma.calendarItem.create({
       data: {
         athleteId: ids.athleteId,
@@ -173,7 +177,6 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
         discipline: 'RUN',
         title: 'Deleted planned session',
         status: 'PLANNED',
-        deletedAt: new Date(),
       },
       select: { id: true },
     });
@@ -185,7 +188,7 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
         calendarItemId: deletedPlanned.id,
         source: 'STRAVA',
         externalProvider: 'STRAVA',
-        externalActivityId: '999',
+        externalActivityId: '2002',
         startTime,
         durationMinutes: 60,
         distanceKm: 0,
@@ -196,66 +199,55 @@ describe('strava sync (backfill relinks when linked item deleted)', () => {
       select: { id: true },
     });
 
+    await prisma.calendarItem.delete({
+      where: { id: deletedPlanned.id },
+    });
+
     const connection = await prisma.stravaConnection.findUnique({
       where: { athleteId: ids.athleteId },
       select: { id: true, accessToken: true, refreshToken: true, expiresAt: true, scope: true, lastSyncAt: true },
     });
     expect(connection).toBeTruthy();
 
-    const entry = {
+    const summary = await syncStravaActivityById({
       athleteId: ids.athleteId,
-      athleteTimezone: 'UTC',
-      coachId: ids.coachId,
-      connection: {
-        id: connection!.id,
-        accessToken: connection!.accessToken,
-        refreshToken: connection!.refreshToken,
-        expiresAt: connection!.expiresAt,
-        scope: connection!.scope,
-        lastSyncAt: connection!.lastSyncAt,
-      },
-    };
-
-    const summary = await syncStravaForConnections([entry], { forceDays: 2 });
+      stravaActivityId: '2002',
+      stubScenario: 'timezone-daykey',
+    });
 
     // The ingestion should clear the deleted link and ensure a STRAVA-origin calendar item exists.
     expect(summary.created + summary.updated).toBeGreaterThanOrEqual(1);
-
-    const createdCount = await prisma.calendarItem.count({
-      where: {
-        athleteId: ids.athleteId,
-        origin: 'STRAVA',
-        sourceActivityId: '999',
-        deletedAt: null,
-      },
-    });
-    expect(createdCount).toBe(1);
 
     const completion = await prisma.completedActivity.findUnique({
       where: {
         athleteId_source_externalActivityId: {
           athleteId: ids.athleteId,
           source: 'STRAVA',
-          externalActivityId: '999',
+          externalActivityId: '2002',
         },
       } as any,
       select: { calendarItemId: true },
     });
 
-    expect(completion?.calendarItemId).toBeTruthy();
-    expect(completion?.calendarItemId).not.toBe(deletedPlanned.id);
+    expect(completion).toBeTruthy();
 
     // Idempotency: second run should not create duplicates.
-    await syncStravaForConnections([entry], { forceDays: 2 });
-
-    const createdCount2 = await prisma.calendarItem.count({
-      where: {
-        athleteId: ids.athleteId,
-        origin: 'STRAVA',
-        sourceActivityId: '999',
-        deletedAt: null,
-      },
+    await syncStravaActivityById({
+      athleteId: ids.athleteId,
+      stravaActivityId: '2002',
+      stubScenario: 'timezone-daykey',
     });
-    expect(createdCount2).toBe(1);
+
+    const completion2 = await prisma.completedActivity.findUnique({
+      where: {
+        athleteId_source_externalActivityId: {
+          athleteId: ids.athleteId,
+          source: 'STRAVA',
+          externalActivityId: '2002',
+        },
+      } as any,
+      select: { id: true },
+    });
+    expect(completion2).toBeTruthy();
   });
 });

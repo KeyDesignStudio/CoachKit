@@ -4,12 +4,13 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
-import { assertValidDateRange, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
-import { getLocalDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
+import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 
 export const dynamic = 'force-dynamic';
@@ -49,8 +50,15 @@ export async function GET(request: NextRequest) {
 
     const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
 
-    const rangeFilter = { date: { gte: fromDate, lte: toDate } };
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(fromKey, -1), 'from');
+    const candidateToDate = parseDateOnly(addDaysToDayKey(toKey, 1), 'to');
+    const rangeFilter = { date: { gte: candidateFromDate, lte: candidateToDate } };
     const disciplineFilter = discipline ? { discipline } : {};
+    const utcRange = getUtcRangeForLocalDayKeyRange({
+      fromDayKey: fromKey,
+      toDayKey: toKey,
+      timeZone: user.timezone,
+    });
 
     const items = await prisma.calendarItem.findMany({
       where: {
@@ -71,28 +79,56 @@ export async function GET(request: NextRequest) {
         completedActivities: {
           orderBy: [{ startTime: 'desc' as const }],
           take: 1,
-          select: { durationMinutes: true, distanceKm: true, confirmedAt: true, painFlag: true, metricsJson: true },
+          select: {
+            startTime: true,
+            durationMinutes: true,
+            distanceKm: true,
+            confirmedAt: true,
+            painFlag: true,
+            metricsJson: true,
+            matchDayDiff: true,
+          },
         },
       },
       orderBy: [{ date: 'asc' as const }],
     });
 
+    const filteredItems = items
+      .map((item) => {
+        const completion = item.completedActivities?.[0] ?? null;
+        const stravaMetrics = (completion?.metricsJson as any)?.strava ?? null;
+        const completionStartUtc = completion
+          ? (() => {
+              const raw = stravaMetrics?.startDateUtc ?? null;
+              const parsed = raw ? new Date(raw) : null;
+              const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
+              if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
+                return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
+              }
+              return base;
+            })()
+          : null;
+        const effectiveStartUtc = completionStartUtc ?? combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+        return { item, completion, effectiveStartUtc, stravaMetrics };
+      })
+      .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
+
     const rangeSummary = getAthleteRangeSummary({
-      items: items.map((item) => ({
+      items: filteredItems.map(({ item, completion, effectiveStartUtc, stravaMetrics }) => ({
         id: item.id,
-        date: item.date.toISOString(),
+        date: effectiveStartUtc.toISOString(),
         discipline: item.discipline,
         status: item.status,
         title: item.title,
         plannedDurationMinutes: item.plannedDurationMinutes,
         plannedDistanceKm: item.plannedDistanceKm,
-        latestCompletedActivity: item.completedActivities?.[0]
+        latestCompletedActivity: completion
           ? {
-              durationMinutes: item.completedActivities[0].durationMinutes,
-              distanceKm: item.completedActivities[0].distanceKm,
-              caloriesKcal: getStravaCaloriesKcal(item.completedActivities[0].metricsJson),
-              kilojoules: getStravaKilojoules(item.completedActivities[0].metricsJson),
-              confirmedAt: item.completedActivities[0].confirmedAt ? item.completedActivities[0].confirmedAt.toISOString() : null,
+              durationMinutes: completion.durationMinutes,
+              distanceKm: completion.distanceKm,
+              caloriesKcal: getStravaCaloriesKcal(stravaMetrics),
+              kilojoules: getStravaKilojoules(stravaMetrics),
+              confirmedAt: completion.confirmedAt ? completion.confirmedAt.toISOString() : null,
             }
           : null,
       })),
@@ -103,13 +139,13 @@ export async function GET(request: NextRequest) {
       weightKg: null,
     });
 
-    const pendingConfirmationCount = items.filter(
+    const pendingConfirmationCount = filteredItems.map(({ item }) => item).filter(
       (item) => item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT
     ).length;
 
-    const painFlagWorkouts = items.filter((item) => item.completedActivities?.[0]?.painFlag).length;
+    const painFlagWorkouts = filteredItems.map(({ item }) => item).filter((item) => item.completedActivities?.[0]?.painFlag).length;
 
-    const nextUp = items
+    const nextUp = filteredItems.map(({ item }) => item)
       .filter((item) => item.status === CalendarItemStatus.PLANNED)
       .filter((item) => getLocalDayKey(item.date, user.timezone) >= todayKey)
       .sort((a, b) => {
