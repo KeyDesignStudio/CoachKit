@@ -1,5 +1,4 @@
-import { combineDateWithLocalTime } from '@/lib/date';
-import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
+import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 
 export type IcalFeedCalendarItem = {
   id: string;
@@ -22,10 +21,6 @@ function isCompletedStatus(status: string): boolean {
   return status === 'COMPLETED_MANUAL' || status === 'COMPLETED_SYNCED' || status === 'COMPLETED_SYNCED_DRAFT';
 }
 
-export function getStoredStartUtcForCalendarItem(item: Pick<IcalFeedCalendarItem, 'date' | 'plannedStartTimeLocal'>): Date {
-  return combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
-}
-
 export function filterCalendarItemsForLocalDayRange(params: {
   items: IcalFeedCalendarItem[];
   fromDayKey: string;
@@ -44,7 +39,7 @@ export function filterCalendarItemsForLocalDayRange(params: {
     });
 
   return items
-    .map((item) => ({ item, storedStartUtc: getStoredStartUtcForCalendarItem(item) }))
+    .map((item) => ({ item, storedStartUtc: getStoredStartUtcFromCalendarItem(item, timeZone) }))
     .filter(({ storedStartUtc }) => isStoredStartInUtcRange(storedStartUtc, utcRange))
     .sort((a, b) => a.storedStartUtc.getTime() - b.storedStartUtc.getTime())
     .map(({ item }) => item);
@@ -67,7 +62,7 @@ export function buildIcalEventsForCalendarItems(params: {
     const latest = item.completedActivities[0] ?? null;
     const isCompleted = isCompletedStatus(item.status);
 
-    const plannedStartUtc = getStoredStartUtcForCalendarItem(item);
+    const plannedStartUtc = getStoredStartUtcFromCalendarItem(item, params.timeZone);
     const startUtc = isCompleted && latest?.startTime ? new Date(latest.startTime) : plannedStartUtc;
 
     const durationSec =

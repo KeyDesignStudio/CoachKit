@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/auth';
 import { cn } from '@/lib/cn';
-import { combineDateWithLocalTime } from '@/lib/date';
-import { getLocalDayKey } from '@/lib/day-key';
+import { getLocalDayKey, formatUtcDayKey } from '@/lib/day-key';
+import { resolveLocalStartUtc } from '@/lib/calendar-local-day';
 import { tokens } from '@/components/ui/tokens';
 
 export const dynamic = 'force-dynamic';
@@ -156,7 +156,11 @@ export default async function AdminStravaSyncPage() {
 
                   const calendarItem = activity.calendarItem;
                   const calendarStartUtc = calendarItem
-                    ? combineDateWithLocalTime(calendarItem.date, calendarItem.plannedStartTimeLocal)
+                    ? resolveLocalStartUtc({
+                        dayKey: formatUtcDayKey(calendarItem.date),
+                        plannedStartTimeLocal: calendarItem.plannedStartTimeLocal,
+                        timeZone,
+                      })
                     : null;
                   const calendarDayKey = calendarStartUtc ? getLocalDayKey(calendarStartUtc, timeZone) : '—';
                   const materialised = calendarDayKey !== '—' && calendarDayKey === activityDayKey ? 'Yes' : 'No';

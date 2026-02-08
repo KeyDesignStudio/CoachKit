@@ -1,5 +1,4 @@
-import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
-import { combineDateWithLocalTime } from '@/lib/date';
+import { addDaysToDayKey, formatUtcDayKey, getLocalDayKey } from '@/lib/day-key';
 import { zonedDayTimeToUtc } from '@/lib/zoned-time';
 
 export type UtcRange = {
@@ -20,11 +19,30 @@ export function getUtcRangeForLocalDayKeyRange(params: {
   return { startUtc, endUtc };
 }
 
-export function getStoredStartUtcFromCalendarItem(item: {
-  date: Date;
-  plannedStartTimeLocal: string | null;
+export function resolveLocalStartUtc(params: {
+  dayKey: string;
+  plannedStartTimeLocal: string | null | undefined;
+  timeZone: string;
 }): Date {
-  return combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+  const time = params.plannedStartTimeLocal && params.plannedStartTimeLocal.trim()
+    ? params.plannedStartTimeLocal
+    : '00:00';
+
+  return zonedDayTimeToUtc(params.dayKey, time, params.timeZone);
+}
+
+export function getStoredStartUtcFromCalendarItem(
+  item: {
+    date: Date;
+    plannedStartTimeLocal: string | null;
+  },
+  timeZone: string
+): Date {
+  return resolveLocalStartUtc({
+    dayKey: formatUtcDayKey(item.date),
+    plannedStartTimeLocal: item.plannedStartTimeLocal,
+    timeZone,
+  });
 }
 
 export type CalendarCompletionLike = {
@@ -54,16 +72,20 @@ export function getEffectiveStartUtcFromCompletion(completion: CalendarCompletio
 export function getEffectiveStartUtcForCalendarItem(params: {
   item: { date: Date; plannedStartTimeLocal: string | null };
   completion?: CalendarCompletionLike | null;
+  timeZone: string;
 }): Date {
   if (params.completion) {
     return getEffectiveStartUtcFromCompletion(params.completion);
   }
 
-  return getStoredStartUtcFromCalendarItem(params.item);
+  return getStoredStartUtcFromCalendarItem(params.item, params.timeZone);
 }
 
-export function getLocalDayKeyForCalendarItem(item: { date: Date; plannedStartTimeLocal: string | null }, timeZone: string): string {
-  return getLocalDayKey(getStoredStartUtcFromCalendarItem(item), timeZone);
+export function getLocalDayKeyForCalendarItem(
+  item: { date: Date; plannedStartTimeLocal: string | null },
+  timeZone: string
+): string {
+  return getLocalDayKey(getStoredStartUtcFromCalendarItem(item, timeZone), timeZone);
 }
 
 export function isStoredStartInUtcRange(storedStartUtc: Date, range: UtcRange): boolean {

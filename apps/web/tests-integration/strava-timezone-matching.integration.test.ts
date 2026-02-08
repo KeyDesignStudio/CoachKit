@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { syncStravaForConnections, type StravaConnectionEntry } from '@/lib/strava-sync';
 import { getLocalDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
-import { combineDateWithLocalTime } from '@/lib/date';
+import { formatUtcDayKey } from '@/lib/day-key';
+import { resolveLocalStartUtc } from '@/lib/calendar-local-day';
 import { getWeeklyPlannedCompletedSummary } from '@/lib/calendar/weekly-summary';
 
 type EnvSnapshot = {
@@ -320,7 +321,11 @@ describe('strava sync timezone + matching', () => {
       } else if (metricsCompletion) {
         effectiveStartUtc = metricsCompletion.startTime;
       } else {
-        effectiveStartUtc = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+        effectiveStartUtc = resolveLocalStartUtc({
+          dayKey: formatUtcDayKey(item.date),
+          plannedStartTimeLocal: item.plannedStartTimeLocal,
+          timeZone: 'Australia/Brisbane',
+        });
       }
 
       return {

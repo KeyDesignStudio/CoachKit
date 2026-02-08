@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { handleError, success } from '@/lib/http';
 import { ApiError } from '@/lib/errors';
-import { combineDateWithLocalTime } from '@/lib/date';
 import { formatUtcDayKey } from '@/lib/day-key';
+import { resolveLocalStartUtc } from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -104,7 +104,11 @@ export async function GET(request: NextRequest) {
       const calendarItem = c.calendarItem;
       const storedCalendarStartUtc =
         calendarItem && calendarItem.date
-          ? combineDateWithLocalTime(calendarItem.date, calendarItem.plannedStartTimeLocal)
+          ? resolveLocalStartUtc({
+              dayKey: formatUtcDayKey(calendarItem.date),
+              plannedStartTimeLocal: calendarItem.plannedStartTimeLocal,
+              timeZone: athlete.timezone ?? 'UTC',
+            })
           : null;
 
       return {

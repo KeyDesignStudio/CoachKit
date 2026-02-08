@@ -10,9 +10,9 @@ describe('calendar iCal feed local-day selection (Australia/Brisbane)', () => {
     const items = [
       {
         id: 'item-in-range',
-        // date-only UTC day key for the instant 2026-01-29T17:00Z
-        date: new Date('2026-01-29T00:00:00.000Z'),
-        plannedStartTimeLocal: '17:00',
+        // 03:00 local on 2026-01-30 -> 2026-01-29T17:00Z
+        date: new Date('2026-01-30T00:00:00.000Z'),
+        plannedStartTimeLocal: '03:00',
         status: 'PLANNED',
         discipline: 'RUN',
         title: 'Morning run',
@@ -22,8 +22,8 @@ describe('calendar iCal feed local-day selection (Australia/Brisbane)', () => {
       },
       {
         id: 'item-out-of-range',
-        date: new Date('2026-01-30T00:00:00.000Z'),
-        plannedStartTimeLocal: '15:00',
+        date: new Date('2026-01-31T00:00:00.000Z'),
+        plannedStartTimeLocal: '01:00',
         status: 'PLANNED',
         discipline: 'RUN',
         title: 'Other run',

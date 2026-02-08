@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { ApiError, notFound } from '@/lib/errors';
-import { combineDateWithLocalTime } from '@/lib/date';
+import { getStoredStartUtcFromCalendarItem } from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +62,7 @@ export async function POST(
         throw new ApiError(409, 'ALREADY_COMPLETED', 'This workout already has a manual completion.');
       }
 
-      const startTime = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal ?? undefined);
+      const startTime = getStoredStartUtcFromCalendarItem(item, user.timezone ?? 'UTC');
 
       const completedActivity = await tx.completedActivity.create({
         data: {
