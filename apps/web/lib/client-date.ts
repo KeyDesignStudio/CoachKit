@@ -35,6 +35,33 @@ export function formatDisplayInTimeZone(dateIso: string, timeZone?: string): str
   }).format(date);
 }
 
+export function formatDayMonthYearInTimeZone(dateIso: string, timeZone?: string): string {
+  const date = new Date(`${dateIso}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return dateIso;
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timeZone || undefined,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).formatToParts(date);
+
+  const day = parts.find((p) => p.type === 'day')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const year = parts.find((p) => p.type === 'year')?.value;
+
+  if (!day || !month || !year) {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || undefined,
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(date);
+  }
+
+  return `${day} ${month} ${year}`;
+}
+
 function getOrdinalSuffix(day: number): string {
   const mod100 = day % 100;
   if (mod100 >= 11 && mod100 <= 13) return 'th';

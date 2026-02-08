@@ -23,7 +23,7 @@ import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
 import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
-import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
+import { formatDayMonthYearInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
 import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calendar/completion';
@@ -160,7 +160,7 @@ export default function AthleteCalendarPage() {
       const dayKey = addDaysToDayKey(weekStartKey, i);
       return {
         date: dayKey,
-        formatted: formatDisplayInTimeZone(dayKey, athleteTimezone),
+        formatted: formatDayMonthYearInTimeZone(dayKey, athleteTimezone),
         name: DAY_NAMES[i],
       };
     });
@@ -538,6 +538,7 @@ export default function AthleteCalendarPage() {
                     dayWeather={dayWeatherByDate[day.date]}
                     isEmpty={dayItems.length === 0}
                     isToday={day.date === todayKey}
+                    headerTestId="athlete-calendar-date-header"
                     onAddClick={() => openCreateDrawer(day.date)}
                     onContextMenu={(e) => handleContextMenu(e, 'day', { date: day.date })}
                   >

@@ -24,7 +24,7 @@ import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
-import { formatDisplayInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
+import { formatDayMonthYearInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
@@ -368,7 +368,7 @@ export default function CoachCalendarPage() {
 
     return Array.from({ length: 7 }, (_, i) => {
       const dateStr = addDaysToDayKey(weekStartKey, i);
-      const formatted = formatDisplayInTimeZone(dateStr, athleteTimezone);
+      const formatted = formatDayMonthYearInTimeZone(dateStr, athleteTimezone);
 
       const dayItems = sortSessionsForDay(
         (itemsByDate[dateStr] || []).map((item) => ({
@@ -381,7 +381,7 @@ export default function CoachCalendarPage() {
       return {
         dayName: DAY_NAMES[i],
         date: dateStr,
-        formattedDate: formatted.split(',')[1]?.trim() || formatted,
+        formattedDate: formatted,
         weather: dayWeatherByDate[dateStr],
         items: dayItems,
       };
