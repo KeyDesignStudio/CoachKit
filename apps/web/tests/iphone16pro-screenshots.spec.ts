@@ -152,6 +152,9 @@ test.describe('Mobile screenshots', () => {
     await mkdir(path.join(process.cwd(), 'screenshots', String(testInfo.project.name || 'unknown')), { recursive: true });
 
     await setRoleCookie(page, 'COACH');
+    await page.addInitScript(() => {
+      localStorage.setItem('coach-calendar-right-click-tip-seen', 'true');
+    });
 
     // Week view
     await page.goto('/coach/calendar', { waitUntil: 'networkidle' });

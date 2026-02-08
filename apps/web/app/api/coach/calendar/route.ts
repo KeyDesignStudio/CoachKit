@@ -151,7 +151,11 @@ export async function GET(request: NextRequest) {
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
       const metricsCompletion = latestStrava ?? latestManual;
-      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({ item, completion: metricsCompletion });
+      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({
+        item,
+        completion: metricsCompletion,
+        timeZone: athleteTimezone,
+      });
 
       return { item, completions, latestManual, latestStrava, metricsCompletion, effectiveStartUtc };
     });

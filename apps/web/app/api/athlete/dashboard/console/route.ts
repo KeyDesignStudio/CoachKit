@@ -4,13 +4,13 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
-import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
-import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
+import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 
 export const dynamic = 'force-dynamic';
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
               return base;
             })()
           : null;
-        const effectiveStartUtc = completionStartUtc ?? combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+        const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, user.timezone ?? 'UTC');
         return { item, completion, effectiveStartUtc, stravaMetrics };
       })
       .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
