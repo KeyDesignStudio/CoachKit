@@ -22,6 +22,22 @@ async function assertNoHorizontalScroll(page: any) {
   expect(hasOverflow, 'Page should not have horizontal overflow').toBeFalsy();
 }
 
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+async function getCalendarHeaderLines(page: any, testId: string) {
+  const header = page.getByTestId(testId).first();
+  await expect(header).toBeVisible();
+  const lines = (await header.locator('p').allTextContents()).map((text) => text.trim());
+  return { weekday: lines[0] ?? '', dateLine: lines[1] ?? '' };
+}
+
+function assertCalendarHeaderFormat(weekday: string, dateLine: string) {
+  expect(weekday, 'Weekday label should be a 3-letter abbreviation').toMatch(/^[A-Za-z]{3}$/);
+  expect(dateLine, 'Date line should include day, month, and year').toMatch(/^\d{1,2} [A-Za-z]{3} \d{4}$/);
+  const hasWeekday = WEEKDAY_LABELS.some((day) => dateLine.includes(day));
+  expect(hasWeekday, 'Date line should not repeat weekday text').toBeFalsy();
+}
+
 test.describe('Mobile smoke', () => {
   test('Coach dashboard loads (auth disabled) and no horizontal scroll', async ({ page }) => {
     await setRoleCookie(page, 'COACH');
@@ -96,6 +112,9 @@ test.describe('Mobile smoke', () => {
     await setRoleCookie(page, 'COACH');
     await page.goto('/coach/calendar', { waitUntil: 'networkidle' });
     await expect(page.locator('h1', { hasText: 'Weekly Calendar' })).toBeVisible();
+    await page.getByRole('button', { name: /^Week$/ }).click();
+    const { weekday, dateLine } = await getCalendarHeaderLines(page, 'coach-calendar-date-header');
+    assertCalendarHeaderFormat(weekday, dateLine);
     await assertNoHorizontalScroll(page);
   });
 
@@ -153,6 +172,9 @@ test.describe('Mobile smoke', () => {
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/calendar', { waitUntil: 'networkidle' });
     await expect(page.locator('h1', { hasText: 'Weekly Calendar' })).toBeVisible();
+    await page.getByRole('button', { name: /^Week$/ }).click();
+    const { weekday, dateLine } = await getCalendarHeaderLines(page, 'athlete-calendar-date-header');
+    assertCalendarHeaderFormat(weekday, dateLine);
     await assertNoHorizontalScroll(page);
   });
 
