@@ -6,13 +6,18 @@ import { prisma } from '@/lib/prisma';
 import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
-import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
-import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
+import {
+  getEffectiveStartUtcForCalendarItem,
+  getEffectiveStartUtcFromCompletion,
+  getUtcRangeForLocalDayKeyRange,
+  isStoredStartInUtcRange,
+} from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,20 +28,6 @@ const querySchema = z.object({
 });
 
 const COMPLETIONS_TAKE = 5;
-
-function getEffectiveActualStartUtc(completion: {
-  source: CompletionSource | string;
-  startTime: Date;
-  metricsJson?: any;
-}): Date {
-  if (completion.source === CompletionSource.STRAVA) {
-    const candidate = completion.metricsJson?.strava?.startDateUtc;
-    const parsed = candidate ? new Date(candidate) : null;
-    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
-  }
-
-  return completion.startTime;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -131,6 +122,7 @@ export async function GET(request: NextRequest) {
               durationMinutes: true,
               distanceKm: true,
               metricsJson: true,
+              matchDayDiff: true,
             },
           },
         },
@@ -143,20 +135,7 @@ export async function GET(request: NextRequest) {
 
     prof.mark('db');
 
-    const filteredItems = items
-      .map((item: any) => ({
-        item,
-        storedStartUtc: combineDateWithLocalTime(item.date, item.plannedStartTimeLocal),
-      }))
-      .filter(({ storedStartUtc }) => isStoredStartInUtcRange(storedStartUtc, utcRange))
-      .sort((a, b) => a.storedStartUtc.getTime() - b.storedStartUtc.getTime())
-      .map(({ item }) => item);
-
-    // Format items to include latestCompletedActivity.
-    // Prefer STRAVA for metrics (duration/distance/calories) because manual completions
-    // are often used for notes/pain flags on top of a synced activity.
-    const formattedItems = filteredItems.map((item: any) => {
-      const storedStartUtc = combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+    const preparedItems = items.map((item: any) => {
       const completions = (item.completedActivities ?? []) as Array<{
         id: string;
         painFlag: boolean;
@@ -166,76 +145,90 @@ export async function GET(request: NextRequest) {
         durationMinutes?: number | null;
         distanceKm?: number | null;
         metricsJson?: any;
+        matchDayDiff?: number | null;
       }>;
 
       const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
-
       const metricsCompletion = latestStrava ?? latestManual;
-      const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
+      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({ item, completion: metricsCompletion });
 
-      const latestCompletedActivity = metricsCompletion
-        ? {
-            id: metricsCompletion.id,
-            painFlag,
-            source: metricsCompletion.source,
-            confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
-            effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
-            durationMinutes: metricsCompletion.durationMinutes ?? null,
-            distanceKm: metricsCompletion.distanceKm ?? null,
-            metricsJson: metricsCompletion.metricsJson, // Ensure full metrics are passed to UI
-            caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
-            // DEV-ONLY DEBUG — Strava time diagnostics
-            // Never enabled in production. Do not rely on this data.
-            debug:
-              includeDebug && metricsCompletion.source === CompletionSource.STRAVA
-                ? {
-                    stravaTime: {
-                      tzUsed: athleteTimezone,
-                      stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
-                      stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
-                      storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
-                    },
-                  }
-                : undefined,
-          }
-        : null;
-
-      return {
-        id: item.id,
-        athleteId: item.athleteId,
-        coachId: item.coachId,
-        date: getLocalDayKey(storedStartUtc, athleteTimezone),
-        plannedStartTimeLocal: item.plannedStartTimeLocal,
-        origin: item.origin ?? null,
-        planningStatus: item.planningStatus ?? null,
-        sourceActivityId: item.sourceActivityId ?? null,
-        discipline: item.discipline,
-        subtype: item.subtype,
-        title: item.title,
-        plannedDurationMinutes: item.plannedDurationMinutes,
-        plannedDistanceKm: item.plannedDistanceKm,
-        distanceMeters: item.distanceMeters ?? null,
-        intensityTarget: item.intensityTarget ?? null,
-        tags: item.tags ?? [],
-        equipment: item.equipment ?? [],
-        workoutStructure: item.workoutStructure ?? null,
-        notes: item.notes ?? null,
-        intensityType: item.intensityType,
-        intensityTargetJson: item.intensityTargetJson,
-        workoutDetail: item.workoutDetail,
-        attachmentsJson: item.attachmentsJson,
-        status: item.status,
-        templateId: item.templateId,
-        groupSessionId: item.groupSessionId,
-        reviewedAt: item.reviewedAt,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        template: item.template,
-        groupSession: item.groupSession,
-        latestCompletedActivity,
-      };
+      return { item, completions, latestManual, latestStrava, metricsCompletion, effectiveStartUtc };
     });
+
+    const filteredItems = preparedItems
+      .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange))
+      .sort((a, b) => a.effectiveStartUtc.getTime() - b.effectiveStartUtc.getTime());
+
+    // Format items to include latestCompletedActivity.
+    // Prefer STRAVA for metrics (duration/distance/calories) because manual completions
+    // are often used for notes/pain flags on top of a synced activity.
+    const formattedItems = filteredItems.map(
+      ({ item, latestManual, latestStrava, metricsCompletion, effectiveStartUtc }) => {
+        const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
+        const latestCompletedActivity = metricsCompletion
+          ? {
+              id: metricsCompletion.id,
+              painFlag,
+              source: metricsCompletion.source,
+              confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
+              effectiveStartTimeUtc: getEffectiveStartUtcFromCompletion(metricsCompletion).toISOString(),
+              durationMinutes: metricsCompletion.durationMinutes ?? null,
+              distanceKm: metricsCompletion.distanceKm ?? null,
+              metricsJson: metricsCompletion.metricsJson, // Ensure full metrics are passed to UI
+              caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
+              // DEV-ONLY DEBUG — Strava time diagnostics
+              // Never enabled in production. Do not rely on this data.
+              debug:
+                includeDebug && metricsCompletion.source === CompletionSource.STRAVA
+                  ? {
+                      stravaTime: {
+                        tzUsed: athleteTimezone,
+                        stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
+                        stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
+                        storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
+                      },
+                    }
+                  : undefined,
+            }
+          : null;
+
+        return {
+          id: item.id,
+          athleteId: item.athleteId,
+          coachId: item.coachId,
+          date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+          plannedStartTimeLocal: item.plannedStartTimeLocal,
+          origin: item.origin ?? null,
+          planningStatus: item.planningStatus ?? null,
+          sourceActivityId: item.sourceActivityId ?? null,
+          discipline: item.discipline,
+          subtype: item.subtype,
+          title: item.title,
+          plannedDurationMinutes: item.plannedDurationMinutes,
+          plannedDistanceKm: item.plannedDistanceKm,
+          distanceMeters: item.distanceMeters ?? null,
+          intensityTarget: item.intensityTarget ?? null,
+          tags: item.tags ?? [],
+          equipment: item.equipment ?? [],
+          workoutStructure: item.workoutStructure ?? null,
+          notes: item.notes ?? null,
+          intensityType: item.intensityType,
+          intensityTargetJson: item.intensityTargetJson,
+          workoutDetail: item.workoutDetail,
+          attachmentsJson: item.attachmentsJson,
+          status: item.status,
+          templateId: item.templateId,
+          groupSessionId: item.groupSessionId,
+          reviewedAt: item.reviewedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          template: item.template,
+          groupSession: item.groupSession,
+          latestCompletedActivity,
+        };
+      }
+    );
 
     let dayWeather: Record<string, any> | undefined;
     if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {

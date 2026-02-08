@@ -6,12 +6,17 @@ import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
-import { assertValidDateRange, combineDateWithLocalTime, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
-import { getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
+import {
+  getEffectiveStartUtcForCalendarItem,
+  getEffectiveStartUtcFromCompletion,
+  getUtcRangeForLocalDayKeyRange,
+  isStoredStartInUtcRange,
+} from '@/lib/calendar-local-day';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,25 +47,6 @@ const includeRefs = {
     },
   },
 };
-
-function getEffectiveActualStartUtc(completion: {
-  source: CompletionSource | string;
-  startTime: Date;
-  metricsJson?: any;
-  matchDayDiff?: number | null;
-}): Date {
-  if (completion.source === CompletionSource.STRAVA) {
-    const candidate = completion.metricsJson?.strava?.startDateUtc;
-    const parsed = candidate ? new Date(candidate) : null;
-    const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
-    if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
-      return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
-    }
-    return base;
-  }
-
-  return completion.startTime;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -133,11 +119,16 @@ export async function GET(request: NextRequest) {
       const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
       const metricsCompletion = latestStrava ?? latestManual;
 
-      const effectiveStartUtc = metricsCompletion
-        ? getEffectiveActualStartUtc(metricsCompletion)
-        : combineDateWithLocalTime(item.date, item.plannedStartTimeLocal);
+      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({ item, completion: metricsCompletion });
 
-      return { item, completions, latestManual, latestStrava, metricsCompletion, effectiveStartUtc };
+      return {
+        item,
+        completions,
+        latestManual,
+        latestStrava,
+        metricsCompletion,
+        effectiveStartUtc,
+      };
     });
 
     // Filter down to items whose effective start time falls within the requested local-day range.
@@ -150,14 +141,13 @@ export async function GET(request: NextRequest) {
     // are often used for notes/pain flags on top of a synced activity.
     const formattedItems = filteredItems.map(({ item, latestManual, latestStrava, metricsCompletion, effectiveStartUtc }) => {
       const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
-
       const latestCompletedActivity = metricsCompletion
         ? {
             id: metricsCompletion.id,
             painFlag,
             source: metricsCompletion.source,
             confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
-            effectiveStartTimeUtc: getEffectiveActualStartUtc(metricsCompletion).toISOString(),
+            effectiveStartTimeUtc: getEffectiveStartUtcFromCompletion(metricsCompletion).toISOString(),
             durationMinutes: metricsCompletion.durationMinutes ?? null,
             distanceKm: metricsCompletion.distanceKm ?? null,
             caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
