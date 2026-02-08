@@ -39,6 +39,7 @@ export type RangeSummarySession = {
   title?: string | null;
   discipline: string;
   caloriesKcal: number;
+  caloriesEstimated?: boolean;
 };
 
 export type RangeSummary = {
@@ -260,6 +261,7 @@ export function getAthleteRangeSummary(params: {
         title: item.title ?? null,
         discipline: normalizeDiscipline(item.discipline),
         caloriesKcal: completedCalories,
+        caloriesEstimated: usedEstimate,
       });
       caloriesByDay.set(localDayKey, existing);
     }

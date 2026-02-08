@@ -220,4 +220,54 @@ describe('getAthleteRangeSummary', () => {
     expect(day?.sessions).toHaveLength(2);
     expect(day?.sessions?.map((session) => session.title)).toContain('Track Session');
   });
+
+  it('aggregates daily calories by athlete-local day keys', () => {
+    const summary = getAthleteRangeSummary({
+      items: [
+        {
+          ...baseItem,
+          date: '2026-02-05T01:00:00.000Z',
+          status: 'COMPLETED_SYNCED',
+          latestCompletedActivity: { durationMinutes: 30, caloriesKcal: 300 },
+        },
+        {
+          ...baseItem,
+          date: '2026-02-05T14:30:00.000Z',
+          status: 'COMPLETED_SYNCED',
+          latestCompletedActivity: { durationMinutes: 45, caloriesKcal: 500 },
+        },
+      ],
+      timeZone: 'Australia/Brisbane',
+      fromDayKey: '2026-02-05',
+      toDayKey: '2026-02-06',
+      todayDayKey: '2026-02-06',
+    });
+
+    const dayFive = summary.caloriesByDay.find((row) => row.dayKey === '2026-02-05');
+    const daySix = summary.caloriesByDay.find((row) => row.dayKey === '2026-02-06');
+    expect(dayFive?.completedCaloriesKcal).toBe(300);
+    expect(daySix?.completedCaloriesKcal).toBe(500);
+  });
+
+  it('tracks compliance when no planned sessions exist', () => {
+    const summary = getAthleteRangeSummary({
+      items: [
+        {
+          ...baseItem,
+          date: '2026-02-06',
+          status: 'COMPLETED_SYNCED',
+          plannedDurationMinutes: null,
+          plannedDistanceKm: null,
+          latestCompletedActivity: { durationMinutes: 35 },
+        },
+      ],
+      timeZone: 'UTC',
+      fromDayKey: '2026-02-01',
+      toDayKey: '2026-02-07',
+      todayDayKey: '2026-02-07',
+    });
+
+    expect(summary.totals.plannedMinutes).toBe(0);
+    expect(summary.totals.completedMinutes).toBe(35);
+  });
 });
