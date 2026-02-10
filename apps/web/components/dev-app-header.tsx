@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
@@ -27,6 +28,82 @@ const ALL_NAV_LINKS: NavLink[] = [
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
+
+function DevUserMenu({ role }: { role: Role }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  const close = useCallback(() => setOpen(false), []);
+  const toggle = useCallback(() => setOpen((value) => !value), []);
+
+  useEffect(() => {
+    close();
+  }, [close, pathname]);
+
+  const settingsHref = role === 'ATHLETE' ? '/athlete/settings' : '/coach/settings';
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        data-testid="user-header-control"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account"
+        onClick={toggle}
+        className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]"
+      >
+        D
+      </button>
+
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <div
+            role="menu"
+            aria-label="Account menu"
+            className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]"
+          >
+            <div className="px-4 py-3">
+              <div className="text-sm font-semibold text-[var(--text)] truncate">Account</div>
+              <div className="text-xs text-[var(--muted)] truncate">Dev mode</div>
+            </div>
+            <div className="h-px bg-[var(--border-subtle)]" />
+            <div className="p-2">
+              <button
+                type="button"
+                role="menuitem"
+                className="w-full min-h-[44px] rounded-xl px-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]"
+                onClick={() => {
+                  close();
+                  router.push(settingsHref);
+                }}
+              >
+                <Icon name="settings" size="sm" className="text-[var(--muted)]" />
+                <span>Account settings</span>
+              </button>
+              {role === 'ATHLETE' ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="mt-1 w-full min-h-[44px] rounded-xl px-3 inline-flex items-center gap-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]"
+                  onClick={() => {
+                    close();
+                    router.push('/athlete/profile');
+                  }}
+                >
+                  <Icon name="info" size="sm" className="text-[var(--muted)]" />
+                  <span>Athlete profile</span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -94,10 +171,7 @@ export function DevAppHeader() {
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
             <div className="flex w-11 justify-end">
-              {/* Placeholder avatar in dev mode */}
-              <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
-                D
-              </div>
+              <DevUserMenu role={role} />
             </div>
           </div>
 
@@ -145,9 +219,7 @@ export function DevAppHeader() {
             ) : null}
           </nav>
 
-          <div className="h-11 w-11 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] inline-flex items-center justify-center text-sm font-semibold text-[var(--text)]">
-            D
-          </div>
+          <DevUserMenu role={role} />
         </div>
         </Card>
       </header>

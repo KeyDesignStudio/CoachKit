@@ -3,6 +3,7 @@ import type { Route } from 'next';
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
@@ -32,6 +33,13 @@ const allNavLinks: NavLink[] = [
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
 
+function isAuthDisabled() {
+  return (
+    process.env.NODE_ENV === 'development' &&
+    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true')
+  );
+}
+
 /**
  * AppHeader - Server Component with Clerk Authentication
  * 
@@ -43,6 +51,7 @@ const allNavLinks: NavLink[] = [
  */
 export async function AppHeader() {
   const { userId } = await auth();
+  const authDisabled = isAuthDisabled();
 
   // Get user from database if authenticated
   let userRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null = null;
@@ -116,6 +125,34 @@ export async function AppHeader() {
         }
       }
     }
+  } else if (authDisabled) {
+    const { user } = await requireAuth();
+    userRole = user.role;
+
+    if (user.role === 'COACH' || user.role === 'ADMIN') {
+      brandingCoachId = user.id;
+    } else {
+      const athleteProfile = await prisma.athleteProfile.findUnique({
+        where: { userId: user.id },
+        select: { coachId: true },
+      });
+      brandingCoachId = athleteProfile?.coachId ?? null;
+    }
+
+    if (brandingCoachId) {
+      const coachBranding = await prisma.coachBranding.findUnique({
+        where: { coachId: brandingCoachId },
+        select: { displayName: true, logoUrl: true, darkLogoUrl: true },
+      });
+
+      if (coachBranding) {
+        clubBranding = {
+          displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
+          logoUrl: coachBranding.logoUrl,
+          darkLogoUrl: coachBranding.darkLogoUrl ?? null,
+        };
+      }
+    }
   }
 
   // Filter navigation by authenticated role
@@ -132,6 +169,7 @@ export async function AppHeader() {
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
+  const showUserControl = Boolean(userId) || authDisabled;
 
   return (
     <>
@@ -202,7 +240,7 @@ export async function AppHeader() {
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
             <MobileHeaderTitle />
             <div className="flex min-w-0 max-w-[40vw] justify-end">
-              {userId && <UserHeaderControl />}
+              {showUserControl && <UserHeaderControl />}
             </div>
           </div>
 
@@ -303,7 +341,7 @@ export async function AppHeader() {
               </nav>
             ) : null}
 
-            {userId && <UserHeaderControl />}
+            {showUserControl && <UserHeaderControl />}
           </div>
         </div>
         </Card>

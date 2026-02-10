@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -15,9 +15,21 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
+import { normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const;
 const AVAILABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+
+const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say', 'Other'] as const;
+const EXPERIENCE_OPTIONS = ['New to structured training', 'Some experience', 'Experienced'] as const;
+const CONSISTENCY_OPTIONS = ['Just starting', 'Some weeks consistent', 'Mostly consistent'] as const;
+const SCHEDULE_VARIABILITY_OPTIONS = ['Very stable', 'Some variation', 'Often unpredictable'] as const;
+const SLEEP_QUALITY_OPTIONS = ['Great', 'Okay', 'Inconsistent', 'Poor'] as const;
+const INJURY_OPTIONS = ['No injuries', 'Managing minor pain', 'Recovering from injury', 'Medical considerations'] as const;
+const FEEDBACK_STYLE_OPTIONS = ['Direct and concise', 'Encouraging and supportive', 'Balanced and pragmatic'] as const;
+const TONE_OPTIONS = ['Direct', 'Warm', 'Balanced'] as const;
+const CHECK_IN_OPTIONS = ['Weekly', 'Every two weeks', 'Only when needed', 'As needed'] as const;
+const MOTIVATION_OPTIONS = ['Progress updates', 'Clear accountability', 'Variety', 'Performance targets', 'Community'] as const;
 
 type AthleteProfile = {
   userId: string;
@@ -45,6 +57,8 @@ type AthleteProfile = {
   availableDays?: string[] | null;
   scheduleVariability?: string | null;
   sleepQuality?: string | null;
+  equipmentAccess?: string | null;
+  travelConstraints?: string | null;
   injuryStatus?: string | null;
   constraintsNotes?: string | null;
   feedbackStyle?: string | null;
@@ -76,12 +90,8 @@ const span4 = { base: 1, md: 2, xl: 4 } as const;
 
 export default function AthleteProfilePage() {
   const router = useRouter();
-  const params = useParams();
   const { request } = useApi();
   const { user, loading: userLoading } = useAuthUser();
-
-  const athleteIdParam = params?.athleteId;
-  const athleteId = Array.isArray(athleteIdParam) ? athleteIdParam[0] : athleteIdParam ?? null;
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,6 +112,7 @@ export default function AthleteProfilePage() {
   const [primaryGoal, setPrimaryGoal] = useState('');
   const [secondaryGoals, setSecondaryGoals] = useState('');
   const [weeklyMinutesTarget, setWeeklyMinutesTarget] = useState('');
+  const [consistencyLevel, setConsistencyLevel] = useState('');
   const [swimConfidence, setSwimConfidence] = useState('');
   const [bikeConfidence, setBikeConfidence] = useState('');
   const [runConfidence, setRunConfidence] = useState('');
@@ -111,6 +122,8 @@ export default function AthleteProfilePage() {
   const [feedbackStyle, setFeedbackStyle] = useState('');
   const [tonePreference, setTonePreference] = useState('');
   const [checkInCadence, setCheckInCadence] = useState('');
+  const [structurePreference, setStructurePreference] = useState('');
+  const [motivationStyle, setMotivationStyle] = useState('');
 
   const [focus, setFocus] = useState('');
   const [eventName, setEventName] = useState('');
@@ -119,19 +132,21 @@ export default function AthleteProfilePage() {
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([]);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [scheduleVariability, setScheduleVariability] = useState('');
+  const [sleepQuality, setSleepQuality] = useState('');
+  const [equipmentAccess, setEquipmentAccess] = useState('');
+  const [travelConstraints, setTravelConstraints] = useState('');
   const [injuryStatus, setInjuryStatus] = useState('');
   const [constraintsNotes, setConstraintsNotes] = useState('');
 
   useEffect(() => {
-    if (!athleteId) return;
     if (userLoading) return;
-    if (!user || user.role !== 'COACH') return;
+    if (!user || user.role !== 'ATHLETE') return;
 
     const loadData = async () => {
       setLoading(true);
       setError('');
       try {
-        const data = await request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' });
+        const data = await request<{ athlete: AthleteProfile }>('/api/athlete/profile', { cache: 'no-store' });
         const athlete = data.athlete;
 
         setFirstName(athlete.firstName || '');
@@ -147,6 +162,7 @@ export default function AthleteProfilePage() {
         setPrimaryGoal(athlete.primaryGoal || '');
         setSecondaryGoals((athlete.secondaryGoals ?? []).join(', '));
         setWeeklyMinutesTarget(athlete.weeklyMinutesTarget != null ? String(athlete.weeklyMinutesTarget) : '');
+        setConsistencyLevel(athlete.consistencyLevel || '');
         setSwimConfidence(athlete.swimConfidence != null ? String(athlete.swimConfidence) : '');
         setBikeConfidence(athlete.bikeConfidence != null ? String(athlete.bikeConfidence) : '');
         setRunConfidence(athlete.runConfidence != null ? String(athlete.runConfidence) : '');
@@ -164,6 +180,8 @@ export default function AthleteProfilePage() {
         setFeedbackStyle(athlete.feedbackStyle || '');
         setTonePreference(athlete.tonePreference || '');
         setCheckInCadence(athlete.checkInCadence || '');
+        setStructurePreference(athlete.structurePreference != null ? String(athlete.structurePreference) : '');
+        setMotivationStyle(athlete.motivationStyle || '');
 
         setFocus(athlete.focus || '');
         setEventName(athlete.eventName || '');
@@ -172,17 +190,20 @@ export default function AthleteProfilePage() {
         setSelectedDisciplines(athlete.disciplines ?? []);
         setAvailableDays(athlete.availableDays ?? []);
         setScheduleVariability(athlete.scheduleVariability || '');
+        setSleepQuality(athlete.sleepQuality || '');
+        setEquipmentAccess(athlete.equipmentAccess || '');
+        setTravelConstraints(athlete.travelConstraints || '');
         setInjuryStatus(athlete.injuryStatus || '');
         setConstraintsNotes(athlete.constraintsNotes || '');
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load athlete.');
+        setError(err instanceof Error ? err.message : 'Failed to load profile.');
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [athleteId, request, user, userLoading]);
+  }, [request, user, userLoading]);
 
   const toggleDiscipline = (discipline: string) => {
     setSelectedDisciplines((prev) =>
@@ -204,17 +225,36 @@ export default function AthleteProfilePage() {
   );
 
   const handleSave = async () => {
-    if (!athleteId) return;
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
+      if (!timezone.trim()) {
+        throw new Error('Timezone is required.');
+      }
+
       if (selectedDisciplines.length === 0) {
         throw new Error('At least one discipline is required.');
       }
 
-      await request(`/api/coach/athletes/${athleteId}`, {
+      if (trainingPlanFrequency !== 'AD_HOC' && trainingPlanDayOfWeek === null) {
+        throw new Error('Training plan schedule day is required.');
+      }
+
+      if (trainingPlanFrequency === 'MONTHLY' && trainingPlanWeekOfMonth === null) {
+        throw new Error('Training plan schedule week is required.');
+      }
+
+      const trimmedMobile = mobilePhone.trim();
+      if (trimmedMobile) {
+        const normalized = normalizeAustralianMobile(trimmedMobile);
+        if (!normalized) {
+          throw new Error('Enter an Australian mobile number, e.g. 04xx xxx xxx or +614xx xxx xxx.');
+        }
+      }
+
+      await request('/api/athlete/profile', {
         method: 'PATCH',
         data: {
           firstName: firstName.trim() || undefined,
@@ -235,16 +275,22 @@ export default function AthleteProfilePage() {
           timelineWeeks: timelineWeeks ? Number(timelineWeeks) : null,
           experienceLevel: experienceLevel.trim() || null,
           weeklyMinutesTarget: weeklyMinutesTarget ? Number(weeklyMinutesTarget) : null,
+          consistencyLevel: consistencyLevel.trim() || null,
           swimConfidence: swimConfidence ? Number(swimConfidence) : null,
           bikeConfidence: bikeConfidence ? Number(bikeConfidence) : null,
           runConfidence: runConfidence ? Number(runConfidence) : null,
           availableDays,
           scheduleVariability: scheduleVariability.trim() || null,
+          sleepQuality: sleepQuality.trim() || null,
+          equipmentAccess: equipmentAccess.trim() || null,
+          travelConstraints: travelConstraints.trim() || null,
           injuryStatus: injuryStatus.trim() || null,
           constraintsNotes: constraintsNotes.trim() || null,
           feedbackStyle: feedbackStyle.trim() || null,
           tonePreference: tonePreference.trim() || null,
           checkInCadence: checkInCadence.trim() || null,
+          structurePreference: structurePreference ? Number(structurePreference) : null,
+          motivationStyle: motivationStyle.trim() || null,
           trainingPlanSchedule: {
             frequency: trainingPlanFrequency,
             dayOfWeek: trainingPlanFrequency === 'AD_HOC' ? null : trainingPlanDayOfWeek,
@@ -254,11 +300,7 @@ export default function AthleteProfilePage() {
         },
       });
 
-      await request(`/api/coach/athletes/${athleteId}/athlete-brief/refresh`, {
-        method: 'POST',
-      });
-
-      setSuccess('Saved changes and refreshed Athlete Brief.');
+      setSuccess('Saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save changes.');
     } finally {
@@ -274,18 +316,10 @@ export default function AthleteProfilePage() {
     );
   }
 
-  if (!user || user.role !== 'COACH') {
+  if (!user || user.role !== 'ATHLETE') {
     return (
       <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Coach access required.</p>
-      </div>
-    );
-  }
-
-  if (!athleteId) {
-    return (
-      <div className="px-6 pt-6">
-        <p className="text-[var(--muted)]">Athlete not found.</p>
+        <p className="text-[var(--muted)]">Athlete access required.</p>
       </div>
     );
   }
@@ -296,11 +330,11 @@ export default function AthleteProfilePage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className={uiH1}>Athlete Profile</h1>
-            <p className={uiMuted}>Edit athlete details and coaching preferences.</p>
+            <p className={uiMuted}>Update your training profile and preferences.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" onClick={() => router.push('/coach/athletes')}>
-              Back to athletes
+            <Button type="button" variant="secondary" onClick={() => router.push('/athlete/dashboard')}>
+              Back to dashboard
             </Button>
             <Button type="button" onClick={handleSave} disabled={saving || loading}>
               {saving ? 'Saving...' : 'Save changes'}
@@ -355,7 +389,14 @@ export default function AthleteProfilePage() {
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Gender
-              <Input value={gender} onChange={(e) => setGender(e.target.value)} />
+              <Select value={gender} onChange={(e) => setGender(e.target.value)}>
+                <option value="">Select...</option>
+                {GENDER_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
@@ -402,7 +443,14 @@ export default function AthleteProfilePage() {
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Experience level
-              <Input value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} />
+              <Select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)}>
+                <option value="">Select...</option>
+                {EXPERIENCE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
@@ -419,9 +467,23 @@ export default function AthleteProfilePage() {
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
+              Consistency level
+              <Select value={consistencyLevel} onChange={(e) => setConsistencyLevel(e.target.value)}>
+                <option value="">Select...</option>
+                {CONSISTENCY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormFieldSpan>
+
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
               Swim confidence
               <Select value={swimConfidence} onChange={(e) => setSwimConfidence(e.target.value)}>
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -434,7 +496,7 @@ export default function AthleteProfilePage() {
             <label className="flex flex-col gap-2 text-sm font-medium">
               Bike confidence
               <Select value={bikeConfidence} onChange={(e) => setBikeConfidence(e.target.value)}>
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -448,7 +510,7 @@ export default function AthleteProfilePage() {
             <label className="flex flex-col gap-2 text-sm font-medium">
               Run confidence
               <Select value={runConfidence} onChange={(e) => setRunConfidence(e.target.value)}>
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -509,7 +571,7 @@ export default function AthleteProfilePage() {
                 onChange={(e) => setTrainingPlanDayOfWeek(Number(e.target.value))}
                 disabled={saving || trainingPlanFrequency === 'AD_HOC'}
               >
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 <option value="0">Sunday</option>
                 <option value="1">Monday</option>
                 <option value="2">Tuesday</option>
@@ -520,23 +582,72 @@ export default function AthleteProfilePage() {
               </Select>
             </label>
           </FormFieldSpan>
+
+          <FormSection title="Coaching Preferences" className="mt-2" />
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Check-in cadence
-              <Input value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)} />
+              <Select value={checkInCadence} onChange={(e) => setCheckInCadence(e.target.value)}>
+                <option value="">Select...</option>
+                {CHECK_IN_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
 
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Feedback style
-              <Input value={feedbackStyle} onChange={(e) => setFeedbackStyle(e.target.value)} />
+              <Select value={feedbackStyle} onChange={(e) => setFeedbackStyle(e.target.value)}>
+                <option value="">Select...</option>
+                {FEEDBACK_STYLE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
           <FormFieldSpan span={span1}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Tone preference
-              <Input value={tonePreference} onChange={(e) => setTonePreference(e.target.value)} />
+              <Select value={tonePreference} onChange={(e) => setTonePreference(e.target.value)}>
+                <option value="">Select...</option>
+                {TONE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Structure preference
+              <Select value={structurePreference} onChange={(e) => setStructurePreference(e.target.value)}>
+                <option value="">Select...</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span1}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Motivation style
+              <Select value={motivationStyle} onChange={(e) => setMotivationStyle(e.target.value)}>
+                <option value="">Select...</option>
+                {MOTIVATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
 
@@ -647,13 +758,52 @@ export default function AthleteProfilePage() {
           <FormFieldSpan span={span2}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Schedule variability
-              <Input value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)} />
+              <Select value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)}>
+                <option value="">Select...</option>
+                {SCHEDULE_VARIABILITY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Sleep quality
+              <Select value={sleepQuality} onChange={(e) => setSleepQuality(e.target.value)}>
+                <option value="">Select...</option>
+                {SLEEP_QUALITY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
             </label>
           </FormFieldSpan>
           <FormFieldSpan span={span2}>
             <label className="flex flex-col gap-2 text-sm font-medium">
               Injury status
-              <Input value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)} />
+              <Select value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)}>
+                <option value="">Select...</option>
+                {INJURY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Equipment access
+              <Input value={equipmentAccess} onChange={(e) => setEquipmentAccess(e.target.value)} />
+            </label>
+          </FormFieldSpan>
+          <FormFieldSpan span={span2}>
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Travel constraints
+              <Input value={travelConstraints} onChange={(e) => setTravelConstraints(e.target.value)} />
             </label>
           </FormFieldSpan>
           <FormFieldSpan span={span4}>
