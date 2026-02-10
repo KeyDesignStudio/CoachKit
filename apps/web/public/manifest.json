@@ -1,0 +1,13 @@
+{
+  "name": "CoachKit",
+  "short_name": "CoachKit",
+  "start_url": "/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

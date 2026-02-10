@@ -10,7 +10,13 @@ import { DevAppHeader } from '@/components/dev-app-header';
 
 export const metadata: Metadata = {
   title: 'CoachKit',
+  applicationName: 'CoachKit',
   description: 'CoachKit — Training management platform for coaches and athletes.',
+  manifest: '/manifest.json',
+  icons: {
+    icon: [{ url: '/icon.png', type: 'image/png' }],
+    apple: [{ url: '/icon.png', type: 'image/png' }],
+  },
 };
 
 // Auth-gated app: render on-demand.
