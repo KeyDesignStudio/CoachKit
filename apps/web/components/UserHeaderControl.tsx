@@ -3,10 +3,11 @@
 import { useClerk, useUser } from '@clerk/nextjs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
+import { useAuthUser } from '@/components/use-auth-user';
 
 function getDisplayName(user: ReturnType<typeof useUser>['user']): string {
   const first = (user?.firstName ?? '').trim();
@@ -41,7 +42,9 @@ type UserHeaderControlProps = {
 export function UserHeaderControl({ className }: UserHeaderControlProps) {
   const { openUserProfile, signOut } = useClerk();
   const { user, isLoaded } = useUser();
+  const { user: authUser } = useAuthUser();
   const pathname = usePathname();
+  const router = useRouter();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 260 });
@@ -144,6 +147,27 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
               <span>Account settings</span>
             </button>
 
+            {authUser?.role === 'ATHLETE' ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'mt-1 w-full min-h-[44px] rounded-xl px-3',
+                  'inline-flex items-center gap-2',
+                  'text-sm font-medium text-[var(--text)]',
+                  'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+                )}
+                onClick={() => {
+                  close();
+                  router.push('/athlete/profile');
+                }}
+              >
+                <Icon name="info" size="sm" className="text-[var(--muted)]" />
+                <span>Athlete profile</span>
+              </button>
+            ) : null}
+
             <button
               type="button"
               role="menuitem"
@@ -167,7 +191,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
       </>,
       document.body
     );
-  }, [close, displayName, menuPosition.left, menuPosition.top, menuPosition.width, open, openUserProfile, signOut]);
+  }, [authUser?.role, close, displayName, menuPosition.left, menuPosition.top, menuPosition.width, open, openUserProfile, router, signOut]);
 
   return (
     <>

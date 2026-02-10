@@ -4,9 +4,11 @@ import { TrainingPlanFrequency } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
-import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
+import { requireAthlete } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
+import { normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
+import { ensureAthleteBrief } from '@/modules/ai-plan-builder/server/athlete-brief';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,9 +54,7 @@ const updateAthleteSchema = z
       })
       .nullable()
       .optional(),
-    coachNotes: z.string().trim().max(2000).nullable().optional(),
     dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dateOfBirth must be YYYY-MM-DD').nullable().optional(),
-    zonesJson: z.unknown().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.trainingPlanSchedule === undefined || data.trainingPlanSchedule === null) return;
@@ -93,13 +93,17 @@ const updateAthleteSchema = z
     }
   });
 
-export async function GET(
-  request: NextRequest,
-  context: { params: { athleteId: string } }
-) {
+export async function GET() {
   try {
-    const { user } = await requireCoach();
-    const athlete = await assertCoachOwnsAthlete(context.params.athleteId, user.id);
+    const { user } = await requireAthlete();
+    const athlete = await prisma.athleteProfile.findUnique({
+      where: { userId: user.id },
+      include: { user: true },
+    });
+
+    if (!athlete) {
+      throw new ApiError(404, 'ATHLETE_PROFILE_REQUIRED', 'Athlete profile not found.');
+    }
 
     return success({ athlete });
   } catch (error) {
@@ -107,19 +111,27 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  context: { params: { athleteId: string } }
-) {
+export async function PATCH(request: NextRequest) {
   try {
-    const { user } = await requireCoach();
-    const athlete = await assertCoachOwnsAthlete(context.params.athleteId, user.id);
+    const { user } = await requireAthlete();
+    const athlete = await prisma.athleteProfile.findUnique({
+      where: { userId: user.id },
+      include: { user: true },
+    });
+
+    if (!athlete) {
+      throw new ApiError(404, 'ATHLETE_PROFILE_REQUIRED', 'Athlete profile not found.');
+    }
+
     const payload = updateAthleteSchema.parse(await request.json());
 
     const hasUpdates = Object.values(payload).some((value) => value !== undefined);
-
     if (!hasUpdates) {
       throw new ApiError(400, 'NO_FIELDS_PROVIDED', 'At least one field must be provided.');
+    }
+
+    if (payload.timezone === undefined) {
+      throw new ApiError(400, 'TIMEZONE_REQUIRED', 'Timezone is required.');
     }
 
     const userData: Prisma.UserUpdateInput = {};
@@ -133,7 +145,8 @@ export async function PATCH(
       const existingName = athlete.user?.name ?? '';
       const [existingFirst, ...existingRest] = existingName.split(' ').filter(Boolean);
       const nextFirst = normalizedFirstName ?? (normalizedName ? normalizedName.split(' ')[0] : existingFirst) ?? null;
-      const nextLast = normalizedLastName ?? (normalizedName ? normalizedName.split(' ').slice(1).join(' ') : existingRest.join(' ')) ?? null;
+      const nextLast =
+        normalizedLastName ?? (normalizedName ? normalizedName.split(' ').slice(1).join(' ') : existingRest.join(' ')) ?? null;
 
       profileData.firstName = nextFirst;
       profileData.lastName = nextLast || null;
@@ -162,7 +175,19 @@ export async function PATCH(
     }
 
     if (payload.mobilePhone !== undefined) {
-      profileData.mobilePhone = payload.mobilePhone;
+      if (payload.mobilePhone === null || payload.mobilePhone.trim() === '') {
+        profileData.mobilePhone = null;
+      } else {
+        const normalized = normalizeAustralianMobile(payload.mobilePhone);
+        if (!normalized) {
+          throw new ApiError(
+            400,
+            'INVALID_MOBILE_PHONE',
+            'Enter an Australian mobile number, e.g. 04xx xxx xxx or +614xx xxx xxx.'
+          );
+        }
+        profileData.mobilePhone = normalized;
+      }
     }
 
     if (payload.secondaryGoals !== undefined) {
@@ -261,16 +286,8 @@ export async function PATCH(
       profileData.trainingPlanSchedule = payload.trainingPlanSchedule as Prisma.InputJsonValue;
     }
 
-    if (payload.coachNotes !== undefined) {
-      profileData.coachNotes = payload.coachNotes;
-    }
-
     if (payload.dateOfBirth !== undefined) {
       profileData.dateOfBirth = payload.dateOfBirth ? new Date(payload.dateOfBirth + 'T00:00:00.000Z') : null;
-    }
-
-    if (payload.zonesJson !== undefined) {
-      profileData.zonesJson = payload.zonesJson as Prisma.InputJsonValue;
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -284,6 +301,10 @@ export async function PATCH(
         include: { user: true },
       });
     });
+
+    if (updated.coachId) {
+      await ensureAthleteBrief({ athleteId: updated.userId, coachId: updated.coachId });
+    }
 
     return success({ athlete: updated });
   } catch (error) {
