@@ -8,8 +8,6 @@ import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 
-export const dynamic = 'force-dynamic';
-
 const updateAthleteSchema = z
   .object({
     name: z.string().trim().min(1).optional(),

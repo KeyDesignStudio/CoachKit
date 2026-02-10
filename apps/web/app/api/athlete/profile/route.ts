@@ -10,7 +10,6 @@ import { handleError, success } from '@/lib/http';
 import { normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
 import { ensureAthleteBrief } from '@/modules/ai-plan-builder/server/athlete-brief';
 
-export const dynamic = 'force-dynamic';
 
 const updateAthleteSchema = z
   .object({

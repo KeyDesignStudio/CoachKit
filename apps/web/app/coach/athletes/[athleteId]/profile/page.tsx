@@ -131,7 +131,7 @@ export default function AthleteProfilePage() {
       setLoading(true);
       setError('');
       try {
-        const data = await request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`);
+        const data = await request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' });
         const athlete = data.athlete;
 
         setFirstName(athlete.firstName || '');
