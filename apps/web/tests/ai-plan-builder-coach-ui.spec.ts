@@ -129,7 +129,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     expect(savedPayload?.data?.athlete?.primaryGoal).toBe('GOAL TEST 123');
 
     await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
-    await expect(page.getByText('Plan Builder')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plan Builder', exact: true })).toBeVisible();
     await expect(page.getByTestId('apb-athlete-brief-details')).toContainText('Goal: GOAL TEST 123', { timeout: 60_000 });
   });
   test('happy path: intake → plan preview → edit → publish → calendar truth', async ({ page }, testInfo) => {
@@ -294,7 +294,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
     });
 
     await page.goto(`/coach/athletes/${athleteId}/ai-plan-builder`);
-    await expect(page.getByText('Plan Builder')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plan Builder', exact: true })).toBeVisible();
 
     // Coach UI must not expose internal/system language.
     const forbidden = [

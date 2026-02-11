@@ -813,7 +813,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">Plan Builder</div>
+          <h2 className="text-lg font-semibold">Plan Builder</h2>
           <div className="text-sm text-[var(--fg-muted)]">Coach-first planning in four steps.</div>
         </div>
 
