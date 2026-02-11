@@ -681,7 +681,7 @@ export default function CoachDashboardConsolePage() {
                   <div className="md:col-start-2 md:row-start-2">
                     <FieldLabel className="pl-1">&nbsp;</FieldLabel>
                     <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
-                      <div className={cn("font-medium text-[var(--muted)]", tokens.typography.body)}>
+                      <div className={cn("font-medium text-[var(--muted)] text-xs sm:text-sm", tokens.typography.body)}>
                         {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
                       </div>
                     </div>

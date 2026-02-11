@@ -324,7 +324,7 @@ export default function AthleteDashboardConsolePage() {
                         )}
                         data-testid="athlete-dashboard-range-display"
                       >
-                        <div className={cn('truncate', tokens.typography.body)}>
+                        <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
                           {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                         </div>
                       </div>
