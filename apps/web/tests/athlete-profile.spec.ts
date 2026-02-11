@@ -66,6 +66,7 @@ test.describe('Athlete profile', () => {
     await page.getByRole('menuitem', { name: 'Athlete profile' }).click();
 
     await expect(page.getByRole('heading', { level: 1, name: 'Athlete Profile' })).toBeVisible();
+    await expect(page.getByLabel('Training suburb')).toHaveValue('Brisbane');
 
     await page.getByLabel('Training suburb').fill('Newstead');
     await page.getByRole('tab', { name: 'Training Basics' }).click();
