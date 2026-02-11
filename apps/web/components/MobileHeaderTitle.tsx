@@ -3,33 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
+import { getPageTitleFromPath } from '@/lib/mobile-header-title';
+
 type TitleEventDetail = { title: string };
 
 type MobileHeaderTitleProps = {
   defaultTitle?: string;
 };
 
-function fallbackTitleFromPath(pathname: string): string {
-  if (pathname.startsWith('/coach/calendar')) return 'Calendar';
-  if (pathname.startsWith('/coach/dashboard')) return 'Dashboard';
-  if (pathname.startsWith('/coach/notifications')) return 'Notifications';
-  if (pathname.startsWith('/coach/athletes')) return 'Athletes';
-  if (pathname.startsWith('/coach/group-sessions')) return 'Session Builder';
-  if (pathname.startsWith('/coach/settings')) return 'Settings';
-
-  if (pathname.startsWith('/athlete/calendar')) return 'Calendar';
-  if (pathname.startsWith('/athlete/today')) return 'Today';
-  if (pathname.startsWith('/athlete/workouts')) return 'Workouts';
-  if (pathname.startsWith('/athlete/notifications')) return 'Notifications';
-  if (pathname.startsWith('/athlete/settings')) return 'Settings';
-  if (pathname.startsWith('/athlete/intake')) return 'Intake';
-
-  return 'CoachKit';
-}
-
 export function MobileHeaderTitle({ defaultTitle }: MobileHeaderTitleProps) {
   const pathname = usePathname();
-  const fallback = useMemo(() => fallbackTitleFromPath(pathname), [pathname]);
+  const fallback = useMemo(() => getPageTitleFromPath(pathname), [pathname]);
   const [title, setTitle] = useState<string>(defaultTitle ?? fallback);
 
   useEffect(() => {
@@ -51,7 +35,7 @@ export function MobileHeaderTitle({ defaultTitle }: MobileHeaderTitleProps) {
   }, []);
 
   return (
-    <div className="min-w-0 flex-1 text-center">
+    <div className="min-w-0 flex-1 text-center" data-testid="mobile-header-title">
       <div className="truncate text-sm font-semibold text-[var(--text)]">{title}</div>
     </div>
   );
