@@ -237,6 +237,7 @@ export default function CoachCalendarPage() {
   const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit' | 'view_completed'>('closed');
   const [sessionForm, setSessionForm] = useState(() => emptyForm(weekStartKey));
   const [editItemId, setEditItemId] = useState('');
+  const [drawerItem, setDrawerItem] = useState<CalendarItem | null>(null);
   const [drawerAthleteId, setDrawerAthleteId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -288,6 +289,7 @@ export default function CoachCalendarPage() {
   }, [user?.role, request]);
 
   const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
+  const [sessionDetailLoadingId, setSessionDetailLoadingId] = useState<string | null>(null);
 
   const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
   const [mobileDaySheetDateStr, setMobileDaySheetDateStr] = useState<string>('');
@@ -406,8 +408,9 @@ export default function CoachCalendarPage() {
 
   const editingItem = useMemo(() => {
     if ((drawerMode !== 'edit' && drawerMode !== 'view_completed') || !editItemId) return null;
+    if (drawerItem?.id === editItemId) return drawerItem;
     return itemsById.get(editItemId) ?? null;
-  }, [drawerMode, editItemId, itemsById]);
+  }, [drawerMode, editItemId, itemsById, drawerItem]);
 
   const weekGridDays = useMemo(() => {
     const selected = selectedAthletes;
@@ -643,7 +646,7 @@ export default function CoachCalendarPage() {
       if (selectedAthleteIds.size === 1) {
         const athleteId = Array.from(selectedAthleteIds)[0];
         const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string; dayWeather?: Record<string, WeatherSummary> }>(
-          `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+          `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
 
         const planWeeksPromise =
@@ -690,7 +693,7 @@ export default function CoachCalendarPage() {
         setDayWeatherByDate({});
         const results = await mapWithConcurrency(selected, 5, async (athleteId) => {
           const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
-            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
           );
           const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
           return itemsData.items.map((item) => ({
@@ -949,13 +952,38 @@ export default function CoachCalendarPage() {
     setDrawerAthleteId(athleteId);
     setSessionForm(emptyForm(date));
     setEditItemId('');
+    setDrawerItem(null);
     setDrawerMode('create');
     setError('');
     setTitleMessage('');
   };
 
+  const normalizeCalendarItemDetail = useCallback((detail: CalendarItem, fallback: CalendarItem): CalendarItem => {
+    const dateRaw = String((detail as any)?.date ?? fallback.date ?? '');
+    const normalizedDate = /^\d{4}-\d{2}-\d{2}/.test(dateRaw) ? dateRaw.slice(0, 10) : fallback.date;
+
+    return {
+      ...fallback,
+      ...detail,
+      date: normalizedDate,
+      athleteId: detail.athleteId ?? fallback.athleteId,
+      athleteName: detail.athleteName ?? fallback.athleteName,
+      athleteTimezone: detail.athleteTimezone ?? fallback.athleteTimezone,
+      displayTimeLocal: fallback.displayTimeLocal ?? detail.displayTimeLocal ?? detail.plannedStartTimeLocal ?? null,
+    };
+  }, []);
+
+  const fetchCalendarItemDetail = useCallback(
+    async (item: CalendarItem): Promise<CalendarItem> => {
+      const data = await request<{ item: CalendarItem }>(`/api/coach/calendar-items/${item.id}`);
+      return normalizeCalendarItemDetail(data.item, item);
+    },
+    [normalizeCalendarItemDetail, request]
+  );
+
   const openCompletedView = (item: CalendarItem) => {
     setEditItemId(item.id);
+    setDrawerItem(item);
     setDrawerAthleteId(item.athleteId || singleAthleteId);
     setDrawerMode('view_completed');
   };
@@ -981,25 +1009,39 @@ export default function CoachCalendarPage() {
       workoutDetail: item.workoutDetail || '',
     });
     setEditItemId(item.id);
+    setDrawerItem(item);
     setDrawerMode('edit');
     setError('');
     setTitleMessage('');
   };
 
-  const handleSessionClick = (item: CalendarItem) => {
+  const handleSessionClick = useCallback(async (item: CalendarItem) => {
     // Ensure we have the latest item state
     const freshItem = itemsById.get(item.id) || item;
+    setSessionDetailLoadingId(item.id);
 
-    if (freshItem.status?.startsWith('COMPLETED')) {
-      openCompletedView(freshItem);
-    } else {
-      openEditDrawer(freshItem);
+    try {
+      const detailItem = await fetchCalendarItemDetail(freshItem);
+      if (detailItem.status?.startsWith('COMPLETED')) {
+        openCompletedView(detailItem);
+      } else {
+        openEditDrawer(detailItem);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load workout details.');
+    } finally {
+      setSessionDetailLoadingId(null);
     }
-  };
+  }, [itemsById, fetchCalendarItemDetail, singleAthleteId]);
+
+  const onSessionClick = useCallback((item: CalendarItem) => {
+    void handleSessionClick(item);
+  }, [handleSessionClick]);
 
   const closeDrawer = () => {
     setDrawerMode('closed');
     setEditItemId('');
+    setDrawerItem(null);
     setDrawerAthleteId('');
     setTitleMessage('');
   };
@@ -1381,6 +1423,7 @@ export default function CoachCalendarPage() {
         {copyMessage ? <p className="text-sm text-emerald-600">{copyMessage}</p> : null}
         {error && drawerMode === 'closed' ? <p className="text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="text-sm text-[var(--muted)]">Loading calendar…</p> : null}
+        {sessionDetailLoadingId ? <p className="text-sm text-[var(--muted)]">Loading workout details…</p> : null}
       </header>
 
       {/* Copy Week Form */}
@@ -1450,7 +1493,7 @@ export default function CoachCalendarPage() {
           if (!singleAthleteId) return;
           openCreateDrawerForAthlete(singleAthleteId, dateStr);
         }}
-        onSessionClick={handleSessionClick}
+        onSessionClick={onSessionClick}
       />
 
       {/* Session Drawer */}
