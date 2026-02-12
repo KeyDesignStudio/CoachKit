@@ -167,17 +167,10 @@ function groupItemsByDate(items: CalendarItem[]): Record<string, CalendarItem[]>
     grouped[dateStr].push(item);
   });
   
-  // Sort items within each day by time
-  Object.keys(grouped).forEach((date) => {
-    grouped[date].sort((a, b) => {
-      const timeA = a.plannedStartTimeLocal || '';
-      const timeB = b.plannedStartTimeLocal || '';
-      return timeA.localeCompare(timeB);
-    });
-  });
-  
   return grouped;
 }
+
+type ItemsByDateAthlete = Record<string, Record<string, CalendarItem[]>>;
 
 function buildCalendarItemCreatePayload(
   source: CalendarItem,
@@ -322,6 +315,14 @@ export default function CoachCalendarPage() {
     });
   }, [athletes, athleteTimezone, selectedAthleteIds]);
 
+  const selectedAthletesById = useMemo(() => {
+    const map = new Map<string, AthleteOption>();
+    selectedAthletes.forEach((athlete) => {
+      map.set(athlete.userId, athlete);
+    });
+    return map;
+  }, [selectedAthletes]);
+
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       return {
@@ -348,36 +349,83 @@ export default function CoachCalendarPage() {
     return map;
   }, [items]);
 
+  const todayKey = useMemo(() => getTodayDayKey(athleteTimezone), [athleteTimezone]);
+
+  const weekItemsByDateAthlete = useMemo(() => {
+    if (viewMode !== 'week') return {} as ItemsByDateAthlete;
+
+    const buckets: ItemsByDateAthlete = {};
+    const now = new Date();
+
+    items.forEach((item) => {
+      const dateKey = String(item.date ?? '');
+      const athleteId = String(item.athleteId ?? '');
+      if (!dateKey || !athleteId) return;
+
+      const athlete = selectedAthletesById.get(athleteId);
+      if (!athlete) return;
+
+      const timeZone = athlete.user.timezone || 'Australia/Brisbane';
+      const dayBucket = (buckets[dateKey] ??= {});
+      const athleteBucket = (dayBucket[athleteId] ??= []);
+
+      athleteBucket.push({
+        ...item,
+        displayTimeLocal: getCalendarDisplayTime(item as any, timeZone, now),
+      });
+    });
+
+    Object.entries(buckets).forEach(([, athletesBucket]) => {
+      Object.entries(athletesBucket).forEach(([athleteId, dayItems]) => {
+        const timeZone = selectedAthletesById.get(athleteId)?.user.timezone || 'Australia/Brisbane';
+        athletesBucket[athleteId] = sortSessionsForDay(dayItems, timeZone);
+      });
+    });
+
+    return buckets;
+  }, [viewMode, items, selectedAthletesById]);
+
+  const monthItemsByDate = useMemo(() => {
+    if (viewMode !== 'month') return {} as Record<string, CalendarItem[]>;
+
+    const now = new Date();
+    const byDate: Record<string, CalendarItem[]> = {};
+
+    Object.entries(itemsByDate).forEach(([dateStr, dayItems]) => {
+      byDate[dateStr] = sortSessionsForDay(
+        dayItems.map((item) => ({
+          ...item,
+          displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
+        })),
+        athleteTimezone
+      );
+    });
+
+    return byDate;
+  }, [viewMode, itemsByDate, athleteTimezone]);
+
   const editingItem = useMemo(() => {
     if ((drawerMode !== 'edit' && drawerMode !== 'view_completed') || !editItemId) return null;
     return itemsById.get(editItemId) ?? null;
   }, [drawerMode, editItemId, itemsById]);
 
   const weekGridDays = useMemo(() => {
-    const now = new Date();
     const selected = selectedAthletes;
 
     return Array.from({ length: 7 }, (_, i) => {
       const dateKey = addDaysToDayKey(weekStartKey, i);
       const formattedDate = formatDayMonthYearInTimeZone(dateKey, athleteTimezone);
-      const dayItems = itemsByDate[dateKey] || [];
 
       return {
         dateKey,
         dayName: DAY_NAMES[i],
         formattedDate,
         weather: dayWeatherByDate[dateKey],
-        isToday: dateKey === getTodayDayKey(athleteTimezone),
+        isToday: dateKey === todayKey,
         athleteRows: selected.map((athlete) => {
           const timeZone = athlete.user.timezone || 'Australia/Brisbane';
-          const athleteItems = dayItems.filter((item) => item.athleteId === athlete.userId);
-          const mappedItems = sortSessionsForDay(
-            athleteItems.map((item) => ({
-              ...item,
-              displayTimeLocal: getCalendarDisplayTime(item as any, timeZone, now),
-            })),
-            timeZone
-          );
+          const dayBucket = weekItemsByDateAthlete[dateKey] ?? {};
+          const mappedItems = dayBucket[athlete.userId] ?? [];
 
           return {
             athlete,
@@ -387,12 +435,10 @@ export default function CoachCalendarPage() {
         }),
       };
     });
-  }, [weekStartKey, itemsByDate, athleteTimezone, dayWeatherByDate, selectedAthletes]);
+  }, [weekStartKey, athleteTimezone, dayWeatherByDate, selectedAthletes, todayKey, weekItemsByDateAthlete]);
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
-
-    const now = new Date();
 
     const gridStartKey = getMonthGridStartKey(currentMonth.year, currentMonth.month);
     const days: Array<{ date: Date; dateStr: string; isCurrentMonth: boolean; weather?: WeatherSummary; items: CalendarItem[] }> = [];
@@ -407,18 +453,12 @@ export default function CoachCalendarPage() {
         dateStr,
         isCurrentMonth,
         weather: dayWeatherByDate[dateStr],
-        items: sortSessionsForDay(
-          (itemsByDate[dateStr] || []).map((item) => ({
-            ...item,
-            displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
-          })),
-          athleteTimezone
-        ),
+        items: monthItemsByDate[dateStr] || [],
       });
     }
     
     return days;
-  }, [viewMode, currentMonth, itemsByDate, athleteTimezone, dayWeatherByDate]);
+  }, [viewMode, currentMonth, dayWeatherByDate, monthItemsByDate]);
 
   const monthWeeks = useMemo(() => {
     if (viewMode !== 'month') return [];
@@ -1192,8 +1232,6 @@ export default function CoachCalendarPage() {
     !mounted ||
     athletes.length === 0 ||
     selectedAthleteIds.size === 0;
-
-  const todayKey = getTodayDayKey(athleteTimezone);
 
   useEffect(() => {
     if (showSkeleton) return;

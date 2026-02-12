@@ -5,7 +5,7 @@
 import type { PlanReasoningV1 } from '@/lib/ai/plan-reasoning/types';
 import type { Dispatch, SetStateAction } from 'react';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -17,16 +17,6 @@ import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRende
 
 import { DAY_NAMES_SUN0, dayOffsetFromWeekStart } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
-
-const DAY_NAME_TO_INDEX: Record<string, number> = {
-  Sunday: 0,
-  Monday: 1,
-  Tuesday: 2,
-  Wednesday: 3,
-  Thursday: 4,
-  Friday: 5,
-  Saturday: 6,
-};
 
 type ReviewPlanSetup = {
   startDate: string;
@@ -105,20 +95,30 @@ type WeekSummaryProps = {
 
 function WeekSummaryCard({ week, weekSessions }: WeekSummaryProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const totalSessions = weekSessions.length;
-  const keySessions = weekSessions.filter((s) => isIntensitySessionType(String(s.type ?? ''))).length;
-  const longSession = weekSessions.reduce(
-    (acc, s) => (Number(s.durationMinutes ?? 0) > Number(acc?.durationMinutes ?? 0) ? s : acc),
-    null as any
-  );
-  const longSessionLabel = longSession
-    ? `${String(longSession.discipline ?? '').toLowerCase()} · ${DAY_NAMES_SUN0[Number(longSession.dayOfWeek ?? 0)] ?? 'Day'}`
-    : '—';
-  const balance = deriveDisciplineBalance(week.disciplineSplitMinutes ?? {});
-  const splitEntries = Object.entries(week.disciplineSplitMinutes)
-    .filter(([, v]) => typeof v === 'number' && v > 0)
-    .map(([k, v]) => `${k}: ${v}m`)
-    .join(', ');
+  const { totalSessions, keySessions, longSessionLabel, balance, splitEntries } = useMemo(() => {
+    const total = weekSessions.length;
+    const key = weekSessions.filter((s) => isIntensitySessionType(String(s.type ?? ''))).length;
+    const longSession = weekSessions.reduce(
+      (acc, s) => (Number(s.durationMinutes ?? 0) > Number(acc?.durationMinutes ?? 0) ? s : acc),
+      null as any
+    );
+    const longLabel = longSession
+      ? `${String(longSession.discipline ?? '').toLowerCase()} · ${DAY_NAMES_SUN0[Number(longSession.dayOfWeek ?? 0)] ?? 'Day'}`
+      : '—';
+    const disciplineBalance = deriveDisciplineBalance(week.disciplineSplitMinutes ?? {});
+    const split = Object.entries(week.disciplineSplitMinutes)
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+      .map(([k, v]) => `${k}: ${v}m`)
+      .join(', ');
+
+    return {
+      totalSessions: total,
+      keySessions: key,
+      longSessionLabel: longLabel,
+      balance: disciplineBalance,
+      splitEntries: split,
+    };
+  }, [weekSessions, week.disciplineSplitMinutes]);
 
   return (
     <div
@@ -171,6 +171,36 @@ function formatDayKeyShort(dayKey: string): string {
   return `${dow} ${dd} ${mon}`.trim();
 }
 
+function deriveWeekCommencingDayKey(params: {
+  weekIndex: number;
+  startDate: string;
+  completionDate: string;
+  weekStart: 'monday' | 'sunday';
+  effectiveWeeksToCompletion: number;
+}): string {
+  const { weekIndex, startDate, completionDate, weekStart, effectiveWeeksToCompletion } = params;
+
+  if (isDayKey(startDate)) {
+    const week0 = startOfWeekDayKeyWithWeekStart(startDate, weekStart);
+    return addDaysToDayKey(week0, 7 * weekIndex);
+  }
+
+  if (isDayKey(completionDate)) {
+    const completionWeekStart = startOfWeekDayKeyWithWeekStart(completionDate, weekStart);
+    const remainingWeeks = Math.max(1, effectiveWeeksToCompletion) - 1 - weekIndex;
+    return addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
+  }
+
+  return '';
+}
+
+type SessionPresentation = {
+  objective: string | null;
+  blocks: any[];
+  workoutDetailPreview: string | null;
+  dayLabel: string;
+};
+
 export function AiPlanBuilderReviewPlanSection({
   hasDraft,
   planReasoning,
@@ -187,6 +217,57 @@ export function AiPlanBuilderReviewPlanSection({
   toggleSessionLock,
   toggleWeekLock,
 }: ReviewPlanProps) {
+  const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'] as const;
+
+  const weekCommencingByIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const [weekIndex] of sessionsByWeek) {
+      const wIdx = Number(weekIndex);
+      map.set(
+        wIdx,
+        deriveWeekCommencingDayKey({
+          weekIndex: wIdx,
+          startDate: setup.startDate,
+          completionDate: setup.completionDate,
+          weekStart: effectiveWeekStart,
+          effectiveWeeksToCompletion,
+        })
+      );
+    }
+    return map;
+  }, [sessionsByWeek, setup.startDate, setup.completionDate, effectiveWeekStart, effectiveWeeksToCompletion]);
+
+  const sessionPresentationById = useMemo(() => {
+    const map = new Map<string, SessionPresentation>();
+
+    for (const [weekIndex, sessions] of sessionsByWeek) {
+      const weekCommencingDayKey = weekCommencingByIndex.get(Number(weekIndex)) ?? '';
+
+      for (const s of sessions) {
+        const sessionId = String(s.id);
+        const detailParsed = sessionDetailV1Schema.safeParse((s as any)?.detailJson ?? null);
+        const objective = detailParsed.success ? detailParsed.data.objective : null;
+        const blocks = detailParsed.success ? detailParsed.data.structure : [];
+        const workoutDetailPreview = detailParsed.success
+          ? renderWorkoutDetailFromSessionDetailV1(detailParsed.data)
+          : null;
+
+        const sessionDayKey = weekCommencingDayKey
+          ? addDaysToDayKey(weekCommencingDayKey, dayOffsetFromWeekStart(Number(s.dayOfWeek) ?? 0, effectiveWeekStart))
+          : '';
+
+        map.set(sessionId, {
+          objective,
+          blocks,
+          workoutDetailPreview,
+          dayLabel: sessionDayKey ? formatDayKeyShort(sessionDayKey) : DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0],
+        });
+      }
+    }
+
+    return map;
+  }, [sessionsByWeek, weekCommencingByIndex, effectiveWeekStart]);
+
   return !hasDraft ? (
     <div className="text-sm text-[var(--fg-muted)]">Generate a plan preview to see sessions.</div>
   ) : (
@@ -306,79 +387,47 @@ export function AiPlanBuilderReviewPlanSection({
         )}
       </div>
 
-      {sessionsByWeek.map(([weekIndex, sessions]) => (
-        <div key={weekIndex} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3" data-testid="apb-week">
-          {(() => {
-            const wIdx = Number(weekIndex);
-            const startDate = setup.startDate;
-            const completionDate = setup.completionDate;
-            const weekStart = effectiveWeekStart;
+      {sessionsByWeek.map(([weekIndex, sessions]) => {
+        const weekIndexNumber = Number(weekIndex);
+        const weekLocked = weekLockedByIndex.get(weekIndexNumber) ?? false;
+        const weekCommencingDayKey = weekCommencingByIndex.get(weekIndexNumber) ?? '';
 
-            const weekCommencingDayKey = (() => {
-              if (isDayKey(startDate)) {
-                const week0 = startOfWeekDayKeyWithWeekStart(startDate, weekStart);
-                return addDaysToDayKey(week0, 7 * wIdx);
-              }
-
-              if (isDayKey(completionDate)) {
-                const completionWeekStart = startOfWeekDayKeyWithWeekStart(completionDate, weekStart);
-                const remainingWeeks = Math.max(1, effectiveWeeksToCompletion) - 1 - wIdx;
-                return addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
-              }
-
-              return '';
-            })();
-
-            return (
-              <div className="mb-3 flex items-center justify-between" data-testid="apb-week-header">
-                <div className="text-sm font-semibold" data-testid="apb-week-heading">
-                  Week {wIdx + 1}{' '}
-                  {weekCommencingDayKey ? (
-                    <span className="font-normal text-[var(--fg-muted)]" data-testid="apb-week-commencing">
-                      • Commencing {formatDayKeyShort(weekCommencingDayKey)}
-                    </span>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={(weekLockedByIndex.get(Number(weekIndex)) ?? false) ? 'primary' : 'secondary'}
-                  disabled={busy != null}
-                  data-testid="apb-week-lock-toggle"
-                  onClick={() =>
-                    toggleWeekLock(
-                      Number(weekIndex),
-                      !(weekLockedByIndex.get(Number(weekIndex)) ?? false)
-                    )
-                  }
-                >
-                  {busy === `lock-week:${Number(weekIndex)}`
-                    ? 'Updating…'
-                    : (weekLockedByIndex.get(Number(weekIndex)) ?? false)
-                      ? 'Unlock week'
-                      : 'Lock week'}
-                </Button>
+        return (
+          <div key={weekIndex} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3" data-testid="apb-week">
+            <div className="mb-3 flex items-center justify-between" data-testid="apb-week-header">
+              <div className="text-sm font-semibold" data-testid="apb-week-heading">
+                Week {weekIndexNumber + 1}{' '}
+                {weekCommencingDayKey ? (
+                  <span className="font-normal text-[var(--fg-muted)]" data-testid="apb-week-commencing">
+                    • Commencing {formatDayKeyShort(weekCommencingDayKey)}
+                  </span>
+                ) : null}
               </div>
-            );
-          })()}
+              <Button
+                type="button"
+                size="sm"
+                variant={weekLocked ? 'primary' : 'secondary'}
+                disabled={busy != null}
+                data-testid="apb-week-lock-toggle"
+                onClick={() => toggleWeekLock(weekIndexNumber, !weekLocked)}
+              >
+                {busy === `lock-week:${weekIndexNumber}` ? 'Updating…' : weekLocked ? 'Unlock week' : 'Lock week'}
+              </Button>
+            </div>
 
           <div className="space-y-3">
             {sessions.map((s) => {
-              const detailParsed = sessionDetailV1Schema.safeParse((s as any)?.detailJson ?? null);
-              const objective = detailParsed.success ? detailParsed.data.objective : null;
-              const blocks = detailParsed.success ? detailParsed.data.structure : [];
-              const workoutDetailPreview = detailParsed.success
-                ? renderWorkoutDetailFromSessionDetailV1(detailParsed.data)
-                : null;
-
               const sessionId = String(s.id);
               const edit = sessionDraftEdits[sessionId] ?? {};
+              const presentation = sessionPresentationById.get(sessionId);
+              const blocks = presentation?.blocks ?? [];
+              const workoutDetailPreview = presentation?.workoutDetailPreview ?? null;
+              const dayLabel = presentation?.dayLabel ?? (DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0] ?? 'Day');
+              const objective = presentation?.objective ?? null;
 
-              const weekLocked = weekLockedByIndex.get(Number(weekIndex)) ?? false;
               const sessionLocked = Boolean((s as any)?.locked);
               const locked = weekLocked || sessionLocked;
 
-              const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'];
               const currentDisciplineRaw = String(edit.discipline ?? (s as any)?.discipline ?? '').trim().toUpperCase();
               const selectedDiscipline = currentDisciplineRaw || disciplineOptions[0];
               const disciplineChoices = Array.from(new Set([selectedDiscipline, ...disciplineOptions]));
@@ -389,42 +438,14 @@ export function AiPlanBuilderReviewPlanSection({
                   className={`rounded-md border border-[var(--border-subtle)] bg-[var(--bg)] px-3 py-3 ${locked ? 'opacity-80' : ''}`}
                   data-testid="apb-session"
                 >
-                  {(() => {
-                    const wIdx = Number(weekIndex);
-                    const startDate = setup.startDate;
-                    const completionDate = setup.completionDate;
-                    const weekStart = effectiveWeekStart;
-
-                    const weekCommencingDayKey = (() => {
-                      if (isDayKey(startDate)) {
-                        const week0 = startOfWeekDayKeyWithWeekStart(startDate, weekStart);
-                        return addDaysToDayKey(week0, 7 * wIdx);
-                      }
-
-                      if (isDayKey(completionDate)) {
-                        const completionWeekStart = startOfWeekDayKeyWithWeekStart(completionDate, weekStart);
-                        const remainingWeeks = Math.max(1, effectiveWeeksToCompletion) - 1 - wIdx;
-                        return addDaysToDayKey(completionWeekStart, -7 * remainingWeeks);
-                      }
-
-                      return '';
-                    })();
-
-                    const sessionDayKey = weekCommencingDayKey
-                      ? addDaysToDayKey(weekCommencingDayKey, dayOffsetFromWeekStart(Number(s.dayOfWeek) ?? 0, weekStart))
-                      : '';
-
-                    return (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-medium" data-testid="apb-session-day">
-                          {sessionDayKey ? formatDayKeyShort(sessionDayKey) : DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0]}
-                          {locked ? (
-                            <span className="ml-2 rounded bg-[var(--bg-structure)] px-2 py-0.5 text-xs text-[var(--fg-muted)]">Locked</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium" data-testid="apb-session-day">
+                      {dayLabel}
+                      {locked ? (
+                        <span className="ml-2 rounded bg-[var(--bg-structure)] px-2 py-0.5 text-xs text-[var(--fg-muted)]">Locked</span>
+                      ) : null}
+                    </div>
+                  </div>
 
                   {weekLocked ? (
                     <div className="mt-2 text-xs text-[var(--fg-muted)]">Week is locked — unlock the week to edit sessions.</div>
@@ -595,7 +616,8 @@ export function AiPlanBuilderReviewPlanSection({
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

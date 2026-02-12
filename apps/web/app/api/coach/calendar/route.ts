@@ -63,75 +63,69 @@ export async function GET(request: NextRequest) {
 
     prof.mark('auth+parse');
 
-    const [items, athleteProfile] = await Promise.all([
-      prisma.calendarItem.findMany({
-        where: {
-          athleteId: params.athleteId,
-          coachId: user.id,
-          deletedAt: null,
-          date: {
-            gte: candidateFromDate,
-            lte: candidateToDate,
+    const items = await prisma.calendarItem.findMany({
+      where: {
+        athleteId: params.athleteId,
+        coachId: user.id,
+        deletedAt: null,
+        date: {
+          gte: candidateFromDate,
+          lte: candidateToDate,
+        },
+      },
+      orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+      select: {
+        id: true,
+        athleteId: true,
+        coachId: true,
+        date: true,
+        plannedStartTimeLocal: true,
+        origin: true,
+        planningStatus: true,
+        sourceActivityId: true,
+        discipline: true,
+        subtype: true,
+        title: true,
+        plannedDurationMinutes: true,
+        plannedDistanceKm: true,
+        distanceMeters: true,
+        intensityTarget: true,
+        tags: true,
+        equipment: true,
+        workoutStructure: true,
+        notes: true,
+        intensityType: true,
+        intensityTargetJson: true,
+        workoutDetail: true,
+        attachmentsJson: true,
+        status: true,
+        templateId: true,
+        groupSessionId: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        template: { select: { id: true, title: true } },
+        groupSession: { select: { id: true, title: true } },
+        completedActivities: {
+          orderBy: [{ startTime: 'desc' as const }],
+          take: COMPLETIONS_TAKE,
+          where: {
+            source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
+          },
+          select: {
+            id: true,
+            painFlag: true,
+            startTime: true,
+            confirmedAt: true,
+            source: true,
+            durationMinutes: true,
+            distanceKm: true,
+            metricsJson: true,
+            matchDayDiff: true,
           },
         },
-        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-        select: {
-          id: true,
-          athleteId: true,
-          coachId: true,
-          date: true,
-          plannedStartTimeLocal: true,
-          origin: true,
-          planningStatus: true,
-          sourceActivityId: true,
-          discipline: true,
-          subtype: true,
-          title: true,
-          plannedDurationMinutes: true,
-          plannedDistanceKm: true,
-          distanceMeters: true,
-          intensityTarget: true,
-          tags: true,
-          equipment: true,
-          workoutStructure: true,
-          notes: true,
-          intensityType: true,
-          intensityTargetJson: true,
-          workoutDetail: true,
-          attachmentsJson: true,
-          status: true,
-          templateId: true,
-          groupSessionId: true,
-          reviewedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          template: { select: { id: true, title: true } },
-          groupSession: { select: { id: true, title: true } },
-          completedActivities: {
-            orderBy: [{ startTime: 'desc' as const }],
-            take: COMPLETIONS_TAKE,
-            where: {
-              source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
-            },
-            select: {
-              id: true,
-              painFlag: true,
-              startTime: true,
-              confirmedAt: true,
-              source: true,
-              durationMinutes: true,
-              distanceKm: true,
-              metricsJson: true,
-              matchDayDiff: true,
-            },
-          },
-        },
-      }),
-      prisma.athleteProfile.findUnique({
-        where: { userId: params.athleteId },
-        select: { defaultLat: true, defaultLon: true },
-      }),
-    ]);
+      },
+    });
 
     prof.mark('db');
 
@@ -235,11 +229,11 @@ export async function GET(request: NextRequest) {
     );
 
     let dayWeather: Record<string, any> | undefined;
-    if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {
+    if (athlete?.defaultLat != null && athlete?.defaultLon != null) {
       try {
         const map = await getWeatherSummariesForRange({
-          lat: athleteProfile.defaultLat,
-          lon: athleteProfile.defaultLon,
+          lat: athlete.defaultLat,
+          lon: athlete.defaultLon,
           from: params.from,
           to: params.to,
           timezone: athleteTimezone,
