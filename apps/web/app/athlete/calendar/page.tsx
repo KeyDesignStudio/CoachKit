@@ -10,23 +10,16 @@ import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { AthleteWeekGrid } from '@/components/athlete/AthleteWeekGrid';
-import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
-import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
-import { MonthGrid } from '@/components/coach/MonthGrid';
-import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
+import { AthleteCalendarGrid } from '@/components/calendar/AthleteCalendarGrid';
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { CalendarContextMenu, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
-import { CalendarShell } from '@/components/calendar/CalendarShell';
-import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
-import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { formatDayMonthYearInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
-import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
 import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calendar/completion';
+import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@/lib/perf/calendar-perf';
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 
@@ -136,8 +129,7 @@ export default function AthleteCalendarPage() {
   }>({ isOpen: false, position: { x: 0, y: 0 }, type: 'day', data: null });
   const [clipboard, setClipboard] = useState<any>(null);
 
-  const perfFrameMarked = useRef(false);
-  const perfDataMarked = useRef(false);
+  const perfLogged = useRef(false);
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
@@ -156,15 +148,24 @@ export default function AthleteCalendarPage() {
   }, [viewMode, weekStartKey, currentMonth]);
 
   const weekDays = useMemo(() => {
+    const now = new Date();
+
     return Array.from({ length: 7 }, (_, i) => {
       const dayKey = addDaysToDayKey(weekStartKey, i);
+      const dayItems = (itemsByDate[dayKey] || []).map((item) => ({
+        ...item,
+        displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
+      }));
+
       return {
         date: dayKey,
         formatted: formatDayMonthYearInTimeZone(dayKey, athleteTimezone),
         name: DAY_NAMES[i],
+        weather: dayWeatherByDate[dayKey],
+        items: sortSessionsForDay(dayItems, athleteTimezone),
       };
     });
-  }, [weekStartKey, athleteTimezone]);
+  }, [weekStartKey, athleteTimezone, itemsByDate, dayWeatherByDate]);
 
   const itemsByDate = useMemo(() => {
     const grouped: Record<string, CalendarItem[]> = {};
@@ -216,6 +217,50 @@ export default function AthleteCalendarPage() {
     return days;
   }, [viewMode, currentMonth, itemsByDate, athleteTimezone, dayWeatherByDate]);
 
+  const weekSummary = useMemo(() => {
+    return getRangeCompletionSummary({
+      items,
+      timeZone: athleteTimezone,
+      fromDayKey: weekStartKey,
+      toDayKey: addDaysToDayKey(weekStartKey, 6),
+    });
+  }, [items, athleteTimezone, weekStartKey]);
+
+  const weekTopDisciplines = useMemo(() => {
+    return weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
+  }, [weekSummary]);
+
+  const monthWeeks = useMemo(() => {
+    if (viewMode !== 'month') return [];
+
+    return Array.from({ length: 6 }, (_, weekIndex) => {
+      const start = weekIndex * 7;
+      const week = monthDays.slice(start, start + 7);
+      const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => isCompletedCalendarItem(i)).length, 0);
+      const weekStart = week[0]?.dateStr ?? '';
+      const weekEnd = week[6]?.dateStr ?? '';
+      const weekSummary = weekStart && weekEnd
+        ? getRangeCompletionSummary({
+            items,
+            timeZone: athleteTimezone,
+            fromDayKey: weekStart,
+            toDayKey: weekEnd,
+          })
+        : null;
+      const weekTopDisciplines = weekSummary
+        ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
+        : [];
+
+      return {
+        weekIndex,
+        week,
+        weekSummary,
+        weekTopDisciplines,
+        weekWorkoutCount,
+      };
+    });
+  }, [viewMode, monthDays, items, athleteTimezone]);
+
   const loadItems = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
       return;
@@ -237,6 +282,7 @@ export default function AthleteCalendarPage() {
       );
       setItems(data.items.map((item) => ({ ...item, title: resolveCalendarItemTitle(item) })));
       setDayWeatherByDate(data.dayWeather ?? {});
+      markCalendarPerf('data');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
     } finally {
@@ -250,16 +296,6 @@ export default function AthleteCalendarPage() {
         } catch {
           // noop
         }
-
-        if (perfFrameMarked.current && !perfDataMarked.current) {
-          perfDataMarked.current = true;
-          try {
-            performance.mark('athlete-calendar-data');
-            performance.measure('athlete-calendar-load', 'athlete-calendar-frame', 'athlete-calendar-data');
-          } catch {
-            // noop
-          }
-        }
       }
     }
   }, [request, user?.role, user?.userId, dateRange.from, dateRange.to]);
@@ -272,17 +308,12 @@ export default function AthleteCalendarPage() {
     }
   }, []);
 
-  // Dev-only perf mark for frame.
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
-    if (perfFrameMarked.current) return;
-    perfFrameMarked.current = true;
-    try {
-      performance.mark('athlete-calendar-frame');
-    } catch {
-      // noop
-    }
-  }, []);
+    resetCalendarPerfMarks();
+    perfLogged.current = false;
+    markCalendarPerf('shell');
+  }, [viewMode, weekStartKey, currentMonth.year, currentMonth.month]);
 
   useEffect(() => {
     loadItems();
@@ -327,10 +358,6 @@ export default function AthleteCalendarPage() {
       });
     }
   }, [viewMode]);
-
-  const handleWorkoutClick = (itemId: string) => {
-    router.push(`/athlete/workouts/${itemId}`);
-  };
 
   const handleItemIdClick = (itemId: string) => {
     router.push(`/athlete/workouts/${itemId}`);
@@ -442,6 +469,12 @@ export default function AthleteCalendarPage() {
   const showSkeleton = userLoading || loading || !mounted;
   const todayKey = getTodayDayKey(athleteTimezone);
 
+  useEffect(() => {
+    if (showSkeleton) return;
+    markCalendarPerf('grid');
+    logCalendarPerfOnce('athlete-calendar', perfLogged);
+  }, [showSkeleton, viewMode, weekDays, monthWeeks]);
+
   return (
     <>
     <section className="flex flex-col gap-6">
@@ -518,188 +551,20 @@ export default function AthleteCalendarPage() {
         <p className="text-[var(--muted)]">Athlete access required.</p>
       ) : null}
 
-      {/* Calendar Grid - Week or Month */}
-      {viewMode === 'week' ? (
-        <CalendarShell variant="week" data-athlete-week-view-version="athlete-week-v2">
-          {showSkeleton ? (
-            <SkeletonWeekGrid showSummaryColumn />
-          ) : (
-            <AthleteWeekGrid includeSummaryColumn>
-              {weekDays.map((day) => {
-                const dayItems = (itemsByDate[day.date] || []).map((item) => ({
-                  ...item,
-                  displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, new Date()),
-                }));
-                return (
-                  <AthleteWeekDayColumn
-                    key={day.date}
-                    dayName={day.name}
-                    formattedDate={day.formatted}
-                    dayWeather={dayWeatherByDate[day.date]}
-                    isEmpty={dayItems.length === 0}
-                    isToday={day.date === todayKey}
-                    headerTestId="athlete-calendar-date-header"
-                    onAddClick={() => openCreateDrawer(day.date)}
-                    onContextMenu={(e) => handleContextMenu(e, 'day', { date: day.date })}
-                  >
-                    {sortSessionsForDay(dayItems, athleteTimezone).map((item) => (
-                      <AthleteWeekSessionRow
-                        key={item.id}
-                        item={item}
-                        onClick={() => handleWorkoutClick(item.id)}
-                        timeZone={athleteTimezone}
-                        statusIndicatorVariant="bar"
-                        onContextMenu={(e) => handleContextMenu(e, 'session', item)}
-                      />
-                    ))}
-                  </AthleteWeekDayColumn>
-                );
-              })}
-
-              {/* Weekly summary column (desktop: right of Sunday) */}
-              <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border-2 border-white">
-                <div className="px-3 py-1.5">
-                  <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
-                  <p className="text-sm font-medium truncate">This week</p>
-                </div>
-                <div className="flex flex-col gap-2 p-2">
-                  <div className="rounded p-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
-                    <div className="text-sm font-semibold text-[var(--text)]">
-                      {items.filter((i) => {
-                        const dateKey = getLocalDayKey(i.date, athleteTimezone);
-                        return dateKey >= weekStartKey && dateKey <= addDaysToDayKey(weekStartKey, 6) && isCompletedCalendarItem(i);
-                      }).length}
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const toDayKey = addDaysToDayKey(weekStartKey, 6);
-                    const summary = getRangeCompletionSummary({
-                      items,
-                      timeZone: athleteTimezone,
-                      fromDayKey: weekStartKey,
-                      toDayKey,
-                    });
-                    const top = summary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 6);
-
-                    return (
-                      <>
-                        <div className="rounded p-2">
-                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
-                          <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
-                            {formatMinutesCompact(summary.totals.durationMinutes)} · {formatKmCompact(summary.totals.distanceKm)}
-                          </div>
-                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(summary.totals.caloriesKcal)}</div>
-                        </div>
-
-                        <div className="rounded p-2">
-                          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
-                          {top.length === 0 ? (
-                            <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
-                          ) : (
-                            <div className="mt-1 space-y-1">
-                              {top.map((row) => (
-                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                                  <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                                  <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
-                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            </AthleteWeekGrid>
-          )}
-        </CalendarShell>
-      ) : (
-        <CalendarShell variant="month" data-athlete-month-view-version="athlete-month-v2">
-          {showSkeleton ? (
-            <SkeletonMonthGrid showSummaryColumn />
-          ) : (
-            <MonthGrid includeSummaryColumn>
-              {Array.from({ length: 6 }, (_, weekIndex) => {
-                const start = weekIndex * 7;
-                const week = monthDays.slice(start, start + 7);
-                const weekWorkoutCount = week.reduce((acc, d) => acc + d.items.filter((i) => isCompletedCalendarItem(i)).length, 0);
-                const weekStart = week[0]?.dateStr ?? '';
-                const weekEnd = week[6]?.dateStr ?? '';
-                const weekSummary = weekStart && weekEnd
-                  ? getRangeCompletionSummary({
-                      items,
-                      timeZone: athleteTimezone,
-                      fromDayKey: weekStart,
-                      toDayKey: weekEnd,
-                    })
-                  : null;
-                const weekTopDisciplines = weekSummary
-                  ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
-                  : [];
-
-                return (
-                  <div key={`week-${weekIndex}`} className="contents">
-                    {week.map((day) => (
-                      <AthleteMonthDayCell
-                        key={day.dateStr}
-                        date={day.date}
-                        dateStr={day.dateStr}
-                        dayWeather={day.weather}
-                        items={day.items}
-                        isCurrentMonth={day.isCurrentMonth}
-                        isToday={day.dateStr === todayKey}
-                        athleteTimezone={athleteTimezone}
-                        onDayClick={handleDayClick}
-                        onAddClick={(dateStr) => openCreateDrawer(dateStr)}
-                        canAdd
-                        onItemClick={handleItemIdClick}
-                        onContextMenu={handleContextMenu}
-                      />
-                    ))}
-
-                    <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
-                      <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
-                        {weekSummary ? (
-                          <>
-                            {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
-                          </>
-                        ) : (
-                          <>{weekWorkoutCount} workouts</>
-                        )}
-                      </div>
-                      {weekSummary ? (
-                        <>
-                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
-                          {weekTopDisciplines.length ? (
-                            <div className="mt-1 space-y-0.5">
-                              {weekTopDisciplines.map((row) => (
-                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                                  <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                                  <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
-                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div className="text-xs text-[var(--muted)]">{weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </MonthGrid>
-          )}
-        </CalendarShell>
-      )}
+      <AthleteCalendarGrid
+        viewMode={viewMode}
+        showSkeleton={showSkeleton}
+        weekDays={weekDays}
+        weekSummary={weekSummary}
+        weekTopDisciplines={weekTopDisciplines}
+        monthWeeks={monthWeeks}
+        todayKey={todayKey}
+        athleteTimezone={athleteTimezone}
+        onDayClick={handleDayClick}
+        onAddClick={openCreateDrawer}
+        onItemClick={handleItemIdClick}
+        onContextMenu={handleContextMenu}
+      />
 
       {!loading && items.length === 0 ? (
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center">

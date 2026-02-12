@@ -10,26 +10,17 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { WeekSummaryColumn } from '@/components/coach/WeekSummaryColumn';
-import { WeekGrid } from '@/components/coach/WeekGrid';
-import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn';
-import { AthleteWeekSessionRow } from '@/components/athlete/AthleteWeekSessionRow';
+import { CoachCalendarGrid } from '@/components/calendar/CoachCalendarGrid';
 import { SessionDrawer } from '@/components/coach/SessionDrawer';
-import { MonthGrid } from '@/components/coach/MonthGrid';
-import { AthleteMonthDayCell } from '@/components/athlete/AthleteMonthDayCell';
 import { AthleteSelector } from '@/components/coach/AthleteSelector';
-import { CalendarShell } from '@/components/calendar/CalendarShell';
-import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
-import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
 import { getCalendarDisplayTime } from '@/components/calendar/getCalendarDisplayTime';
 import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
-import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { formatDayMonthYearInTimeZone, formatWeekOfLabel } from '@/lib/client-date';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { addDaysToDayKey, getLocalDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
-import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
+import { addDaysToDayKey, getTodayDayKey, parseDayKeyToUtcDate, startOfWeekDayKey } from '@/lib/day-key';
 import { getRangeCompletionSummary } from '@/lib/calendar/completion';
 import { cn } from '@/lib/cn';
+import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@/lib/perf/calendar-perf';
 import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { WorkoutStructureView } from '@/components/workouts/WorkoutStructureView';
@@ -308,8 +299,7 @@ export default function CoachCalendarPage() {
   const [mobileDaySheetOpen, setMobileDaySheetOpen] = useState(false);
   const [mobileDaySheetDateStr, setMobileDaySheetDateStr] = useState<string>('');
 
-  const perfFrameMarked = useRef(false);
-  const perfDataMarked = useRef(false);
+  const perfLogged = useRef(false);
 
   const stackedMode = selectedAthleteIds.size > 1;
   const singleAthleteId = selectedAthleteIds.size === 1 ? Array.from(selectedAthleteIds)[0] : '';
@@ -363,30 +353,41 @@ export default function CoachCalendarPage() {
     return itemsById.get(editItemId) ?? null;
   }, [drawerMode, editItemId, itemsById]);
 
-  const weekDays = useMemo(() => {
+  const weekGridDays = useMemo(() => {
     const now = new Date();
+    const selected = selectedAthletes;
 
     return Array.from({ length: 7 }, (_, i) => {
-      const dateStr = addDaysToDayKey(weekStartKey, i);
-      const formatted = formatDayMonthYearInTimeZone(dateStr, athleteTimezone);
-
-      const dayItems = sortSessionsForDay(
-        (itemsByDate[dateStr] || []).map((item) => ({
-          ...item,
-          displayTimeLocal: getCalendarDisplayTime(item, athleteTimezone, now),
-        })),
-        athleteTimezone
-      );
+      const dateKey = addDaysToDayKey(weekStartKey, i);
+      const formattedDate = formatDayMonthYearInTimeZone(dateKey, athleteTimezone);
+      const dayItems = itemsByDate[dateKey] || [];
 
       return {
+        dateKey,
         dayName: DAY_NAMES[i],
-        date: dateStr,
-        formattedDate: formatted,
-        weather: dayWeatherByDate[dateStr],
-        items: dayItems,
+        formattedDate,
+        weather: dayWeatherByDate[dateKey],
+        isToday: dateKey === getTodayDayKey(athleteTimezone),
+        athleteRows: selected.map((athlete) => {
+          const timeZone = athlete.user.timezone || 'Australia/Brisbane';
+          const athleteItems = dayItems.filter((item) => item.athleteId === athlete.userId);
+          const mappedItems = sortSessionsForDay(
+            athleteItems.map((item) => ({
+              ...item,
+              displayTimeLocal: getCalendarDisplayTime(item as any, timeZone, now),
+            })),
+            timeZone
+          );
+
+          return {
+            athlete,
+            dayItems: mappedItems,
+            timeZone,
+          };
+        }),
       };
     });
-  }, [weekStartKey, itemsByDate, athleteTimezone, dayWeatherByDate]);
+  }, [weekStartKey, itemsByDate, athleteTimezone, dayWeatherByDate, selectedAthletes]);
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
@@ -418,6 +419,38 @@ export default function CoachCalendarPage() {
     
     return days;
   }, [viewMode, currentMonth, itemsByDate, athleteTimezone, dayWeatherByDate]);
+
+  const monthWeeks = useMemo(() => {
+    if (viewMode !== 'month') return [];
+
+    return Array.from({ length: 6 }, (_, weekIndex) => {
+      const start = weekIndex * 7;
+      const week = monthDays.slice(start, start + 7);
+      const weekStart = week[0]?.dateStr ?? '';
+      const weekEnd = week[6]?.dateStr ?? '';
+      const weekSummary = weekStart && weekEnd
+        ? getRangeCompletionSummary({
+            items,
+            timeZone: athleteTimezone,
+            fromDayKey: weekStart,
+            toDayKey: weekEnd,
+            filter: (it: any) => selectedAthleteIds.has((it as any).athleteId ?? ''),
+          })
+        : null;
+      const weekWorkoutCount = weekSummary?.workoutCount ?? 0;
+      const weekTopDisciplines = weekSummary
+        ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
+        : [];
+
+      return {
+        weekIndex,
+        week,
+        weekSummary,
+        weekTopDisciplines,
+        weekWorkoutCount,
+      };
+    });
+  }, [viewMode, monthDays, items, athleteTimezone, selectedAthleteIds]);
 
   const ensureDiscipline = (value: string): DisciplineOption => {
     const normalized = (value || '').toUpperCase();
@@ -603,6 +636,8 @@ export default function CoachCalendarPage() {
           setAthleteTimezone(itemsData.athleteTimezone);
         }
 
+        markCalendarPerf('data');
+
         if (viewMode === 'week' && weekData.weeks.length > 0) {
           const currentWeekData = weekData.weeks[0];
           setWeekStatus(currentWeekData?.status || 'DRAFT');
@@ -628,6 +663,7 @@ export default function CoachCalendarPage() {
         });
         setItems(results.flat());
         setWeekStatus('DRAFT');
+        markCalendarPerf('data');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
@@ -679,34 +715,12 @@ export default function CoachCalendarPage() {
     }
   }, [mounted, user?.userId]);
 
-  // Dev-only perf marks
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
-    if (perfFrameMarked.current) return;
-    perfFrameMarked.current = true;
-    try {
-      performance.mark('coach-calendar-frame');
-    } catch {
-      // noop
-    }
-  }, []);
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
-    if (!perfFrameMarked.current) return;
-    if (perfDataMarked.current) return;
-    if (userLoading) return;
-    if (loading) return;
-    if (items.length === 0) return;
-
-    perfDataMarked.current = true;
-    try {
-      performance.mark('coach-calendar-data');
-      performance.measure('coach-calendar-load', 'coach-calendar-frame', 'coach-calendar-data');
-    } catch {
-      // noop
-    }
-  }, [items.length, loading, userLoading]);
+    resetCalendarPerfMarks();
+    perfLogged.current = false;
+    markCalendarPerf('shell');
+  }, [viewMode, weekStartKey, currentMonth.year, currentMonth.month, selectedAthleteIds]);
 
   useEffect(() => {
     loadAthletes();
@@ -1179,6 +1193,15 @@ export default function CoachCalendarPage() {
     athletes.length === 0 ||
     selectedAthleteIds.size === 0;
 
+  const todayKey = getTodayDayKey(athleteTimezone);
+
+  useEffect(() => {
+    if (showSkeleton) return;
+    if (selectedAthleteIds.size === 0) return;
+    markCalendarPerf('grid');
+    logCalendarPerfOnce('coach-calendar', perfLogged);
+  }, [showSkeleton, selectedAthleteIds, viewMode, weekGridDays, monthWeeks]);
+
   return (
     <section className="flex flex-col gap-6">
       {/* Header */}
@@ -1362,304 +1385,35 @@ export default function CoachCalendarPage() {
       ) : null}
 
       {/* Calendar Grid - Week or Month */}
-      {showSkeleton ? (
-        <CalendarShell variant={viewMode}>
-          {viewMode === 'week' ? <SkeletonWeekGrid pillsPerDay={3} showSummaryColumn /> : <SkeletonMonthGrid showSummaryColumn />}
-        </CalendarShell>
-      ) : selectedAthleteIds.size > 0 ? (
-        viewMode === 'week' ? (
-          <CalendarShell variant="week" data-coach-week-view-version="coach-week-v2">
-            <>
-              {/* Mobile View */}
-              <div className="flex flex-col gap-3 md:hidden">
-                {weekDays.map((day) => {
-                  const dateKey = day.date;
-                  const isDayToday = dateKey === getTodayDayKey(athleteTimezone);
-                  const selected = selectedAthletes;
+      <CoachCalendarGrid
+        viewMode={viewMode}
+        showSkeleton={showSkeleton}
+        selectedAthleteIds={selectedAthleteIds}
+        selectedAthletes={selectedAthletes}
+        weekGridDays={weekGridDays}
+        monthWeeks={monthWeeks}
+        weekStartKey={weekStartKey}
+        athleteTimezone={athleteTimezone}
+        items={items}
+        itemsById={itemsById}
+        todayKey={todayKey}
+        onContextMenu={handleContextMenu}
+        onAddClick={openCreateDrawerForAthlete}
+        onMonthDayClick={(dateStr) => {
+          if (isMobile) {
+            openMobileDaySheet(dateStr);
+            return;
+          }
 
-                  return (
-                    <AthleteWeekDayColumn
-                      key={dateKey}
-                      dayName={day.dayName}
-                      formattedDate={day.formattedDate}
-                      dayWeather={day.weather}
-                      isEmpty={false}
-                      isToday={isDayToday}
-                      headerTestId="coach-calendar-date-header"
-                      onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey })}
-                    >
-                      <div className="flex flex-col">
-                        {selected.map((athlete, index) => {
-                          const tz = athlete.user.timezone || 'Australia/Brisbane';
-                          const showAthleteSubheaderOnMobile = selected.length > 1;
-                          const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
-                          const dayItems = sortSessionsForDay(
-                            dayItemsRaw.map((item) => ({
-                              ...item,
-                              displayTimeLocal: getCalendarDisplayTime(
-                                {
-                                  ...item,
-                                } as any,
-                                tz,
-                                new Date()
-                              ),
-                            })),
-                            tz
-                          );
-
-                          return (
-                            <div
-                              key={athlete.userId}
-                              data-testid="coach-calendar-athlete-row"
-                              onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey, athleteId: athlete.userId })}
-                              className="flex flex-col gap-1.5"
-                            >
-                              <div
-                                className={cn(
-                                  'h-8 items-center justify-between gap-2',
-                                  showAthleteSubheaderOnMobile ? 'flex' : 'hidden'
-                                )}
-                              >
-                                <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
-                                  {athlete.user.name || athlete.userId}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                  className="h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)]"
-                                >
-                                  <Icon name={CALENDAR_ADD_SESSION_ICON} size="sm" className="text-[16px]" aria-hidden />
-                                </button>
-                              </div>
-
-                              <div className="min-h-[44px] flex flex-col gap-1">
-                                {dayItems.map((item) => (
-                                  <AthleteWeekSessionRow
-                                    key={item.id}
-                                    item={{
-                                      ...(item as any),
-                                      title: `${item.title || item.discipline || 'Workout'}`,
-                                    }}
-                                    timeZone={tz}
-                                    onClick={() => handleSessionClick(item)}
-                                    onContextMenu={(e) => handleContextMenu(e, 'session', item)}
-                                    showTimeOnMobile={false}
-                                    statusIndicatorVariant="bar"
-                                  />
-                                ))}
-                              </div>
-
-                              {index < selected.length - 1 ? (
-                                <div className="my-1 h-px bg-[var(--border-subtle)] opacity-40" />
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </AthleteWeekDayColumn>
-                  );
-                })}
-              </div>
-
-              {/* Desktop View (Grid Aligned) */}
-              <div
-                className={cn('hidden md:grid gap-3', selectedAthleteIds.size > 0 ? 'md:grid-cols-8' : 'md:grid-cols-7')}
-                style={{ gridTemplateRows: `auto repeat(${selectedAthletes.length}, auto)` }}
-              >
-                {weekDays.map((day) => {
-                  const dateKey = day.date;
-                  const isDayToday = dateKey === getTodayDayKey(athleteTimezone);
-                  const selected = selectedAthletes;
-
-                  return (
-                    <AthleteWeekDayColumn
-                      key={dateKey}
-                      dayName={day.dayName}
-                      formattedDate={day.formattedDate}
-                      dayWeather={day.weather}
-                      isEmpty={false}
-                      isToday={isDayToday}
-                      headerTestId="coach-calendar-date-header"
-                      onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey })}
-                      useSubgrid
-                      style={{ gridRow: '1 / -1' }}
-                    >
-                      {selected.map((athlete, index) => {
-                        const tz = athlete.user.timezone || 'Australia/Brisbane';
-                        const dayItemsRaw = (itemsByDate[dateKey] || []).filter((item) => item.athleteId === athlete.userId);
-                        const dayItems = sortSessionsForDay(
-                          dayItemsRaw.map((item) => ({
-                            ...item,
-                            displayTimeLocal: getCalendarDisplayTime(
-                              {
-                                ...item,
-                              } as any,
-                              tz,
-                              new Date()
-                            ),
-                          })),
-                          tz
-                        );
-
-                        return (
-                          <div
-                            key={athlete.userId}
-                            data-testid="coach-calendar-athlete-row"
-                            onContextMenu={(e) => handleContextMenu(e, 'day', { date: dateKey, athleteId: athlete.userId })}
-                            className="flex flex-col gap-1.5 md:gap-2 min-w-0"
-                          >
-                            <div className="hidden md:flex h-8 items-center justify-between gap-2">
-                              <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
-                                {athlete.user.name || athlete.userId}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => openCreateDrawerForAthlete(athlete.userId, dateKey)}
-                                data-testid="add-schedule-button"
-                                className="hidden md:inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--bg-structure)] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-                                aria-label="Add workout"
-                                title="Add workout"
-                              >
-                                <Icon
-                                  name={CALENDAR_ADD_SESSION_ICON}
-                                  size="sm"
-                                  className={`text-[16px] ${CALENDAR_ACTION_ICON_CLASS}`}
-                                  aria-hidden
-                                />
-                              </button>
-                            </div>
-
-                            <div className="min-h-[44px] flex flex-col gap-1 md:gap-2 md:min-h-[72px]">
-                              {dayItems.map((item) => (
-                                <AthleteWeekSessionRow
-                                  key={item.id}
-                                  item={{
-                                    ...(item as any),
-                                    title: `${item.title || item.discipline || 'Workout'}`,
-                                  }}
-                                  timeZone={tz}
-                                  onClick={() => handleSessionClick(item)}
-                                  onContextMenu={(e) => handleContextMenu(e, 'session', item)}
-                                  showTimeOnMobile={false}
-                                  statusIndicatorVariant="bar"
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </AthleteWeekDayColumn>
-                  );
-                })}
-
-                <WeekSummaryColumn
-                  items={items}
-                  selectedAthleteIds={selectedAthleteIds}
-                  weekStartKey={weekStartKey}
-                  athleteTimezone={athleteTimezone}
-                  style={{ gridRow: '1 / -1' }}
-                />
-              </div>
-            </>
-          </CalendarShell>
-        ) : (
-          <CalendarShell variant="month" data-coach-month-view-version="coach-month-v2">
-            <MonthGrid includeSummaryColumn>
-              {Array.from({ length: 6 }, (_, weekIndex) => {
-                const start = weekIndex * 7;
-                const week = monthDays.slice(start, start + 7);
-                const weekStart = week[0]?.dateStr ?? '';
-                const weekEnd = week[6]?.dateStr ?? '';
-                const weekSummary = weekStart && weekEnd
-                  ? getRangeCompletionSummary({
-                      items,
-                      timeZone: athleteTimezone,
-                      fromDayKey: weekStart,
-                      toDayKey: weekEnd,
-                      filter: (it: any) => selectedAthleteIds.has((it as any).athleteId ?? ''),
-                    })
-                  : null;
-                const weekWorkoutCount = weekSummary?.workoutCount ?? 0;
-                const weekTopDisciplines = weekSummary
-                  ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
-                  : [];
-
-                return (
-                  <div key={`week-${weekIndex}`} className="contents">
-                    {week.map((day) => (
-                      <AthleteMonthDayCell
-                        key={day.dateStr}
-                        date={day.date}
-                        dateStr={day.dateStr}
-                        dayWeather={day.weather}
-                        items={day.items as any}
-                        isCurrentMonth={day.isCurrentMonth}
-                        isToday={day.dateStr === getTodayDayKey(athleteTimezone)}
-                        canAdd={selectedAthleteIds.size === 1}
-                        onDayClick={(dateStr) => {
-                          if (isMobile) {
-                            openMobileDaySheet(dateStr);
-                            return;
-                          }
-
-                          setViewMode('week');
-                          setWeekStartKey(startOfWeekDayKey(dateStr));
-                        }}
-                        onAddClick={(dateStr) => {
-                          if (!singleAthleteId) return;
-                          openCreateDrawerForAthlete(singleAthleteId, dateStr);
-                        }}
-                        onItemClick={(itemId) => {
-                          const found = itemsById.get(itemId);
-                          if (found) {
-                            handleSessionClick(found);
-                          }
-                        }}
-                      />
-                    ))}
-
-                    <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
-                      <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
-                      <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
-                        {weekSummary ? (
-                          <>
-                            {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
-                          </>
-                        ) : (
-                          <>{weekWorkoutCount} workouts</>
-                        )}
-                      </div>
-                      {weekSummary ? (
-                        <>
-                          <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
-                          {weekTopDisciplines.length ? (
-                            <div className="mt-1 space-y-0.5">
-                              {weekTopDisciplines.map((row) => (
-                                <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                                  <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                                  <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
-                                    {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div className="text-xs text-[var(--muted)]">{weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </MonthGrid>
-          </CalendarShell>
-        )
-      ) : (
-        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-8 text-center text-[var(--muted)]">
-          <p>Select athletes to view the calendar</p>
-        </div>
-      )}
+          setViewMode('week');
+          setWeekStartKey(startOfWeekDayKey(dateStr));
+        }}
+        onMonthAddClick={(dateStr) => {
+          if (!singleAthleteId) return;
+          openCreateDrawerForAthlete(singleAthleteId, dateStr);
+        }}
+        onSessionClick={handleSessionClick}
+      />
 
       {/* Session Drawer */}
       <SessionDrawer
