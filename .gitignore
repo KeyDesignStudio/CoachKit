@@ -68,8 +68,6 @@ screenshots/
 # Dev-only assets (never ship)
 apps/web/public/_dev/
 
-# Copilot/Codex workspace artifacts
-.codex/
 
 # Database
 *.db
