@@ -73,9 +73,10 @@ test.describe('Calendar grid rendering', () => {
 
     const timeZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
     const todayKey = getLocalDayKey(new Date(), timeZone);
-    const todayCell = page.getByLabel(`Open day ${todayKey}`);
-    await expect(todayCell).toBeVisible();
-    await expect(todayCell.locator('text=Today')).toBeVisible();
+    const todayButton = page.getByRole('button', { name: `Open day ${todayKey}`, exact: true }).first();
+    await expect(todayButton).toBeVisible();
+    const dayCell = page.locator('[data-athlete-month-day-cell]', { has: todayButton }).first();
+    await expect(dayCell.locator('text=Today')).toBeVisible();
   });
 
   test('Coach and athlete week headers align', async ({ page }) => {
