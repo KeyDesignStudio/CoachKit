@@ -87,3 +87,67 @@ npx --yes lighthouse http://localhost:3000/athlete/calendar \
 
 Notes:
 - LCP element is not reported in these runs (null in Lighthouse output).
+
+## Phase 2 Sprint (Coach Calendar Render Path)
+
+Date: 2026-02-12
+
+### Harness
+
+Script:
+
+```bash
+node apps/web/scripts/dev/benchmark-calendar-render.mjs
+```
+
+What it does:
+- Starts `next dev` on port `3123` with auth disabled.
+- Seeds deterministic dev fixture data via `POST /api/dev/strava/test-fixtures`.
+- Loads `/coach/calendar` in week and month mode (7 iterations each).
+- Reads existing client marks:
+  - `calendar_shell_paint`
+  - `calendar_data_ready`
+  - `calendar_grid_interactive`
+
+### Before/After (Median, ms)
+
+| Scenario | shell->data | shell->grid | data->grid |
+|---|---:|---:|---:|
+| Week (before) | 25 | 35 | 7 |
+| Week (after) | 26 | 32 | 9 |
+| Month (before) | 20 | 37 | 16 |
+| Month (after) | 21 | 34 | 15 |
+
+### Notes
+
+- Week and month `shell->grid` improved by ~3 ms median in this local harness.
+- Month `data->grid` improved by ~1 ms median.
+- `shell->data` stayed roughly flat (network/API-bound in local run).
+
+## Phase 3 Sprint (Calendar API Path)
+
+Date: 2026-02-12
+
+Changes:
+- Removed a redundant athlete-profile query from `/api/coach/calendar` (reuse already-loaded athlete profile).
+- Reduced week status lookup complexity in `/api/coach/plan-weeks` (map lookup instead of repeated linear scan).
+
+Benchmark method:
+- Same harness (`node apps/web/scripts/dev/benchmark-calendar-render.mjs`), 7 iterations.
+- Two post-change runs were captured due local dev variance.
+
+### Phase 3 Results (Median, ms)
+
+| Scenario | Before (phase 2 after) | After run A | After run B |
+|---|---:|---:|---:|
+| Week shell->data | 26 | 23 | 26 |
+| Week shell->grid | 32 | 33 | 35 |
+| Week data->grid | 9 | 10 | 9 |
+| Month shell->data | 21 | 21 | 22 |
+| Month shell->grid | 34 | 38 | 38 |
+| Month data->grid | 15 | 16 | 16 |
+
+Conclusion:
+- Week `shell->data` showed one improved run, but improvements were not stable across repeated runs.
+- Month grid timings regressed in this dev harness, likely dominated by run-to-run noise and front-end render path rather than API query time.
+- Keep these API cleanups for code efficiency, but treat their user-visible perf impact as negligible in current measurements.

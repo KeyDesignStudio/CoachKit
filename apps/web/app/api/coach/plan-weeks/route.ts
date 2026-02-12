@@ -21,15 +21,6 @@ export async function GET(request: NextRequest) {
     const searchParams = Object.fromEntries(request.nextUrl.searchParams);
     const { athleteId, from, to } = querySchema.parse(searchParams);
 
-    // Verify athlete ownership
-    const athlete = await prisma.athleteProfile.findFirst({
-      where: { userId: athleteId, coachId: user.id },
-    });
-
-    if (!athlete) {
-      return handleError(new Error('Athlete not found or not accessible'));
-    }
-
     const fromDate = new Date(from + 'T00:00:00Z');
     const toDate = new Date(to + 'T23:59:59Z');
 
@@ -45,6 +36,9 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { weekStart: 'asc' },
     });
+    const planWeekByStartKey = new Map(
+      planWeeks.map((pw) => [pw.weekStart.toISOString().slice(0, 10), pw])
+    );
 
     // Build a map of all Monday weeks in range
     const weeks: Array<{
@@ -58,9 +52,7 @@ export async function GET(request: NextRequest) {
 
     while (currentMonday <= endMonday) {
       const weekStartISO = currentMonday.toISOString().split('T')[0];
-      const existing = planWeeks.find(
-        (pw) => pw.weekStart.toISOString().split('T')[0] === weekStartISO
-      );
+      const existing = planWeekByStartKey.get(weekStartISO);
 
       weeks.push({
         weekStart: weekStartISO,
