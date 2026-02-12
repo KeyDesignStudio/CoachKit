@@ -28,6 +28,64 @@ const querySchema = z.object({
 });
 
 const COMPLETIONS_TAKE = 5;
+const LEAN_CALENDAR_ITEMS = new Set(['1', 'true', 'yes']);
+const completionSources: CompletionSource[] = [CompletionSource.MANUAL, CompletionSource.STRAVA];
+
+const calendarItemLeanSelect = {
+  id: true,
+  athleteId: true,
+  coachId: true,
+  date: true,
+  plannedStartTimeLocal: true,
+  origin: true,
+  planningStatus: true,
+  sourceActivityId: true,
+  discipline: true,
+  subtype: true,
+  title: true,
+  status: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  completedActivities: {
+    orderBy: [{ startTime: 'desc' as const }],
+    take: COMPLETIONS_TAKE,
+    where: {
+      source: { in: completionSources },
+    },
+    select: {
+      id: true,
+      painFlag: true,
+      startTime: true,
+      confirmedAt: true,
+      source: true,
+      durationMinutes: true,
+      distanceKm: true,
+      metricsJson: true,
+      matchDayDiff: true,
+    },
+  },
+};
+
+const calendarItemFullSelect = {
+  ...calendarItemLeanSelect,
+  plannedDurationMinutes: true,
+  plannedDistanceKm: true,
+  distanceMeters: true,
+  intensityTarget: true,
+  tags: true,
+  equipment: true,
+  workoutStructure: true,
+  notes: true,
+  intensityType: true,
+  intensityTargetJson: true,
+  workoutDetail: true,
+  attachmentsJson: true,
+  templateId: true,
+  groupSessionId: true,
+  template: { select: { id: true, title: true } },
+  groupSession: { select: { id: true, title: true } },
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,6 +100,7 @@ export async function GET(request: NextRequest) {
       from: searchParams.get('from'),
       to: searchParams.get('to'),
     });
+    const lean = LEAN_CALENDAR_ITEMS.has(String(searchParams.get('lean') ?? '').toLowerCase());
 
     const athlete = await assertCoachOwnsAthlete(params.athleteId, user.id);
     const athleteTimezone = athlete?.user?.timezone ?? 'Australia/Brisbane';
@@ -74,57 +133,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-      select: {
-        id: true,
-        athleteId: true,
-        coachId: true,
-        date: true,
-        plannedStartTimeLocal: true,
-        origin: true,
-        planningStatus: true,
-        sourceActivityId: true,
-        discipline: true,
-        subtype: true,
-        title: true,
-        plannedDurationMinutes: true,
-        plannedDistanceKm: true,
-        distanceMeters: true,
-        intensityTarget: true,
-        tags: true,
-        equipment: true,
-        workoutStructure: true,
-        notes: true,
-        intensityType: true,
-        intensityTargetJson: true,
-        workoutDetail: true,
-        attachmentsJson: true,
-        status: true,
-        templateId: true,
-        groupSessionId: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        template: { select: { id: true, title: true } },
-        groupSession: { select: { id: true, title: true } },
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: COMPLETIONS_TAKE,
-          where: {
-            source: { in: [CompletionSource.MANUAL, CompletionSource.STRAVA] },
-          },
-          select: {
-            id: true,
-            painFlag: true,
-            startTime: true,
-            confirmedAt: true,
-            source: true,
-            durationMinutes: true,
-            distanceKm: true,
-            metricsJson: true,
-            matchDayDiff: true,
-          },
-        },
-      },
+      select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
     });
 
     prof.mark('db');
@@ -203,26 +212,26 @@ export async function GET(request: NextRequest) {
           discipline: item.discipline,
           subtype: item.subtype,
           title: item.title,
-          plannedDurationMinutes: item.plannedDurationMinutes,
-          plannedDistanceKm: item.plannedDistanceKm,
+          plannedDurationMinutes: item.plannedDurationMinutes ?? null,
+          plannedDistanceKm: item.plannedDistanceKm ?? null,
           distanceMeters: item.distanceMeters ?? null,
           intensityTarget: item.intensityTarget ?? null,
           tags: item.tags ?? [],
           equipment: item.equipment ?? [],
           workoutStructure: item.workoutStructure ?? null,
           notes: item.notes ?? null,
-          intensityType: item.intensityType,
-          intensityTargetJson: item.intensityTargetJson,
-          workoutDetail: item.workoutDetail,
-          attachmentsJson: item.attachmentsJson,
+          intensityType: item.intensityType ?? null,
+          intensityTargetJson: item.intensityTargetJson ?? null,
+          workoutDetail: item.workoutDetail ?? null,
+          attachmentsJson: item.attachmentsJson ?? null,
           status: item.status,
-          templateId: item.templateId,
-          groupSessionId: item.groupSessionId,
+          templateId: item.templateId ?? null,
+          groupSessionId: item.groupSessionId ?? null,
           reviewedAt: item.reviewedAt,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
-          template: item.template,
-          groupSession: item.groupSession,
+          template: item.template ?? null,
+          groupSession: item.groupSession ?? null,
           latestCompletedActivity,
         };
       }

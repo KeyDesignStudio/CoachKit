@@ -151,3 +151,34 @@ Conclusion:
 - Week `shell->data` showed one improved run, but improvements were not stable across repeated runs.
 - Month grid timings regressed in this dev harness, likely dominated by run-to-run noise and front-end render path rather than API query time.
 - Keep these API cleanups for code efficiency, but treat their user-visible perf impact as negligible in current measurements.
+
+## Phase 4 Sprint (Lean List Payload + Lazy Session Detail)
+
+Date: 2026-02-12
+
+Changes:
+- Added `lean=1` mode to `GET /api/coach/calendar` to return only grid-critical fields.
+- Coach calendar page now requests lean payloads for initial week/month loads.
+- Full workout detail is fetched lazily on session open via `GET /api/coach/calendar-items/:itemId`.
+- Drawer now hydrates from fetched detail payload while preserving existing UI behavior.
+
+Trade-off:
+- Initial calendar load is faster.
+- Opening a session now includes one additional detail request (intentional, deferred cost).
+
+### Phase 4 Results (Median, ms)
+
+Compared to phase 3 run B medians:
+
+| Scenario | Before (phase 3 run B) | After (phase 4) |
+|---|---:|---:|
+| Week shell->data | 26 | 21 |
+| Week shell->grid | 35 | 30 |
+| Week data->grid | 9 | 9 |
+| Month shell->data | 22 | 20 |
+| Month shell->grid | 38 | 35 |
+| Month data->grid | 16 | 15 |
+
+Conclusion:
+- This is the first change set in the sprint with stable and meaningful improvements to initial calendar load.
+- Lean payload + lazy detail fetch is a worthwhile pattern for further expansion.
