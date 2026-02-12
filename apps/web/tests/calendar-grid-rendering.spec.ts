@@ -33,7 +33,7 @@ test.describe('Calendar grid rendering', () => {
 
     const weekView = page.locator('[data-athlete-week-view-version="athlete-week-v2"]').first();
     await expect(weekView).toBeVisible();
-    await expect(page.getByTestId('athlete-calendar-date-header')).toHaveCount(7);
+    await expect(page.locator('[data-testid="athlete-calendar-date-header"]:visible')).toHaveCount(7);
 
     await page.getByRole('button', { name: /^Month$/ }).click();
     const monthView = page.locator('[data-athlete-month-view-version="athlete-month-v2"]').first();
@@ -50,7 +50,7 @@ test.describe('Calendar grid rendering', () => {
 
     const weekView = page.locator('[data-coach-week-view-version="coach-week-v2"]').first();
     await expect(weekView).toBeVisible();
-    await expect(page.getByTestId('coach-calendar-date-header')).toHaveCount(7);
+    await expect(page.locator('[data-testid="coach-calendar-date-header"]:visible')).toHaveCount(7);
 
     await page.getByRole('button', { name: /^Month$/ }).click();
     const monthView = page.locator('[data-coach-month-view-version="coach-month-v2"]').first();

@@ -147,6 +147,25 @@ export default function AthleteCalendarPage() {
     }
   }, [viewMode, weekStartKey, currentMonth]);
 
+  const itemsByDate = useMemo(() => {
+    const grouped: Record<string, CalendarItem[]> = {};
+
+    for (const item of items) {
+      const dateKey = getLocalDayKey(item.date, athleteTimezone);
+      (grouped[dateKey] ??= []).push(item);
+    }
+
+    for (const key of Object.keys(grouped)) {
+      grouped[key].sort((a, b) => {
+        const timeA = a.plannedStartTimeLocal || '';
+        const timeB = b.plannedStartTimeLocal || '';
+        return timeA.localeCompare(timeB);
+      });
+    }
+
+    return grouped;
+  }, [items, athleteTimezone]);
+
   const weekDays = useMemo(() => {
     const now = new Date();
 
@@ -166,25 +185,6 @@ export default function AthleteCalendarPage() {
       };
     });
   }, [weekStartKey, athleteTimezone, itemsByDate, dayWeatherByDate]);
-
-  const itemsByDate = useMemo(() => {
-    const grouped: Record<string, CalendarItem[]> = {};
-
-    for (const item of items) {
-      const dateKey = getLocalDayKey(item.date, athleteTimezone);
-      (grouped[dateKey] ??= []).push(item);
-    }
-
-    for (const key of Object.keys(grouped)) {
-      grouped[key].sort((a, b) => {
-        const timeA = a.plannedStartTimeLocal || '';
-        const timeB = b.plannedStartTimeLocal || '';
-        return timeA.localeCompare(timeB);
-      });
-    }
-
-    return grouped;
-  }, [items, athleteTimezone]);
 
   const monthDays = useMemo(() => {
     if (viewMode !== 'month') return [];
