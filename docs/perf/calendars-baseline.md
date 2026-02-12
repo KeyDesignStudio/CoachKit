@@ -182,3 +182,34 @@ Compared to phase 3 run B medians:
 Conclusion:
 - This is the first change set in the sprint with stable and meaningful improvements to initial calendar load.
 - Lean payload + lazy detail fetch is a worthwhile pattern for further expansion.
+
+## Phase 5 Sprint (Lean Payload Tightening + Auth De-dupe + Month Cell Render Trim)
+
+Date: 2026-02-12
+
+Changes:
+- Tightened `lean=1` response shape in `GET /api/coach/calendar`:
+  - Removed `latestCompletedActivity.metricsJson` from list payload.
+  - Omitted many null/empty optional fields from lean list responses.
+- Added shared client cache/de-dupe for `useAuthUser` (`/api/me`) with a short TTL and in-flight request sharing.
+- Removed redundant per-cell `sortSessionsForDay` in month day cells (parent already passes sorted day items).
+
+Benchmark method:
+- Same harness (`node apps/web/scripts/dev/benchmark-calendar-render.mjs`), 7 iterations.
+- Compared one pre-change run with two post-change runs.
+
+### Phase 5 Results (Median, ms)
+
+| Scenario | Before (phase 5 baseline) | After run A | After run B |
+|---|---:|---:|---:|
+| Week shell->data | 25 | 25 | 24 |
+| Week shell->grid | 31 | 35 | 32 |
+| Week data->grid | 6 | 9 | 9 |
+| Month shell->data | 22 | 21 | 21 |
+| Month shell->grid | 37 | 34 | 35 |
+| Month data->grid | 15 | 15 | 14 |
+
+Conclusion:
+- Month view improved modestly and consistently (about 1-3 ms across median metrics).
+- Week view remained noisy in `next dev`; improvements were not consistent in this harness.
+- API transfer/parse overhead is lower on lean responses, but user-visible gains are currently larger on month than week in dev measurements.
