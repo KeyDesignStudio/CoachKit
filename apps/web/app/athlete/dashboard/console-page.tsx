@@ -255,8 +255,10 @@ export default function AthleteDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
         <div className="pt-3 md:pt-6">
-          <h1 className={tokens.typography.h1}>Athlete Console</h1>
-          <p className={cn('mt-1', tokens.typography.bodyMuted)}>{welcomeMessage}</p>
+          <div className="flex flex-wrap items-baseline gap-x-4">
+            <h1 className={tokens.typography.h1}>Athlete Console</h1>
+            <p className={cn(tokens.typography.h1, 'opacity-90')}>{welcomeMessage}</p>
+          </div>
         </div>
 
         <div className="mt-4">
