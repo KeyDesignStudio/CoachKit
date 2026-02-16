@@ -13,11 +13,11 @@ import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
-import { uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
+import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -319,6 +319,7 @@ function ReviewInboxRow({
 export default function CoachDashboardConsolePage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
+  const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [customFrom, setCustomFrom] = useState('');
@@ -542,6 +543,7 @@ export default function CoachDashboardConsolePage() {
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
           <h1 className={tokens.typography.h1}>Coach Console</h1>
+          <p className={cn("mt-1", tokens.typography.bodyMuted)}>{welcomeMessage}</p>
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}

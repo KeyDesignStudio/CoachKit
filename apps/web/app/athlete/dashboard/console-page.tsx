@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
+import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -144,6 +145,7 @@ function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string
 export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
+  const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
@@ -242,6 +244,7 @@ export default function AthleteDashboardConsolePage() {
       <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
         <div className="pt-3 md:pt-6">
           <h1 className={tokens.typography.h1}>Athlete Console</h1>
+          <p className={cn('mt-1', tokens.typography.bodyMuted)}>{welcomeMessage}</p>
         </div>
 
         <div className="mt-4">
