@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -143,8 +144,9 @@ function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string
 }
 
 export default function AthleteDashboardConsolePage() {
-  const { user, loading: userLoading } = useAuthUser();
+  const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
+  const router = useRouter();
   const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
@@ -194,6 +196,14 @@ export default function AthleteDashboardConsolePage() {
     }
   }, [reload, user?.role]);
 
+  useEffect(() => {
+    if (user?.role === 'COACH') {
+      router.replace('/coach/dashboard');
+    } else if (user?.role === 'ADMIN') {
+      router.replace('/admin/ai-usage');
+    }
+  }, [router, user?.role]);
+
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -227,14 +237,16 @@ export default function AthleteDashboardConsolePage() {
   }, [user, userLoading]);
 
   // Keep loading/access gates consistent with the coach dashboard styling.
-  if (userLoading) {
+  if (userLoading || (!user && !userError)) {
     return <FullScreenLogoLoader />;
   }
 
   if (!user || user.role !== 'ATHLETE') {
     return (
       <div className={cn(tokens.spacing.screenPadding, 'pt-6')}>
-        <p className={tokens.typography.bodyMuted}>Athlete access required.</p>
+        <p className={tokens.typography.bodyMuted}>
+          {userError ? 'We could not load your account yet. Please refresh.' : 'Redirecting...'}
+        </p>
       </div>
     );
   }

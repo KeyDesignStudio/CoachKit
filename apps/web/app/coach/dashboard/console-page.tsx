@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -317,8 +318,9 @@ function ReviewInboxRow({
 }
 
 export default function CoachDashboardConsolePage() {
-  const { user, loading: userLoading } = useAuthUser();
+  const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
+  const router = useRouter();
   const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
@@ -382,6 +384,14 @@ export default function CoachDashboardConsolePage() {
       reload();
     }
   }, [reload, user?.role]);
+
+  useEffect(() => {
+    if (user?.role === 'ATHLETE') {
+      router.replace('/athlete/dashboard');
+    } else if (user?.role === 'ADMIN') {
+      router.replace('/admin/ai-usage');
+    }
+  }, [router, user?.role]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   // Note: this must initialize after the coach UI renders; during the loading gate the ref is null.
@@ -522,7 +532,7 @@ export default function CoachDashboardConsolePage() {
     [jumpToInbox]
   );
 
-  if (userLoading) {
+  if (userLoading || (!user && !userError)) {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
         <p className={cn(tokens.typography.bodyMuted)}>Loading...</p>
@@ -533,7 +543,9 @@ export default function CoachDashboardConsolePage() {
   if (!user || user.role !== 'COACH') {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
-        <p className={tokens.typography.bodyMuted}>Coach access required.</p>
+        <p className={tokens.typography.bodyMuted}>
+          {userError ? 'We could not load your account yet. Please refresh.' : 'Redirecting...'}
+        </p>
       </div>
     );
   }
