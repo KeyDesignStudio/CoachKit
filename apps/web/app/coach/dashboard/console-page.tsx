@@ -554,8 +554,10 @@ export default function CoachDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
-          <h1 className={tokens.typography.h1}>Coach Console</h1>
-          <p className={cn("mt-1", tokens.typography.bodyMuted)}>{welcomeMessage}</p>
+          <div className="flex flex-wrap items-baseline gap-x-4">
+            <h1 className={tokens.typography.h1}>Coach Console</h1>
+            <p className={cn(tokens.typography.h1, "opacity-90")}>{welcomeMessage}</p>
+          </div>
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
