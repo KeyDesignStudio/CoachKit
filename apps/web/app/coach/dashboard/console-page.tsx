@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -13,11 +14,11 @@ import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
-import { uiH1, uiMuted } from '@/components/ui/typography';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
+import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -317,8 +318,10 @@ function ReviewInboxRow({
 }
 
 export default function CoachDashboardConsolePage() {
-  const { user, loading: userLoading } = useAuthUser();
+  const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
+  const router = useRouter();
+  const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [customFrom, setCustomFrom] = useState('');
@@ -381,6 +384,14 @@ export default function CoachDashboardConsolePage() {
       reload();
     }
   }, [reload, user?.role]);
+
+  useEffect(() => {
+    if (user?.role === 'ATHLETE') {
+      router.replace('/athlete/dashboard');
+    } else if (user?.role === 'ADMIN') {
+      router.replace('/admin/ai-usage');
+    }
+  }, [router, user?.role]);
 
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   // Note: this must initialize after the coach UI renders; during the loading gate the ref is null.
@@ -521,7 +532,7 @@ export default function CoachDashboardConsolePage() {
     [jumpToInbox]
   );
 
-  if (userLoading) {
+  if (userLoading || (!user && !userError)) {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
         <p className={cn(tokens.typography.bodyMuted)}>Loading...</p>
@@ -532,7 +543,9 @@ export default function CoachDashboardConsolePage() {
   if (!user || user.role !== 'COACH') {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
-        <p className={tokens.typography.bodyMuted}>Coach access required.</p>
+        <p className={tokens.typography.bodyMuted}>
+          {userError ? 'We could not load your account yet. Please refresh.' : 'Redirecting...'}
+        </p>
       </div>
     );
   }
@@ -542,6 +555,7 @@ export default function CoachDashboardConsolePage() {
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
           <h1 className={tokens.typography.h1}>Coach Console</h1>
+          <p className={cn("mt-1", tokens.typography.bodyMuted)}>{welcomeMessage}</p>
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}

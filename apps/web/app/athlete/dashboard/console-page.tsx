@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -16,6 +17,7 @@ import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
+import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -142,8 +144,10 @@ function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string
 }
 
 export default function AthleteDashboardConsolePage() {
-  const { user, loading: userLoading } = useAuthUser();
+  const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
+  const router = useRouter();
+  const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
@@ -192,6 +196,14 @@ export default function AthleteDashboardConsolePage() {
     }
   }, [reload, user?.role]);
 
+  useEffect(() => {
+    if (user?.role === 'COACH') {
+      router.replace('/coach/dashboard');
+    } else if (user?.role === 'ADMIN') {
+      router.replace('/admin/ai-usage');
+    }
+  }, [router, user?.role]);
+
   // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -225,14 +237,16 @@ export default function AthleteDashboardConsolePage() {
   }, [user, userLoading]);
 
   // Keep loading/access gates consistent with the coach dashboard styling.
-  if (userLoading) {
+  if (userLoading || (!user && !userError)) {
     return <FullScreenLogoLoader />;
   }
 
   if (!user || user.role !== 'ATHLETE') {
     return (
       <div className={cn(tokens.spacing.screenPadding, 'pt-6')}>
-        <p className={tokens.typography.bodyMuted}>Athlete access required.</p>
+        <p className={tokens.typography.bodyMuted}>
+          {userError ? 'We could not load your account yet. Please refresh.' : 'Redirecting...'}
+        </p>
       </div>
     );
   }
@@ -242,6 +256,7 @@ export default function AthleteDashboardConsolePage() {
       <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
         <div className="pt-3 md:pt-6">
           <h1 className={tokens.typography.h1}>Athlete Console</h1>
+          <p className={cn('mt-1', tokens.typography.bodyMuted)}>{welcomeMessage}</p>
         </div>
 
         <div className="mt-4">

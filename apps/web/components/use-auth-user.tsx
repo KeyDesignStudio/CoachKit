@@ -1,5 +1,6 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
 import { UserRole } from '@prisma/client';
 
@@ -26,6 +27,7 @@ const authState: AuthState = {
 };
 
 let authFetchedAt = 0;
+let cachedClerkUserId: string | null = null;
 let inFlightUserRequest: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
@@ -71,11 +73,20 @@ async function fetchAuthUserShared(): Promise<void> {
   await inFlightUserRequest;
 }
 
+function resetCachedAuthState() {
+  authState.user = null;
+  authState.error = null;
+  authState.loading = true;
+  authFetchedAt = 0;
+  inFlightUserRequest = null;
+}
+
 /**
  * Client-side hook to fetch the authenticated user from /api/me
  * This replaces the legacy useUser hook from user-context
  */
 export function useAuthUser() {
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const [state, setState] = useState<AuthState>(() => ({ ...authState }));
 
   useEffect(() => {
@@ -88,6 +99,20 @@ export function useAuthUser() {
       listeners.delete(sync);
     };
   }, []);
+
+  useEffect(() => {
+    if (!clerkLoaded) return;
+
+    const nextClerkUserId = clerkUser?.id ?? null;
+    if (cachedClerkUserId !== nextClerkUserId) {
+      cachedClerkUserId = nextClerkUserId;
+      resetCachedAuthState();
+      notifyListeners();
+      if (nextClerkUserId) {
+        void fetchAuthUserShared();
+      }
+    }
+  }, [clerkLoaded, clerkUser?.id]);
 
   return state;
 }

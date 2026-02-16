@@ -12,6 +12,7 @@ import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
+import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
@@ -55,6 +56,9 @@ export async function AppHeader() {
 
   // Get user from database if authenticated
   let userRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null = null;
+  let userName: string | null = null;
+  let userTimezone: string | null = null;
+  let clerkFallbackName: string | null = null;
   let clubBranding = {
     displayName: DEFAULT_BRAND_NAME,
     logoUrl: null as string | null,
@@ -63,21 +67,23 @@ export async function AppHeader() {
   let brandingCoachId: string | null = null;
 
   if (userId) {
+    const clerkUser = await currentUser();
+    clerkFallbackName = clerkUser?.firstName ?? clerkUser?.fullName ?? clerkUser?.username ?? null;
+
     // Try to find user by authProviderId first
     let user = await prisma.user.findUnique({
       where: { authProviderId: userId },
-      select: { role: true, branding: true, email: true, id: true, authProviderId: true },
+      select: { role: true, branding: true, email: true, id: true, authProviderId: true, name: true, timezone: true },
     });
 
     // If not found by authProviderId, try email lookup (first-time login)
     if (!user) {
-      const clerkUser = await currentUser();
       if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
         const email = clerkUser.emailAddresses[0].emailAddress;
         
         const existingUser = await prisma.user.findUnique({
           where: { email },
-          select: { role: true, branding: true, email: true, id: true, authProviderId: true },
+          select: { role: true, branding: true, email: true, id: true, authProviderId: true, name: true, timezone: true },
         });
 
         if (existingUser && !existingUser.authProviderId) {
@@ -85,7 +91,7 @@ export async function AppHeader() {
           user = await prisma.user.update({
             where: { id: existingUser.id },
             data: { authProviderId: userId },
-            select: { role: true, branding: true, email: true, id: true, authProviderId: true },
+            select: { role: true, branding: true, email: true, id: true, authProviderId: true, name: true, timezone: true },
           });
           
           console.log(`[AppHeader] Linked Clerk user ${userId} to DB user ${user.email}`);
@@ -97,6 +103,8 @@ export async function AppHeader() {
 
     if (user) {
       userRole = user.role;
+      userName = user.name ?? null;
+      userTimezone = user.timezone ?? null;
 
       // Resolve the coachId we should use for club branding
       if (user.role === 'COACH' || user.role === 'ADMIN') {
@@ -128,6 +136,8 @@ export async function AppHeader() {
   } else if (authDisabled) {
     const { user } = await requireAuth();
     userRole = user.role;
+    userName = user.name ?? null;
+    userTimezone = user.timezone ?? null;
 
     if (user.role === 'COACH' || user.role === 'ADMIN') {
       brandingCoachId = user.id;
@@ -170,6 +180,9 @@ export async function AppHeader() {
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
   const showUserControl = Boolean(userId) || authDisabled;
+  const welcomeMessage = userId || authDisabled
+    ? getWarmWelcomeMessage({ name: userName ?? clerkFallbackName, timeZone: userTimezone })
+    : null;
 
   return (
     <>
@@ -344,6 +357,11 @@ export async function AppHeader() {
             {showUserControl && <UserHeaderControl />}
           </div>
         </div>
+        {welcomeMessage ? (
+          <div className="border-t border-[var(--border-subtle)] px-4 py-2 md:px-6">
+            <p className={tokens.typography.bodyMuted}>{welcomeMessage}</p>
+          </div>
+        ) : null}
         </Card>
       </header>
     </>
