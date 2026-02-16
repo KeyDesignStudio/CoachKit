@@ -2,7 +2,6 @@ import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { getSessionStatusVisual } from '@/components/calendar/getSessionStatusVisual';
-import { sortSessionsForDay } from '@/components/athlete/sortSessionsForDay';
 import { CALENDAR_ACTION_ICON_CLASS, CALENDAR_ADD_SESSION_ICON } from '@/components/calendar/iconTokens';
 import { mobileDayCellPadding, mobilePillGap, mobilePillPadding } from '@/components/calendar/calendarDensity';
 import type { WeatherSummary } from '@/lib/weather-model';
@@ -50,7 +49,8 @@ export function AthleteMonthDayCell({
   onContextMenu,
 }: AthleteMonthDayCellProps) {
   const dayNumber = Number(dateStr.slice(8, 10));
-  const sortedItems = sortSessionsForDay(items, athleteTimezone);
+  // Parent month view already provides day items sorted by display time.
+  const sortedItems = items;
   const visible = sortedItems.slice(0, MAX_VISIBLE_ROWS);
   const remainingCount = Math.max(0, sortedItems.length - MAX_VISIBLE_ROWS);
   const addEnabled = !!onAddClick && canAdd;

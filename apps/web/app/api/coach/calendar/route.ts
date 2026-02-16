@@ -87,6 +87,50 @@ const calendarItemFullSelect = {
   groupSession: { select: { id: true, title: true } },
 };
 
+function buildLeanCalendarItem(params: {
+  item: any;
+  effectiveDayKey: string;
+  latestCompletedActivity: {
+    painFlag: boolean;
+    source: string;
+    confirmedAt: string | null;
+    effectiveStartTimeUtc: string;
+    durationMinutes: number | null;
+    distanceKm: number | null;
+    caloriesKcal: number | null;
+  } | null;
+}) {
+  const { item, effectiveDayKey, latestCompletedActivity } = params;
+
+  return {
+    id: item.id,
+    athleteId: item.athleteId,
+    coachId: item.coachId,
+    date: effectiveDayKey,
+    plannedStartTimeLocal: item.plannedStartTimeLocal,
+    discipline: item.discipline,
+    subtype: item.subtype,
+    title: item.title,
+    status: item.status,
+    reviewedAt: item.reviewedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    ...(item.origin ? { origin: item.origin } : {}),
+    ...(item.planningStatus ? { planningStatus: item.planningStatus } : {}),
+    ...(item.sourceActivityId ? { sourceActivityId: item.sourceActivityId } : {}),
+    ...(typeof item.plannedDurationMinutes === 'number' ? { plannedDurationMinutes: item.plannedDurationMinutes } : {}),
+    ...(typeof item.plannedDistanceKm === 'number' ? { plannedDistanceKm: item.plannedDistanceKm } : {}),
+    ...(typeof item.distanceMeters === 'number' ? { distanceMeters: item.distanceMeters } : {}),
+    ...(item.intensityTarget ? { intensityTarget: item.intensityTarget } : {}),
+    ...(Array.isArray(item.tags) && item.tags.length > 0 ? { tags: item.tags } : {}),
+    ...(Array.isArray(item.equipment) && item.equipment.length > 0 ? { equipment: item.equipment } : {}),
+    ...(item.workoutStructure != null ? { workoutStructure: item.workoutStructure } : {}),
+    ...(item.notes ? { notes: item.notes } : {}),
+    ...(item.workoutDetail ? { workoutDetail: item.workoutDetail } : {}),
+    ...(latestCompletedActivity ? { latestCompletedActivity } : {}),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const prof = createServerProfiler('coach/calendar');
@@ -182,7 +226,6 @@ export async function GET(request: NextRequest) {
               effectiveStartTimeUtc: getEffectiveStartUtcFromCompletion(metricsCompletion).toISOString(),
               durationMinutes: metricsCompletion.durationMinutes ?? null,
               distanceKm: metricsCompletion.distanceKm ?? null,
-              metricsJson: metricsCompletion.metricsJson, // Ensure full metrics are passed to UI
               caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
               // DEV-ONLY DEBUG — Strava time diagnostics
               // Never enabled in production. Do not rely on this data.
@@ -200,11 +243,20 @@ export async function GET(request: NextRequest) {
             }
           : null;
 
+        const effectiveDayKey = getLocalDayKey(effectiveStartUtc, athleteTimezone);
+        if (lean) {
+          return buildLeanCalendarItem({
+            item,
+            effectiveDayKey,
+            latestCompletedActivity,
+          });
+        }
+
         return {
           id: item.id,
           athleteId: item.athleteId,
           coachId: item.coachId,
-          date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+          date: effectiveDayKey,
           plannedStartTimeLocal: item.plannedStartTimeLocal,
           origin: item.origin ?? null,
           planningStatus: item.planningStatus ?? null,
