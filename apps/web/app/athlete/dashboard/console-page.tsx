@@ -147,7 +147,10 @@ export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
-  const welcomeMessage = getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone });
+  const welcomeMessage = useMemo(
+    () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
+    [user?.name, user?.timezone]
+  );
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [discipline, setDiscipline] = useState<string | null>(null);
@@ -255,9 +258,9 @@ export default function AthleteDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
         <div className="pt-3 md:pt-6">
-          <div className="flex flex-wrap items-baseline gap-x-4">
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-4">
             <h1 className={tokens.typography.h1}>Athlete Console</h1>
-            <p className={cn(tokens.typography.h1, 'opacity-90')}>{welcomeMessage}</p>
+            <p className={cn(tokens.typography.h1, 'justify-self-center text-center opacity-90')}>{welcomeMessage}</p>
           </div>
         </div>
 
