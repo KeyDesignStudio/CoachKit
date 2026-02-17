@@ -559,7 +559,7 @@ export default function CoachDashboardConsolePage() {
         <div className={cn("pt-3 md:pt-6")}>
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-4">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
-            <p className={cn(tokens.typography.h1, "justify-self-center text-center opacity-90")}>{welcomeMessage}</p>
+            <p className={cn(tokens.typography.h1, "justify-self-center text-center italic opacity-90")}>{welcomeMessage}</p>
           </div>
         </div>
 
