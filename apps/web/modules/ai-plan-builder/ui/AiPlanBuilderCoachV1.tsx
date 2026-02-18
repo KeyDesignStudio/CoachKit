@@ -4,6 +4,7 @@ import type { PlanReasoningV1 } from '@/lib/ai/plan-reasoning/types';
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Block } from '@/components/ui/Block';
@@ -58,6 +59,14 @@ type ReferencePlanOption = {
   recommended: boolean;
   score: number | null;
   reasons: string[];
+};
+
+type CommandAction = {
+  id: string;
+  label: string;
+  keywords: string;
+  disabled: boolean;
+  run: () => void;
 };
 
 type PerformanceModelPreview = {
@@ -319,6 +328,7 @@ function deriveWeeksToCompletionFromDates(params: {
 
 export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
+  const router = useRouter();
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +356,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
   const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
   const [referencePlanOptions, setReferencePlanOptions] = useState<ReferencePlanOption[]>([]);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
+  const [commandPaletteActiveIndex, setCommandPaletteActiveIndex] = useState(0);
+  const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const [performanceModel, setPerformanceModel] = useState<PerformanceModelPreview | null>(null);
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
@@ -796,6 +810,18 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     }
   }, [athleteId, draftPlanLatest?.id, fetchPublishStatus, request]);
 
+  const openCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(true);
+    setCommandPaletteQuery('');
+    setCommandPaletteActiveIndex(0);
+  }, []);
+
+  const closeCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(false);
+    setCommandPaletteQuery('');
+    setCommandPaletteActiveIndex(0);
+  }, []);
+
   const saveSessionEdit = useCallback(
     async (sessionId: string) => {
       const draftId = String(draftPlanLatest?.id ?? '');
@@ -921,6 +947,147 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const canPlan = Boolean(briefLatest);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
 
+  const commandActions = useMemo<CommandAction[]>(
+    () => [
+      {
+        id: 'refresh-page',
+        label: 'Refresh screen',
+        keywords: 'reload refresh page',
+        disabled: busy != null,
+        run: () => window.location.reload(),
+      },
+      {
+        id: 'refresh-brief',
+        label: canStart ? 'Create athlete snapshot' : 'Refresh athlete snapshot',
+        keywords: 'athlete brief snapshot intake',
+        disabled: busy != null,
+        run: () => {
+          void refreshBrief();
+        },
+      },
+      {
+        id: 'generate-plan',
+        label: 'Generate weekly plan',
+        keywords: 'build preview draft plan',
+        disabled: busy != null || !canPlan,
+        run: () => {
+          void generatePlanPreview();
+        },
+      },
+      {
+        id: 'publish',
+        label: 'Approve and schedule',
+        keywords: 'publish schedule calendar',
+        disabled: busy != null || !hasDraft,
+        run: () => {
+          void publishPlan();
+        },
+      },
+      {
+        id: 'toggle-advanced',
+        label: showAdvancedSetup ? 'Hide advanced setup' : 'Show advanced setup',
+        keywords: 'advanced setup',
+        disabled: false,
+        run: () => setShowAdvancedSetup((v) => !v),
+      },
+      {
+        id: 'toggle-compare',
+        label: reviewSideMode === 'reference' ? 'Switch compare to earlier vs recent' : 'Switch compare to reference plans',
+        keywords: 'compare reference previous',
+        disabled: !hasDraft,
+        run: () => setReviewSideMode((m) => (m === 'reference' ? 'previous' : 'reference')),
+      },
+      {
+        id: 'open-calendar',
+        label: 'Open scheduling calendar',
+        keywords: 'calendar schedule coach',
+        disabled: false,
+        run: () => router.push('/coach/calendar'),
+      },
+    ],
+    [
+      busy,
+      canPlan,
+      canStart,
+      generatePlanPreview,
+      hasDraft,
+      publishPlan,
+      refreshBrief,
+      reviewSideMode,
+      router,
+      showAdvancedSetup,
+    ]
+  );
+
+  const filteredCommandActions = useMemo(() => {
+    const q = commandPaletteQuery.trim().toLowerCase();
+    if (!q) return commandActions;
+    return commandActions.filter((action) => `${action.label} ${action.keywords}`.toLowerCase().includes(q));
+  }, [commandActions, commandPaletteQuery]);
+
+  useEffect(() => {
+    if (!commandPaletteOpen) return;
+    setCommandPaletteActiveIndex(0);
+  }, [commandPaletteOpen, commandPaletteQuery]);
+
+  useEffect(() => {
+    if (!commandPaletteOpen) return;
+    const node = commandPaletteInputRef.current;
+    if (!node) return;
+    const id = window.setTimeout(() => node.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [commandPaletteOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (!commandPaletteOpen && isShortcut) {
+        event.preventDefault();
+        openCommandPalette();
+        return;
+      }
+
+      if (!commandPaletteOpen) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCommandPalette();
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!filteredCommandActions.length) return;
+        setCommandPaletteActiveIndex((idx) => (idx + 1) % filteredCommandActions.length);
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!filteredCommandActions.length) return;
+        setCommandPaletteActiveIndex((idx) => (idx - 1 + filteredCommandActions.length) % filteredCommandActions.length);
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        const action = filteredCommandActions[commandPaletteActiveIndex];
+        if (!action || action.disabled) return;
+        event.preventDefault();
+        closeCommandPalette();
+        action.run();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [
+    closeCommandPalette,
+    commandPaletteActiveIndex,
+    commandPaletteOpen,
+    filteredCommandActions,
+    openCommandPalette,
+  ]);
+
   const sessionsByWeek = useMemo(() => {
     if (!shouldPrepareReview) return [];
     const sessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
@@ -987,6 +1154,16 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={busy != null}
+            data-testid="apb-open-command-palette"
+            onClick={openCommandPalette}
+          >
+            Quick actions
+          </Button>
           <Button type="button" size="sm" variant="secondary" disabled={busy != null} onClick={() => window.location.reload()}>
             Refresh
           </Button>
@@ -995,6 +1172,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           </a>
         </div>
       </div>
+      <div className="mt-2 text-xs text-[var(--fg-muted)]">Tip: press Cmd/Ctrl+K for quick actions.</div>
 
       {error && (
         <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
@@ -1683,6 +1861,59 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           )}
         </Block>
       </div>
+
+      {commandPaletteOpen ? (
+        <>
+          <div className="fixed inset-0 z-[70] bg-black/35" onClick={closeCommandPalette} />
+          <div
+            className="fixed left-1/2 top-20 z-[71] w-[min(680px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quick actions"
+            data-testid="apb-command-palette"
+          >
+            <Input
+              ref={commandPaletteInputRef}
+              value={commandPaletteQuery}
+              onChange={(e) => setCommandPaletteQuery(e.target.value)}
+              placeholder="Search actions…"
+              data-testid="apb-command-palette-input"
+            />
+            <div className="mt-2 max-h-80 overflow-y-auto">
+              {filteredCommandActions.length === 0 ? (
+                <div className="rounded-md px-3 py-2 text-sm text-[var(--fg-muted)]">No actions found.</div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredCommandActions.map((action, idx) => {
+                    const isActive = idx === commandPaletteActiveIndex;
+                    return (
+                      <button
+                        key={action.id}
+                        type="button"
+                        className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
+                          isActive
+                            ? 'border-[var(--border)] bg-[var(--bg-structure)]'
+                            : 'border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-[var(--bg-structure)]'
+                        } ${action.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                        disabled={action.disabled}
+                        onMouseEnter={() => setCommandPaletteActiveIndex(idx)}
+                        onClick={() => {
+                          closeCommandPalette();
+                          action.run();
+                        }}
+                        data-testid={`apb-command-action-${action.id}`}
+                      >
+                        {action.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="mt-2 text-xs text-[var(--fg-muted)]">Navigate with ↑ ↓, press Enter to run, Esc to close.</div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
