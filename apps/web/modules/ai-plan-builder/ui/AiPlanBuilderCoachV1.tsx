@@ -269,6 +269,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       }
     >
   >({});
+  const [sessionDetailsById, setSessionDetailsById] = useState<
+    Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>
+  >({});
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -410,6 +413,64 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     setDraftPlanLatest(data.draftPlan);
     return data.draftPlan;
   }, [athleteId, request]);
+
+  useEffect(() => {
+    const sessions = Array.isArray((draftPlanLatest as any)?.sessions) ? (draftPlanLatest as any).sessions : [];
+    const valid = new Set(sessions.map((s: any) => String(s.id)));
+    setSessionDetailsById((prev) => {
+      const next: Record<string, { detailJson: any | null; loading: boolean; error?: string | null }> = {};
+      for (const [id, state] of Object.entries(prev)) {
+        if (valid.has(id)) next[id] = state;
+      }
+      for (const session of sessions) {
+        const id = String(session.id);
+        if (session.detailJson && !next[id]) {
+          next[id] = { detailJson: session.detailJson, loading: false, error: null };
+        }
+      }
+      return next;
+    });
+  }, [draftPlanLatest]);
+
+  const loadSessionDetail = useCallback(
+    async (sessionId: string) => {
+      const draftId = String((draftPlanLatest as any)?.id ?? '');
+      if (!draftId) return;
+      setSessionDetailsById((prev) => ({
+        ...prev,
+        [sessionId]: { detailJson: prev[sessionId]?.detailJson ?? null, loading: true, error: null },
+      }));
+      try {
+        const detail = await request<{ detail: any; detailMode: string | null; detailGeneratedAt: string | null }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/session-detail?draftPlanId=${encodeURIComponent(
+            draftId
+          )}&sessionId=${encodeURIComponent(sessionId)}`
+        );
+
+        setSessionDetailsById((prev) => ({
+          ...prev,
+          [sessionId]: { detailJson: detail.detail ?? null, loading: false, error: null },
+        }));
+
+        if (detail.detail) {
+          setDraftPlanLatest((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              sessions: (prev.sessions ?? []).map((s: any) => (String(s.id) === sessionId ? { ...s, detailJson: detail.detail } : s)),
+            };
+          });
+        }
+      } catch (e) {
+        const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to load details.';
+        setSessionDetailsById((prev) => ({
+          ...prev,
+          [sessionId]: { detailJson: prev[sessionId]?.detailJson ?? null, loading: false, error: message },
+        }));
+      }
+    },
+    [athleteId, draftPlanLatest, request]
+  );
 
   const fetchPublishStatus = useCallback(
     async (aiPlanDraftId: string) => {
@@ -1199,6 +1260,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               saveSessionEdit={saveSessionEdit}
               toggleSessionLock={toggleSessionLock}
               toggleWeekLock={toggleWeekLock}
+              sessionDetailsById={sessionDetailsById}
+              loadSessionDetail={loadSessionDetail}
             />
           ) : (
             <div className="min-h-[120px] text-sm text-[var(--fg-muted)]">Preparing review details...</div>

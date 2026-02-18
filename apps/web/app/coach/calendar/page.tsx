@@ -791,7 +791,7 @@ export default function CoachCalendarPage() {
 
     const title =
       viewMode === 'month'
-        ? new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        ? new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
         : 'Calendar';
 
     window.dispatchEvent(new CustomEvent('coachkit:mobile-header-title', { detail: { title } }));
@@ -1038,13 +1038,17 @@ export default function CoachCalendarPage() {
     void handleSessionClick(item);
   }, [handleSessionClick]);
 
-  const closeDrawer = () => {
+  const closeDrawer = useCallback(() => {
     setDrawerMode('closed');
     setEditItemId('');
     setDrawerItem(null);
     setDrawerAthleteId('');
     setTitleMessage('');
-  };
+    // Defensive refresh: ensure grid is repopulated after drawer-driven mutations.
+    if (selectedAthleteIds.size > 0) {
+      void loadCalendar();
+    }
+  }, [loadCalendar, selectedAthleteIds.size]);
 
   const onSaveSession = async (event: FormEvent) => {
     event.preventDefault();
@@ -1307,7 +1311,7 @@ export default function CoachCalendarPage() {
               {mounted ? (
                 viewMode === 'week' 
                   ? formatWeekOfLabel(dateRange.from, athleteTimezone)
-                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
               ) : (
                 formatWeekOfLabel(dateRange.from, athleteTimezone)
               )}
@@ -1369,7 +1373,7 @@ export default function CoachCalendarPage() {
               {mounted
                 ? viewMode === 'week'
                   ? formatWeekOfLabel(dateRange.from, athleteTimezone)
-                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
                 : formatWeekOfLabel(dateRange.from, athleteTimezone)}
             </button>
 

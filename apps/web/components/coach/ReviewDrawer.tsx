@@ -193,7 +193,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
       if (!isoString) return null;
       const date = new Date(isoString);
       if (Number.isNaN(date.getTime())) return null;
-      return new Intl.DateTimeFormat(undefined, {
+      return new Intl.DateTimeFormat('en-AU', {
         timeZone,
         year: 'numeric',
         month: 'short',

@@ -121,7 +121,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     if (!isoString) return null;
     const date = new Date(isoString);
     if (Number.isNaN(date.getTime())) return null;
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat('en-AU', {
       timeZone: tz,
       year: 'numeric',
       month: 'short',
@@ -328,6 +328,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }, 3000);
   }, []);
 
+  const navigateToCalendar = useCallback(() => {
+    router.push(`/athlete/calendar?refresh=${Date.now()}`);
+  }, [router]);
+
   const deleteWorkout = useCallback(async () => {
     if (deleting || submitting) return;
     setDeleting(true);
@@ -347,12 +351,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
       // Let the toast render briefly, then navigate away.
       await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      router.push('/athlete/calendar');
+      navigateToCalendar();
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 404) {
         showToast('Workout already deleted.', 'success');
         await new Promise((resolve) => window.setTimeout(resolve, 1200));
-        router.push('/athlete/calendar');
+        navigateToCalendar();
       } else if (err instanceof ApiClientError && err.status === 403) {
         showToast('You can only delete your own workouts.', 'error');
       } else {
@@ -362,7 +366,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       setDeleting(false);
       setConfirmDeleteOpen(false);
     }
-  }, [deleting, request, router, showToast, submitting, workoutId]);
+  }, [deleting, navigateToCalendar, request, showToast, submitting, workoutId]);
 
   const loadWeather = useCallback(
     async (bypassCache = false) => {
@@ -388,14 +392,8 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
   const handleClose = useCallback(() => {
     if (submitting || deleting) return;
-
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push('/athlete/calendar');
-  }, [deleting, router, submitting]);
+    navigateToCalendar();
+  }, [deleting, navigateToCalendar, submitting]);
 
   useEffect(() => {
     loadData();

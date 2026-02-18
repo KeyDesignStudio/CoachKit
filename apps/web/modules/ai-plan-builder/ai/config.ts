@@ -73,6 +73,23 @@ function parsePositiveInt(raw: unknown): number | null {
   return n;
 }
 
+function getCapabilitySuffix(capability: AiCapabilityName): string {
+  switch (capability) {
+    case 'summarizeIntake':
+      return 'SUMMARIZE_INTAKE';
+    case 'suggestDraftPlan':
+      return 'SUGGEST_DRAFT_PLAN';
+    case 'suggestProposalDiffs':
+      return 'SUGGEST_PROPOSAL_DIFFS';
+    case 'generateSessionDetail':
+      return 'GENERATE_SESSION_DETAIL';
+    case 'generateIntakeFromProfile':
+      return 'GENERATE_INTAKE_FROM_PROFILE';
+    case 'generateAthleteBriefFromIntake':
+      return 'GENERATE_ATHLETE_BRIEF_FROM_INTAKE';
+  }
+}
+
 export function getAiPlanBuilderLlmMaxOutputTokensFromEnv(
   capability: AiCapabilityName,
   env: NodeJS.ProcessEnv = process.env,
@@ -80,22 +97,7 @@ export function getAiPlanBuilderLlmMaxOutputTokensFromEnv(
 ): number {
   const fallback = Math.max(1, options?.fallback ?? 1200);
 
-  const perCapKey = (() => {
-    switch (capability) {
-      case 'summarizeIntake':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUMMARIZE_INTAKE';
-      case 'suggestDraftPlan':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUGGEST_DRAFT_PLAN';
-      case 'suggestProposalDiffs':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_SUGGEST_PROPOSAL_DIFFS';
-      case 'generateSessionDetail':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_GENERATE_SESSION_DETAIL';
-      case 'generateIntakeFromProfile':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_GENERATE_INTAKE_FROM_PROFILE';
-      case 'generateAthleteBriefFromIntake':
-        return 'AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_GENERATE_ATHLETE_BRIEF_FROM_INTAKE';
-    }
-  })();
+  const perCapKey = `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_${getCapabilitySuffix(capability)}`;
 
   const perCap = parsePositiveInt(env[perCapKey]);
   if (perCap !== null) return perCap;
@@ -116,4 +118,27 @@ export function getAiPlanBuilderLlmRateLimitPerHourFromEnv(env: NodeJS.ProcessEn
   const raw = Number.parseInt(String(env.AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR ?? ''), 10);
   if (!Number.isFinite(raw)) return 20;
   return Math.max(1, raw);
+}
+
+export function getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv(
+  capability: AiCapabilityName,
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const key = `AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR_${getCapabilitySuffix(capability)}`;
+  const perCap = Number.parseInt(String(env[key] ?? ''), 10);
+  if (Number.isFinite(perCap) && perCap > 0) return perCap;
+  return getAiPlanBuilderLlmRateLimitPerHourFromEnv(env);
+}
+
+export function getAiPlanBuilderLlmModelForCapabilityFromEnv(
+  capability: AiCapabilityName,
+  env: NodeJS.ProcessEnv = process.env,
+  options?: { fallback?: string }
+): string {
+  const key = `AI_PLAN_BUILDER_LLM_MODEL_${getCapabilitySuffix(capability)}`;
+  const perCap = String(env[key] ?? '').trim();
+  if (perCap) return perCap;
+  const globalModel = String(env.AI_PLAN_BUILDER_LLM_MODEL ?? '').trim();
+  if (globalModel) return globalModel;
+  return String(options?.fallback ?? '').trim();
 }

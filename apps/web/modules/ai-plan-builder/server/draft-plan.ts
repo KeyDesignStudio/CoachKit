@@ -303,25 +303,16 @@ export async function generateAiDraftPlanV1(params: {
     },
   });
 
-  // Enrich sessions with schema-validated detail JSON after deterministic rows are persisted.
-  // IMPORTANT: do not do this inside an interactive transaction.
-  try {
-    await generateSessionDetailsForDraftPlan({
-      coachId: params.coachId,
-      athleteId: params.athleteId,
-      draftPlanId: created.id,
-    });
-  } catch {
-    // Draft generation should still succeed even if enrichment fails.
-  }
+  // Fire-and-forget enrichment so draft generation latency is not blocked by per-session detail calls.
+  // NOTE: session details are also lazily generated on demand via API.
+  void generateSessionDetailsForDraftPlan({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    draftPlanId: created.id,
+    limit: 12,
+  }).catch(() => {});
 
-  return prisma.aiPlanDraft.findUniqueOrThrow({
-    where: { id: created.id },
-    include: {
-      weeks: { orderBy: [{ weekIndex: 'asc' }] },
-      sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
-    },
-  });
+  return created;
 }
 
 async function getAthleteSummaryTextForSessionDetail(params: { coachId: string; athleteId: string; setup: any }) {
@@ -335,6 +326,8 @@ export async function generateSessionDetailsForDraftPlan(params: {
   coachId: string;
   athleteId: string;
   draftPlanId: string;
+  onlySessionIds?: string[];
+  limit?: number;
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -348,6 +341,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
       setupJson: true,
       sessions: {
         orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+        where: params.onlySessionIds?.length ? { id: { in: params.onlySessionIds } } : undefined,
         select: {
           id: true,
           weekIndex: true,
@@ -393,7 +387,9 @@ export async function generateSessionDetailsForDraftPlan(params: {
   const effectiveMode = getAiPlanBuilderEffectiveMode('generateSessionDetail');
   const now = new Date();
 
-  await mapWithConcurrency(draft.sessions, 4, async (s) => {
+  const selectedSessions = params.limit && params.limit > 0 ? draft.sessions.slice(0, params.limit) : draft.sessions;
+
+  await mapWithConcurrency(selectedSessions, 4, async (s) => {
     // Coach edits are authoritative; never overwrite them during background enrichment.
     if (String((s as any)?.detailMode || '') === 'coach') return;
 
@@ -490,18 +486,119 @@ export async function generateSessionDetailsForDraftPlan(params: {
 }
 
 
-export async function getLatestAiDraftPlan(params: { coachId: string; athleteId: string }) {
+export async function getLatestAiDraftPlan(params: {
+  coachId: string;
+  athleteId: string;
+  includeDetails?: boolean;
+}) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
   return prisma.aiPlanDraft.findFirst({
     where: { athleteId: params.athleteId, coachId: params.coachId },
     orderBy: [{ createdAt: 'desc' }],
-    include: {
+    select: {
+      id: true,
+      athleteId: true,
+      coachId: true,
+      source: true,
+      status: true,
+      visibilityStatus: true,
+      publishedAt: true,
+      publishedByCoachId: true,
+      lastPublishedHash: true,
+      lastPublishedSummaryText: true,
+      setupJson: true,
+      setupHash: true,
+      planJson: true,
+      reasoningJson: true,
+      planSourceSelectionJson: true,
+      createdAt: true,
+      updatedAt: true,
       weeks: { orderBy: [{ weekIndex: 'asc' }] },
-      sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
+      sessions: {
+        orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+        select: {
+          id: true,
+          draftId: true,
+          weekIndex: true,
+          ordinal: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          notes: true,
+          locked: true,
+          detailMode: true,
+          detailGeneratedAt: true,
+          ...(params.includeDetails
+            ? {
+                detailJson: true,
+                detailInputHash: true,
+              }
+            : {}),
+        },
+      },
     },
   });
+}
+
+export async function getOrGenerateDraftSessionDetail(params: {
+  coachId: string;
+  athleteId: string;
+  draftPlanId: string;
+  sessionId: string;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const session = await prisma.aiPlanDraftSession.findUnique({
+    where: { id: params.sessionId },
+    select: {
+      id: true,
+      draftId: true,
+      detailJson: true,
+      detailMode: true,
+      detailGeneratedAt: true,
+    },
+  });
+
+  if (!session || session.draftId !== params.draftPlanId) {
+    throw new ApiError(404, 'NOT_FOUND', 'Draft session not found.');
+  }
+
+  if (session.detailJson) {
+    return {
+      detail: session.detailJson,
+      detailMode: session.detailMode ?? null,
+      detailGeneratedAt: session.detailGeneratedAt ?? null,
+      generatedNow: false,
+    };
+  }
+
+  await generateSessionDetailsForDraftPlan({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    draftPlanId: params.draftPlanId,
+    onlySessionIds: [params.sessionId],
+    limit: 1,
+  });
+
+  const refreshed = await prisma.aiPlanDraftSession.findUnique({
+    where: { id: params.sessionId },
+    select: {
+      detailJson: true,
+      detailMode: true,
+      detailGeneratedAt: true,
+    },
+  });
+
+  return {
+    detail: refreshed?.detailJson ?? null,
+    detailMode: refreshed?.detailMode ?? null,
+    detailGeneratedAt: refreshed?.detailGeneratedAt ?? null,
+    generatedNow: true,
+  };
 }
 
 export async function updateAiDraftPlan(params: {

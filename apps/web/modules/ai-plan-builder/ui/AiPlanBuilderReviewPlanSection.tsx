@@ -50,6 +50,8 @@ type ReviewPlanProps = {
   saveSessionEdit: (sessionId: string) => void;
   toggleSessionLock: (sessionId: string, locked: boolean) => void;
   toggleWeekLock: (weekIndex: number, locked: boolean) => void;
+  sessionDetailsById: Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>;
+  loadSessionDetail: (sessionId: string) => void;
 };
 
 function isIntensitySessionType(type: string): boolean {
@@ -216,6 +218,8 @@ export function AiPlanBuilderReviewPlanSection({
   saveSessionEdit,
   toggleSessionLock,
   toggleWeekLock,
+  sessionDetailsById,
+  loadSessionDetail,
 }: ReviewPlanProps) {
   const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'] as const;
 
@@ -245,7 +249,8 @@ export function AiPlanBuilderReviewPlanSection({
 
       for (const s of sessions) {
         const sessionId = String(s.id);
-        const detailParsed = sessionDetailV1Schema.safeParse((s as any)?.detailJson ?? null);
+        const lazyDetail = sessionDetailsById[String(s.id)]?.detailJson;
+        const detailParsed = sessionDetailV1Schema.safeParse(lazyDetail ?? (s as any)?.detailJson ?? null);
         const objective = detailParsed.success ? detailParsed.data.objective : null;
         const blocks = detailParsed.success ? detailParsed.data.structure : [];
         const workoutDetailPreview = detailParsed.success
@@ -420,10 +425,12 @@ export function AiPlanBuilderReviewPlanSection({
               const sessionId = String(s.id);
               const edit = sessionDraftEdits[sessionId] ?? {};
               const presentation = sessionPresentationById.get(sessionId);
+              const detailState = sessionDetailsById[sessionId];
               const blocks = presentation?.blocks ?? [];
               const workoutDetailPreview = presentation?.workoutDetailPreview ?? null;
               const dayLabel = presentation?.dayLabel ?? (DAY_NAMES_SUN0[Number(s.dayOfWeek) ?? 0] ?? 'Day');
               const objective = presentation?.objective ?? null;
+              const hasDetail = Boolean(detailState?.detailJson ?? (s as any)?.detailJson);
 
               const sessionLocked = Boolean((s as any)?.locked);
               const locked = weekLocked || sessionLocked;
@@ -498,6 +505,28 @@ export function AiPlanBuilderReviewPlanSection({
                       <div className="mt-1 whitespace-pre-wrap text-sm" data-testid="apb-session-workout-detail-preview">
                         {workoutDetailPreview}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {!hasDetail ? (
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy != null || Boolean(detailState?.loading)}
+                        data-testid="apb-session-load-detail"
+                        onClick={() => loadSessionDetail(sessionId)}
+                      >
+                        {detailState?.loading ? 'Loading details…' : 'Load session details'}
+                      </Button>
+                      {detailState?.error ? (
+                        <div className="mt-2 text-xs text-red-700">{detailState.error}</div>
+                      ) : (
+                        <div className="mt-2 text-xs text-[var(--fg-muted)]">
+                          Session details are generated lazily to improve initial load speed.
+                        </div>
+                      )}
                     </div>
                   ) : null}
 

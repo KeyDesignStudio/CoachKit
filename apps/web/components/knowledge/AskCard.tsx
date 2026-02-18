@@ -118,16 +118,18 @@ export function AskCard() {
       {answer ? <p className={cn('mt-4 text-[var(--text)]', tokens.typography.body)}>{answer}</p> : null}
 
       {citations.length > 0 ? (
-        <ul className={cn('mt-3 list-disc pl-6 space-y-1', tokens.typography.meta)}>
+        <div className={cn('mt-3', tokens.typography.meta)}>
+          <div className="text-[var(--muted)] mb-1">{citations.length === 1 ? 'Source' : 'Sources'}</div>
+          <ul className="list-disc pl-6 space-y-1">
           {citations.map((citation) => (
             <li key={citation.id} className="text-[var(--text)]">
               <a href={citation.url} className="text-[var(--primary)] underline-offset-2 hover:underline">
                 {citation.title}
-              </a>{' '}
-              <span className="text-[var(--muted)]">({citation.score.toFixed(3)})</span>
+              </a>
             </li>
           ))}
-        </ul>
+          </ul>
+        </div>
       ) : null}
     </Block>
   );

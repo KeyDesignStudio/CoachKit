@@ -491,7 +491,7 @@ export default function AthleteCalendarPage() {
               {mounted ? (
                 viewMode === 'week' 
                   ? formatWeekOfLabel(dateRange.from, athleteTimezone)
-                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
               ) : (
                 formatWeekOfLabel(dateRange.from, athleteTimezone)
               )}

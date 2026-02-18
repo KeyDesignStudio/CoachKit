@@ -12,6 +12,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { AthleteDetailDrawer } from '@/components/coach/AthleteDetailDrawer';
 import { CreateAthleteModal } from '@/components/coach/CreateAthleteModal';
 import { uiH2, uiMuted } from '@/components/ui/typography';
+import { formatDateShortAu } from '@/lib/client-date';
 
 interface AthleteRecord {
   userId: string;
@@ -97,7 +98,7 @@ export default function CoachAthletesPage() {
   const formatDateOfBirth = (dob: string | null | undefined) => {
     if (!dob) return null;
     const date = new Date(dob);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatDateShortAu(date) || dob;
   };
 
   const dayName = (dayOfWeek: number) => {
