@@ -65,6 +65,7 @@ export default function CoachGroupSessionsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
   const [createInitialValues, setCreateInitialValues] = useState<any>(null);
 
   const isCoach = user?.role === 'COACH';
@@ -163,13 +164,15 @@ export default function CoachGroupSessionsPage() {
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || null;
 
   const filteredSessions = sessions.filter((session) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      session.title.toLowerCase().includes(query) ||
-      session.discipline.toLowerCase().includes(query) ||
-      session.description?.toLowerCase().includes(query)
-    );
+    const textQuery = searchQuery.trim().toLowerCase();
+    const locQuery = locationQuery.trim().toLowerCase();
+    const textOk =
+      !textQuery ||
+      session.title.toLowerCase().includes(textQuery) ||
+      session.discipline.toLowerCase().includes(textQuery) ||
+      session.description?.toLowerCase().includes(textQuery);
+    const locationOk = !locQuery || (session.location ?? '').toLowerCase().includes(locQuery);
+    return textOk && locationOk;
   });
 
   if (!isCoach) {
@@ -195,16 +198,26 @@ export default function CoachGroupSessionsPage() {
 
           {/* Search Bar */}
           <div className="flex flex-col gap-3">
-            <div className="relative">
-              <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="relative">
+                <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                <Input
+                  type="text"
+                  placeholder="Search title/discipline..."
+                  className="pl-10 min-h-[44px]"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
               <Input
                 type="text"
-                placeholder="Search..."
-                className="pl-10 min-h-[44px]"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter by location..."
+                className="min-h-[44px]"
+                value={locationQuery}
+                onChange={(e) => setLocationQuery(e.target.value)}
               />
             </div>
+            <p className="text-xs text-[var(--muted)]">Location-aware sessions: filter by venue and open the map link from each session drawer.</p>
           </div>
         </div>
 

@@ -344,6 +344,16 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
                     value={form.location}
                     onChange={(e) => setForm({ ...form, location: e.target.value })}
                   />
+                  {form.location.trim() ? (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.location.trim())}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-[var(--fg)] underline"
+                    >
+                      Open location in map
+                    </a>
+                  ) : null}
                 </label>
 
                 <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">

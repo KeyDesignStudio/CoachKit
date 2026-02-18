@@ -1,5 +1,6 @@
 export type RiskTolerance = 'low' | 'med' | 'high';
 export type DisciplineEmphasis = 'balanced' | 'swim' | 'bike' | 'run';
+export type ProgramPolicy = 'COUCH_TO_5K' | 'COUCH_TO_IRONMAN_26' | 'HALF_TO_FULL_MARATHON';
 
 export type DraftDiscipline = 'swim' | 'bike' | 'run' | 'strength' | 'rest';
 export type DraftSessionType = 'endurance' | 'tempo' | 'threshold' | 'technique' | 'recovery' | 'strength' | 'rest';
@@ -21,6 +22,7 @@ export type DraftPlanSetupV1 = {
   maxDoublesPerWeek: number; // 0-3
   longSessionDay?: number | null; // 0=Sun..6=Sat
   coachGuidanceText?: string; // plain-English coach guidance; optional
+  programPolicy?: ProgramPolicy;
   weeklyMinutesByWeek?: number[]; // optional per-week override
   disciplineSplitTargets?: { swim?: number; bike?: number; run?: number; strength?: number };
   sessionTypeDistribution?: {
@@ -206,6 +208,116 @@ function roundToStep(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
 
+function progressionCurve(params: {
+  weeks: number;
+  startMinutes: number;
+  endMinutes: number;
+  recoveryEveryNWeeks?: number;
+  recoveryWeekMultiplier?: number;
+  taperWeeks?: number;
+}) {
+  const weeks = Math.max(1, Math.round(params.weeks));
+  const taperWeeks = Math.max(0, Math.min(3, Math.round(params.taperWeeks ?? 2)));
+  const recoveryEveryN = params.recoveryEveryNWeeks && params.recoveryEveryNWeeks > 1 ? Math.round(params.recoveryEveryNWeeks) : null;
+  const recoveryMul = typeof params.recoveryWeekMultiplier === 'number' ? Math.max(0.55, Math.min(0.95, params.recoveryWeekMultiplier)) : 0.8;
+  const values: number[] = [];
+
+  for (let i = 0; i < weeks; i += 1) {
+    const progress = weeks <= 1 ? 1 : i / (weeks - 1);
+    const baseline = params.startMinutes + (params.endMinutes - params.startMinutes) * progress;
+    let next = baseline;
+    if (recoveryEveryN && (i + 1) % recoveryEveryN === 0) next *= recoveryMul;
+    if (taperWeeks > 0 && i >= weeks - taperWeeks) {
+      const t = i - (weeks - taperWeeks) + 1;
+      next *= Math.max(0.6, 1 - t * 0.12);
+    }
+    values.push(Math.max(45, Math.round(next)));
+  }
+
+  return values;
+}
+
+function applyProgramPolicy(setup: DraftPlanSetupV1): DraftPlanSetupV1 {
+  if (!setup.programPolicy) return setup;
+  const weeks = Math.max(1, Math.round(setup.weeksToEvent || 1));
+
+  if (setup.programPolicy === 'COUCH_TO_5K') {
+    const endMinutes = Math.max(180, Math.min(260, availabilityTotalMinutes(setup.weeklyAvailabilityMinutes) || 220));
+    return {
+      ...setup,
+      disciplineEmphasis: 'run',
+      riskTolerance: 'low',
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      sessionsPerWeekOverride: Math.max(3, Math.min(5, setup.sessionsPerWeekOverride ?? 4)),
+      disciplineSplitTargets: { run: 0.75, strength: 0.2, bike: 0.05 },
+      sessionTypeDistribution: { endurance: 0.58, recovery: 0.24, tempo: 0.1, technique: 0.08 },
+      recoveryEveryNWeeks: 4,
+      recoveryWeekMultiplier: 0.82,
+      weeklyMinutesByWeek: progressionCurve({
+        weeks,
+        startMinutes: 90,
+        endMinutes,
+        recoveryEveryNWeeks: 4,
+        recoveryWeekMultiplier: 0.82,
+        taperWeeks: 2,
+      }),
+    };
+  }
+
+  if (setup.programPolicy === 'COUCH_TO_IRONMAN_26') {
+    const endMinutes = Math.max(720, Math.min(980, availabilityTotalMinutes(setup.weeklyAvailabilityMinutes) || 840));
+    return {
+      ...setup,
+      disciplineEmphasis: 'balanced',
+      riskTolerance: 'med',
+      maxIntensityDaysPerWeek: Math.max(1, Math.min(2, setup.maxIntensityDaysPerWeek)),
+      maxDoublesPerWeek: Math.max(1, Math.min(2, setup.maxDoublesPerWeek)),
+      sessionsPerWeekOverride: Math.max(6, Math.min(9, setup.sessionsPerWeekOverride ?? 7)),
+      disciplineSplitTargets: { swim: 0.23, bike: 0.45, run: 0.27, strength: 0.05 },
+      sessionTypeDistribution: { endurance: 0.56, technique: 0.16, tempo: 0.14, threshold: 0.08, recovery: 0.06 },
+      recoveryEveryNWeeks: 4,
+      recoveryWeekMultiplier: 0.76,
+      longSessionDay: setup.longSessionDay ?? 6,
+      weeklyMinutesByWeek: progressionCurve({
+        weeks,
+        startMinutes: 300,
+        endMinutes,
+        recoveryEveryNWeeks: 4,
+        recoveryWeekMultiplier: 0.76,
+        taperWeeks: 3,
+      }),
+    };
+  }
+
+  if (setup.programPolicy === 'HALF_TO_FULL_MARATHON') {
+    const endMinutes = Math.max(420, Math.min(620, availabilityTotalMinutes(setup.weeklyAvailabilityMinutes) || 520));
+    return {
+      ...setup,
+      disciplineEmphasis: 'run',
+      riskTolerance: 'med',
+      maxIntensityDaysPerWeek: Math.max(1, Math.min(2, setup.maxIntensityDaysPerWeek)),
+      maxDoublesPerWeek: Math.max(0, Math.min(1, setup.maxDoublesPerWeek)),
+      sessionsPerWeekOverride: Math.max(5, Math.min(7, setup.sessionsPerWeekOverride ?? 6)),
+      disciplineSplitTargets: { run: 0.7, strength: 0.2, bike: 0.1 },
+      sessionTypeDistribution: { endurance: 0.52, recovery: 0.18, tempo: 0.17, threshold: 0.08, technique: 0.05 },
+      recoveryEveryNWeeks: 4,
+      recoveryWeekMultiplier: 0.8,
+      longSessionDay: setup.longSessionDay ?? 0,
+      weeklyMinutesByWeek: progressionCurve({
+        weeks,
+        startMinutes: 240,
+        endMinutes,
+        recoveryEveryNWeeks: 4,
+        recoveryWeekMultiplier: 0.8,
+        taperWeeks: 2,
+      }),
+    };
+  }
+
+  return setup;
+}
+
 function humanizeWeekDurations(params: {
   sessions: DraftWeekV1['sessions'];
   longDay: number;
@@ -286,28 +398,33 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     maxIntensityDaysPerWeek,
     maxDoublesPerWeek,
   };
+  const effectiveSetup = applyProgramPolicy(setup);
 
-  const totalMinutesBase = availabilityTotalMinutes(setup.weeklyAvailabilityMinutes);
-  const targetSessions = sessionsPerWeek(setup, days.length);
-  const longDay = pickLongDay(setup, days);
-  const disciplineQueue = disciplineSequence(setup, targetSessions);
-  const typeQueues = sessionTypeQueues(setup);
+  const totalMinutesBase = availabilityTotalMinutes(effectiveSetup.weeklyAvailabilityMinutes);
+  const targetSessions = sessionsPerWeek(effectiveSetup, days.length);
+  const longDay = pickLongDay(effectiveSetup, days);
+  const disciplineQueue = disciplineSequence(effectiveSetup, targetSessions);
+  const typeQueues = sessionTypeQueues(effectiveSetup);
 
   const weeks: DraftWeekV1[] = [];
 
   for (let weekIndex = 0; weekIndex < weeksToEvent; weekIndex++) {
-    const baseMinutesFromSource = Array.isArray(setup.weeklyMinutesByWeek)
-      ? setup.weeklyMinutesByWeek[weekIndex]
+    const baseMinutesFromSource = Array.isArray(effectiveSetup.weeklyMinutesByWeek)
+      ? effectiveSetup.weeklyMinutesByWeek[weekIndex]
       : undefined;
-    const multiplier = taperMultiplier(setup, weekIndex);
+    const multiplier = taperMultiplier(effectiveSetup, weekIndex);
     let weekTotalMinutes = clampInt(totalMinutesBase * multiplier, 60, Math.max(60, totalMinutesBase));
 
     if (typeof baseMinutesFromSource === 'number' && Number.isFinite(baseMinutesFromSource)) {
       weekTotalMinutes = clampInt(baseMinutesFromSource, 60, Math.max(60, baseMinutesFromSource));
     }
 
-    if (setup.recoveryEveryNWeeks && setup.recoveryEveryNWeeks > 1 && (weekIndex + 1) % setup.recoveryEveryNWeeks === 0) {
-      const recoveryMultiplier = typeof setup.recoveryWeekMultiplier === 'number' ? setup.recoveryWeekMultiplier : 0.8;
+    if (
+      effectiveSetup.recoveryEveryNWeeks &&
+      effectiveSetup.recoveryEveryNWeeks > 1 &&
+      (weekIndex + 1) % effectiveSetup.recoveryEveryNWeeks === 0
+    ) {
+      const recoveryMultiplier = typeof effectiveSetup.recoveryWeekMultiplier === 'number' ? effectiveSetup.recoveryWeekMultiplier : 0.8;
       weekTotalMinutes = clampInt(weekTotalMinutes * recoveryMultiplier, 60, Math.max(60, weekTotalMinutes));
     }
 
@@ -340,7 +457,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     let ordinal = 0;
 
     // Technique swim once per week if swim included (on the first available day).
-    if (includesSwim(setup) && weekSlots.length > 0) {
+    if (includesSwim(effectiveSetup) && weekSlots.length > 0) {
       const d = weekSlots[0];
       sessions.push({
         weekIndex,
@@ -371,7 +488,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     }
 
     // Brick every 2 weeks for med/high.
-    if ((setup.riskTolerance === 'med' || setup.riskTolerance === 'high') && weekIndex % 2 === 1) {
+    if ((effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') && weekIndex % 2 === 1) {
       sessions.push({
         weekIndex,
         ordinal: ordinal++,
@@ -385,7 +502,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     }
 
     // Fill remaining slots deterministically.
-    const preferredMain = mainDiscipline(setup);
+    const preferredMain = mainDiscipline(effectiveSetup);
 
     while (sessions.length < weekSlots.length) {
       const day = weekSlots[sessions.length % weekSlots.length];
@@ -393,8 +510,8 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
 
       const discipline: DraftDiscipline = disciplineQueue
         ? disciplineQueue[sessions.length % disciplineQueue.length]
-        : setup.disciplineEmphasis === 'balanced'
-          ? (sessions.length % 3 === 0 ? 'run' : sessions.length % 3 === 1 ? 'bike' : includesSwim(setup) ? 'swim' : 'run')
+        : effectiveSetup.disciplineEmphasis === 'balanced'
+          ? (sessions.length % 3 === 0 ? 'run' : sessions.length % 3 === 1 ? 'bike' : includesSwim(effectiveSetup) ? 'swim' : 'run')
           : preferredMain;
 
       const type: DraftSessionType = (() => {
@@ -407,7 +524,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
           if (entry === 'technique') return 'technique';
           if (entry === 'endurance') return 'endurance';
         }
-        return isIntensity ? (setup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
+        return isIntensity ? (effectiveSetup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
       })();
 
       sessions.push({
@@ -433,6 +550,5 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     weeks.push({ weekIndex, locked: false, sessions: humanized });
   }
 
-  return { version: 'v1', setup, weeks };
+  return { version: 'v1', setup: effectiveSetup, weeks };
 }
-

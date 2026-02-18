@@ -256,6 +256,7 @@ export default function CoachCalendarPage() {
   const [titleLoadingDiscipline, setTitleLoadingDiscipline] = useState<string | null>(null);
   const [weekStatus, setWeekStatus] = useState<'DRAFT' | 'PUBLISHED'>('DRAFT');
   const [publishLoading, setPublishLoading] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [pasteToast, setPasteToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Context Menu & Clipboard
@@ -1197,6 +1198,57 @@ export default function CoachCalendarPage() {
     }
   };
 
+  const runBulkWeekAction = useCallback(
+    async (action: 'copy' | 'publish' | 'unpublish') => {
+      const athleteIds = Array.from(selectedAthleteIds);
+      if (!athleteIds.length) return;
+
+      setBulkActionLoading(true);
+      setError('');
+      setCopyError('');
+      setCopyMessage('');
+      try {
+        if (action === 'copy') {
+          await mapWithConcurrency(athleteIds, 4, async (athleteId) =>
+            request('/api/coach/calendar/copy-week', {
+              method: 'POST',
+              data: {
+                athleteId,
+                fromWeekStart: copyForm.fromWeekStart,
+                toWeekStart: copyForm.toWeekStart,
+                mode: copyForm.mode,
+              },
+            })
+          );
+          setCopyMessage(`Copied week for ${athleteIds.length} athlete${athleteIds.length === 1 ? '' : 's'}.`);
+        } else if (action === 'publish') {
+          await mapWithConcurrency(athleteIds, 4, async (athleteId) =>
+            request('/api/coach/plan-weeks/publish', {
+              method: 'POST',
+              data: { athleteId, weekStart: weekStartKey },
+            })
+          );
+          setCopyMessage(`Published week for ${athleteIds.length} athlete${athleteIds.length === 1 ? '' : 's'}.`);
+        } else {
+          await mapWithConcurrency(athleteIds, 4, async (athleteId) =>
+            request('/api/coach/plan-weeks/unpublish', {
+              method: 'POST',
+              data: { athleteId, weekStart: weekStartKey },
+            })
+          );
+          setCopyMessage(`Unpublished week for ${athleteIds.length} athlete${athleteIds.length === 1 ? '' : 's'}.`);
+        }
+        await loadCalendar();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Bulk operation failed.';
+        setError(message);
+      } finally {
+        setBulkActionLoading(false);
+      }
+    },
+    [copyForm.fromWeekStart, copyForm.mode, copyForm.toWeekStart, loadCalendar, request, selectedAthleteIds, weekStartKey]
+  );
+
   const toggleCopyForm = () => {
     if (copyFormOpen) {
       setCopyFormOpen(false);
@@ -1260,6 +1312,59 @@ export default function CoachCalendarPage() {
       setPublishLoading(false);
     }
   };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTyping = Boolean(
+        target &&
+          (target.isContentEditable ||
+            tag === 'input' ||
+            tag === 'textarea' ||
+            tag === 'select')
+      );
+      if (isTyping) return;
+
+      if (event.key === 'n' || event.key === 'N') {
+        if (!singleAthleteId) return;
+        event.preventDefault();
+        openCreateDrawer(getTodayDayKey(athleteTimezone));
+        return;
+      }
+      if (event.key === '[') {
+        event.preventDefault();
+        navigatePrev();
+        return;
+      }
+      if (event.key === ']') {
+        event.preventDefault();
+        navigateNext();
+        return;
+      }
+      if (event.key === 't' || event.key === 'T') {
+        event.preventDefault();
+        goToToday();
+        return;
+      }
+      if (event.shiftKey && (event.key === 'C' || event.key === 'c')) {
+        event.preventDefault();
+        toggleCopyForm();
+        return;
+      }
+      if (event.shiftKey && (event.key === 'P' || event.key === 'p')) {
+        event.preventDefault();
+        if (selectedAthleteIds.size > 1) {
+          void runBulkWeekAction('publish');
+        } else if (singleAthleteId) {
+          void publishWeek();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [athleteTimezone, navigateNext, navigatePrev, publishWeek, runBulkWeekAction, selectedAthleteIds.size, singleAthleteId, toggleCopyForm]);
 
   const isTitleLoading = () => {
     const key = ensureDiscipline(sessionForm.discipline);
@@ -1411,6 +1516,30 @@ export default function CoachCalendarPage() {
             >
               {copyFormOpen ? 'Close' : <><Icon name="copyWeek" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Copy</span></>}
             </Button>
+            {viewMode === 'week' && mounted && selectedAthleteIds.size > 1 ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void runBulkWeekAction('copy')}
+                  disabled={bulkActionLoading}
+                  className="min-h-[44px]"
+                  title="Copy from/to week for all selected athletes"
+                >
+                  {bulkActionLoading ? 'Working…' : `Bulk Copy (${selectedAthleteIds.size})`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void runBulkWeekAction('publish')}
+                  disabled={bulkActionLoading}
+                  className="min-h-[44px]"
+                  title="Publish this week for all selected athletes"
+                >
+                  {bulkActionLoading ? 'Publishing…' : `Bulk Publish (${selectedAthleteIds.size})`}
+                </Button>
+              </>
+            ) : null}
             {viewMode === 'week' && mounted && !!singleAthleteId && (
               weekStatus === 'DRAFT' ? (
                 <Button type="button" variant="primary" onClick={publishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
