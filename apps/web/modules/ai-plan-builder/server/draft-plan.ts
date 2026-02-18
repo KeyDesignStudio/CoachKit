@@ -756,7 +756,18 @@ export async function generateSessionDetailsForDraftPlan(params: {
             durationMinutes: s.durationMinutes,
           });
 
-      const detail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
+      const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
+      const validatedCandidate = sessionDetailV1Schema.safeParse(candidateDetail);
+      const detail = validatedCandidate.success
+        ? validatedCandidate.data
+        : normalizeSessionDetailV1DurationsToTotal({
+            detail: buildDeterministicSessionDetailV1({
+              discipline: s.discipline as any,
+              type: s.type,
+              durationMinutes: s.durationMinutes,
+            }),
+            totalMinutes: s.durationMinutes,
+          });
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
@@ -775,7 +786,18 @@ export async function generateSessionDetailsForDraftPlan(params: {
         durationMinutes: s.durationMinutes,
       });
 
-      const detail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
+      const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
+      const validatedCandidate = sessionDetailV1Schema.safeParse(candidateDetail);
+      const detail = validatedCandidate.success
+        ? validatedCandidate.data
+        : normalizeSessionDetailV1DurationsToTotal({
+            detail: buildDeterministicSessionDetailV1({
+              discipline: s.discipline as any,
+              type: s.type,
+              durationMinutes: s.durationMinutes,
+            }),
+            totalMinutes: s.durationMinutes,
+          });
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
@@ -1105,6 +1127,19 @@ export async function updateAiDraftPlan(params: {
           }
 
           updatedDetail = normalizeSessionDetailV1DurationsToTotal({ detail: updatedDetail, totalMinutes: nextDurationMinutes });
+          const updatedParsed = sessionDetailV1Schema.safeParse(updatedDetail);
+          if (!updatedParsed.success) {
+            updatedDetail = normalizeSessionDetailV1DurationsToTotal({
+              detail: buildDeterministicSessionDetailV1({
+                discipline: nextDiscipline as any,
+                type: nextType,
+                durationMinutes: nextDurationMinutes,
+              }),
+              totalMinutes: nextDurationMinutes,
+            });
+          } else {
+            updatedDetail = updatedParsed.data;
+          }
 
           nextDetailJson = updatedDetail as unknown as Prisma.InputJsonValue;
           nextDetailMode = 'coach';
