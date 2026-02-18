@@ -81,6 +81,7 @@ type GroupSessionDrawerProps = {
   session: GroupSessionRecord | null;
   athletes: AthleteOption[];
   onClose: () => void;
+  onDuplicate: (session: GroupSessionRecord) => void;
   onSave: (sessionId: string, data: any) => Promise<void>;
   onDelete: (sessionId: string) => Promise<void>;
   onApply: (sessionId: string, from: string, to: string) => Promise<ApplyResult>;
@@ -146,7 +147,7 @@ function sessionToForm(session: GroupSessionRecord): SessionFormState {
   };
 }
 
-export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelete, onApply }: GroupSessionDrawerProps) {
+export function GroupSessionDrawer({ session, athletes, onClose, onDuplicate, onSave, onDelete, onApply }: GroupSessionDrawerProps) {
   const [form, setForm] = useState<SessionFormState>(
     session ? sessionToForm(session) : {
       title: '',
@@ -481,6 +482,14 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
             <div className="flex gap-3">
               <Button type="submit" disabled={saving || deleting} variant="primary">
                 {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => onDuplicate(session)}
+                disabled={saving || deleting}
+                variant="secondary"
+              >
+                Duplicate
               </Button>
               <Button type="button" onClick={handleDelete} disabled={saving || deleting} variant="primary" className="bg-rose-500 hover:bg-rose-600">
                 {deleting ? 'Deleting...' : 'Delete Session'}
