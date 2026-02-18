@@ -57,6 +57,7 @@ export const draftPlanSetupV1Schema = z.object({
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
   coachGuidanceText: z.string().max(2_000).optional(),
   programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
+  selectedPlanSourceVersionIds: z.array(z.string().min(1)).max(4).optional(),
 }).transform((raw) => {
   const eventDate = raw.eventDate ?? raw.completionDate;
   if (!eventDate) {
@@ -97,6 +98,9 @@ export const draftPlanSetupV1Schema = z.object({
     weekStart,
     eventDate,
     weeksToEvent,
+    selectedPlanSourceVersionIds: Array.isArray(raw.selectedPlanSourceVersionIds)
+      ? Array.from(new Set(raw.selectedPlanSourceVersionIds.map((id) => id.trim()).filter(Boolean))).slice(0, 4)
+      : [],
   };
 });
 
@@ -380,11 +384,20 @@ export async function generateAiDraftPlanV1(params: {
     queryText: [setup.coachGuidanceText, athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
   });
 
-  const selectedMatches = planSourceMatches.slice(0, 4);
-  const selectedVersionIds = selectedMatches.map((m) => m.planSourceVersionId);
+  const requestedVersionIds = Array.isArray(setup.selectedPlanSourceVersionIds)
+    ? setup.selectedPlanSourceVersionIds.filter((id) => typeof id === 'string' && id.trim().length > 0).slice(0, 4)
+    : [];
+  const selectedMatches =
+    requestedVersionIds.length > 0
+      ? requestedVersionIds
+          .map((id) => planSourceMatches.find((m) => m.planSourceVersionId === id) ?? null)
+          .filter((m): m is (typeof planSourceMatches)[number] => m != null)
+      : planSourceMatches.slice(0, 4);
+  const selectedVersionIds =
+    requestedVersionIds.length > 0 ? requestedVersionIds : selectedMatches.map((m) => m.planSourceVersionId);
   const selectedPlanSources = selectedVersionIds.length
     ? await prisma.planSourceVersion.findMany({
-        where: { id: { in: selectedVersionIds } },
+        where: { id: { in: selectedVersionIds }, planSource: { isActive: true } },
         include: {
           planSource: {
             select: {
@@ -401,9 +414,28 @@ export async function generateAiDraftPlanV1(params: {
         },
       })
     : [];
+  const selectedPlanSourcesOrdered = selectedVersionIds
+    .map((id) => selectedPlanSources.find((row) => row.id === id) ?? null)
+    .filter(Boolean) as typeof selectedPlanSources;
 
-  const sourceById = new Map(selectedPlanSources.map((s) => [s.id, s]));
-  const appliedBySource = selectedMatches
+  const sourceById = new Map(selectedPlanSourcesOrdered.map((s) => [s.id, s]));
+  const effectiveSelectedMatches =
+    requestedVersionIds.length > 0
+      ? selectedPlanSourcesOrdered.map((source) => {
+          const existing = selectedMatches.find((m) => m.planSourceVersionId === source.id);
+          if (existing) return existing;
+          return {
+            planSourceVersionId: source.id,
+            planSourceId: source.planSource.id,
+            title: source.planSource.title,
+            score: 99,
+            semanticScore: 0,
+            metadataScore: 0,
+            reasons: ['coach selected'],
+          };
+        })
+      : selectedMatches;
+  const appliedBySource = effectiveSelectedMatches
     .map((match) => {
       const source = sourceById.get(match.planSourceVersionId);
       if (!source) return null;
@@ -461,11 +493,20 @@ export async function generateAiDraftPlanV1(params: {
   });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
   const setupHash = computeStableSha256(adjustedSetup);
+  const planSourceMatchesForReasoning =
+    requestedVersionIds.length > 0
+      ? [
+          ...effectiveSelectedMatches,
+          ...planSourceMatches.filter(
+            (m) => !effectiveSelectedMatches.some((sel) => sel.planSourceVersionId === m.planSourceVersionId)
+          ),
+        ].slice(0, 6)
+      : planSourceMatches;
   const reasoning = buildPlanReasoningV1({
     athleteProfile: athleteProfile as any,
     setup: adjustedSetup,
     draftPlanJson: draft as any,
-    planSources: planSourceMatches,
+    planSources: planSourceMatchesForReasoning,
     planSourceInfluence: blended.influenceSummary,
   });
 
@@ -480,7 +521,7 @@ export async function generateAiDraftPlanV1(params: {
       setupHash,
       reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
       planSourceSelectionJson: {
-        selectedPlanSourceVersionIds: planSourceMatches.map((m) => m.planSourceVersionId),
+        selectedPlanSourceVersionIds: effectiveSelectedMatches.map((m) => m.planSourceVersionId),
         selectedPlanSource: primarySelected
           ? {
               planSourceId: primarySelected.source.planSource.id,
@@ -502,7 +543,7 @@ export async function generateAiDraftPlanV1(params: {
           metadataScore: row.match.metadataScore,
           reasons: row.match.reasons,
         })),
-        matchScores: planSourceMatches.map((m) => ({
+        matchScores: planSourceMatchesForReasoning.map((m) => ({
           planSourceVersionId: m.planSourceVersionId,
           planSourceId: m.planSourceId,
           title: m.title,
@@ -553,6 +594,54 @@ export async function generateAiDraftPlanV1(params: {
   }).catch(() => {});
 
   return created;
+}
+
+export async function listReferencePlansForAthlete(params: { coachId: string; athleteId: string }) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const athleteProfile =
+    (await loadAthleteProfileSnapshot({ coachId: params.coachId, athleteId: params.athleteId })) ?? ({} as any);
+  const matches = await selectPlanSources({
+    athleteProfile: athleteProfile as any,
+    durationWeeks: Number(athleteProfile?.timelineWeeks ?? 12) || 12,
+    queryText: [athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
+  });
+  const recommendedMap = new Map(matches.map((m) => [m.planSourceVersionId, m]));
+
+  const versions = await prisma.planSourceVersion.findMany({
+    where: { planSource: { isActive: true } },
+    include: {
+      planSource: {
+        select: {
+          id: true,
+          title: true,
+          sport: true,
+          distance: true,
+          level: true,
+          durationWeeks: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    take: 80,
+  });
+
+  return versions.map((v) => {
+    const rec = recommendedMap.get(v.id);
+    return {
+      planSourceVersionId: v.id,
+      planSourceId: v.planSource.id,
+      title: v.planSource.title,
+      sport: v.planSource.sport,
+      distance: v.planSource.distance,
+      level: v.planSource.level,
+      durationWeeks: v.planSource.durationWeeks,
+      recommended: Boolean(rec),
+      score: rec?.score ?? null,
+      reasons: rec?.reasons ?? [],
+    };
+  });
 }
 
 async function getAthleteSummaryTextForSessionDetail(params: { coachId: string; athleteId: string; setup: any }) {
