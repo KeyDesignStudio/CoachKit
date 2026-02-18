@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
+import { AskCard } from '@/components/knowledge/AskCard';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
@@ -453,6 +454,10 @@ export default function AthleteDashboardConsolePage() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-6">
+          <AskCard />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="athlete-dashboard-chart-grid">
