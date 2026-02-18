@@ -84,3 +84,36 @@ export DRY_RUN='false'
 npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
   apps/web/prisma/scripts/cleanup-strava-notes-equal-activity-name.ts
 ```
+
+## import-plan-sources-batch.ts
+
+Batch-ingests external plan files into `PlanSource` tables for AI Plan Builder:
+- Structured CSV bundle (`training_catalogue.csv`, `training_schedule.csv`, `workout_sessions.csv`)
+- Additional plan PDFs
+
+Default mode is `DRY_RUN` (analysis only, no writes).
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+
+# Dry run (recommended first)
+export APPLY='false'
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/import-plan-sources-batch.ts
+
+# Apply import
+export APPLY='true'
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/import-plan-sources-batch.ts
+```
+
+Optional environment variables:
+- `PLAN_LIBRARY_BASE_DIR` (default `/Users/gordonprice/Downloads/triathlon_training_library`)
+- `PLAN_LIBRARY_CATALOGUE_PATH`
+- `PLAN_LIBRARY_SCHEDULE_PATH`
+- `PLAN_LIBRARY_SESSIONS_PATH`
+- `PLAN_LIBRARY_PDFS` (comma-separated absolute PDF paths)
+- `ACTIVATE_IMPORTED` (`true`/`false`, default `true`)
