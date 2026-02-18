@@ -51,6 +51,7 @@ type GroupSessionRecord = {
 type SessionCardProps = {
   session: GroupSessionRecord;
   onClick: () => void;
+  onLocationClick?: (location: string) => void;
 };
 
 function parseRuleDays(rule: string): string[] {
@@ -84,7 +85,7 @@ function formatTargets(session: GroupSessionRecord): string {
   return `${count} squad${count !== 1 ? 's' : ''}`;
 }
 
-export function SessionCard({ session, onClick }: SessionCardProps) {
+export function SessionCard({ session, onClick, onLocationClick }: SessionCardProps) {
   const theme = getDisciplineTheme(session.discipline);
 
   const metaParts: string[] = [
@@ -96,10 +97,22 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
 
   const metaLine = metaParts.join(' • ');
 
+  const mapUrl = session.location?.trim()
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(session.location.trim())}`
+    : null;
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-left shadow-sm transition-all hover:bg-[var(--bg-surface)] hover:shadow-md min-w-0 h-full"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      className="group w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 text-left shadow-sm transition-all hover:bg-[var(--bg-surface)] hover:shadow-md min-w-0 h-full cursor-pointer"
     >
       <div className="flex items-start gap-3">
         {/* Discipline Icon */}
@@ -117,17 +130,39 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
             <span className="text-[var(--muted)]"> • {metaLine}</span>
           </div>
 
-          <p className="mt-1 text-xs text-[var(--muted)] truncate min-h-[16px]">
+          <div className="mt-1 min-h-[16px]">
             {session.location ? (
-              <>
-                {session.location}
-              </>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--border-subtle)] px-2 py-0.5 text-[var(--muted)] hover:bg-[var(--bg-surface)]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onLocationClick?.(session.location || '');
+                  }}
+                  title="Filter by this location"
+                >
+                  {session.location}
+                </button>
+                {mapUrl ? (
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[var(--fg)] underline"
+                    onClick={(event) => event.stopPropagation()}
+                    title="Open location in map"
+                  >
+                    Map
+                  </a>
+                ) : null}
+              </div>
             ) : (
-              <span className="invisible">—</span>
+              <span className="invisible text-xs">—</span>
             )}
-          </p>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

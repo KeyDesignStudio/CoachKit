@@ -241,7 +241,12 @@ export default function CoachGroupSessionsPage() {
             )}
 
             {filteredSessions.map((session) => (
-              <SessionCard key={session.id} session={session} onClick={() => setSelectedSessionId(session.id)} />
+              <SessionCard
+                key={session.id}
+                session={session}
+                onClick={() => setSelectedSessionId(session.id)}
+                onLocationClick={(location) => setLocationQuery(location)}
+              />
             ))}
           </div>
 
