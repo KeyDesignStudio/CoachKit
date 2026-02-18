@@ -37,6 +37,7 @@ type SetupState = {
   longSessionDay: number | null;
   coachGuidanceText: string;
   programPolicy: '' | 'COUCH_TO_5K' | 'COUCH_TO_IRONMAN_26' | 'HALF_TO_FULL_MARATHON';
+  selectedPlanSourceVersionId: string;
 };
 
 type AthleteProfileSummary = {
@@ -44,6 +45,19 @@ type AthleteProfileSummary = {
   availableDays?: string[] | null;
   disciplines?: string[] | null;
   experienceLevel?: string | null;
+};
+
+type ReferencePlanOption = {
+  planSourceVersionId: string;
+  planSourceId: string;
+  title: string;
+  sport: string;
+  distance: string;
+  level: string;
+  durationWeeks: number;
+  recommended: boolean;
+  score: number | null;
+  reasons: string[];
 };
 
 const DAY_NAME_TO_INDEX: Record<string, number> = {
@@ -103,6 +117,7 @@ function buildSetupFromProfile(profile: AthleteProfileSummary | null): SetupStat
     longSessionDay: defaultLongSessionDay(availableDays),
     coachGuidanceText: '',
     programPolicy: '',
+    selectedPlanSourceVersionId: '',
   };
 }
 
@@ -323,6 +338,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   >({});
   const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
   const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
+  const [referencePlanOptions, setReferencePlanOptions] = useState<ReferencePlanOption[]>([]);
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -411,6 +427,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           typeof (setupJson as any)?.programPolicy === 'string'
             ? ((setupJson as any).programPolicy as SetupState['programPolicy'])
             : prev.programPolicy,
+        selectedPlanSourceVersionId: Array.isArray((setupJson as any)?.selectedPlanSourceVersionIds)
+          ? String((setupJson as any).selectedPlanSourceVersionIds[0] ?? '')
+          : prev.selectedPlanSourceVersionId,
       };
     });
   }, [draftPlanLatest]);
@@ -478,6 +497,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     );
     setDraftPlanLatest(data.draftPlan);
     return data.draftPlan;
+  }, [athleteId, request]);
+
+  const fetchReferencePlans = useCallback(async () => {
+    const data = await request<{ referencePlans: ReferencePlanOption[] }>(
+      `/api/coach/athletes/${athleteId}/ai-plan-builder/reference-plans`
+    );
+    const rows = Array.isArray(data.referencePlans) ? data.referencePlans : [];
+    setReferencePlanOptions(rows);
+    return rows;
   }, [athleteId, request]);
 
   useEffect(() => {
@@ -554,7 +582,12 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     (async () => {
       try {
         setError(null);
-        const [brief, draft] = await Promise.all([fetchBriefLatest(), fetchDraftPlanLatest(), fetchAthleteProfile()]);
+        const [brief, draft] = await Promise.all([
+          fetchBriefLatest(),
+          fetchDraftPlanLatest(),
+          fetchAthleteProfile(),
+          fetchReferencePlans(),
+        ]);
 
         if (cancelled) return;
 
@@ -576,7 +609,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, request]);
+  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, fetchReferencePlans, request]);
 
   useEffect(() => {
     if (!shouldDeferReview) return;
@@ -695,6 +728,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         longSessionDay: setup.longSessionDay,
         coachGuidanceText: setup.coachGuidanceText || '',
         programPolicy: setup.programPolicy || undefined,
+        selectedPlanSourceVersionIds: setup.selectedPlanSourceVersionId ? [setup.selectedPlanSourceVersionId] : undefined,
       };
 
       const created = await request<{ draftPlan: any }>(
@@ -1190,6 +1224,29 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
             <div className="mt-2 text-xs text-[var(--fg-muted)]">
               Templates apply recommended progression and structure. You can still edit every field.
+            </div>
+          </div>
+          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-3">
+            <div className="mb-2 text-sm font-semibold">Reference Plan from Library</div>
+            <Select
+              value={setup.selectedPlanSourceVersionId}
+              onChange={(e) => setSetup((s) => ({ ...s, selectedPlanSourceVersionId: e.target.value }))}
+              data-testid="apb-reference-plan-select"
+            >
+              <option value="">Auto-select best match</option>
+              {referencePlanOptions.map((plan) => {
+                const rec = plan.recommended ? 'Recommended' : '';
+                const score = typeof plan.score === 'number' ? `score ${plan.score.toFixed(2)}` : '';
+                const meta = [plan.sport, plan.distance, `${plan.durationWeeks}w`, plan.level, rec || score].filter(Boolean).join(' • ');
+                return (
+                  <option key={plan.planSourceVersionId} value={plan.planSourceVersionId}>
+                    {plan.title} ({meta})
+                  </option>
+                );
+              })}
+            </Select>
+            <div className="mt-2 text-xs text-[var(--fg-muted)]">
+              Select a known plan to anchor generation, or leave on auto for blended retrieval.
             </div>
           </div>
           {adaptationMemory ? (
