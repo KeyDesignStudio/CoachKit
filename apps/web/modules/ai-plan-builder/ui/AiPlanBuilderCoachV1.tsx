@@ -76,6 +76,12 @@ type PerformanceModelPreview = {
   upcoming: { days: number; plannedLoad: number; avgDailyLoad: number };
 };
 
+type AdaptationSuggestion = {
+  id: string;
+  label: string;
+  guidance: string;
+};
+
 const DAY_NAME_TO_INDEX: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -326,6 +332,65 @@ function deriveWeeksToCompletionFromDates(params: {
   return Math.max(1, Math.min(52, weeks));
 }
 
+function buildAdaptationSuggestions(adaptationMemory: any | null): AdaptationSuggestion[] {
+  if (!adaptationMemory || typeof adaptationMemory !== 'object') return [];
+
+  const completionRate = Number(adaptationMemory.completionRate ?? 0);
+  const skipRate = Number(adaptationMemory.skipRate ?? 0);
+  const sorenessRate = Number(adaptationMemory.sorenessRate ?? 0);
+  const painRate = Number(adaptationMemory.painRate ?? 0);
+  const avgRpe = Number(adaptationMemory.avgRpe ?? 0);
+
+  const suggestions: AdaptationSuggestion[] = [];
+
+  if (painRate >= 0.15 || sorenessRate >= 0.35) {
+    suggestions.push({
+      id: 'protect-recovery',
+      label: 'Protect recovery this week',
+      guidance:
+        'Reduce intensity density this week: cap to one hard day, remove doubles, and keep key sessions aerobic until pain and soreness trends improve.',
+    });
+  }
+
+  if (completionRate < 0.7 || skipRate > 0.25) {
+    suggestions.push({
+      id: 'reset-consistency',
+      label: 'Reset for consistency',
+      guidance:
+        'Lower weekly load by about 10-15% and prioritize consistency sessions on available days before rebuilding progression.',
+    });
+  }
+
+  if (avgRpe >= 7.5) {
+    suggestions.push({
+      id: 'de-load-fatigue',
+      label: 'Deload fatigue',
+      guidance:
+        'Insert a deload microcycle: maintain frequency, reduce total duration, and keep intensity controlled to bring perceived effort back to target.',
+    });
+  }
+
+  if (completionRate >= 0.9 && painRate < 0.05 && sorenessRate < 0.2 && avgRpe > 0 && avgRpe <= 6.5) {
+    suggestions.push({
+      id: 'progress-build',
+      label: 'Progress the build',
+      guidance:
+        'Athlete is tolerating training well. Progress load gradually with one key quality session and one longer endurance session in the week.',
+    });
+  }
+
+  if (!suggestions.length) {
+    suggestions.push({
+      id: 'hold-steady',
+      label: 'Hold current progression',
+      guidance:
+        'Current readiness signal is mixed but stable. Keep progression conservative and monitor compliance, soreness, and pain before increasing load.',
+    });
+  }
+
+  return suggestions;
+}
+
 export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
   const router = useRouter();
@@ -498,6 +563,22 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     const mem = (draftPlanLatest as any)?.planSourceSelectionJson?.adaptationMemory;
     return mem && typeof mem === 'object' ? mem : null;
   }, [draftPlanLatest]);
+
+  const adaptationSuggestions = useMemo(
+    () => buildAdaptationSuggestions(adaptationMemory),
+    [adaptationMemory]
+  );
+
+  const applyCoachGuidance = useCallback((guidance: string) => {
+    const next = String(guidance ?? '').trim();
+    if (!next) return;
+    setSetup((s) => {
+      const existing = String(s.coachGuidanceText ?? '').trim();
+      if (!existing) return { ...s, coachGuidanceText: next };
+      if (existing.includes(next)) return s;
+      return { ...s, coachGuidanceText: `${existing}\n${next}` };
+    });
+  }, []);
 
   const fetchBriefLatest = useCallback(async () => {
     const data = await request<{ brief: any | null }>(
@@ -1004,8 +1085,20 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         disabled: false,
         run: () => router.push('/coach/calendar'),
       },
+      {
+        id: 'apply-readiness-guidance',
+        label: 'Apply top readiness guidance',
+        keywords: 'readiness adaptation recovery pain adherence',
+        disabled: adaptationSuggestions.length === 0,
+        run: () => {
+          const top = adaptationSuggestions[0];
+          if (top) applyCoachGuidance(top.guidance);
+        },
+      },
     ],
     [
+      adaptationSuggestions,
+      applyCoachGuidance,
       busy,
       canPlan,
       canStart,
@@ -1462,20 +1555,37 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes.length ? (
                 <div className="mt-2 text-xs text-[var(--text)]">{adaptationMemory.notes[0]}</div>
               ) : null}
+              <div className="mt-3 rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                <div className="text-xs font-medium text-[var(--text)]">Recommended coach prompts</div>
+                <div className="mt-2 space-y-2">
+                  {adaptationSuggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.id}
+                      className="rounded border border-[var(--border-subtle)] bg-[var(--bg)] p-2"
+                      data-testid={`apb-adaptation-suggestion-${suggestion.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-medium text-[var(--text)]">{suggestion.label}</div>
+                          <div className="mt-1 text-xs text-[var(--fg-muted)]">{suggestion.guidance}</div>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => applyCoachGuidance(suggestion.guidance)}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes[0] ? (
                 <div className="mt-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() =>
-                      setSetup((s) => ({
-                        ...s,
-                        coachGuidanceText: [s.coachGuidanceText, adaptationMemory.notes[0]].filter(Boolean).join('\n'),
-                      }))
-                    }
-                  >
-                    Adjust plan based on recent training
+                  <Button type="button" size="sm" variant="secondary" onClick={() => applyCoachGuidance(adaptationMemory.notes[0])}>
+                    Use recorded coach note
                   </Button>
                 </div>
               ) : null}
