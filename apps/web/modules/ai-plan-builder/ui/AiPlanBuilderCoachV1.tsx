@@ -322,6 +322,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>
   >({});
   const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -921,8 +922,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Plan Builder</h2>
-          <div className="text-sm text-[var(--fg-muted)]">Coach-first planning in four steps.</div>
+          <h2 className="text-lg font-semibold">Build This Athlete&apos;s Next Training Block</h2>
+          <div className="text-sm text-[var(--fg-muted)]">
+            Set the block, generate a weekly plan, then approve and schedule.
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -930,7 +933,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             Refresh
           </Button>
           <a href="/coach/calendar" className="text-sm text-[var(--fg)] underline">
-            Scheduling calendar
+            Open scheduling calendar
           </a>
         </div>
       </div>
@@ -940,9 +943,9 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       )}
 
       <div className="mt-6 space-y-4">
-        <Block title="Athlete Brief">
+        <Block title="Athlete Snapshot">
           {!briefLatest ? (
-            <div className="text-sm text-[var(--fg-muted)]">No Athlete Brief yet. Ask the athlete to complete intake.</div>
+            <div className="text-sm text-[var(--fg-muted)]">No snapshot yet. Ask the athlete to complete intake.</div>
           ) : (
             <div className="space-y-3 text-sm" data-testid="apb-athlete-brief-details">
               {(() => {
@@ -1117,10 +1120,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           )}
         </Block>
 
-        <Block title="1) Athlete Brief">
+        <Block title="1) Confirm Athlete Snapshot">
           <div className="space-y-3">
             <div className="text-sm text-[var(--fg-muted)]">
-              Refresh the Athlete Brief using the latest intake + coach profile fields.
+              Pull the latest intake and profile information before building this block.
             </div>
             <Button
               type="button"
@@ -1129,22 +1132,22 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               data-testid="apb-refresh-brief"
               onClick={refreshBrief}
             >
-              {busy === 'refresh-brief' ? 'Refreshing…' : canStart ? 'Build Athlete Brief' : 'Refresh Athlete Brief'}
+              {busy === 'refresh-brief' ? 'Refreshing…' : canStart ? 'Create snapshot' : 'Refresh snapshot'}
             </Button>
 
             {!canPlan ? (
-              <div className="text-sm text-[var(--fg-muted)]">Athlete Brief required to continue.</div>
+              <div className="text-sm text-[var(--fg-muted)]">Athlete snapshot required to continue.</div>
             ) : (
               <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3" data-testid="apb-athlete-brief">
-                <div className="text-sm font-semibold">Athlete Brief</div>
-                <div className="mt-2 text-sm text-[var(--fg-muted)]">Ready for plan generation.</div>
+                <div className="text-sm font-semibold">Athlete snapshot</div>
+                <div className="mt-2 text-sm text-[var(--fg-muted)]">Ready to build this training block.</div>
               </div>
             )}
           </div>
         </Block>
 
         <Block
-          title="2) Plan Settings"
+          title="2) Block Setup"
           rightAction={
             <Button
               type="button"
@@ -1154,22 +1157,22 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               data-testid="apb-generate-plan"
               onClick={generatePlanPreview}
             >
-              {busy === 'generate-plan' ? 'Building…' : 'Build plan preview'}
+              {busy === 'generate-plan' ? 'Generating…' : 'Generate weekly plan'}
             </Button>
           }
         >
           <div className="mb-3 text-xs text-[var(--fg-muted)]">
-            Defaults come from the Athlete Profile. Changes here apply to this plan only.
+            Defaults come from the athlete profile. Changes here apply only to this block.
           </div>
           <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-3">
-            <div className="mb-2 text-sm font-semibold">Periodization Wizard</div>
+            <div className="mb-2 text-sm font-semibold">Plan Type</div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
               <Select
                 value={setup.programPolicy}
                 onChange={(e) => setSetup((s) => ({ ...s, programPolicy: e.target.value as SetupState['programPolicy'] }))}
                 data-testid="apb-program-policy"
               >
-                <option value="">Custom plan (no template)</option>
+                <option value="">Custom block (no template)</option>
                 <option value="COUCH_TO_5K">Couch to 5K</option>
                 <option value="COUCH_TO_IRONMAN_26">Couch to Ironman (26w)</option>
                 <option value="HALF_TO_FULL_MARATHON">Half Marathon to Marathon</option>
@@ -1182,16 +1185,16 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 disabled={!setup.programPolicy}
                 data-testid="apb-apply-policy-preset"
               >
-                Apply template defaults
+                Use suggested setup
               </Button>
             </div>
             <div className="mt-2 text-xs text-[var(--fg-muted)]">
-              Templates tune risk, progression, and weekly structure. You can still edit every field manually.
+              Templates apply recommended progression and structure. You can still edit every field.
             </div>
           </div>
           {adaptationMemory ? (
             <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-3" data-testid="apb-readiness-card">
-              <div className="text-sm font-semibold">Readiness and Adherence Signal</div>
+              <div className="text-sm font-semibold">Current Training Status</div>
               <div className="mt-1 text-xs text-[var(--fg-muted)]">
                 Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}% · Skips {(Number(adaptationMemory.skipRate ?? 0) * 100).toFixed(0)}% ·
                 Soreness {(Number(adaptationMemory.sorenessRate ?? 0) * 100).toFixed(0)}% · Pain {(Number(adaptationMemory.painRate ?? 0) * 100).toFixed(0)}%
@@ -1213,7 +1216,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                       }))
                     }
                   >
-                    Use signal in AI guidance
+                    Adjust plan based on recent training
                   </Button>
                 </div>
               ) : null}
@@ -1227,18 +1230,18 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
-              <div className="mb-1 text-sm font-medium">Coach guidance (optional)</div>
+              <div className="mb-1 text-sm font-medium">Coach priorities for this block (optional)</div>
               <Textarea
                 rows={3}
                 value={setup.coachGuidanceText}
                 onChange={(e) => setSetup((s) => ({ ...s, coachGuidanceText: e.target.value }))}
-                placeholder="E.g. avoid intensity on Fridays; keep long run on Sunday"
+                placeholder="Example: Keep long run on Sunday, no hard sessions the day after, focus on consistency first."
                 data-testid="apb-coach-guidance"
               />
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Starting date</div>
+              <div className="mb-1 text-sm font-medium">Block start date</div>
               <Input
                 type="date"
                 value={setup.startDate}
@@ -1253,7 +1256,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Completion date</div>
+              <div className="mb-1 text-sm font-medium">Block end date</div>
               <Input
                 type="date"
                 value={setup.completionDate}
@@ -1269,7 +1272,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
             <div className="md:col-span-2">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Weeks to completion</div>
+                <div className="text-sm font-medium">Block length (weeks)</div>
                 <Button
                   type="button"
                   size="sm"
@@ -1282,7 +1285,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   }
                   data-testid="apb-weeks-auto-toggle"
                 >
-                  {setup.weeksToEventOverride == null ? 'Auto' : 'Manual'}
+                  {setup.weeksToEventOverride == null ? 'Auto from dates' : 'Set manually'}
                 </Button>
               </div>
 
@@ -1318,7 +1321,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Weekly time budget (minutes)</div>
+              <div className="mb-1 text-sm font-medium">Weekly training time (minutes)</div>
               <Input
                 type="number"
                 min={0}
@@ -1358,7 +1361,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Discipline emphasis</div>
+              <div className="mb-1 text-sm font-medium">Primary discipline focus</div>
               <Select
                 value={setup.disciplineEmphasis}
                 onChange={(e) => setSetup((s) => ({ ...s, disciplineEmphasis: e.target.value as any }))}
@@ -1372,7 +1375,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Risk tolerance</div>
+              <div className="mb-1 text-sm font-medium">Progression approach</div>
               <Select
                 value={setup.riskTolerance}
                 onChange={(e) => setSetup((s) => ({ ...s, riskTolerance: e.target.value as any }))}
@@ -1383,13 +1386,82 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 <option value="high">Aggressive</option>
               </Select>
             </div>
+
+            <div className="md:col-span-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setShowAdvancedSetup((v) => !v)}
+                data-testid="apb-toggle-advanced-setup"
+              >
+                {showAdvancedSetup ? 'Hide advanced setup' : 'Show advanced setup'}
+              </Button>
+            </div>
+
+            {showAdvancedSetup ? (
+              <>
+                <div>
+                  <div className="mb-1 text-sm font-medium">Hard sessions per week (max)</div>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={7}
+                    value={String(setup.maxIntensityDaysPerWeek)}
+                    onChange={(e) =>
+                      setSetup((s) => ({
+                        ...s,
+                        maxIntensityDaysPerWeek: Math.max(0, Math.min(7, Number(e.target.value) || 0)),
+                      }))
+                    }
+                    data-testid="apb-max-intensity-days"
+                  />
+                </div>
+                <div>
+                  <div className="mb-1 text-sm font-medium">Double-session days per week (max)</div>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={7}
+                    value={String(setup.maxDoublesPerWeek)}
+                    onChange={(e) =>
+                      setSetup((s) => ({
+                        ...s,
+                        maxDoublesPerWeek: Math.max(0, Math.min(7, Number(e.target.value) || 0)),
+                      }))
+                    }
+                    data-testid="apb-max-doubles"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-1 text-sm font-medium">Preferred long session day</div>
+                  <Select
+                    value={setup.longSessionDay == null ? '' : String(setup.longSessionDay)}
+                    onChange={(e) =>
+                      setSetup((s) => ({
+                        ...s,
+                        longSessionDay: e.target.value === '' ? null : Number.parseInt(e.target.value, 10),
+                      }))
+                    }
+                    data-testid="apb-long-session-day"
+                  >
+                    <option value="">No preference</option>
+                    {orderedDays.map((day) => (
+                      <option key={day} value={day}>
+                        {DAY_NAMES_SUN0[day]}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </>
+            ) : null}
           </div>
         </Block>
 
-        <Block title="3) Review Plan">
+        <Block title="3) Preview & Edit Weekly Plan">
           <div ref={reviewSentinelRef} className="h-px w-full" aria-hidden="true" />
           {!hasDraft ? (
-            <div className="text-sm text-[var(--fg-muted)]">Generate a plan preview to see sessions.</div>
+            <div className="text-sm text-[var(--fg-muted)]">Generate a weekly plan to preview and edit sessions.</div>
           ) : reviewReady && reviewInView ? (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
               <ReviewPlanSection
@@ -1412,16 +1484,16 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               />
               <aside className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3" data-testid="apb-reference-pane">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold">Dual-Pane Coach View</div>
+                  <div className="text-sm font-semibold">Compare Views</div>
                   <Select value={reviewSideMode} onChange={(e) => setReviewSideMode(e.target.value as any)}>
-                    <option value="reference">Reference plan</option>
-                    <option value="previous">Previous block</option>
+                    <option value="reference">Reference plans</option>
+                    <option value="previous">Earlier vs recent block</option>
                   </Select>
                 </div>
                 <div className="mt-1 text-xs text-[var(--fg-muted)]">
                   {reviewSideMode === 'reference'
-                    ? 'Athlete draft vs matched plan-library sources.'
-                    : 'Athlete draft vs early block load to gauge progression drift.'}
+                    ? 'Compare this draft against matched plan-library sources.'
+                    : 'Compare early and recent weeks to check progression drift.'}
                 </div>
                 {reviewSideMode === 'reference' && selectedPlanSources.length ? (
                   <ul className="mt-3 space-y-2 text-xs">
@@ -1467,7 +1539,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         </Block>
 
         <Block
-          title="4) Publish"
+          title="4) Approve & Schedule"
           rightAction={
             <Button
               type="button"
@@ -1476,26 +1548,26 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               data-testid="apb-publish"
               onClick={publishPlan}
             >
-              {busy === 'publish' ? 'Publishing…' : 'Publish plan to athlete calendar'}
+              {busy === 'publish' ? 'Scheduling…' : 'Approve and schedule'}
             </Button>
           }
         >
           {!hasDraft ? (
-            <div className="text-sm text-[var(--fg-muted)]">Build a plan preview before publishing.</div>
+            <div className="text-sm text-[var(--fg-muted)]">Generate a plan before scheduling to the athlete calendar.</div>
           ) : isPublished ? (
             <div className="space-y-2">
               <div
                 className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-4 py-3 text-sm"
                 data-testid="apb-publish-success"
               >
-                Published — sessions are now visible in the scheduling calendar.
+                Scheduled successfully. Sessions are now visible in the athlete calendar.
               </div>
               <a href="/coach/calendar" className="text-sm text-[var(--fg)] underline" data-testid="apb-open-calendar">
-                Open scheduling calendar
+                Open coach calendar
               </a>
             </div>
           ) : (
-            <div className="text-sm text-[var(--fg-muted)]">Publishing will schedule all plan weeks onto the athlete’s calendar.</div>
+            <div className="text-sm text-[var(--fg-muted)]">This schedules all plan weeks onto the athlete calendar.</div>
           )}
         </Block>
       </div>
