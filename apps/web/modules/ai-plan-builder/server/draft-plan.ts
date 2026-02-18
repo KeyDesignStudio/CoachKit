@@ -18,6 +18,7 @@ import { mapWithConcurrency } from '@/lib/concurrency';
 import { buildPlanReasoningV1 } from '@/lib/ai/plan-reasoning/buildPlanReasoningV1';
 import { selectPlanSources } from '@/modules/plan-library/server/select';
 import { applyPlanSourceToDraftInput } from '@/modules/plan-library/server/apply';
+import { buildAdaptationMemorySummary } from './adaptation-memory';
 import {
   buildDeterministicSessionDetailV1,
   normalizeSessionDetailV1DurationsToTotal,
@@ -55,6 +56,7 @@ export const draftPlanSetupV1Schema = z.object({
   maxDoublesPerWeek: z.number().int().min(0).max(3),
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
   coachGuidanceText: z.string().max(2_000).optional(),
+  programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
 }).transform((raw) => {
   const eventDate = raw.eventDate ?? raw.completionDate;
   if (!eventDate) {
@@ -143,6 +145,184 @@ function stripDurationTokens(value: string): string {
     .trim();
 }
 
+function inferProgramPolicy(params: {
+  guidanceText?: string | null;
+  primaryGoal?: string | null;
+  focus?: string | null;
+  weeksToEvent?: number | null;
+}) {
+  const text = [params.guidanceText, params.primaryGoal, params.focus].filter(Boolean).join(' ').toLowerCase();
+  const weeks = Number(params.weeksToEvent ?? 0) || 0;
+
+  if (/couch\s*to\s*ironman|ironman/.test(text) || weeks >= 24) return 'COUCH_TO_IRONMAN_26' as const;
+  if (/couch\s*to\s*5\s*k|\b5k\b/.test(text)) return 'COUCH_TO_5K' as const;
+  if ((/half\s*marathon|\bhm\b/.test(text) && /marathon/.test(text)) || /half.*full|full.*half/.test(text)) {
+    return 'HALF_TO_FULL_MARATHON' as const;
+  }
+  return undefined;
+}
+
+function normalizeWeight(score: number): number {
+  if (!Number.isFinite(score) || score <= 0) return 0;
+  return score;
+}
+
+function weightedAverage(values: Array<{ value: number; weight: number }>): number | null {
+  const usable = values.filter((v) => Number.isFinite(v.value) && Number.isFinite(v.weight) && v.weight > 0);
+  if (!usable.length) return null;
+  const totalWeight = usable.reduce((sum, v) => sum + v.weight, 0);
+  if (!totalWeight) return null;
+  return usable.reduce((sum, v) => sum + v.value * v.weight, 0) / totalWeight;
+}
+
+function weightedDistribution(
+  values: Array<{ value: Record<string, number> | null | undefined; weight: number }>
+): Record<string, number> | undefined {
+  const sums: Record<string, number> = {};
+  let total = 0;
+  for (const row of values) {
+    if (!row.value || !Number.isFinite(row.weight) || row.weight <= 0) continue;
+    for (const [k, v] of Object.entries(row.value)) {
+      if (!Number.isFinite(v) || v <= 0) continue;
+      sums[k] = (sums[k] ?? 0) + v * row.weight;
+      total += v * row.weight;
+    }
+  }
+  if (!total) return undefined;
+  const normalized: Record<string, number> = {};
+  for (const [k, v] of Object.entries(sums)) normalized[k] = Number((v / total).toFixed(3));
+  return normalized;
+}
+
+function blendAppliedPlanSources(params: {
+  baseSetup: any;
+  applied: Array<{ weight: number; adjustedSetup: any; influenceSummary: any }>;
+}) {
+  if (!params.applied.length) {
+    return {
+      adjustedSetup: params.baseSetup,
+      influenceSummary: { confidence: 'low', notes: [], appliedRules: [] as string[] },
+    };
+  }
+
+  const longDayScores = new Map<number, number>();
+  for (const row of params.applied) {
+    const d = row.adjustedSetup?.longSessionDay;
+    if (!Number.isInteger(d)) continue;
+    longDayScores.set(Number(d), (longDayScores.get(Number(d)) ?? 0) + row.weight);
+  }
+
+  const weeklyByIndex = new Map<number, Array<{ value: number; weight: number }>>();
+  for (const row of params.applied) {
+    const wk = Array.isArray(row.adjustedSetup?.weeklyMinutesByWeek) ? row.adjustedSetup.weeklyMinutesByWeek : [];
+    wk.forEach((v: unknown, idx: number) => {
+      if (!Number.isFinite(Number(v))) return;
+      const bucket = weeklyByIndex.get(idx) ?? [];
+      bucket.push({ value: Number(v), weight: row.weight });
+      weeklyByIndex.set(idx, bucket);
+    });
+  }
+
+  const weeklyMinutesByWeek = Array.from(weeklyByIndex.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, values]) => Math.max(0, Math.round(weightedAverage(values) ?? 0)));
+
+  const maxIntensityDaysPerWeek = weightedAverage(
+    params.applied.map((row) => ({ value: Number(row.adjustedSetup?.maxIntensityDaysPerWeek ?? 0), weight: row.weight }))
+  );
+  const sessionsPerWeekOverride = weightedAverage(
+    params.applied.map((row) => ({ value: Number(row.adjustedSetup?.sessionsPerWeekOverride ?? 0), weight: row.weight }))
+  );
+  const recoveryEveryNWeeks = weightedAverage(
+    params.applied.map((row) => ({ value: Number(row.adjustedSetup?.recoveryEveryNWeeks ?? 0), weight: row.weight }))
+  );
+  const recoveryWeekMultiplier = weightedAverage(
+    params.applied.map((row) => ({ value: Number(row.adjustedSetup?.recoveryWeekMultiplier ?? 0), weight: row.weight }))
+  );
+
+  const disciplineSplitTargets = weightedDistribution(
+    params.applied.map((row) => ({ value: row.adjustedSetup?.disciplineSplitTargets ?? null, weight: row.weight }))
+  );
+  const sessionTypeDistribution = weightedDistribution(
+    params.applied.map((row) => ({ value: row.adjustedSetup?.sessionTypeDistribution ?? null, weight: row.weight }))
+  );
+
+  const confidenceScore = weightedAverage(
+    params.applied.map((row) => ({
+      value:
+        row.influenceSummary?.confidence === 'high' ? 3 : row.influenceSummary?.confidence === 'med' ? 2 : row.influenceSummary?.confidence === 'low' ? 1 : 0,
+      weight: row.weight,
+    }))
+  );
+  const confidence: 'low' | 'med' | 'high' = confidenceScore && confidenceScore >= 2.4 ? 'high' : confidenceScore && confidenceScore >= 1.6 ? 'med' : 'low';
+  const notes = params.applied.flatMap((row) => (Array.isArray(row.influenceSummary?.notes) ? row.influenceSummary.notes : [])).slice(0, 6);
+  const appliedRules = Array.from(
+    new Set(params.applied.flatMap((row) => (Array.isArray(row.influenceSummary?.appliedRules) ? row.influenceSummary.appliedRules : [])))
+  );
+
+  return {
+    adjustedSetup: {
+      ...params.baseSetup,
+      ...(disciplineSplitTargets ? { disciplineSplitTargets } : {}),
+      ...(sessionTypeDistribution ? { sessionTypeDistribution } : {}),
+      ...(weeklyMinutesByWeek.length ? { weeklyMinutesByWeek } : {}),
+      ...(maxIntensityDaysPerWeek != null ? { maxIntensityDaysPerWeek: Math.max(1, Math.min(3, Math.round(maxIntensityDaysPerWeek))) } : {}),
+      ...(sessionsPerWeekOverride != null ? { sessionsPerWeekOverride: Math.max(3, Math.min(10, Math.round(sessionsPerWeekOverride))) } : {}),
+      ...(recoveryEveryNWeeks != null ? { recoveryEveryNWeeks: Math.max(2, Math.min(8, Math.round(recoveryEveryNWeeks))) } : {}),
+      ...(recoveryWeekMultiplier != null ? { recoveryWeekMultiplier: Number(Math.max(0.5, Math.min(0.95, recoveryWeekMultiplier)).toFixed(2)) } : {}),
+      ...(longDayScores.size
+        ? {
+            longSessionDay: Array.from(longDayScores.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? params.baseSetup.longSessionDay,
+          }
+        : {}),
+    },
+    influenceSummary: {
+      confidence,
+      notes,
+      appliedRules,
+      archetype: `${params.applied.length}-source blend`,
+    },
+  };
+}
+
+function applyAdaptationMemoryToSetup(params: { setup: any; memory: Awaited<ReturnType<typeof buildAdaptationMemorySummary>> }) {
+  const setup = { ...(params.setup ?? {}) };
+  const memory = params.memory;
+  if (!memory || memory.sampleSize <= 0) return setup;
+
+  setup.maxIntensityDaysPerWeek = Math.max(
+    1,
+    Math.min(3, Number(setup.maxIntensityDaysPerWeek ?? 1) + Number(memory.recommendedMaxIntensityDaysPerWeekDelta ?? 0))
+  );
+
+  if (typeof setup.sessionsPerWeekOverride === 'number' && Number.isFinite(setup.sessionsPerWeekOverride)) {
+    setup.sessionsPerWeekOverride = Math.max(
+      3,
+      Math.min(10, Math.round(setup.sessionsPerWeekOverride + Number(memory.recommendedSessionsPerWeekDelta ?? 0)))
+    );
+  }
+
+  if (Array.isArray(setup.weeklyMinutesByWeek) && setup.weeklyMinutesByWeek.length) {
+    setup.weeklyMinutesByWeek = setup.weeklyMinutesByWeek.map((v: unknown) =>
+      Math.max(45, Math.round(Number(v || 0) * Number(memory.recommendedWeeklyMinutesMultiplier || 1)))
+    );
+  } else if (typeof setup.weeklyAvailabilityMinutes === 'number' && Number.isFinite(setup.weeklyAvailabilityMinutes)) {
+    setup.weeklyAvailabilityMinutes = Math.max(
+      60,
+      Math.round(setup.weeklyAvailabilityMinutes * Number(memory.recommendedWeeklyMinutesMultiplier || 1))
+    );
+  }
+
+  if (typeof memory.recommendedRecoveryEveryNWeeks === 'number' && Number.isFinite(memory.recommendedRecoveryEveryNWeeks)) {
+    setup.recoveryEveryNWeeks = memory.recommendedRecoveryEveryNWeeks;
+    if (setup.recoveryWeekMultiplier == null) {
+      setup.recoveryWeekMultiplier = memory.recommendedWeeklyMinutesMultiplier < 1 ? 0.78 : 0.84;
+    }
+  }
+
+  return setup;
+}
+
 export async function createAiDraftPlan(params: { coachId: string; athleteId: string; planJson: unknown }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -185,15 +365,26 @@ export async function generateAiDraftPlanV1(params: {
     setup.coachGuidanceText = bits;
   }
 
+  setup.programPolicy =
+    setup.programPolicy ??
+    inferProgramPolicy({
+      guidanceText: setup.coachGuidanceText,
+      primaryGoal: athleteProfile?.primaryGoal,
+      focus: athleteProfile?.focus,
+      weeksToEvent: setup.weeksToEvent,
+    });
+
   const planSourceMatches = await selectPlanSources({
     athleteProfile: athleteProfile as any,
     durationWeeks: setup.weeksToEvent,
+    queryText: [setup.coachGuidanceText, athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
   });
 
-  const selectedPlanSourceVersionId = planSourceMatches[0]?.planSourceVersionId;
-  const selectedPlanSource = selectedPlanSourceVersionId
-    ? await prisma.planSourceVersion.findUnique({
-        where: { id: selectedPlanSourceVersionId },
+  const selectedMatches = planSourceMatches.slice(0, 4);
+  const selectedVersionIds = selectedMatches.map((m) => m.planSourceVersionId);
+  const selectedPlanSources = selectedVersionIds.length
+    ? await prisma.planSourceVersion.findMany({
+        where: { id: { in: selectedVersionIds } },
         include: {
           planSource: {
             select: {
@@ -209,24 +400,59 @@ export async function generateAiDraftPlanV1(params: {
           rules: true,
         },
       })
-    : null;
+    : [];
 
-  const selectedPlanSourceForApply = selectedPlanSource
-    ? {
-        ...selectedPlanSource,
-        sessions: selectedPlanSource.weeks.flatMap((w) => w.sessions ?? []),
-      }
-    : null;
+  const sourceById = new Map(selectedPlanSources.map((s) => [s.id, s]));
+  const appliedBySource = selectedMatches
+    .map((match) => {
+      const source = sourceById.get(match.planSourceVersionId);
+      if (!source) return null;
+      const selectedPlanSourceForApply = {
+        ...source,
+        sessions: source.weeks.flatMap((w) => w.sessions ?? []),
+      };
+      const applied = applyPlanSourceToDraftInput({
+        athleteProfile: athleteProfile as any,
+        athleteBrief: ensured.brief ?? null,
+        apbSetup: setup as any,
+        baseDraftInput: setup as any,
+        selectedPlanSource: selectedPlanSourceForApply as any,
+      });
+      return {
+        match,
+        source,
+        weight: normalizeWeight(match.score),
+        adjustedSetup: applied.adjustedDraftInput as any,
+        influenceSummary: applied.influenceSummary,
+        ruleBundle: applied.ruleBundle,
+      };
+    })
+    .filter(Boolean) as Array<{
+    match: (typeof selectedMatches)[number];
+    source: (typeof selectedPlanSources)[number];
+    weight: number;
+    adjustedSetup: any;
+    influenceSummary: any;
+    ruleBundle: any;
+  }>;
 
-  const applied = applyPlanSourceToDraftInput({
-    athleteProfile: athleteProfile as any,
-    athleteBrief: ensured.brief ?? null,
-    apbSetup: setup as any,
-    baseDraftInput: setup as any,
-    selectedPlanSource: selectedPlanSourceForApply as any,
+  const blended = blendAppliedPlanSources({
+    baseSetup: setup as any,
+    applied: appliedBySource.map((row) => ({
+      weight: row.weight || 1,
+      adjustedSetup: row.adjustedSetup,
+      influenceSummary: row.influenceSummary,
+    })),
   });
-
-  const adjustedSetup = applied.adjustedDraftInput as any;
+  const adaptationMemory = await buildAdaptationMemorySummary({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+  });
+  const adjustedSetup = applyAdaptationMemoryToSetup({
+    setup: blended.adjustedSetup as any,
+    memory: adaptationMemory,
+  }) as any;
+  const primarySelected = appliedBySource[0] ?? null;
 
   const suggestion = await ai.suggestDraftPlan({
     setup: adjustedSetup,
@@ -240,7 +466,7 @@ export async function generateAiDraftPlanV1(params: {
     setup: adjustedSetup,
     draftPlanJson: draft as any,
     planSources: planSourceMatches,
-    planSourceInfluence: applied.influenceSummary,
+    planSourceInfluence: blended.influenceSummary,
   });
 
   const created = await prisma.aiPlanDraft.create({
@@ -255,24 +481,38 @@ export async function generateAiDraftPlanV1(params: {
       reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
       planSourceSelectionJson: {
         selectedPlanSourceVersionIds: planSourceMatches.map((m) => m.planSourceVersionId),
-        selectedPlanSource: selectedPlanSource
+        selectedPlanSource: primarySelected
           ? {
-              planSourceId: selectedPlanSource.planSource.id,
-              planSourceVersionId: selectedPlanSource.id,
-              planSourceVersion: selectedPlanSource.version,
-              title: selectedPlanSource.planSource.title,
-              checksumSha256: selectedPlanSource.planSource.checksumSha256,
-              archetype: applied.ruleBundle?.planArchetype ?? null,
+              planSourceId: primarySelected.source.planSource.id,
+              planSourceVersionId: primarySelected.source.id,
+              planSourceVersion: primarySelected.source.version,
+              title: primarySelected.source.planSource.title,
+              checksumSha256: primarySelected.source.planSource.checksumSha256,
+              archetype: primarySelected.ruleBundle?.planArchetype ?? null,
             }
           : null,
+        selectedPlanSources: appliedBySource.map((row) => ({
+          planSourceId: row.source.planSource.id,
+          planSourceVersionId: row.source.id,
+          planSourceVersion: row.source.version,
+          title: row.source.planSource.title,
+          checksumSha256: row.source.planSource.checksumSha256,
+          score: row.match.score,
+          semanticScore: row.match.semanticScore,
+          metadataScore: row.match.metadataScore,
+          reasons: row.match.reasons,
+        })),
         matchScores: planSourceMatches.map((m) => ({
           planSourceVersionId: m.planSourceVersionId,
           planSourceId: m.planSourceId,
           title: m.title,
           score: m.score,
+          semanticScore: m.semanticScore,
+          metadataScore: m.metadataScore,
           reasons: m.reasons,
         })),
-        influenceSummary: applied.influenceSummary,
+        influenceSummary: blended.influenceSummary,
+        adaptationMemory,
       } as unknown as Prisma.InputJsonValue,
       weeks: {
         create: draft.weeks.map((w) => ({

@@ -36,6 +36,7 @@ type SetupState = {
   maxDoublesPerWeek: number;
   longSessionDay: number | null;
   coachGuidanceText: string;
+  programPolicy: '' | 'COUCH_TO_5K' | 'COUCH_TO_IRONMAN_26' | 'HALF_TO_FULL_MARATHON';
 };
 
 type AthleteProfileSummary = {
@@ -101,7 +102,55 @@ function buildSetupFromProfile(profile: AthleteProfileSummary | null): SetupStat
     maxDoublesPerWeek: 0,
     longSessionDay: defaultLongSessionDay(availableDays),
     coachGuidanceText: '',
+    programPolicy: '',
   };
+}
+
+function applyPolicyPreset(setup: SetupState, weeksToCompletion: number | null): SetupState {
+  const weeks = Math.max(1, Math.min(52, weeksToCompletion ?? setup.weeksToEventOverride ?? 12));
+  if (setup.programPolicy === 'COUCH_TO_5K') {
+    return {
+      ...setup,
+      disciplineEmphasis: 'run',
+      riskTolerance: 'low',
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      weeklyAvailabilityMinutes: Math.max(150, Math.min(260, setup.weeklyAvailabilityMinutes || 200)),
+      weeksToEventOverride: weeks,
+      coachGuidanceText:
+        setup.coachGuidanceText ||
+        "Novice progression. Keep one quality run max per week and emphasize consistency and recovery.",
+    };
+  }
+  if (setup.programPolicy === 'COUCH_TO_IRONMAN_26') {
+    return {
+      ...setup,
+      disciplineEmphasis: 'balanced',
+      riskTolerance: 'med',
+      maxIntensityDaysPerWeek: Math.min(2, Math.max(1, setup.maxIntensityDaysPerWeek)),
+      maxDoublesPerWeek: Math.max(1, setup.maxDoublesPerWeek),
+      weeklyAvailabilityMinutes: Math.max(600, Math.min(1000, setup.weeklyAvailabilityMinutes || 820)),
+      weeksToEventOverride: Math.max(24, weeks),
+      coachGuidanceText:
+        setup.coachGuidanceText ||
+        'Progressive triathlon build with regular recovery weeks and discipline balance anchored to bike durability.',
+    };
+  }
+  if (setup.programPolicy === 'HALF_TO_FULL_MARATHON') {
+    return {
+      ...setup,
+      disciplineEmphasis: 'run',
+      riskTolerance: 'med',
+      maxIntensityDaysPerWeek: Math.min(2, Math.max(1, setup.maxIntensityDaysPerWeek)),
+      maxDoublesPerWeek: Math.min(1, setup.maxDoublesPerWeek),
+      weeklyAvailabilityMinutes: Math.max(360, Math.min(650, setup.weeklyAvailabilityMinutes || 520)),
+      weeksToEventOverride: Math.max(12, weeks),
+      coachGuidanceText:
+        setup.coachGuidanceText ||
+        'Bridge from half-marathon readiness to full marathon durability with long-run progression and controlled intensity.',
+    };
+  }
+  return setup;
 }
 
 function formatApiErrorMessage(e: ApiClientError): string {
@@ -272,6 +321,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [sessionDetailsById, setSessionDetailsById] = useState<
     Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>
   >({});
+  const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -356,6 +406,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         longSessionDay:
           typeof (setupJson as any)?.longSessionDay === 'number' ? Number((setupJson as any).longSessionDay) : prev.longSessionDay,
         coachGuidanceText: typeof (setupJson as any)?.coachGuidanceText === 'string' ? (setupJson as any).coachGuidanceText : prev.coachGuidanceText,
+        programPolicy:
+          typeof (setupJson as any)?.programPolicy === 'string'
+            ? ((setupJson as any).programPolicy as SetupState['programPolicy'])
+            : prev.programPolicy,
       };
     });
   }, [draftPlanLatest]);
@@ -391,6 +445,17 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     if ((raw as any)?.version !== 'v1') return null;
     return raw as PlanReasoningV1;
   }, [draftPlanLatest, shouldPrepareReview]);
+
+  const selectedPlanSources = useMemo(() => {
+    const rows = (draftPlanLatest as any)?.planSourceSelectionJson?.selectedPlanSources;
+    return Array.isArray(rows) ? rows : [];
+  }, [draftPlanLatest]);
+
+
+  const adaptationMemory = useMemo(() => {
+    const mem = (draftPlanLatest as any)?.planSourceSelectionJson?.adaptationMemory;
+    return mem && typeof mem === 'object' ? mem : null;
+  }, [draftPlanLatest]);
 
   const fetchBriefLatest = useCallback(async () => {
     const data = await request<{ brief: any | null }>(
@@ -628,6 +693,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         maxDoublesPerWeek: Number(setup.maxDoublesPerWeek) || 0,
         longSessionDay: setup.longSessionDay,
         coachGuidanceText: setup.coachGuidanceText || '',
+        programPolicy: setup.programPolicy || undefined,
       };
 
       const created = await request<{ draftPlan: any }>(
@@ -817,6 +883,28 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
     return Array.from(byWeek.entries()).sort(([a], [b]) => a - b);
   }, [draftPlanLatest?.sessions, effectiveWeekStart, shouldPrepareReview]);
+
+  const previousBlockSummary = useMemo(() => {
+    const weeks = sessionsByWeek.map(([, s]) => ({ sessions: s }));
+    if (!weeks.length) return null;
+    const firstBlock = weeks.slice(0, Math.min(4, weeks.length));
+    const lastBlock = weeks.slice(Math.max(0, weeks.length - Math.min(4, weeks.length)));
+    const blockStats = (rows: Array<{ sessions: any[] }>) => {
+      const sessions = rows.flatMap((w) => w.sessions ?? []);
+      const totalMinutes = sessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0);
+      const intensity = sessions.filter((s) => {
+        const t = String(s?.type ?? '').toLowerCase();
+        return t === 'tempo' || t === 'threshold';
+      }).length;
+      return { sessions: sessions.length, totalMinutes, intensity };
+    };
+    return {
+      early: blockStats(firstBlock),
+      recent: blockStats(lastBlock),
+      earlyRange: `Weeks 1-${firstBlock.length}`,
+      recentRange: `Weeks ${Math.max(1, weeks.length - lastBlock.length + 1)}-${weeks.length}`,
+    };
+  }, [sessionsByWeek]);
 
   const sessionsByWeekMap = useMemo(() => new Map(sessionsByWeek), [sessionsByWeek]);
 
@@ -1073,6 +1161,64 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           <div className="mb-3 text-xs text-[var(--fg-muted)]">
             Defaults come from the Athlete Profile. Changes here apply to this plan only.
           </div>
+          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-3">
+            <div className="mb-2 text-sm font-semibold">Periodization Wizard</div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
+              <Select
+                value={setup.programPolicy}
+                onChange={(e) => setSetup((s) => ({ ...s, programPolicy: e.target.value as SetupState['programPolicy'] }))}
+                data-testid="apb-program-policy"
+              >
+                <option value="">Custom plan (no template)</option>
+                <option value="COUCH_TO_5K">Couch to 5K</option>
+                <option value="COUCH_TO_IRONMAN_26">Couch to Ironman (26w)</option>
+                <option value="HALF_TO_FULL_MARATHON">Half Marathon to Marathon</option>
+              </Select>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setSetup((s) => applyPolicyPreset(s, derivedWeeksToCompletion))}
+                disabled={!setup.programPolicy}
+                data-testid="apb-apply-policy-preset"
+              >
+                Apply template defaults
+              </Button>
+            </div>
+            <div className="mt-2 text-xs text-[var(--fg-muted)]">
+              Templates tune risk, progression, and weekly structure. You can still edit every field manually.
+            </div>
+          </div>
+          {adaptationMemory ? (
+            <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-3" data-testid="apb-readiness-card">
+              <div className="text-sm font-semibold">Readiness and Adherence Signal</div>
+              <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}% · Skips {(Number(adaptationMemory.skipRate ?? 0) * 100).toFixed(0)}% ·
+                Soreness {(Number(adaptationMemory.sorenessRate ?? 0) * 100).toFixed(0)}% · Pain {(Number(adaptationMemory.painRate ?? 0) * 100).toFixed(0)}%
+                {adaptationMemory.avgRpe != null ? ` · Avg RPE ${adaptationMemory.avgRpe}` : ''}
+              </div>
+              {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes.length ? (
+                <div className="mt-2 text-xs text-[var(--text)]">{adaptationMemory.notes[0]}</div>
+              ) : null}
+              {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes[0] ? (
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      setSetup((s) => ({
+                        ...s,
+                        coachGuidanceText: [s.coachGuidanceText, adaptationMemory.notes[0]].filter(Boolean).join('\n'),
+                      }))
+                    }
+                  >
+                    Use signal in AI guidance
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {buildProgress ? (
             <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2 text-sm" data-testid="apb-build-progress">
               <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--fg-muted)] border-t-transparent" />
@@ -1245,24 +1391,76 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           {!hasDraft ? (
             <div className="text-sm text-[var(--fg-muted)]">Generate a plan preview to see sessions.</div>
           ) : reviewReady && reviewInView ? (
-            <ReviewPlanSection
-              hasDraft={hasDraft}
-              planReasoning={planReasoning}
-              sessionsByWeek={sessionsByWeek}
-              sessionsByWeekMap={sessionsByWeekMap}
-              sessionDraftEdits={sessionDraftEdits}
-              weekLockedByIndex={weekLockedByIndex}
-              setup={{ startDate: setup.startDate, completionDate: setup.completionDate }}
-              effectiveWeekStart={effectiveWeekStart}
-              effectiveWeeksToCompletion={effectiveWeeksToCompletion}
-              busy={busy}
-              setSessionDraftEdits={setSessionDraftEdits}
-              saveSessionEdit={saveSessionEdit}
-              toggleSessionLock={toggleSessionLock}
-              toggleWeekLock={toggleWeekLock}
-              sessionDetailsById={sessionDetailsById}
-              loadSessionDetail={loadSessionDetail}
-            />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <ReviewPlanSection
+                hasDraft={hasDraft}
+                planReasoning={planReasoning}
+                sessionsByWeek={sessionsByWeek}
+                sessionsByWeekMap={sessionsByWeekMap}
+                sessionDraftEdits={sessionDraftEdits}
+                weekLockedByIndex={weekLockedByIndex}
+                setup={{ startDate: setup.startDate, completionDate: setup.completionDate }}
+                effectiveWeekStart={effectiveWeekStart}
+                effectiveWeeksToCompletion={effectiveWeeksToCompletion}
+                busy={busy}
+                setSessionDraftEdits={setSessionDraftEdits}
+                saveSessionEdit={saveSessionEdit}
+                toggleSessionLock={toggleSessionLock}
+                toggleWeekLock={toggleWeekLock}
+                sessionDetailsById={sessionDetailsById}
+                loadSessionDetail={loadSessionDetail}
+              />
+              <aside className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3" data-testid="apb-reference-pane">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold">Dual-Pane Coach View</div>
+                  <Select value={reviewSideMode} onChange={(e) => setReviewSideMode(e.target.value as any)}>
+                    <option value="reference">Reference plan</option>
+                    <option value="previous">Previous block</option>
+                  </Select>
+                </div>
+                <div className="mt-1 text-xs text-[var(--fg-muted)]">
+                  {reviewSideMode === 'reference'
+                    ? 'Athlete draft vs matched plan-library sources.'
+                    : 'Athlete draft vs early block load to gauge progression drift.'}
+                </div>
+                {reviewSideMode === 'reference' && selectedPlanSources.length ? (
+                  <ul className="mt-3 space-y-2 text-xs">
+                    {selectedPlanSources.slice(0, 4).map((src: any) => (
+                      <li key={String(src.planSourceVersionId)} className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                        <div className="font-medium text-[var(--text)]">{String(src.title ?? 'Plan source')}</div>
+                        <div className="text-[var(--fg-muted)]">
+                          Score {Number(src.score ?? 0).toFixed(2)}
+                          {src.semanticScore != null ? ` · Semantic ${Number(src.semanticScore).toFixed(2)}` : ''}
+                          {src.metadataScore != null ? ` · Metadata ${Number(src.metadataScore).toFixed(2)}` : ''}
+                        </div>
+                        {Array.isArray(src.reasons) && src.reasons.length ? (
+                          <div className="mt-1 text-[var(--fg-muted)]">{src.reasons.slice(0, 3).join(' · ')}</div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : reviewSideMode === 'reference' ? (
+                  <div className="mt-3 text-xs text-[var(--fg-muted)]">No reference sources attached yet for this draft.</div>
+                ) : previousBlockSummary ? (
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                      <div className="font-medium">{previousBlockSummary.earlyRange}</div>
+                      <div className="text-[var(--fg-muted)]">
+                        {previousBlockSummary.early.sessions} sessions · {previousBlockSummary.early.totalMinutes} min · {previousBlockSummary.early.intensity} key sessions
+                      </div>
+                    </div>
+                    <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                      <div className="font-medium">{previousBlockSummary.recentRange}</div>
+                      <div className="text-[var(--fg-muted)]">
+                        {previousBlockSummary.recent.sessions} sessions · {previousBlockSummary.recent.totalMinutes} min · {previousBlockSummary.recent.intensity} key sessions
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-xs text-[var(--fg-muted)]">Not enough week data to compare blocks yet.</div>
+                )}
+              </aside>
+            </div>
           ) : (
             <div className="min-h-[120px] text-sm text-[var(--fg-muted)]">Preparing review details...</div>
           )}

@@ -54,6 +54,7 @@ const draftPlanSetupSchema = z
     maxIntensityDaysPerWeek: z.number().int().min(1).max(3),
     maxDoublesPerWeek: z.number().int().min(0).max(3),
     longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
+    programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
     weeklyMinutesByWeek: z.array(z.number().int().min(0).max(10_000)).optional(),
     disciplineSplitTargets: z
       .object({

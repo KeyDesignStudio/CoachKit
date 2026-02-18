@@ -1,6 +1,7 @@
 import pdfParse from 'pdf-parse';
 
 import type { PlanPhase, PlanSourceDiscipline, RuleType } from '@prisma/client';
+import { compilePlanLogicGraph } from './logic-compiler';
 
 export type ExtractedWeekTemplate = {
   weekIndex: number;
@@ -153,14 +154,29 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
     }
   }
 
-  const confidence = Math.min(1, (weeks.length ? 0.4 : 0) + (sessions.length ? 0.4 : 0) + 0.2);
+  const compiled = compilePlanLogicGraph({
+    rawText,
+    weeks,
+    sessions,
+    durationWeeks: durationWeeks ?? null,
+  });
+
+  const confidence = Math.min(
+    1,
+    (weeks.length ? 0.3 : 0) + (sessions.length ? 0.3 : 0) + Math.max(0, Math.min(0.4, compiled.graph.confidence))
+  );
 
   return {
     rawText,
-    rawJson: null,
+    rawJson: {
+      compiler: {
+        version: 'v1',
+        graph: compiled.graph,
+      },
+    },
     weeks,
     sessions,
-    rules: [],
+    rules: compiled.rules,
     warnings,
     confidence,
   };

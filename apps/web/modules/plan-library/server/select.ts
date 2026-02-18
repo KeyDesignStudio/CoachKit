@@ -8,8 +8,32 @@ export type PlanSourceMatch = {
   planSourceId: string;
   title: string;
   score: number;
+  semanticScore: number;
+  metadataScore: number;
   reasons: string[];
 };
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3);
+}
+
+function jaccard(a: string[], b: string[]): number {
+  if (!a.length || !b.length) return 0;
+  const as = new Set(a);
+  const bs = new Set(b);
+  let inter = 0;
+  for (const token of as) {
+    if (bs.has(token)) inter += 1;
+  }
+  const union = as.size + bs.size - inter;
+  if (!union) return 0;
+  return inter / union;
+}
 
 function inferSport(profile: AthleteProfileSnapshot | null | undefined): PlanSport | null {
   const disciplines = profile?.disciplines?.map((d) => d.toUpperCase()) ?? [];
@@ -46,10 +70,23 @@ export async function selectPlanSources(params: {
   athleteProfile: AthleteProfileSnapshot | null;
   durationWeeks: number;
   season?: PlanSeason | null;
+  queryText?: string | null;
 }) {
   const inferredSport = inferSport(params.athleteProfile);
   const inferredLevel = (params.athleteProfile?.experienceLevel?.toUpperCase() ?? null) as PlanLevel | null;
   const inferredDistance = normalizeDistance(params.athleteProfile?.primaryGoal ?? null);
+
+  const queryTokens = tokenize(
+    [
+      params.queryText ?? '',
+      params.athleteProfile?.primaryGoal ?? '',
+      params.athleteProfile?.focus ?? '',
+      params.athleteProfile?.experienceLevel ?? '',
+      ...(params.athleteProfile?.disciplines ?? []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
 
   const sources = await prisma.planSource.findMany({
     where: { isActive: true },
@@ -67,40 +104,49 @@ export async function selectPlanSources(params: {
     const version = source.versions[0];
     if (!version) continue;
 
-    let score = 0;
+    let metadataScore = 0;
     const reasons: string[] = [];
 
     if (inferredSport && source.sport === inferredSport) {
-      score += 3;
+      metadataScore += 3;
       reasons.push('sport match');
     }
 
     if (inferredDistance && source.distance === inferredDistance) {
-      score += 3;
+      metadataScore += 3;
       reasons.push('distance match');
     }
 
     if (inferredLevel && source.level === inferredLevel) {
-      score += 2;
+      metadataScore += 2;
       reasons.push('level match');
     }
 
     if (params.season && source.season === params.season) {
-      score += 1;
+      metadataScore += 1;
       reasons.push('season match');
     }
 
     if (params.durationWeeks > 0) {
       const diff = Math.abs(source.durationWeeks - params.durationWeeks);
-      score += Math.max(0, 3 - Math.min(3, diff));
+      metadataScore += Math.max(0, 3 - Math.min(3, diff));
       reasons.push(`duration delta ${diff}w`);
     }
+
+    const semanticCorpus = `${source.title} ${source.rawText.slice(0, 7000)}`;
+    const sourceTokens = tokenize(semanticCorpus);
+    const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
+
+    if (semanticScore >= 0.08) reasons.push(`semantic ${(semanticScore * 100).toFixed(0)}%`);
+    const score = metadataScore + semanticScore * 4;
 
     matches.push({
       planSourceVersionId: version.id,
       planSourceId: source.id,
       title: source.title,
       score,
+      semanticScore,
+      metadataScore,
       reasons,
     });
   }

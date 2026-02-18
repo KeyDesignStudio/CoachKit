@@ -25,7 +25,16 @@ type AskContext = {
 
 type KnowledgeDoc = {
   id: string;
-  kind: 'ATHLETE' | 'SESSION' | 'ACTIVITY' | 'ATHLETE_BRIEF' | 'AI_PLAN' | 'AI_PROPOSAL' | 'AI_AUDIT';
+  kind:
+    | 'ATHLETE'
+    | 'SESSION'
+    | 'ACTIVITY'
+    | 'ATHLETE_BRIEF'
+    | 'AI_PLAN'
+    | 'AI_PLAN_WEEK'
+    | 'AI_PLAN_SESSION'
+    | 'AI_PROPOSAL'
+    | 'AI_AUDIT';
   title: string;
   body: string;
   url: string;
@@ -90,6 +99,22 @@ function detectIntent(query: string): AskIntent {
   return 'GENERAL';
 }
 
+function parseWeekFromQuery(query: string): number | null {
+  const q = query.toLowerCase();
+  const match = q.match(/\bweek\s+(\d{1,2})\b/);
+  if (!match) return null;
+  const week = Number(match[1]);
+  if (!Number.isFinite(week) || week <= 0) return null;
+  return week;
+}
+
+function isSimpleFactualQuery(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (q.length <= 90 && /^(what|when|who|which|how many|how much|is|did|does|was|were)\b/.test(q)) return true;
+  return /(last|latest|next|upcoming|missed|skipped|week\s+\d+)/.test(q) && q.length <= 120;
+}
+
 function scoreDoc(doc: KnowledgeDoc, query: string, intent: AskIntent): number {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) return 0;
@@ -111,6 +136,11 @@ function scoreDoc(doc: KnowledgeDoc, query: string, intent: AskIntent): number {
   if (intent === 'MISSED' && doc.status === CalendarItemStatus.SKIPPED) score += 0.2;
   if (intent === 'PLAN' && (doc.kind === 'AI_PLAN' || doc.kind === 'ATHLETE_BRIEF' || doc.kind === 'AI_PROPOSAL' || doc.kind === 'AI_AUDIT')) {
     score += 0.24;
+  }
+  if (intent === 'PLAN' && (doc.kind === 'AI_PLAN_WEEK' || doc.kind === 'AI_PLAN_SESSION')) score += 0.28;
+  const week = parseWeekFromQuery(query);
+  if (week != null && (doc.kind === 'AI_PLAN_WEEK' || doc.kind === 'AI_PLAN_SESSION')) {
+    if (doc.title.toLowerCase().includes(`week ${week}`)) score += 0.32;
   }
 
   if (doc.athleteName) {
@@ -206,6 +236,27 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
   }
 
   if (intent === 'PLAN') {
+    const requestedWeek = parseWeekFromQuery(query);
+    if (requestedWeek != null) {
+      const weekDoc = docs.find((d) => d.kind === 'AI_PLAN_WEEK' && d.title.toLowerCase().includes(`week ${requestedWeek}`));
+      if (weekDoc) {
+        return {
+          answer: `${weekDoc.athleteName ?? 'Athlete'} week ${requestedWeek} plan: ${weekDoc.body.replace(/\s*\|\s*/g, ', ')}.`,
+          primaryDocId: weekDoc.id,
+        };
+      }
+    }
+
+    if (/(session|workout)/.test(query.toLowerCase())) {
+      const sessionDoc = docs.find((d) => d.kind === 'AI_PLAN_SESSION') ?? docs.find((d) => d.kind === 'AI_PLAN_WEEK');
+      if (sessionDoc) {
+        return {
+          answer: `Best plan session match: ${sessionDoc.title}. ${sessionDoc.body.replace(/\s*\|\s*/g, ', ')}.`,
+          primaryDocId: sessionDoc.id,
+        };
+      }
+    }
+
     const planDoc = docs.find((d) => d.kind === 'AI_PLAN') ?? docs.find((d) => d.kind === 'ATHLETE_BRIEF') ?? docs[0];
     if (planDoc.kind === 'AI_PLAN') {
       return {
@@ -520,6 +571,92 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     });
   }
 
+  const latestDraftIds = Array.from(new Set(Array.from(latestDraftByAthlete.values()).map((d) => d.id)));
+  if (latestDraftIds.length) {
+    const draftSessions = await prisma.aiPlanDraftSession.findMany({
+      where: { draftId: { in: latestDraftIds } },
+      select: {
+        id: true,
+        draftId: true,
+        weekIndex: true,
+        dayOfWeek: true,
+        discipline: true,
+        type: true,
+        durationMinutes: true,
+        ordinal: true,
+        locked: true,
+      },
+      orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+      take: 1200,
+    });
+
+    const draftById = new Map(Array.from(latestDraftByAthlete.values()).map((d) => [d.id, d] as const));
+    const sessionsByAthleteWeek = new Map<string, typeof draftSessions>();
+
+    for (const session of draftSessions) {
+      const draft = draftById.get(session.draftId);
+      if (!draft) continue;
+      const key = `${draft.athleteId}:${session.weekIndex}`;
+      const bucket = sessionsByAthleteWeek.get(key) ?? [];
+      bucket.push(session);
+      sessionsByAthleteWeek.set(key, bucket);
+    }
+
+    for (const [key, sessions] of sessionsByAthleteWeek.entries()) {
+      const [athleteId, weekIndexRaw] = key.split(':');
+      const weekIndex = Number(weekIndexRaw);
+      const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+      const weekNumber = Number.isFinite(weekIndex) ? weekIndex + 1 : 1;
+      const totalMinutes = sessions.reduce((sum, s) => sum + Number(s.durationMinutes ?? 0), 0);
+      const disciplines = Array.from(
+        new Set(
+          sessions
+            .map((s) => String(s.discipline ?? '').trim().toLowerCase())
+            .filter(Boolean)
+            .map((d) => d.toUpperCase())
+        )
+      );
+
+      docs.push({
+        id: `aiplanweek:${athleteId}:${weekIndex}`,
+        kind: 'AI_PLAN_WEEK',
+        title: `${athleteName} · Week ${weekNumber} plan`,
+        body: [`Sessions: ${sessions.length}`, `Total minutes: ${totalMinutes}`, `Disciplines: ${disciplines.join(', ') || '-'}`].join(' | '),
+        url:
+          context.role === UserRole.ATHLETE
+            ? '/athlete/ai-plan'
+            : `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+        athleteName,
+      });
+    }
+
+    for (const session of draftSessions.slice(0, 400)) {
+      const draft = draftById.get(session.draftId);
+      if (!draft) continue;
+      const athleteId = draft.athleteId;
+      const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+      const weekNumber = Number(session.weekIndex) + 1;
+      docs.push({
+        id: `aiplansession:${session.id}`,
+        kind: 'AI_PLAN_SESSION',
+        title: `${athleteName} · Week ${weekNumber} ${String(session.discipline)} ${String(session.type)}`,
+        body: [
+          `Week: ${weekNumber}`,
+          `Day index: ${session.dayOfWeek}`,
+          `Duration min: ${session.durationMinutes}`,
+          `Discipline: ${session.discipline}`,
+          `Type: ${session.type}`,
+          `Locked: ${session.locked ? 'yes' : 'no'}`,
+        ].join(' | '),
+        url:
+          context.role === UserRole.ATHLETE
+            ? '/athlete/ai-plan'
+            : `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+        athleteName,
+      });
+    }
+  }
+
   const latestProposalByAthlete = new Map<string, (typeof planChangeProposals)[number]>();
   for (const proposal of planChangeProposals) {
     if (latestProposalByAthlete.has(proposal.athleteId)) continue;
@@ -601,7 +738,8 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     }
   }
 
-  citations = citations.slice(0, intent === 'GENERAL' ? 3 : 1);
+  const factual = isSimpleFactualQuery(query);
+  citations = citations.slice(0, factual ? 1 : intent === 'GENERAL' ? 3 : 1);
 
   const answer = built.answer;
 
