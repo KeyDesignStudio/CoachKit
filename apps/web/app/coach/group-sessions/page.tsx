@@ -54,6 +54,21 @@ type ApplyResult = {
   createdIds: string[];
 };
 
+const DAY_ORDER = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
+
+function parseRuleDays(rule: string): string[] {
+  if (!rule) return [];
+  const byDay = rule
+    .split(';')
+    .map((part) => part.trim().split('='))
+    .find(([k]) => String(k).toUpperCase() === 'BYDAY');
+  if (!byDay?.[1]) return [];
+  return byDay[1]
+    .split(',')
+    .map((token) => token.trim().toUpperCase())
+    .filter((token): token is (typeof DAY_ORDER)[number] => DAY_ORDER.includes(token as (typeof DAY_ORDER)[number]));
+}
+
 export default function CoachGroupSessionsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -200,6 +215,29 @@ export default function CoachGroupSessionsPage() {
     return newSessionId;
   };
 
+  const handleDuplicateSession = useCallback((session: GroupSessionRecord) => {
+    const selectedDays = parseRuleDays(session.recurrenceRule);
+    setCreateInitialValues({
+      title: `${session.title} (Copy)`,
+      discipline: session.discipline,
+      location: session.location ?? '',
+      startTimeLocal: session.startTimeLocal,
+      durationMinutes: String(session.durationMinutes),
+      description: session.description ?? '',
+      selectedDays: selectedDays.length ? selectedDays : ['MO'],
+      visibilityType: session.visibilityType,
+      targetAthleteIds: session.targets
+        .map((target) => target.athleteId)
+        .filter((value): value is string => Boolean(value)),
+      squadInput: session.targets
+        .map((target) => target.squadId)
+        .filter(Boolean)
+        .join(', '),
+    });
+    setSelectedSessionId(null);
+    setIsCreateModalOpen(true);
+  }, []);
+
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || null;
 
   const filteredSessions = sessions.filter((session) => {
@@ -296,6 +334,7 @@ export default function CoachGroupSessionsPage() {
               session={selectedSession}
               athletes={athletes}
               onClose={() => setSelectedSessionId(null)}
+              onDuplicate={handleDuplicateSession}
               onSave={handleSave}
               onDelete={handleDelete}
               onApply={handleApply}
