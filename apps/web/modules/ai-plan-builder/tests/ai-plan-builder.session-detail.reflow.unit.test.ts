@@ -7,6 +7,35 @@ import {
 } from '@/modules/ai-plan-builder/rules/session-detail';
 
 describe('AI Plan Builder v1 (Session detail: rounding + reflow)', () => {
+  it('enforces structured order and target coherence', () => {
+    const missingMain = sessionDetailV1Schema.safeParse({
+      objective: 'Easy session',
+      structure: [
+        { blockType: 'warmup', durationMinutes: 10, intensity: { rpe: 2, zone: 'Z1', notes: 'Easy' }, steps: 'Warm up.' },
+        { blockType: 'cooldown', durationMinutes: 5, intensity: { rpe: 2, zone: 'Z1', notes: 'Easy' }, steps: 'Cool down.' },
+      ],
+      targets: { primaryMetric: 'RPE', notes: 'Keep easy.' },
+    });
+    expect(missingMain.success).toBe(false);
+
+    const badOrder = sessionDetailV1Schema.safeParse({
+      objective: 'Tempo run',
+      structure: [
+        { blockType: 'main', durationMinutes: 30, intensity: { rpe: 6, zone: 'Z3', notes: 'Tempo' }, steps: 'Main set.' },
+        { blockType: 'warmup', durationMinutes: 10, intensity: { rpe: 2, zone: 'Z1', notes: 'Easy' }, steps: 'Warm up.' },
+      ],
+      targets: { primaryMetric: 'RPE', notes: 'Controlled tempo.' },
+    });
+    expect(badOrder.success).toBe(false);
+
+    const zoneMismatch = sessionDetailV1Schema.safeParse({
+      objective: 'Bike endurance',
+      structure: [{ blockType: 'main', durationMinutes: 45, intensity: { rpe: 4, notes: 'Steady' }, steps: 'Main set.' }],
+      targets: { primaryMetric: 'ZONE', notes: 'Hold zone.' },
+    });
+    expect(zoneMismatch.success).toBe(false);
+  });
+
   it('normalizes odd block minutes to 5-min increments and preserves total', () => {
     const detail = sessionDetailV1Schema.parse({
       objective: 'Technique swim session',
