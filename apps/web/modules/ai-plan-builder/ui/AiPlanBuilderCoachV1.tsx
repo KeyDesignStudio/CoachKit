@@ -82,6 +82,12 @@ type AdaptationSuggestion = {
   guidance: string;
 };
 
+type WeekStats = {
+  sessions: number;
+  totalMinutes: number;
+  intensity: number;
+};
+
 const DAY_NAME_TO_INDEX: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -419,6 +425,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>
   >({});
   const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
+  const [selectedCompareWeekIndex, setSelectedCompareWeekIndex] = useState<number | null>(null);
   const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
   const [referencePlanOptions, setReferencePlanOptions] = useState<ReferencePlanOption[]>([]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1203,19 +1210,52 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return Array.from(byWeek.entries()).sort(([a], [b]) => a - b);
   }, [draftPlanLatest?.sessions, effectiveWeekStart, shouldPrepareReview]);
 
-  const previousBlockSummary = useMemo(() => {
-    const weeks = sessionsByWeek.map(([, s]) => ({ sessions: s }));
-    if (!weeks.length) return null;
-    const firstBlock = weeks.slice(0, Math.min(4, weeks.length));
-    const lastBlock = weeks.slice(Math.max(0, weeks.length - Math.min(4, weeks.length)));
-    const blockStats = (rows: Array<{ sessions: any[] }>) => {
-      const sessions = rows.flatMap((w) => w.sessions ?? []);
+  const weekStatsByIndex = useMemo(() => {
+    const map = new Map<number, WeekStats>();
+    for (const [weekIndex, sessions] of sessionsByWeek) {
       const totalMinutes = sessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0);
       const intensity = sessions.filter((s) => {
         const t = String(s?.type ?? '').toLowerCase();
         return t === 'tempo' || t === 'threshold';
       }).length;
-      return { sessions: sessions.length, totalMinutes, intensity };
+      map.set(weekIndex, { sessions: sessions.length, totalMinutes, intensity });
+    }
+    return map;
+  }, [sessionsByWeek]);
+
+  const compareWeekOptions = useMemo(
+    () =>
+      sessionsByWeek.map(([weekIndex]) => ({
+        weekIndex,
+        label: `Week ${weekIndex + 1}`,
+      })),
+    [sessionsByWeek]
+  );
+
+  useEffect(() => {
+    if (!compareWeekOptions.length) {
+      setSelectedCompareWeekIndex(null);
+      return;
+    }
+    if (selectedCompareWeekIndex == null || !weekStatsByIndex.has(selectedCompareWeekIndex)) {
+      setSelectedCompareWeekIndex(compareWeekOptions[0].weekIndex);
+    }
+  }, [compareWeekOptions, selectedCompareWeekIndex, weekStatsByIndex]);
+
+  const previousBlockSummary = useMemo(() => {
+    const weeks = sessionsByWeek.map(([weekIndex]) => weekStatsByIndex.get(weekIndex)).filter(Boolean) as WeekStats[];
+    if (!weeks.length) return null;
+    const firstBlock = weeks.slice(0, Math.min(4, weeks.length));
+    const lastBlock = weeks.slice(Math.max(0, weeks.length - Math.min(4, weeks.length)));
+    const blockStats = (rows: WeekStats[]) => {
+      return rows.reduce(
+        (acc, row) => ({
+          sessions: acc.sessions + row.sessions,
+          totalMinutes: acc.totalMinutes + row.totalMinutes,
+          intensity: acc.intensity + row.intensity,
+        }),
+        { sessions: 0, totalMinutes: 0, intensity: 0 }
+      );
     };
     return {
       early: blockStats(firstBlock),
@@ -1223,7 +1263,26 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       earlyRange: `Weeks 1-${firstBlock.length}`,
       recentRange: `Weeks ${Math.max(1, weeks.length - lastBlock.length + 1)}-${weeks.length}`,
     };
-  }, [sessionsByWeek]);
+  }, [sessionsByWeek, weekStatsByIndex]);
+
+  const selectedWeekStats = useMemo(() => {
+    if (selectedCompareWeekIndex == null) return null;
+    return weekStatsByIndex.get(selectedCompareWeekIndex) ?? null;
+  }, [selectedCompareWeekIndex, weekStatsByIndex]);
+
+  const previousWeekStats = useMemo(() => {
+    if (selectedCompareWeekIndex == null) return null;
+    return weekStatsByIndex.get(selectedCompareWeekIndex - 1) ?? null;
+  }, [selectedCompareWeekIndex, weekStatsByIndex]);
+
+  const selectedReasoningWeek = useMemo(() => {
+    if (!planReasoning || selectedCompareWeekIndex == null) return null;
+    return (
+      planReasoning.weeks.find((w) => Number(w.weekIndex) === selectedCompareWeekIndex) ??
+      planReasoning.weeks[0] ??
+      null
+    );
+  }, [planReasoning, selectedCompareWeekIndex]);
 
   const sessionsByWeekMap = useMemo(() => new Map(sessionsByWeek), [sessionsByWeek]);
 
@@ -1892,27 +1951,94 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 </div>
                 <div className="mt-1 text-xs text-[var(--fg-muted)]">
                   {reviewSideMode === 'reference'
-                    ? 'Compare this draft against matched plan-library sources.'
-                    : 'Compare early and recent weeks to check progression drift.'}
+                    ? 'Compare this draft week against plan reasoning targets and matched sources.'
+                    : 'Compare this draft week against the previous week to check progression drift.'}
                 </div>
+                {compareWeekOptions.length ? (
+                  <div className="mt-3">
+                    <div className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Compare week</div>
+                    <Select
+                      value={selectedCompareWeekIndex == null ? '' : String(selectedCompareWeekIndex)}
+                      onChange={(e) => setSelectedCompareWeekIndex(Number.parseInt(e.target.value, 10))}
+                      data-testid="apb-compare-week-select"
+                    >
+                      {compareWeekOptions.map((opt) => (
+                        <option key={opt.weekIndex} value={opt.weekIndex}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+                {selectedWeekStats ? (
+                  <div className="mt-3 rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2 text-xs" data-testid="apb-compare-current-week">
+                    <div className="font-medium">
+                      Draft {selectedCompareWeekIndex != null ? `Week ${selectedCompareWeekIndex + 1}` : 'week'}
+                    </div>
+                    <div className="text-[var(--fg-muted)]">
+                      {selectedWeekStats.sessions} sessions · {selectedWeekStats.totalMinutes} min · {selectedWeekStats.intensity} key sessions
+                    </div>
+                  </div>
+                ) : null}
                 {reviewSideMode === 'reference' && selectedPlanSources.length ? (
-                  <ul className="mt-3 space-y-2 text-xs">
-                    {selectedPlanSources.slice(0, 4).map((src: any) => (
-                      <li key={String(src.planSourceVersionId)} className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
-                        <div className="font-medium text-[var(--text)]">{String(src.title ?? 'Plan source')}</div>
+                  <div className="mt-3 space-y-2 text-xs">
+                    {selectedReasoningWeek ? (
+                      <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2" data-testid="apb-compare-reference-target">
+                        <div className="font-medium">Reference target ({`Week ${Number(selectedReasoningWeek.weekIndex) + 1}`})</div>
                         <div className="text-[var(--fg-muted)]">
-                          Score {Number(src.score ?? 0).toFixed(2)}
-                          {src.semanticScore != null ? ` · Semantic ${Number(src.semanticScore).toFixed(2)}` : ''}
-                          {src.metadataScore != null ? ` · Metadata ${Number(src.metadataScore).toFixed(2)}` : ''}
+                          {selectedReasoningWeek.volumeMinutesPlanned} min · {selectedReasoningWeek.intensityDaysPlanned} key days · {selectedReasoningWeek.weekIntent}
                         </div>
-                        {Array.isArray(src.reasons) && src.reasons.length ? (
-                          <div className="mt-1 text-[var(--fg-muted)]">{src.reasons.slice(0, 3).join(' · ')}</div>
+                        {selectedWeekStats ? (
+                          <div className="mt-1 text-[var(--fg-muted)]">
+                            Delta {selectedWeekStats.totalMinutes - Number(selectedReasoningWeek.volumeMinutesPlanned)} min
+                            {' · '}
+                            {selectedWeekStats.intensity - Number(selectedReasoningWeek.intensityDaysPlanned)} key days
+                          </div>
                         ) : null}
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                    ) : null}
+                    <ul className="space-y-2">
+                      {selectedPlanSources.slice(0, 3).map((src: any) => (
+                        <li key={String(src.planSourceVersionId)} className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                          <div className="font-medium text-[var(--text)]">{String(src.title ?? 'Plan source')}</div>
+                          <div className="text-[var(--fg-muted)]">
+                            Score {Number(src.score ?? 0).toFixed(2)}
+                            {src.semanticScore != null ? ` · Semantic ${Number(src.semanticScore).toFixed(2)}` : ''}
+                            {src.metadataScore != null ? ` · Metadata ${Number(src.metadataScore).toFixed(2)}` : ''}
+                          </div>
+                          {Array.isArray(src.reasons) && src.reasons.length ? (
+                            <div className="mt-1 text-[var(--fg-muted)]">{src.reasons.slice(0, 2).join(' · ')}</div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : reviewSideMode === 'reference' ? (
                   <div className="mt-3 text-xs text-[var(--fg-muted)]">No reference sources attached yet for this draft.</div>
+                ) : selectedWeekStats && previousWeekStats ? (
+                  <div className="mt-3 space-y-2 text-xs" data-testid="apb-compare-previous-week">
+                    <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                      <div className="font-medium">
+                        Week {selectedCompareWeekIndex != null ? selectedCompareWeekIndex : 0}
+                      </div>
+                      <div className="text-[var(--fg-muted)]">
+                        {previousWeekStats.sessions} sessions · {previousWeekStats.totalMinutes} min · {previousWeekStats.intensity} key sessions
+                      </div>
+                    </div>
+                    <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                      <div className="font-medium">
+                        Drift into Week {selectedCompareWeekIndex != null ? selectedCompareWeekIndex + 1 : 1}
+                      </div>
+                      <div className="text-[var(--fg-muted)]">
+                        {selectedWeekStats.totalMinutes - previousWeekStats.totalMinutes >= 0 ? '+' : ''}
+                        {selectedWeekStats.totalMinutes - previousWeekStats.totalMinutes}
+                        {' min · '}
+                        {selectedWeekStats.intensity - previousWeekStats.intensity >= 0 ? '+' : ''}
+                        {selectedWeekStats.intensity - previousWeekStats.intensity}
+                        {' key sessions'}
+                      </div>
+                    </div>
+                  </div>
                 ) : previousBlockSummary ? (
                   <div className="mt-3 space-y-2 text-xs">
                     <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
