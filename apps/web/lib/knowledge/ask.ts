@@ -1,8 +1,9 @@
-import { CalendarItemStatus, UserRole } from '@prisma/client';
+import { AiPlanDraftVisibilityStatus, CalendarItemStatus, UserRole } from '@prisma/client';
 
+import { formatDateShortAu } from '@/lib/client-date';
 import { prisma } from '@/lib/prisma';
 
-type AskIntent = 'CONTACT' | 'LAST_SESSION' | 'UPCOMING' | 'PAIN' | 'MISSED' | 'GENERAL';
+type AskIntent = 'CONTACT' | 'LAST_SESSION' | 'UPCOMING' | 'PAIN' | 'MISSED' | 'PLAN' | 'GENERAL';
 
 type AskCitation = {
   id: string;
@@ -24,7 +25,7 @@ type AskContext = {
 
 type KnowledgeDoc = {
   id: string;
-  kind: 'ATHLETE' | 'SESSION' | 'ACTIVITY';
+  kind: 'ATHLETE' | 'SESSION' | 'ACTIVITY' | 'ATHLETE_BRIEF' | 'AI_PLAN' | 'AI_PROPOSAL' | 'AI_AUDIT';
   title: string;
   body: string;
   url: string;
@@ -51,6 +52,9 @@ const SYNONYMS: Record<string, string[]> = {
   pain: ['injury', 'sore', 'soreness'],
   skipped: ['missed'],
   missed: ['skipped'],
+  ai: ['plan', 'brief'],
+  plan: ['ai', 'draft', 'builder'],
+  brief: ['athlete', 'profile', 'plan'],
 };
 
 function normalize(value: string): string {
@@ -81,6 +85,7 @@ function detectIntent(query: string): AskIntent {
   if (/(upcoming|next|soon)/.test(q) && /(session|workout|activity|training|planned|coming)/.test(q)) return 'UPCOMING';
   if (/(pain|injury|sore|soreness)/.test(q)) return 'PAIN';
   if (/(missed|skipped)/.test(q)) return 'MISSED';
+  if (/(ai plan|plan builder|draft plan|athlete brief|brief)/.test(q)) return 'PLAN';
 
   return 'GENERAL';
 }
@@ -104,6 +109,9 @@ function scoreDoc(doc: KnowledgeDoc, query: string, intent: AskIntent): number {
   if (intent === 'UPCOMING' && doc.kind === 'SESSION') score += 0.2;
   if (intent === 'PAIN' && doc.body.toLowerCase().includes('pain flag: yes')) score += 0.2;
   if (intent === 'MISSED' && doc.status === CalendarItemStatus.SKIPPED) score += 0.2;
+  if (intent === 'PLAN' && (doc.kind === 'AI_PLAN' || doc.kind === 'ATHLETE_BRIEF' || doc.kind === 'AI_PROPOSAL' || doc.kind === 'AI_AUDIT')) {
+    score += 0.24;
+  }
 
   if (doc.athleteName) {
     const athlete = normalize(doc.athleteName);
@@ -117,7 +125,7 @@ function fmtDate(iso?: string): string {
   if (!iso) return 'unknown date';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
-  return date.toISOString().slice(0, 10);
+  return formatDateShortAu(date) || iso.slice(0, 10);
 }
 
 function firstNonBlank(...values: Array<string | null | undefined>): string {
@@ -128,21 +136,46 @@ function firstNonBlank(...values: Array<string | null | undefined>): string {
   return '-';
 }
 
-function buildDeterministicAnswer(intent: AskIntent, query: string, docs: KnowledgeDoc[]): string {
+function readBodyField(body: string, label: string): string | null {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = body.match(new RegExp(`${escaped}:\\s*([^|]+)`));
+  const value = match?.[1]?.trim();
+  return value ? value : null;
+}
+
+type BuiltAnswer = {
+  answer: string;
+  primaryDocId?: string;
+};
+
+function buildDeterministicAnswer(intent: AskIntent, query: string, docs: KnowledgeDoc[]): BuiltAnswer {
   if (!docs.length) {
-    return 'I could not find a confident match in your CoachKit records. Try adding an athlete name, date, or workout keyword.';
+    return {
+      answer: 'I could not find a confident match in your CoachKit records. Try adding an athlete name, date, or workout keyword.',
+    };
   }
 
   if (intent === 'CONTACT') {
     const contactDoc = docs.find((d) => d.kind === 'ATHLETE') ?? docs[0];
-    return `The best contact match is ${contactDoc.title}.`; 
+    return {
+      answer: `Best contact match: ${contactDoc.title}.`,
+      primaryDocId: contactDoc.id,
+    };
   }
 
   if (intent === 'LAST_SESSION') {
     const latest = [...docs]
-      .filter((d) => d.kind === 'SESSION' || d.kind === 'ACTIVITY')
+      .filter((d) => d.kind === 'ACTIVITY' || d.kind === 'SESSION')
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0] ?? docs[0];
-    return `Latest session match: ${latest.title} (${fmtDate(latest.date)}).`;
+    const duration = readBodyField(latest.body, 'Duration min');
+    const distance = readBodyField(latest.body, 'Distance km');
+    const details: string[] = [];
+    if (duration && Number(duration) > 0) details.push(`${Number(duration)} min`);
+    if (distance && Number(distance) > 0) details.push(`${Number(distance)} km`);
+    return {
+      answer: `${latest.athleteName ?? 'Athlete'} last completed session was on ${fmtDate(latest.date)}${details.length ? ` (${details.join(', ')})` : ''}.`,
+      primaryDocId: latest.id,
+    };
   }
 
   if (intent === 'UPCOMING') {
@@ -150,21 +183,47 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
     const upcoming = [...docs]
       .filter((d) => d.kind === 'SESSION' && d.date && d.date >= today)
       .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))[0] ?? docs[0];
-    return `Next upcoming session match: ${upcoming.title} (${fmtDate(upcoming.date)}).`;
+    return {
+      answer: `Next upcoming session: ${upcoming.title} on ${fmtDate(upcoming.date)}.`,
+      primaryDocId: upcoming.id,
+    };
   }
 
   if (intent === 'PAIN') {
     const pain = docs.find((d) => d.body.toLowerCase().includes('pain flag: yes')) ?? docs[0];
-    return `Pain-related match: ${pain.title}${pain.date ? ` (${fmtDate(pain.date)})` : ''}.`;
+    return {
+      answer: `Latest pain-flagged session: ${pain.title}${pain.date ? ` on ${fmtDate(pain.date)}` : ''}.`,
+      primaryDocId: pain.id,
+    };
   }
 
   if (intent === 'MISSED') {
     const missed = docs.find((d) => d.status === CalendarItemStatus.SKIPPED) ?? docs[0];
-    return `Missed-session match: ${missed.title}${missed.date ? ` (${fmtDate(missed.date)})` : ''}.`;
+    return {
+      answer: `Latest missed session: ${missed.title}${missed.date ? ` on ${fmtDate(missed.date)}` : ''}.`,
+      primaryDocId: missed.id,
+    };
+  }
+
+  if (intent === 'PLAN') {
+    const planDoc = docs.find((d) => d.kind === 'AI_PLAN') ?? docs.find((d) => d.kind === 'ATHLETE_BRIEF') ?? docs[0];
+    if (planDoc.kind === 'AI_PLAN') {
+      return {
+        answer: `Latest AI plan context: ${planDoc.title}${planDoc.date ? ` (${fmtDate(planDoc.date)})` : ''}.`,
+        primaryDocId: planDoc.id,
+      };
+    }
+    return {
+      answer: `Latest athlete brief context: ${planDoc.title}.`,
+      primaryDocId: planDoc.id,
+    };
   }
 
   const top = docs[0];
-  return `Top match: ${top.title}${top.date ? ` (${fmtDate(top.date)})` : ''}.`;
+  return {
+    answer: `Top match: ${top.title}${top.date ? ` (${fmtDate(top.date)})` : ''}.`,
+    primaryDocId: top.id,
+  };
 }
 
 async function getScopedAthleteIds(userId: string, role: UserRole): Promise<string[]> {
@@ -202,7 +261,7 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     };
   }
 
-  const [profiles, calendarItems, completed] = await Promise.all([
+  const [profiles, calendarItems, completed, athleteBriefs, aiDrafts, planChangeProposals, planChangeAudits] = await Promise.all([
     prisma.athleteProfile.findMany({
       where: { userId: { in: athleteIds } },
       select: {
@@ -253,6 +312,62 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ startTime: 'desc' }],
       take: 500,
+    }),
+    prisma.athleteBrief.findMany({
+      where: { athleteId: { in: athleteIds } },
+      select: {
+        id: true,
+        athleteId: true,
+        generatedAt: true,
+        summaryText: true,
+        riskFlags: true,
+      },
+      orderBy: [{ generatedAt: 'desc' }],
+      take: 300,
+    }),
+    prisma.aiPlanDraft.findMany({
+      where: {
+        athleteId: { in: athleteIds },
+        ...(context.role === UserRole.ATHLETE ? { visibilityStatus: AiPlanDraftVisibilityStatus.PUBLISHED } : {}),
+      },
+      select: {
+        id: true,
+        athleteId: true,
+        createdAt: true,
+        publishedAt: true,
+        visibilityStatus: true,
+        status: true,
+        lastPublishedSummaryText: true,
+        weeks: { select: { sessionsCount: true, totalMinutes: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 300,
+    }),
+    prisma.planChangeProposal.findMany({
+      where: context.role === UserRole.COACH ? { athleteId: { in: athleteIds } } : { athleteId: '__none__' },
+      select: {
+        id: true,
+        athleteId: true,
+        status: true,
+        rationaleText: true,
+        coachDecisionAt: true,
+        appliedAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 300,
+    }),
+    prisma.planChangeAudit.findMany({
+      where: context.role === UserRole.COACH ? { athleteId: { in: athleteIds } } : { athleteId: '__none__' },
+      select: {
+        id: true,
+        athleteId: true,
+        eventType: true,
+        changeSummaryText: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 300,
     }),
   ]);
 
@@ -326,7 +441,7 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     docs.push({
       id: `activity:${activity.id}`,
       kind: 'ACTIVITY',
-      title: `${athleteName} · Completed activity`,
+      title: `${athleteName} · Completed activity (${day})`,
       body: [
         `Date: ${day}`,
         `Duration min: ${activity.durationMinutes}`,
@@ -344,6 +459,115 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     });
   }
 
+  const latestBriefByAthlete = new Map<string, (typeof athleteBriefs)[number]>();
+  for (const brief of athleteBriefs) {
+    if (latestBriefByAthlete.has(brief.athleteId)) continue;
+    latestBriefByAthlete.set(brief.athleteId, brief);
+  }
+
+  for (const [athleteId, brief] of latestBriefByAthlete.entries()) {
+    const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+    const day = brief.generatedAt.toISOString().slice(0, 10);
+    docs.push({
+      id: `brief:${brief.id}`,
+      kind: 'ATHLETE_BRIEF',
+      title: `${athleteName} · Athlete Brief`,
+      body: [
+        `Generated: ${day}`,
+        `Summary: ${firstNonBlank(brief.summaryText)}`,
+        `Risk flags: ${(brief.riskFlags ?? []).join(', ') || '-'}`,
+      ].join(' | '),
+      url:
+        context.role === UserRole.ATHLETE
+          ? '/athlete/ai-plan'
+          : `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+      athleteName,
+      date: day,
+    });
+  }
+
+  const latestDraftByAthlete = new Map<string, (typeof aiDrafts)[number]>();
+  for (const draft of aiDrafts) {
+    if (latestDraftByAthlete.has(draft.athleteId)) continue;
+    latestDraftByAthlete.set(draft.athleteId, draft);
+  }
+
+  for (const [athleteId, draft] of latestDraftByAthlete.entries()) {
+    const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+    const day = (draft.publishedAt ?? draft.createdAt).toISOString().slice(0, 10);
+    const totalSessions = (draft.weeks ?? []).reduce((sum, week) => sum + Number(week.sessionsCount ?? 0), 0);
+    const totalMinutes = (draft.weeks ?? []).reduce((sum, week) => sum + Number(week.totalMinutes ?? 0), 0);
+    const published = draft.visibilityStatus === AiPlanDraftVisibilityStatus.PUBLISHED;
+
+    docs.push({
+      id: `aiplan:${draft.id}`,
+      kind: 'AI_PLAN',
+      title: `${athleteName} · ${published ? 'Published AI plan' : 'Draft AI plan'}`,
+      body: [
+        `Date: ${day}`,
+        `Draft status: ${draft.status}`,
+        `Visibility: ${draft.visibilityStatus}`,
+        `Sessions: ${totalSessions}`,
+        `Total minutes: ${totalMinutes}`,
+        `Summary: ${firstNonBlank(draft.lastPublishedSummaryText)}`,
+      ].join(' | '),
+      url:
+        context.role === UserRole.ATHLETE
+          ? `/athlete/ai-plan/${encodeURIComponent(draft.id)}`
+          : `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+      athleteName,
+      date: day,
+    });
+  }
+
+  const latestProposalByAthlete = new Map<string, (typeof planChangeProposals)[number]>();
+  for (const proposal of planChangeProposals) {
+    if (latestProposalByAthlete.has(proposal.athleteId)) continue;
+    latestProposalByAthlete.set(proposal.athleteId, proposal);
+  }
+
+  for (const [athleteId, proposal] of latestProposalByAthlete.entries()) {
+    const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+    const proposalDate = (proposal.appliedAt ?? proposal.coachDecisionAt ?? proposal.createdAt).toISOString().slice(0, 10);
+    docs.push({
+      id: `aiproposal:${proposal.id}`,
+      kind: 'AI_PROPOSAL',
+      title: `${athleteName} · Plan proposal (${proposal.status})`,
+      body: [
+        `Date: ${proposalDate}`,
+        `Status: ${proposal.status}`,
+        `Rationale: ${firstNonBlank(proposal.rationaleText)}`,
+      ].join(' | '),
+      url: `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+      athleteName,
+      date: proposalDate,
+    });
+  }
+
+  const latestAuditByAthlete = new Map<string, (typeof planChangeAudits)[number]>();
+  for (const audit of planChangeAudits) {
+    if (latestAuditByAthlete.has(audit.athleteId)) continue;
+    latestAuditByAthlete.set(audit.athleteId, audit);
+  }
+
+  for (const [athleteId, audit] of latestAuditByAthlete.entries()) {
+    const athleteName = firstNonBlank(profileByAthleteId.get(athleteId)?.title, athleteId);
+    const auditDate = audit.createdAt.toISOString().slice(0, 10);
+    docs.push({
+      id: `aiaudit:${audit.id}`,
+      kind: 'AI_AUDIT',
+      title: `${athleteName} · Plan audit (${audit.eventType})`,
+      body: [
+        `Date: ${auditDate}`,
+        `Event: ${audit.eventType}`,
+        `Summary: ${firstNonBlank(audit.changeSummaryText)}`,
+      ].join(' | '),
+      url: `/coach/athletes/${encodeURIComponent(athleteId)}/ai-plan-builder`,
+      athleteName,
+      date: auditDate,
+    });
+  }
+
   const intent = detectIntent(query);
   const ranked = docs
     .map((doc) => ({ doc, score: scoreDoc(doc, query, intent) }))
@@ -351,18 +575,35 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
 
-  const citations: AskCitation[] = ranked.map(({ doc, score }) => ({
-    id: doc.id,
-    title: doc.title,
-    url: doc.url,
-    score: Number(score.toFixed(3)),
-  }));
-
-  const answer = buildDeterministicAnswer(
+  const built = buildDeterministicAnswer(
     intent,
     query,
     ranked.map((entry) => entry.doc)
   );
+
+  const uniqueCitations = new Map<string, AskCitation>();
+  for (const { doc, score } of ranked) {
+    const key = `${doc.url}|${doc.title}`;
+    if (uniqueCitations.has(key)) continue;
+    uniqueCitations.set(key, {
+      id: doc.id,
+      title: doc.title,
+      url: doc.url,
+      score: Number(score.toFixed(3)),
+    });
+  }
+
+  let citations = Array.from(uniqueCitations.values());
+  if (built.primaryDocId) {
+    const preferred = citations.find((citation) => citation.id === built.primaryDocId);
+    if (preferred) {
+      citations = [preferred, ...citations.filter((citation) => citation.id !== built.primaryDocId)];
+    }
+  }
+
+  citations = citations.slice(0, intent === 'GENERAL' ? 3 : 1);
+
+  const answer = built.answer;
 
   return { answer, citations };
 }

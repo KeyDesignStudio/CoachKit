@@ -27,6 +27,7 @@ import { getAiPlanBuilderLlmConfig, getAiPlanBuilderLlmTransport } from './provi
 import { redactAiJsonValue } from './providers/env';
 import {
   getAiPlanBuilderCapabilitySpecVersion,
+  getAiPlanBuilderLlmModelForCapabilityFromEnv,
   getAiPlanBuilderLlmMaxOutputTokensFromEnv,
   getAiPlanBuilderLlmRetryCountFromEnv,
 } from './config';
@@ -209,6 +210,9 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       const maxOutputTokens = getAiPlanBuilderLlmMaxOutputTokensFromEnv(params.capability, process.env, {
         fallback: cfg.maxOutputTokens,
       });
+      const model = getAiPlanBuilderLlmModelForCapabilityFromEnv(params.capability, process.env, {
+        fallback: cfg.model || 'mock',
+      });
 
       if (this.beforeLlmCall) {
         await this.beforeLlmCall({ capability: params.capability });
@@ -217,7 +221,7 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       logMeta('LLM_CALL_ATTEMPT', {
         capability: params.capability,
         provider: cfg.provider,
-        model: cfg.model,
+        model,
         timeoutMs: cfg.timeoutMs,
         maxOutputTokens,
         retryCount,
@@ -230,7 +234,7 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
             system: `APB_CAPABILITY=${params.capability}\n${params.system}`,
             input: JSON.stringify(params.input),
             schema: params.schema,
-            model: cfg.model || 'mock',
+            model,
             maxOutputTokens,
             timeoutMs: cfg.timeoutMs,
           }),
@@ -246,10 +250,10 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
         await this.onInvocation({
           capability: params.capability,
           specVersion,
-          effectiveMode: 'llm',
-          provider: (cfg.provider as any) ?? 'unknown',
-          model: cfg.model ?? null,
-          inputHash: finalAudit.inputHash,
+              effectiveMode: 'llm',
+              provider: (cfg.provider as any) ?? 'unknown',
+              model: model || null,
+              inputHash: finalAudit.inputHash,
           outputHash: finalAudit.outputHash,
           durationMs: Math.max(0, Date.now() - startedAt),
           maxOutputTokens,

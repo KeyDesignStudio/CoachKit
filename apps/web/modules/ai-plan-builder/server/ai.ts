@@ -1,4 +1,5 @@
 import { getAiPlanBuilderAIWithHooks } from '../ai/factory';
+import { getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv } from '../ai/config';
 
 import { consumeLlmRateLimitOrThrow } from './llm-rate-limit';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
@@ -14,6 +15,8 @@ export function getAiPlanBuilderAIForCoachRequest(params: { coachId: string; ath
         capability,
         coachId: ctx.coachId,
         athleteId: ctx.athleteId,
+      }, {
+        limitPerHour: getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv(capability),
       });
     },
     onInvocation: async (meta) => {

@@ -16,9 +16,52 @@ export function toDateInput(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function getDatePartsAu(date: Date, timeZone?: string): { day: string; month: string; monthLong: string; year: string; weekdayLong: string } | null {
+  if (Number.isNaN(date.getTime())) return null;
+
+  const numericParts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: timeZone || undefined,
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  }).formatToParts(date);
+
+  const longParts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: timeZone || undefined,
+    weekday: 'long',
+    month: 'long',
+    year: 'numeric',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const day = numericParts.find((p) => p.type === 'day')?.value;
+  const month = numericParts.find((p) => p.type === 'month')?.value;
+  const year = numericParts.find((p) => p.type === 'year')?.value;
+  const monthLong = longParts.find((p) => p.type === 'month')?.value;
+  const weekdayLong = longParts.find((p) => p.type === 'weekday')?.value;
+  const dayLong = longParts.find((p) => p.type === 'day')?.value;
+  const yearLong = longParts.find((p) => p.type === 'year')?.value;
+
+  if (!day || !month || !year || !monthLong || !weekdayLong || !dayLong || !yearLong) return null;
+  return { day: dayLong, month, monthLong, year: yearLong, weekdayLong };
+}
+
+export function formatDateShortAu(date: Date, timeZone?: string): string {
+  const parts = getDatePartsAu(date, timeZone);
+  if (!parts) return '';
+  const yy = parts.year.slice(-2);
+  return `${parts.day}/${parts.month}/${yy}`;
+}
+
+export function formatDateLongAu(date: Date, timeZone?: string): string {
+  const parts = getDatePartsAu(date, timeZone);
+  if (!parts) return '';
+  return `${parts.weekdayLong}, ${parts.day}/${parts.monthLong}/${parts.year}`;
+}
+
 export function formatDisplay(dateIso: string): string {
   const date = new Date(dateIso);
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return formatDateShortAu(date) || dateIso;
 }
 
 export function formatDisplayInTimeZone(dateIso: string, timeZone?: string): string {
@@ -27,55 +70,13 @@ export function formatDisplayInTimeZone(dateIso: string, timeZone?: string): str
   const date = new Date(`${dateIso}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return formatDisplay(dateIso);
 
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: timeZone || undefined,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
+  return formatDateShortAu(date, timeZone) || formatDisplay(dateIso);
 }
 
 export function formatDayMonthYearInTimeZone(dateIso: string, timeZone?: string): string {
   const date = new Date(`${dateIso}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return dateIso;
-
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timeZone || undefined,
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
-  const parts = formatter.formatToParts(date);
-
-  const day = parts.find((p) => p.type === 'day')?.value;
-  const month = parts.find((p) => p.type === 'month')?.value;
-  const year = parts.find((p) => p.type === 'year')?.value;
-
-  const fallback = formatter.format(date);
-  const formatted = day && month && year ? `${day} ${month} ${year}` : fallback;
-  const weekday = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timeZone || undefined,
-    weekday: 'short',
-  }).format(date);
-
-  const stripped = formatted.replace(new RegExp(`^${weekday}\\s+`, 'i'), '').trim();
-  return /\b\d{4}\b/.test(stripped) || !(day && month && year) ? stripped : `${day} ${month} ${year}`;
-}
-
-function getOrdinalSuffix(day: number): string {
-  const mod100 = day % 100;
-  if (mod100 >= 11 && mod100 <= 13) return 'th';
-  switch (day % 10) {
-    case 1:
-      return 'st';
-    case 2:
-      return 'nd';
-    case 3:
-      return 'rd';
-    default:
-      return 'th';
-  }
+  return formatDateLongAu(date, timeZone) || dateIso;
 }
 
 export function formatWeekOfLabel(weekStartIso: string, timeZone?: string): string {
@@ -84,16 +85,7 @@ export function formatWeekOfLabel(weekStartIso: string, timeZone?: string): stri
   const date = new Date(`${weekStartIso}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return `Week of ${weekStartIso}`;
 
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timeZone || undefined,
-    month: 'long',
-    day: 'numeric',
-  }).formatToParts(date);
-
-  const month = parts.find((p) => p.type === 'month')?.value;
-  const dayStr = parts.find((p) => p.type === 'day')?.value;
-  const day = dayStr ? Number(dayStr) : NaN;
-  if (!month || !Number.isFinite(day)) return `Week of ${weekStartIso}`;
-
-  return `Week of ${month} ${day}${getOrdinalSuffix(day)}`;
+  const formatted = formatDateLongAu(date, timeZone);
+  if (!formatted) return `Week of ${weekStartIso}`;
+  return `Week of ${formatted}`;
 }

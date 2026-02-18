@@ -15,7 +15,7 @@ import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
-import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
+import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
@@ -228,21 +228,8 @@ function ReviewInboxRow({
   }
 
   function formatInboxDateLabel(dateKey: string, tz: string): string | null {
-    const anchor = new Date(`${dateKey}T00:00:00.000Z`);
-    if (Number.isNaN(anchor.getTime())) return null;
-
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-    }).formatToParts(anchor);
-
-    const weekday = parts.find((p) => p.type === 'weekday')?.value;
-    const day = parts.find((p) => p.type === 'day')?.value;
-    const month = parts.find((p) => p.type === 'month')?.value;
-    if (!weekday || !day || !month) return null;
-    return `${weekday} ${day} ${month}`;
+    const formatted = formatDayMonthYearInTimeZone(dateKey, tz);
+    return formatted || null;
   }
 
   const completedDateKey = item.latestCompletedActivity?.startTime ? toDateKeyInTimeZone(item.latestCompletedActivity.startTime, timeZone) : null;

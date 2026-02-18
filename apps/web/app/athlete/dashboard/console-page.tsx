@@ -456,74 +456,13 @@ export default function AthleteDashboardConsolePage() {
           </div>
         </div>
 
-        <div className="mt-6">
-          <AskCard />
-        </div>
-
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="athlete-dashboard-chart-grid">
-          <Block title="Calories" showHeaderDivider={false} className="min-h-[280px] xl:col-start-1" data-testid="athlete-dashboard-calories-chart">
-            {(() => {
-              const summary = data?.rangeSummary;
-              const points = summary?.caloriesByDay ?? [];
-              const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
-              const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
-
-              const buildTooltip = (point: typeof points[number]) => {
-                const dateLabel = formatDisplayInTimeZone(point.dayKey, athleteTimeZone);
-                const header = `${dateLabel} · ${formatCalories(point.completedCaloriesKcal)}`;
-                if (point.sessions.length === 0) return `${header}\nNo completed sessions`;
-
-                const map = new Map<string, { calories: number; estimated: boolean }>();
-                point.sessions.forEach((session) => {
-                  const key = session.discipline.toUpperCase();
-                  const existing = map.get(key) ?? { calories: 0, estimated: false };
-                  existing.calories += session.caloriesKcal;
-                  existing.estimated = existing.estimated || Boolean(session.caloriesEstimated);
-                  map.set(key, existing);
-                });
-
-                const lines = Array.from(map.entries()).map(([discipline, row]) => {
-                  const label = `${discipline} · ${formatCalories(row.calories)}`;
-                  return row.estimated ? `${label} (est.)` : label;
-                });
-
-                return [header, ...lines].join('\n');
-              };
-
-              return (
-                <div className="flex h-full flex-col gap-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-sm text-[var(--muted)]">Total {formatCalories(totalCalories)}</div>
-                    <div className="text-xs text-[var(--muted)]">In this range</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
-                    <div className="flex h-[180px] items-end gap-1" aria-label="Calories per day">
-                      {points.map((point) => {
-                        const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
-                        return (
-                          <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
-                            <div className="w-full flex items-end justify-center h-[140px]">
-                              <div
-                                className="w-3 sm:w-4 rounded-full bg-[var(--bar-fill)]"
-                                style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
-                              />
-                            </div>
-                            <div className="text-[10px] text-[var(--muted)] tabular-nums">{point.dayKey.slice(8)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </Block>
+          <AskCard />
 
           <Block
             title="Planned vs Completed"
             showHeaderDivider={false}
-            className="min-h-[280px] xl:col-start-2"
+            className="min-h-[280px]"
             data-testid="athlete-dashboard-compliance-chart"
           >
             {(() => {
@@ -584,6 +523,65 @@ export default function AthleteDashboardConsolePage() {
                         );
                       })
                     )}
+                  </div>
+                </div>
+              );
+            })()}
+          </Block>
+
+          <Block title="Calories" showHeaderDivider={false} className="min-h-[280px]" data-testid="athlete-dashboard-calories-chart">
+            {(() => {
+              const summary = data?.rangeSummary;
+              const points = summary?.caloriesByDay ?? [];
+              const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
+              const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
+
+              const buildTooltip = (point: typeof points[number]) => {
+                const dateLabel = formatDisplayInTimeZone(point.dayKey, athleteTimeZone);
+                const header = `${dateLabel} · ${formatCalories(point.completedCaloriesKcal)}`;
+                if (point.sessions.length === 0) return `${header}\nNo completed sessions`;
+
+                const map = new Map<string, { calories: number; estimated: boolean }>();
+                point.sessions.forEach((session) => {
+                  const key = session.discipline.toUpperCase();
+                  const existing = map.get(key) ?? { calories: 0, estimated: false };
+                  existing.calories += session.caloriesKcal;
+                  existing.estimated = existing.estimated || Boolean(session.caloriesEstimated);
+                  map.set(key, existing);
+                });
+
+                const lines = Array.from(map.entries()).map(([discipline, row]) => {
+                  const label = `${discipline} · ${formatCalories(row.calories)}`;
+                  return row.estimated ? `${label} (est.)` : label;
+                });
+
+                return [header, ...lines].join('\n');
+              };
+
+              return (
+                <div className="flex h-full flex-col gap-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="text-sm text-[var(--muted)]">Total {formatCalories(totalCalories)}</div>
+                    <div className="text-xs text-[var(--muted)]">In this range</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
+                    <div className="flex h-[180px] items-end gap-1" aria-label="Calories per day">
+                      {points.map((point) => {
+                        const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
+                        return (
+                          <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
+                            <div className="w-full flex items-end justify-center h-[140px]">
+                              <div
+                                className="w-3 sm:w-4 rounded-full bg-[var(--bar-fill)]"
+                                style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-[var(--muted)] tabular-nums">{point.dayKey.slice(8)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );

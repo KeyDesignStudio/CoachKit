@@ -4,7 +4,7 @@ export function formatTimeInTimezone(dateUtc: string | Date | undefined | null, 
   if (Number.isNaN(date.getTime())) return null;
 
   const format = (tz?: string) =>
-    new Intl.DateTimeFormat(undefined, {
+    new Intl.DateTimeFormat('en-AU', {
       timeZone: tz,
       hour: '2-digit',
       minute: '2-digit',

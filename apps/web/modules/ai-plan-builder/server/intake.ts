@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
 import { getAiPlanBuilderAIWithHooks } from '../ai/factory';
+import { getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv } from '../ai/config';
 
 import { consumeLlmRateLimitOrThrow } from './llm-rate-limit';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
@@ -92,6 +93,8 @@ export async function generateSubmittedIntakeFromProfile(params: { coachId: stri
         capability,
         coachId: ctx.coachId,
         athleteId: ctx.athleteId,
+      }, {
+        limitPerHour: getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv(capability),
       });
     },
     onInvocation: async (meta) => {
