@@ -1031,6 +1031,76 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     [athleteId, draftPlanLatest?.id, request]
   );
 
+  const setAllWeekLocks = useCallback(
+    async (locked: boolean) => {
+      const draftId = String(draftPlanLatest?.id ?? '');
+      if (!draftId) return;
+      const weeks = Array.isArray(draftPlanLatest?.weeks) ? draftPlanLatest.weeks : [];
+      const weekLocks = weeks
+        .map((w: any) => Number(w?.weekIndex))
+        .filter((idx: number) => Number.isInteger(idx) && idx >= 0)
+        .map((weekIndex: number) => ({ weekIndex, locked }));
+      if (!weekLocks.length) return;
+
+      setBusy(locked ? 'lock-all-weeks' : 'unlock-all-weeks');
+      setError(null);
+      try {
+        const updated = await request<{ draftPlan: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+          {
+            method: 'PATCH',
+            data: {
+              draftPlanId: draftId,
+              weekLocks,
+            },
+          }
+        );
+        setDraftPlanLatest(updated.draftPlan ?? null);
+      } catch (e) {
+        const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to update week locks.';
+        setError(message);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest, request]
+  );
+
+  const setAllSessionLocks = useCallback(
+    async (locked: boolean) => {
+      const draftId = String(draftPlanLatest?.id ?? '');
+      if (!draftId) return;
+      const sessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const sessionEdits = sessions
+        .map((s: any) => String(s?.id ?? ''))
+        .filter((id: string) => id.length > 0)
+        .map((sessionId: string) => ({ sessionId, locked }));
+      if (!sessionEdits.length) return;
+
+      setBusy(locked ? 'lock-all-sessions' : 'unlock-all-sessions');
+      setError(null);
+      try {
+        const updated = await request<{ draftPlan: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`,
+          {
+            method: 'PATCH',
+            data: {
+              draftPlanId: draftId,
+              sessionEdits,
+            },
+          }
+        );
+        setDraftPlanLatest(updated.draftPlan ?? null);
+      } catch (e) {
+        const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to update session locks.';
+        setError(message);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest, request]
+  );
+
   const canStart = !briefLatest;
   const canPlan = Boolean(briefLatest);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
@@ -1102,6 +1172,42 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           if (top) applyCoachGuidance(top.guidance);
         },
       },
+      {
+        id: 'lock-all-weeks',
+        label: 'Lock all weeks',
+        keywords: 'bulk lock weeks review',
+        disabled: !hasDraft || busy != null,
+        run: () => {
+          void setAllWeekLocks(true);
+        },
+      },
+      {
+        id: 'unlock-all-weeks',
+        label: 'Unlock all weeks',
+        keywords: 'bulk unlock weeks review',
+        disabled: !hasDraft || busy != null,
+        run: () => {
+          void setAllWeekLocks(false);
+        },
+      },
+      {
+        id: 'lock-all-sessions',
+        label: 'Lock all sessions',
+        keywords: 'bulk lock sessions review',
+        disabled: !hasDraft || busy != null,
+        run: () => {
+          void setAllSessionLocks(true);
+        },
+      },
+      {
+        id: 'unlock-all-sessions',
+        label: 'Unlock all sessions',
+        keywords: 'bulk unlock sessions review',
+        disabled: !hasDraft || busy != null,
+        run: () => {
+          void setAllSessionLocks(false);
+        },
+      },
     ],
     [
       adaptationSuggestions,
@@ -1115,6 +1221,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       refreshBrief,
       reviewSideMode,
       router,
+      setAllSessionLocks,
+      setAllWeekLocks,
       showAdvancedSetup,
     ]
   );
@@ -1917,7 +2025,33 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           </div>
         </Block>
 
-        <Block title="3) Preview & Edit Weekly Plan">
+        <Block
+          title="3) Preview & Edit Weekly Plan"
+          rightAction={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy != null || !hasDraft}
+                onClick={() => void setAllWeekLocks(true)}
+                data-testid="apb-lock-all-weeks"
+              >
+                Lock all weeks
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy != null || !hasDraft}
+                onClick={() => void setAllSessionLocks(true)}
+                data-testid="apb-lock-all-sessions"
+              >
+                Lock all sessions
+              </Button>
+            </div>
+          }
+        >
           <div ref={reviewSentinelRef} className="h-px w-full" aria-hidden="true" />
           {!hasDraft ? (
             <div className="text-sm text-[var(--fg-muted)]">Generate a weekly plan to preview and edit sessions.</div>
