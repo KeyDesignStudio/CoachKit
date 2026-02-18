@@ -115,6 +115,11 @@ function isSimpleFactualQuery(query: string): boolean {
   return /(last|latest|next|upcoming|missed|skipped|week\s+\d+)/.test(q) && q.length <= 120;
 }
 
+function shouldUseSingleCitation(query: string, intent: AskIntent): boolean {
+  if (isSimpleFactualQuery(query)) return true;
+  return intent !== 'GENERAL';
+}
+
 function scoreDoc(doc: KnowledgeDoc, query: string, intent: AskIntent): number {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) return 0;
@@ -188,7 +193,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
   if (intent === 'CONTACT') {
     const contactDoc = docs.find((d) => d.kind === 'ATHLETE') ?? docs[0];
     return {
-      answer: `Best contact match: ${contactDoc.title}.`,
+      answer: `Contact details for ${contactDoc.title} are available in their profile.`,
       primaryDocId: contactDoc.id,
     };
   }
@@ -203,7 +208,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
     if (duration && Number(duration) > 0) details.push(`${Number(duration)} min`);
     if (distance && Number(distance) > 0) details.push(`${Number(distance)} km`);
     return {
-      answer: `${latest.athleteName ?? 'Athlete'} last completed session was on ${fmtDate(latest.date)}${details.length ? ` (${details.join(', ')})` : ''}.`,
+      answer: `${latest.athleteName ?? 'Athlete'} last completed session was ${fmtDate(latest.date)}${details.length ? ` (${details.join(', ')})` : ''}.`,
       primaryDocId: latest.id,
     };
   }
@@ -214,7 +219,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
       .filter((d) => d.kind === 'SESSION' && d.date && d.date >= today)
       .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))[0] ?? docs[0];
     return {
-      answer: `Next upcoming session: ${upcoming.title} on ${fmtDate(upcoming.date)}.`,
+      answer: `Next planned session is ${upcoming.title} on ${fmtDate(upcoming.date)}.`,
       primaryDocId: upcoming.id,
     };
   }
@@ -222,7 +227,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
   if (intent === 'PAIN') {
     const pain = docs.find((d) => d.body.toLowerCase().includes('pain flag: yes')) ?? docs[0];
     return {
-      answer: `Latest pain-flagged session: ${pain.title}${pain.date ? ` on ${fmtDate(pain.date)}` : ''}.`,
+      answer: `Latest pain-flagged session is ${pain.title}${pain.date ? ` (${fmtDate(pain.date)})` : ''}.`,
       primaryDocId: pain.id,
     };
   }
@@ -230,7 +235,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
   if (intent === 'MISSED') {
     const missed = docs.find((d) => d.status === CalendarItemStatus.SKIPPED) ?? docs[0];
     return {
-      answer: `Latest missed session: ${missed.title}${missed.date ? ` on ${fmtDate(missed.date)}` : ''}.`,
+      answer: `Latest missed session is ${missed.title}${missed.date ? ` (${fmtDate(missed.date)})` : ''}.`,
       primaryDocId: missed.id,
     };
   }
@@ -251,7 +256,7 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
       const sessionDoc = docs.find((d) => d.kind === 'AI_PLAN_SESSION') ?? docs.find((d) => d.kind === 'AI_PLAN_WEEK');
       if (sessionDoc) {
         return {
-          answer: `Best plan session match: ${sessionDoc.title}. ${sessionDoc.body.replace(/\s*\|\s*/g, ', ')}.`,
+          answer: `Closest plan session match is ${sessionDoc.title}. ${sessionDoc.body.replace(/\s*\|\s*/g, ', ')}.`,
           primaryDocId: sessionDoc.id,
         };
       }
@@ -720,7 +725,15 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
 
   const uniqueCitations = new Map<string, AskCitation>();
   for (const { doc, score } of ranked) {
-    const key = `${doc.url}|${doc.title}`;
+    const normalizedUrl = (() => {
+      try {
+        const u = new URL(doc.url, 'http://coachkit.local');
+        return `${u.pathname.toLowerCase()}|${u.searchParams.get('athleteId') ?? ''}`;
+      } catch {
+        return doc.url.toLowerCase();
+      }
+    })();
+    const key = `${normalizedUrl}|${doc.title.trim().toLowerCase()}`;
     if (uniqueCitations.has(key)) continue;
     uniqueCitations.set(key, {
       id: doc.id,
@@ -738,8 +751,8 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     }
   }
 
-  const factual = isSimpleFactualQuery(query);
-  citations = citations.slice(0, factual ? 1 : intent === 'GENERAL' ? 3 : 1);
+  const singleCitation = shouldUseSingleCitation(query, intent);
+  citations = citations.slice(0, singleCitation ? 1 : 3);
 
   const answer = built.answer;
 
