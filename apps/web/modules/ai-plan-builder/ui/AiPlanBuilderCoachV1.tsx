@@ -60,6 +60,13 @@ type ReferencePlanOption = {
   reasons: string[];
 };
 
+type PerformanceModelPreview = {
+  current: { dayKey: string; ctl: number; atl: number; tsb: number };
+  projected: { dayKey: string; ctl: number; atl: number; tsb: number };
+  delta: { ctl: number; atl: number; tsb: number };
+  upcoming: { days: number; plannedLoad: number; avgDailyLoad: number };
+};
+
 const DAY_NAME_TO_INDEX: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -339,6 +346,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [reviewSideMode, setReviewSideMode] = useState<'reference' | 'previous'>('reference');
   const [showAdvancedSetup, setShowAdvancedSetup] = useState(false);
   const [referencePlanOptions, setReferencePlanOptions] = useState<ReferencePlanOption[]>([]);
+  const [performanceModel, setPerformanceModel] = useState<PerformanceModelPreview | null>(null);
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -508,6 +516,18 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return rows;
   }, [athleteId, request]);
 
+  const fetchPerformanceModel = useCallback(
+    async (aiPlanDraftId?: string | null) => {
+      const qs = aiPlanDraftId ? `?aiPlanDraftId=${encodeURIComponent(aiPlanDraftId)}` : '';
+      const data = await request<{ model: PerformanceModelPreview }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/performance-model${qs}`
+      );
+      setPerformanceModel(data.model ?? null);
+      return data.model ?? null;
+    },
+    [athleteId, request]
+  );
+
   useEffect(() => {
     const sessions = Array.isArray((draftPlanLatest as any)?.sessions) ? (draftPlanLatest as any).sessions : [];
     const valid = new Set(sessions.map((s: any) => String(s.id)));
@@ -593,8 +613,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
         if (draft?.id) {
           await fetchPublishStatus(String(draft.id));
+          await fetchPerformanceModel(String(draft.id));
         } else {
           setPublishStatus(null);
+          await fetchPerformanceModel(null);
         }
 
         setBriefLatest(brief ?? null);
@@ -609,7 +631,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPublishStatus, fetchReferencePlans, request]);
+  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPerformanceModel, fetchPublishStatus, fetchReferencePlans, request]);
 
   useEffect(() => {
     if (!shouldDeferReview) return;
@@ -739,8 +761,10 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       setDraftPlanLatest(created.draftPlan ?? null);
       if (created.draftPlan?.id) {
         await fetchPublishStatus(String(created.draftPlan.id));
+        await fetchPerformanceModel(String(created.draftPlan.id));
       } else {
         setPublishStatus(null);
+        setPerformanceModel(null);
       }
     } catch (e) {
       const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate plan.';
@@ -749,7 +773,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       setBusy(null);
       stopBuildProgress();
     }
-  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup, startBuildProgress, stopBuildProgress]);
+  }, [athleteId, effectiveWeeksToCompletion, fetchPerformanceModel, fetchPublishStatus, request, setup, startBuildProgress, stopBuildProgress]);
 
   const publishPlan = useCallback(async () => {
     const id = String(draftPlanLatest?.id ?? '');
@@ -1277,6 +1301,37 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   </Button>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+          {performanceModel ? (
+            <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-3" data-testid="apb-load-impact-card">
+              <div className="text-sm font-semibold">Load Impact Preview (CTL / ATL / TSB)</div>
+              <div className="mt-2 grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
+                <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                  <div className="font-medium">Current</div>
+                  <div className="mt-1 text-[var(--fg-muted)]">
+                    CTL {performanceModel.current.ctl} · ATL {performanceModel.current.atl} · TSB {performanceModel.current.tsb}
+                  </div>
+                </div>
+                <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                  <div className="font-medium">Projected</div>
+                  <div className="mt-1 text-[var(--fg-muted)]">
+                    CTL {performanceModel.projected.ctl} · ATL {performanceModel.projected.atl} · TSB {performanceModel.projected.tsb}
+                  </div>
+                </div>
+                <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-2">
+                  <div className="font-medium">Delta</div>
+                  <div className="mt-1 text-[var(--fg-muted)]">
+                    CTL {performanceModel.delta.ctl >= 0 ? '+' : ''}
+                    {performanceModel.delta.ctl} · ATL {performanceModel.delta.atl >= 0 ? '+' : ''}
+                    {performanceModel.delta.atl} · TSB {performanceModel.delta.tsb >= 0 ? '+' : ''}
+                    {performanceModel.delta.tsb}
+                  </div>
+                  <div className="mt-1 text-[var(--fg-muted)]">
+                    {performanceModel.upcoming.days}d planned load {performanceModel.upcoming.plannedLoad} (avg {performanceModel.upcoming.avgDailyLoad}/day)
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
           {buildProgress ? (
