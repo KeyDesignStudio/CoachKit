@@ -36,7 +36,86 @@ export const sessionDetailV1Schema = z
     cues: z.array(z.string().min(1).max(160)).max(3).optional(),
     safetyNotes: z.string().min(1).max(800).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const structure = value.structure ?? [];
+    const warmupIdx = structure.findIndex((b) => b.blockType === 'warmup');
+    const cooldownIdx = structure.findIndex((b) => b.blockType === 'cooldown');
+    const firstMainLikeIdx = structure.findIndex((b) => b.blockType === 'main' || b.blockType === 'strength');
+    const warmupCount = structure.filter((b) => b.blockType === 'warmup').length;
+    const cooldownCount = structure.filter((b) => b.blockType === 'cooldown').length;
+
+    if (warmupCount > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['structure'],
+        message: 'Only one warmup block is allowed.',
+      });
+    }
+    if (cooldownCount > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['structure'],
+        message: 'Only one cooldown block is allowed.',
+      });
+    }
+    if (firstMainLikeIdx < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['structure'],
+        message: 'Session structure must include at least one main or strength block.',
+      });
+    } else {
+      if (warmupIdx >= 0 && warmupIdx > firstMainLikeIdx) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['structure', warmupIdx, 'blockType'],
+          message: 'Warmup must appear before main work.',
+        });
+      }
+      if (cooldownIdx >= 0 && cooldownIdx < firstMainLikeIdx) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['structure', cooldownIdx, 'blockType'],
+          message: 'Cooldown must appear after main work.',
+        });
+      }
+      if (cooldownIdx >= 0) {
+        for (let i = cooldownIdx + 1; i < structure.length; i += 1) {
+          if (structure[i]?.blockType !== 'cooldown') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['structure', i, 'blockType'],
+              message: 'No work blocks are allowed after cooldown.',
+            });
+            break;
+          }
+        }
+      }
+
+    }
+
+    if (value.targets.primaryMetric === 'RPE') {
+      const hasRpe = structure.some((b) => typeof b.intensity?.rpe === 'number');
+      if (!hasRpe) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['targets', 'primaryMetric'],
+          message: 'RPE primary metric requires at least one block with RPE.',
+        });
+      }
+    }
+    if (value.targets.primaryMetric === 'ZONE') {
+      const hasZone = structure.some((b) => typeof b.intensity?.zone === 'string');
+      if (!hasZone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['targets', 'primaryMetric'],
+          message: 'ZONE primary metric requires at least one block with zone.',
+        });
+      }
+    }
+  });
 
 export type SessionDetailV1 = z.infer<typeof sessionDetailV1Schema>;
 
@@ -359,6 +438,15 @@ export function buildDeterministicSessionDetailV1(params: {
       durationMinutes: cooldown,
       intensity: { zone: 'Z1', rpe: 2, notes: 'Easy' },
       steps: `Easy ${displayDiscipline.toLowerCase()} to finish, then light stretching.`,
+    });
+  }
+
+  if (structure.length === 0) {
+    const primaryBlockType: SessionDetailBlockType = discipline === 'strength' ? 'strength' : 'main';
+    structure.push({
+      blockType: primaryBlockType,
+      intensity: { zone: 'Z2', rpe: 4, notes: 'Steady' },
+      steps: `${displayType} work at steady effort. Keep form smooth.`,
     });
   }
 
