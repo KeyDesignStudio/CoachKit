@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
@@ -67,6 +67,7 @@ export default function CoachGroupSessionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [createInitialValues, setCreateInitialValues] = useState<any>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const isCoach = user?.role === 'COACH';
 
@@ -98,6 +99,44 @@ export default function CoachGroupSessionsPage() {
     loadSessions();
     loadAthletes();
   }, [loadSessions, loadAthletes]);
+
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(target.isContentEditable);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isCreateModalOpen || selectedSessionId) return;
+
+      if (event.key === '/') {
+        if (isTypingTarget(event.target)) return;
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'n') {
+        if (isTypingTarget(event.target)) return;
+        event.preventDefault();
+        setIsCreateModalOpen(true);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (searchQuery || locationQuery) {
+          event.preventDefault();
+          setSearchQuery('');
+          setLocationQuery('');
+        }
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isCreateModalOpen, locationQuery, searchQuery, selectedSessionId]);
 
   const handleCreate = async (payload: any): Promise<string> => {
     try {
@@ -202,6 +241,7 @@ export default function CoachGroupSessionsPage() {
               <div className="relative">
                 <Icon name="filter" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
                 <Input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search title/discipline..."
                   className="pl-10 min-h-[44px]"
@@ -217,7 +257,7 @@ export default function CoachGroupSessionsPage() {
                 onChange={(e) => setLocationQuery(e.target.value)}
               />
             </div>
-            <p className="text-xs text-[var(--muted)]">Location-aware sessions: filter by venue and open the map link from each session drawer.</p>
+            <p className="text-xs text-[var(--muted)]">Shortcuts: <kbd>/</kbd> search, <kbd>N</kbd> new session, <kbd>Esc</kbd> clear filters.</p>
           </div>
         </div>
 
