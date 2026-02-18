@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -112,6 +112,19 @@ function parseSquadIds(input: string) {
     .filter(Boolean);
 }
 
+function toDayKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 function sessionToForm(session: GroupSessionRecord): SessionFormState {
   const selectedDays = parseRuleDays(session.recurrenceRule);
   return {
@@ -164,6 +177,14 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
       setForm(sessionToForm(session));
     }
   });
+
+  useEffect(() => {
+    if (!session) return;
+    if (applyFrom && applyTo) return;
+    const today = new Date();
+    setApplyFrom(toDayKey(today));
+    setApplyTo(toDayKey(addDays(today, 27)));
+  }, [applyFrom, applyTo, session]);
 
   if (!session) return null;
 
@@ -260,6 +281,19 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
     } finally {
       setApplying(false);
     }
+  };
+
+  const applyPresetRange = (days: number) => {
+    const today = new Date();
+    setApplyFrom(toDayKey(today));
+    setApplyTo(toDayKey(addDays(today, Math.max(0, days - 1))));
+  };
+
+  const applyCurrentMonth = () => {
+    const now = new Date();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setApplyFrom(toDayKey(now));
+    setApplyTo(toDayKey(monthEnd));
   };
 
   const needsAthletePicker = session.visibilityType === 'ALL' || session.visibilityType === 'SQUAD';
@@ -464,6 +498,21 @@ export function GroupSessionDrawer({ session, athletes, onClose, onSave, onDelet
             </h3>
             
             <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={() => applyPresetRange(28)}>
+                  Next 4 weeks
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => applyPresetRange(56)}>
+                  Next 8 weeks
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => applyPresetRange(84)}>
+                  Next 12 weeks
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={applyCurrentMonth}>
+                  This month
+                </Button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
                   From
