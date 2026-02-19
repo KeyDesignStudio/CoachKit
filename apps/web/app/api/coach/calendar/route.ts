@@ -43,6 +43,23 @@ const querySchema = z.object({
 const COMPLETIONS_TAKE = 5;
 const LEAN_CALENDAR_ITEMS = new Set(['1', 'true', 'yes']);
 const completionSources: CompletionSource[] = [CompletionSource.MANUAL, CompletionSource.STRAVA];
+const ATHLETE_ACCESS_CACHE_TTL_MS = 30_000;
+
+type CoachAthleteAccess = {
+  userId: string;
+  defaultLat: number | null;
+  defaultLon: number | null;
+  timezone: string;
+};
+
+const coachAthleteAccessCache = new Map<
+  string,
+  {
+    value: CoachAthleteAccess[];
+    expiresAtMs: number;
+  }
+>();
+const coachAthleteAccessInFlight = new Map<string, Promise<CoachAthleteAccess[]>>();
 
 const calendarItemLeanSelect = {
   id: true,
@@ -144,6 +161,81 @@ function buildLeanCalendarItem(params: {
   };
 }
 
+function buildCoachAthleteAccessCacheKey(params: { coachId: string; athleteIds: string[] }) {
+  return [params.coachId, ...params.athleteIds].join('|');
+}
+
+async function getCoachAthleteAccess(params: {
+  coachId: string;
+  athleteIds: string[];
+  bypassCache: boolean;
+  profiler?: ReturnType<typeof createServerProfiler>;
+}) {
+  const cacheKey = buildCoachAthleteAccessCacheKey(params);
+  const now = Date.now();
+
+  if (!params.bypassCache) {
+    const cached = coachAthleteAccessCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > now) {
+      params.profiler?.mark('athlete-access:cache-hit');
+      return { value: cached.value, cacheHit: true as const };
+    }
+  }
+
+  const existing = !params.bypassCache ? coachAthleteAccessInFlight.get(cacheKey) : null;
+  if (existing) {
+    params.profiler?.mark('athlete-access:inflight-hit');
+    return { value: await existing, cacheHit: true as const };
+  }
+
+  params.profiler?.mark('athlete-access:cache-miss');
+  const promise = prisma.athleteProfile
+    .findMany({
+      where: {
+        coachId: params.coachId,
+        userId: { in: params.athleteIds },
+      },
+      select: {
+        userId: true,
+        defaultLat: true,
+        defaultLon: true,
+        user: {
+          select: {
+            timezone: true,
+          },
+        },
+      },
+    })
+    .then((rows) =>
+      rows.map((athlete) => ({
+        userId: athlete.userId,
+        defaultLat: athlete.defaultLat,
+        defaultLon: athlete.defaultLon,
+        timezone: athlete.user.timezone ?? 'Australia/Brisbane',
+      }))
+    );
+
+  if (!params.bypassCache) {
+    coachAthleteAccessInFlight.set(cacheKey, promise);
+  }
+
+  try {
+    const value = await promise;
+    if (!params.bypassCache) {
+      coachAthleteAccessCache.set(cacheKey, {
+        value,
+        expiresAtMs: now + ATHLETE_ACCESS_CACHE_TTL_MS,
+      });
+    }
+    params.profiler?.mark('athlete-access:loaded');
+    return { value, cacheHit: false as const };
+  } finally {
+    if (!params.bypassCache) {
+      coachAthleteAccessInFlight.delete(cacheKey);
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const prof = createServerProfiler('coach/calendar');
@@ -159,6 +251,7 @@ export async function GET(request: NextRequest) {
       to: searchParams.get('to'),
     });
     const lean = LEAN_CALENDAR_ITEMS.has(String(searchParams.get('lean') ?? '').toLowerCase());
+    const bypassCaches = searchParams.has('t');
 
     const parsedAthleteIds = new Set<string>();
     const singleAthleteId = (params.athleteId ?? '').trim();
@@ -183,22 +276,13 @@ export async function GET(request: NextRequest) {
     const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
     const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
 
-    const athletes = await prisma.athleteProfile.findMany({
-      where: {
-        coachId: user.id,
-        userId: { in: athleteIds },
-      },
-      select: {
-        userId: true,
-        defaultLat: true,
-        defaultLon: true,
-        user: {
-          select: {
-            timezone: true,
-          },
-        },
-      },
+    const athleteAccess = await getCoachAthleteAccess({
+      coachId: user.id,
+      athleteIds,
+      bypassCache: bypassCaches,
+      profiler: prof,
     });
+    const athletes = athleteAccess.value;
 
     if (athletes.length !== athleteIds.length) {
       throw forbidden('Athlete access required.');
@@ -208,7 +292,7 @@ export async function GET(request: NextRequest) {
       athletes.map((athlete) => [athlete.userId, athlete] as const)
     );
     const timezoneByAthleteId = new Map(
-      athletes.map((athlete) => [athlete.userId, athlete.user.timezone ?? 'Australia/Brisbane'] as const)
+      athletes.map((athlete) => [athlete.userId, athlete.timezone ?? 'Australia/Brisbane'] as const)
     );
     const utcRangeByAthleteId = new Map(
       athleteIds.map((athleteId) => [
@@ -374,7 +458,12 @@ export async function GET(request: NextRequest) {
     }
 
     prof.mark('format');
-    prof.done({ itemCount: formattedItems.length, athleteCount: athleteIds.length });
+    prof.done({
+      itemCount: formattedItems.length,
+      athleteCount: athleteIds.length,
+      athleteAccessCacheHit: athleteAccess.cacheHit,
+      cachesBypassed: bypassCaches,
+    });
 
     return success(
       { items: formattedItems, athleteTimezone: primaryAthleteTimezone, dayWeather },
