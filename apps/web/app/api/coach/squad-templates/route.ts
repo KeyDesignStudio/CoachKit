@@ -19,6 +19,8 @@ const targetPresetSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     discipline: z.string().trim().min(1).max(100).optional(),
     location: z.string().trim().max(200).optional(),
+    locationLat: z.number().min(-90).max(90).optional().nullable(),
+    locationLon: z.number().min(-180).max(180).optional().nullable(),
     startTimeLocal: localTimeSchema.optional(),
     durationMinutes: z.number().int().min(1).max(600).optional(),
     description: z.string().trim().max(20000).optional(),

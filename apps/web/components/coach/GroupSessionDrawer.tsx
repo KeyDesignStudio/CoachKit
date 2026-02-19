@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
+import { LocationInputWithGeocode } from '@/components/coach/LocationInputWithGeocode';
 import Link from 'next/link';
 
 const WEEKDAY_OPTIONS = [
@@ -33,6 +34,8 @@ type SessionFormState = {
   title: string;
   discipline: string;
   location: string;
+  locationLat: number | null;
+  locationLon: number | null;
   startTimeLocal: string;
   durationMinutes: string;
   description: string;
@@ -63,6 +66,8 @@ type GroupSessionRecord = {
   title: string;
   discipline: string;
   location: string | null;
+  locationLat: number | null;
+  locationLon: number | null;
   startTimeLocal: string;
   durationMinutes: number;
   description: string | null;
@@ -152,6 +157,8 @@ function sessionToForm(session: GroupSessionRecord): SessionFormState {
     title: session.title,
     discipline: session.discipline,
     location: session.location ?? '',
+    locationLat: session.locationLat ?? null,
+    locationLon: session.locationLon ?? null,
     startTimeLocal: session.startTimeLocal,
     durationMinutes: String(session.durationMinutes),
     description: session.description ?? '',
@@ -183,6 +190,8 @@ export function GroupSessionDrawer({
       title: '',
       discipline: '',
       location: '',
+      locationLat: null,
+      locationLon: null,
       startTimeLocal: '05:30',
       durationMinutes: '60',
       description: '',
@@ -242,6 +251,10 @@ export function GroupSessionDrawer({
       title: typeof preset.title === 'string' ? preset.title : prev.title,
       discipline: typeof preset.discipline === 'string' ? preset.discipline : prev.discipline,
       location: typeof preset.location === 'string' ? preset.location : prev.location,
+      locationLat:
+        typeof preset.locationLat === 'number' && Number.isFinite(preset.locationLat) ? preset.locationLat : prev.locationLat,
+      locationLon:
+        typeof preset.locationLon === 'number' && Number.isFinite(preset.locationLon) ? preset.locationLon : prev.locationLon,
       startTimeLocal: typeof preset.startTimeLocal === 'string' ? preset.startTimeLocal : prev.startTimeLocal,
       durationMinutes:
         typeof preset.durationMinutes === 'number' && Number.isFinite(preset.durationMinutes)
@@ -304,6 +317,8 @@ export function GroupSessionDrawer({
       recurrenceRule: buildWeeklyRule(form.selectedDays),
       visibilityType: form.visibilityType,
       location: form.location.trim() || null,
+      locationLat: form.locationLat ?? null,
+      locationLon: form.locationLon ?? null,
       description: form.description.trim() || null,
     };
 
@@ -457,13 +472,20 @@ export function GroupSessionDrawer({
 
                 <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
                   Location (optional)
-                  <Input
+                  <LocationInputWithGeocode
                     value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    onValueChange={(location) => setForm((prev) => ({ ...prev, location }))}
+                    latitude={form.locationLat}
+                    longitude={form.locationLon}
+                    onCoordinatesChange={(locationLat, locationLon) => setForm((prev) => ({ ...prev, locationLat, locationLon }))}
                   />
                   {form.location.trim() ? (
                     <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.location.trim())}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        form.locationLat != null && form.locationLon != null
+                          ? `${form.locationLat},${form.locationLon}`
+                          : form.location.trim()
+                      )}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs text-[var(--fg)] underline"
