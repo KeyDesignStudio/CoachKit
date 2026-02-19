@@ -24,6 +24,18 @@ type SaveState =
   | { kind: 'saved' }
   | { kind: 'error'; message: string };
 
+type CoachPlanSource = {
+  id: string;
+  title: string;
+  sport: string;
+  distance: string;
+  level: string;
+  durationWeeks: number;
+  isActive: boolean;
+  createdAt: string;
+  latestVersion?: { version: number; extractionMetaJson?: any } | null;
+};
+
 function filenameFromUrl(url: string | null | undefined): string | null {
   const raw = typeof url === 'string' ? url.trim() : '';
   if (!raw) return null;
@@ -107,6 +119,25 @@ export default function CoachSettingsPage() {
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [timezoneMessage, setTimezoneMessage] = useState('');
   const [timezoneError, setTimezoneError] = useState('');
+  const [planSources, setPlanSources] = useState<CoachPlanSource[]>([]);
+  const [planLibraryBusy, setPlanLibraryBusy] = useState(false);
+  const [planLibraryMessage, setPlanLibraryMessage] = useState('');
+  const [planLibraryError, setPlanLibraryError] = useState('');
+  const [planUpload, setPlanUpload] = useState<{
+    title: string;
+    sport: string;
+    distance: string;
+    level: string;
+    durationWeeks: string;
+    file: File | null;
+  }>({
+    title: '',
+    sport: 'TRIATHLON',
+    distance: 'OTHER',
+    level: 'BEGINNER',
+    durationWeeks: '12',
+    file: null,
+  });
 
   useEffect(() => {
     setDisplayName(branding.displayName || DEFAULT_BRAND_NAME);
@@ -143,6 +174,12 @@ export default function CoachSettingsPage() {
     } finally {
       setSavingTimezone(false);
     }
+  };
+
+  const fetchPlanSources = async () => {
+    const data = await request<{ sources: CoachPlanSource[] }>('/api/coach/plan-library/sources');
+    const rows = Array.isArray(data.sources) ? data.sources : [];
+    setPlanSources(rows);
   };
 
   const uploadLogo = async (file: File, variant: 'light' | 'dark') => {
@@ -322,6 +359,49 @@ export default function CoachSettingsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayNameDirty, displayName]);
+
+  useEffect(() => {
+    void fetchPlanSources();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const uploadPlanSource = async () => {
+    if (!planUpload.file) {
+      setPlanLibraryError('Choose a PDF file first.');
+      return;
+    }
+
+    setPlanLibraryBusy(true);
+    setPlanLibraryMessage('');
+    setPlanLibraryError('');
+    try {
+      const form = new FormData();
+      form.set('type', 'PDF');
+      form.set('title', planUpload.title.trim() || planUpload.file.name.replace(/\.pdf$/i, ''));
+      form.set('sport', planUpload.sport);
+      form.set('distance', planUpload.distance);
+      form.set('level', planUpload.level);
+      form.set('durationWeeks', planUpload.durationWeeks.trim() || '12');
+      form.set('file', planUpload.file);
+
+      const response = await fetch('/api/coach/plan-library/ingest', {
+        method: 'POST',
+        body: form,
+        credentials: 'same-origin',
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || 'Failed to upload plan source.');
+      }
+      await fetchPlanSources();
+      setPlanUpload((prev) => ({ ...prev, title: '', file: null }));
+      setPlanLibraryMessage('Plan uploaded to coach library.');
+    } catch (err) {
+      setPlanLibraryError(err instanceof Error ? err.message : 'Failed to upload plan source.');
+    } finally {
+      setPlanLibraryBusy(false);
+    }
+  };
 
   const openPicker = (variant: 'light' | 'dark') => {
     const input = variant === 'light' ? lightInputRef.current : darkInputRef.current;
@@ -508,6 +588,90 @@ export default function CoachSettingsPage() {
         </Block>
 
         <div className="flex flex-col gap-6">
+          <Block className="w-full">
+            <BlockTitle>Plan Library</BlockTitle>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Upload your historical plans here. They are available for your use and can inform CoachKit AI globally.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Input
+                value={planUpload.title}
+                onChange={(e) => setPlanUpload((s) => ({ ...s, title: e.target.value }))}
+                placeholder="Plan title (e.g. 12wk Olympic Beginner)"
+              />
+              <Input
+                value={planUpload.durationWeeks}
+                onChange={(e) => setPlanUpload((s) => ({ ...s, durationWeeks: e.target.value }))}
+                placeholder="Duration weeks"
+                inputMode="numeric"
+              />
+
+              <SelectField value={planUpload.sport} onChange={(e) => setPlanUpload((s) => ({ ...s, sport: e.target.value }))}>
+                <option value="TRIATHLON">Triathlon</option>
+                <option value="RUN">Run</option>
+                <option value="BIKE">Bike</option>
+                <option value="SWIM">Swim</option>
+                <option value="DUATHLON">Duathlon</option>
+              </SelectField>
+
+              <SelectField value={planUpload.level} onChange={(e) => setPlanUpload((s) => ({ ...s, level: e.target.value }))}>
+                <option value="BEGINNER">Beginner</option>
+                <option value="INTERMEDIATE">Intermediate</option>
+                <option value="ADVANCED">Advanced</option>
+              </SelectField>
+
+              <SelectField value={planUpload.distance} onChange={(e) => setPlanUpload((s) => ({ ...s, distance: e.target.value }))}>
+                <option value="OTHER">Other</option>
+                <option value="SPRINT">Sprint</option>
+                <option value="OLYMPIC">Olympic</option>
+                <option value="HALF_IRONMAN">Half Ironman</option>
+                <option value="IRONMAN">Ironman</option>
+                <option value="FIVE_K">5K</option>
+                <option value="TEN_K">10K</option>
+                <option value="HALF_MARATHON">Half Marathon</option>
+                <option value="MARATHON">Marathon</option>
+              </SelectField>
+
+              <Input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) =>
+                  setPlanUpload((s) => ({
+                    ...s,
+                    file: e.currentTarget.files && e.currentTarget.files.length ? e.currentTarget.files[0] : null,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="mt-3 flex items-center gap-3">
+              <Button type="button" variant="primary" size="sm" onClick={() => void uploadPlanSource()} disabled={planLibraryBusy}>
+                {planLibraryBusy ? 'Uploading…' : 'Upload plan'}
+              </Button>
+              <span className="text-xs text-[var(--muted)]">PDF plans are parsed into session and rule templates.</span>
+            </div>
+
+            {planLibraryMessage ? <p className="mt-2 text-sm text-emerald-600">{planLibraryMessage}</p> : null}
+            {planLibraryError ? <p className="mt-2 text-sm text-red-600">{planLibraryError}</p> : null}
+
+            {planSources.length ? (
+              <div className="mt-4 rounded-md border border-[var(--border-subtle)] p-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Recently uploaded</p>
+                <ul className="space-y-2 text-sm">
+                  {planSources.slice(0, 8).map((src) => (
+                    <li key={src.id} className="flex items-center justify-between gap-3">
+                      <span className="truncate">{src.title}</span>
+                      <span className="shrink-0 text-xs text-[var(--muted)]">
+                        {src.durationWeeks}w · v{src.latestVersion?.version ?? 1}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </Block>
+
           <Block className="w-full">
             <BlockTitle>Timezone</BlockTitle>
             <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
