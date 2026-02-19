@@ -13,6 +13,7 @@ import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
@@ -313,7 +314,7 @@ export default function CoachDashboardConsolePage() {
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [athleteId, setAthleteId] = useState<string | null>(null);
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [inboxPreset, setInboxPreset] = useState<InboxPreset>('ALL');
   const [showLoadPanel, setShowLoadPanel] = useState(false);
@@ -334,12 +335,33 @@ export default function CoachDashboardConsolePage() {
   const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
 
   const coachTimeZone = user?.timezone ?? 'UTC';
+  const athleteOptions = useMemo(
+    () =>
+      (data?.athletes ?? []).map((athlete) => ({
+        userId: athlete.id,
+        user: { id: athlete.id, name: athlete.name },
+      })),
+    [data?.athletes]
+  );
+  const selectedAthleteIdList = useMemo(() => Array.from(selectedAthleteIds), [selectedAthleteIds]);
+  const allAthletesSelected =
+    athleteOptions.length > 0 &&
+    selectedAthleteIdList.length === athleteOptions.length &&
+    selectedAthleteIdList.every((id) => athleteOptions.some((athlete) => athlete.userId === id));
+  const singleSelectedAthleteId = selectedAthleteIdList.length === 1 ? selectedAthleteIdList[0] : null;
+  const athleteScopeKey = useMemo(() => selectedAthleteIdList.slice().sort().join(','), [selectedAthleteIdList]);
   const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, coachTimeZone, customFrom, customTo), [
     timeRange,
     coachTimeZone,
     customFrom,
     customTo,
   ]);
+
+  useEffect(() => {
+    if (athleteOptions.length === 0) return;
+    if (selectedAthleteIds.size > 0) return;
+    setSelectedAthleteIds(new Set(athleteOptions.map((athlete) => athlete.userId)));
+  }, [athleteOptions, selectedAthleteIds.size]);
 
   const reload = useCallback(
     async (options?: { bypassCache?: boolean; inboxOffset?: number; appendInbox?: boolean }) => {
@@ -360,7 +382,9 @@ export default function CoachDashboardConsolePage() {
       qs.set('to', dateRange.to);
       qs.set('inboxLimit', '25');
       qs.set('inboxOffset', String(inboxOffset));
-      if (athleteId) qs.set('athleteId', athleteId);
+      if (selectedAthleteIdList.length > 0 && !allAthletesSelected) {
+        qs.set('athleteIds', selectedAthleteIdList.join(','));
+      }
       if (discipline) qs.set('discipline', discipline);
       if (showLoadPanel) qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
@@ -389,7 +413,7 @@ export default function CoachDashboardConsolePage() {
         }
       }
     },
-    [athleteId, dateRange.from, dateRange.to, discipline, request, showLoadPanel, user?.role, user?.userId]
+    [allAthletesSelected, dateRange.from, dateRange.to, discipline, request, selectedAthleteIdList, showLoadPanel, user?.role, user?.userId]
   );
 
   useEffect(() => {
@@ -442,7 +466,7 @@ export default function CoachDashboardConsolePage() {
   // If the global filters change, clear any inbox shortcut filter.
   useEffect(() => {
     setInboxPreset('ALL');
-  }, [dateRange.from, dateRange.to, athleteId, discipline]);
+  }, [athleteScopeKey, dateRange.from, dateRange.to, discipline]);
 
   const disciplineOptions = useMemo(() => {
     const set = new Set<string>();
@@ -631,18 +655,17 @@ export default function CoachDashboardConsolePage() {
                   {/* Row 1 */}
                   <div className="md:col-start-1 md:row-start-1">
                     <FieldLabel className="pl-1">Athlete</FieldLabel>
-                    <SelectField
-                      className="min-h-[44px]"
-                      value={athleteId ?? ''}
-                      onChange={(e) => setAthleteId(e.target.value ? e.target.value : null)}
-                    >
-                      <option value="">All athletes</option>
-                      {(data?.athletes ?? []).map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name ?? 'Unnamed athlete'}
-                        </option>
-                      ))}
-                    </SelectField>
+                    <AthleteSelector
+                      athletes={athleteOptions}
+                      selectedIds={selectedAthleteIds}
+                      onChange={(nextSelected) => {
+                        if (nextSelected.size === 0 && athleteOptions.length > 0) {
+                          setSelectedAthleteIds(new Set(athleteOptions.map((athlete) => athlete.userId)));
+                          return;
+                        }
+                        setSelectedAthleteIds(nextSelected);
+                      }}
+                    />
                   </div>
 
                   <div className="md:col-start-2 md:row-start-1">
@@ -815,7 +838,7 @@ export default function CoachDashboardConsolePage() {
           <StravaVitalsSummaryCard
             comparison={data?.stravaVitals ?? null}
             loading={loading && !data}
-            title={athleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
+            title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
             showLoadPanel={showLoadPanel}
             onToggleLoadPanel={setShowLoadPanel}
           />
