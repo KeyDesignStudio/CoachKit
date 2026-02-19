@@ -689,23 +689,23 @@ export default function CoachCalendarPage() {
           setWeekStatus('DRAFT');
         }
       } else {
-        // Stacked mode: load each athlete in parallel and tag items.
+        // Stacked mode: load all selected athletes in a single API request.
         const selected = Array.from(selectedAthleteIds);
         setDayWeatherByDate({});
-        const results = await mapWithConcurrency(selected, 5, async (athleteId) => {
-          const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
-            `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
-          );
-          const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
-          return itemsData.items.map((item) => ({
-            ...item,
-            title: resolveCalendarItemTitle(item),
-            athleteId,
-            athleteName,
-            athleteTimezone: itemsData.athleteTimezone,
-          }));
-        });
-        setItems(results.flat());
+        const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
+          `/api/coach/calendar?athleteIds=${encodeURIComponent(selected.join(','))}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
+        );
+        setItems(
+          itemsData.items.map((item) => {
+            const athlete = athletes.find((a) => a.userId === item.athleteId);
+            return {
+              ...item,
+              title: resolveCalendarItemTitle(item),
+              athleteName: athlete?.user.name ?? null,
+              athleteTimezone: athlete?.user.timezone ?? itemsData.athleteTimezone,
+            };
+          })
+        );
         setWeekStatus('DRAFT');
         markCalendarPerf('data');
       }
