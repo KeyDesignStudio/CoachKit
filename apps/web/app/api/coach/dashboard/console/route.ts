@@ -102,6 +102,11 @@ type DashboardAggregates = {
   };
 };
 
+type DashboardReviewInboxPage = {
+  items: ReviewItem[];
+  hasMore: boolean;
+};
+
 const DASHBOARD_AGG_CACHE_TTL_MS = 30_000;
 const dashboardAggregateCache = new Map<
   string,
@@ -111,6 +116,15 @@ const dashboardAggregateCache = new Map<
   }
 >();
 const dashboardAggregateInFlight = new Map<string, Promise<DashboardAggregates>>();
+const DASHBOARD_INBOX_CACHE_TTL_MS = 15_000;
+const dashboardInboxCache = new Map<
+  string,
+  {
+    value: DashboardReviewInboxPage;
+    expiresAtMs: number;
+  }
+>();
+const dashboardInboxInFlight = new Map<string, Promise<DashboardReviewInboxPage>>();
 
 function buildDashboardAggregateCacheKey(params: {
   coachId: string;
@@ -120,6 +134,26 @@ function buildDashboardAggregateCacheKey(params: {
   discipline: string | null;
 }) {
   return [params.coachId, params.from ?? '', params.to ?? '', params.athleteId ?? '', params.discipline ?? ''].join('|');
+}
+
+function buildDashboardInboxCacheKey(params: {
+  coachId: string;
+  from: string | null;
+  to: string | null;
+  athleteId: string | null;
+  discipline: string | null;
+  inboxOffset: number;
+  inboxLimit: number;
+}) {
+  return [
+    params.coachId,
+    params.from ?? '',
+    params.to ?? '',
+    params.athleteId ?? '',
+    params.discipline ?? '',
+    String(params.inboxOffset),
+    String(params.inboxLimit),
+  ].join('|');
 }
 
 async function getDashboardAggregates(params: {
@@ -304,6 +338,151 @@ async function getDashboardAggregates(params: {
   }
 }
 
+async function getDashboardReviewInbox(params: {
+  coachId: string;
+  rangeFilter: Record<string, unknown>;
+  athleteFilter: Record<string, unknown>;
+  disciplineFilter: Record<string, unknown>;
+  inboxOffset: number;
+  inboxLimit: number;
+  cacheKey: string;
+  bypassCache: boolean;
+  profiler?: ReturnType<typeof createServerProfiler>;
+}) {
+  const now = Date.now();
+  if (!params.bypassCache) {
+    const cached = dashboardInboxCache.get(params.cacheKey);
+    if (cached && cached.expiresAtMs > now) {
+      params.profiler?.mark('inbox:cache-hit');
+      return { value: cached.value, cacheHit: true as const };
+    }
+  }
+
+  const existing = !params.bypassCache ? dashboardInboxInFlight.get(params.cacheKey) : null;
+  if (existing) {
+    params.profiler?.mark('inbox:inflight-hit');
+    return { value: await existing, cacheHit: true as const };
+  }
+
+  params.profiler?.mark('inbox:cache-miss');
+  const promise = (async () => {
+    const inboxItems = await prisma.calendarItem.findMany({
+      where: {
+        coachId: params.coachId,
+        deletedAt: null,
+        ...params.rangeFilter,
+        ...params.athleteFilter,
+        ...params.disciplineFilter,
+        status: { in: REVIEWABLE_STATUSES },
+        reviewedAt: null,
+      },
+      skip: params.inboxOffset,
+      take: params.inboxLimit + 1,
+      orderBy: [{ actionAt: 'desc' }, { updatedAt: 'desc' }, { date: 'desc' }],
+      select: {
+        id: true,
+        date: true,
+        actionAt: true,
+        plannedStartTimeLocal: true,
+        discipline: true,
+        title: true,
+        plannedDurationMinutes: true,
+        plannedDistanceKm: true,
+        workoutDetail: true,
+        status: true,
+        updatedAt: true,
+        athlete: {
+          select: {
+            user: { select: { id: true, name: true } },
+          },
+        },
+        completedActivities: {
+          orderBy: [{ startTime: 'desc' as const }],
+          take: 1,
+          select: {
+            id: true,
+            durationMinutes: true,
+            distanceKm: true,
+            painFlag: true,
+            startTime: true,
+          },
+        },
+        comments: {
+          where: {
+            author: {
+              role: 'ATHLETE',
+            },
+          },
+          take: 1,
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    const hasMoreInboxItems = inboxItems.length > params.inboxLimit;
+    const pageItems = hasMoreInboxItems ? inboxItems.slice(0, params.inboxLimit) : inboxItems;
+
+    const formattedInbox: ReviewItem[] = pageItems.map((item: any) => {
+      const hasAthleteComment = (item.comments?.length ?? 0) > 0;
+      const latestCompletedActivity = item.completedActivities?.[0] ?? null;
+      const persisted = item.actionAt ? new Date(item.actionAt) : null;
+      const fallback = latestCompletedActivity?.startTime ? new Date(latestCompletedActivity.startTime) : new Date(item.updatedAt);
+      const actionAt = persisted && !Number.isNaN(persisted.getTime()) ? persisted : fallback;
+
+      return {
+        id: item.id,
+        date: item.date,
+        actionAt: actionAt.toISOString(),
+        plannedStartTimeLocal: item.plannedStartTimeLocal,
+        discipline: item.discipline,
+        title: item.title,
+        plannedDurationMinutes: item.plannedDurationMinutes,
+        plannedDistanceKm: item.plannedDistanceKm,
+        workoutDetail: item.workoutDetail,
+        status: item.status,
+        athlete: item.athlete?.user ?? null,
+        latestCompletedActivity,
+        hasAthleteComment,
+        commentCount: item.comments?.length ?? 0,
+      };
+    });
+
+    formattedInbox.sort((a, b) => {
+      const ap = getInboxPriority(a);
+      const bp = getInboxPriority(b);
+      if (ap !== bp) return ap - bp;
+      return new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime();
+    });
+
+    return {
+      items: formattedInbox,
+      hasMore: hasMoreInboxItems,
+    } satisfies DashboardReviewInboxPage;
+  })();
+
+  if (!params.bypassCache) {
+    dashboardInboxInFlight.set(params.cacheKey, promise);
+  }
+
+  try {
+    const value = await promise;
+    if (!params.bypassCache) {
+      dashboardInboxCache.set(params.cacheKey, {
+        value,
+        expiresAtMs: now + DASHBOARD_INBOX_CACHE_TTL_MS,
+      });
+    }
+    params.profiler?.mark('inbox:computed');
+    return { value, cacheHit: false as const };
+  } finally {
+    if (!params.bypassCache) {
+      dashboardInboxInFlight.delete(params.cacheKey);
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const prof = createServerProfiler('coach/dashboard/console');
@@ -338,13 +517,22 @@ export async function GET(request: NextRequest) {
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
     const athleteFilter = athleteId ? { athleteId } : {};
     const disciplineFilter = discipline ? { discipline } : {};
-    const bypassAggregateCache = searchParams.has('t');
+    const bypassCaches = searchParams.has('t');
     const aggregateCacheKey = buildDashboardAggregateCacheKey({
       coachId: user.id,
       from: params.from ?? null,
       to: params.to ?? null,
       athleteId,
       discipline,
+    });
+    const inboxCacheKey = buildDashboardInboxCacheKey({
+      coachId: user.id,
+      from: params.from ?? null,
+      to: params.to ?? null,
+      athleteId,
+      discipline,
+      inboxOffset,
+      inboxLimit,
     });
     prof.mark('auth+parse');
 
@@ -354,121 +542,32 @@ export async function GET(request: NextRequest) {
       athleteFilter,
       disciplineFilter,
       cacheKey: aggregateCacheKey,
-      bypassCache: bypassAggregateCache,
+      bypassCache: bypassCaches,
       profiler: prof,
     });
     prof.mark('kpis');
 
-    // Review inbox items (unreviewed completed/skipped) for this range
-    const inboxItems = await prisma.calendarItem.findMany({
-      where: {
-        coachId: user.id,
-        deletedAt: null,
-        ...rangeFilter,
-        ...athleteFilter,
-        ...disciplineFilter,
-        status: { in: REVIEWABLE_STATUSES },
-        reviewedAt: null,
-      },
-      skip: inboxOffset,
-      take: inboxLimit + 1,
-      orderBy: [{ actionAt: 'desc' }, { updatedAt: 'desc' }, { date: 'desc' }],
-      select: {
-        id: true,
-        athleteId: true,
-        date: true,
-        actionAt: true,
-        plannedStartTimeLocal: true,
-        discipline: true,
-        subtype: true,
-        title: true,
-        plannedDurationMinutes: true,
-        plannedDistanceKm: true,
-        intensityType: true,
-        intensityTargetJson: true,
-        workoutDetail: true,
-        attachmentsJson: true,
-        status: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        athlete: {
-          select: {
-            user: { select: { id: true, name: true } },
-          },
-        },
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: 1,
-          select: {
-            id: true,
-            source: true,
-            durationMinutes: true,
-            distanceKm: true,
-            painFlag: true,
-            startTime: true,
-          },
-        },
-        comments: {
-          where: {
-            author: {
-              role: 'ATHLETE',
-            },
-          },
-          take: 1,
-          select: {
-            id: true,
-          },
-        },
-        _count: {
-          select: { comments: true },
-        },
-      },
-    });
-    const hasMoreInboxItems = inboxItems.length > inboxLimit;
-    const pageItems = hasMoreInboxItems ? inboxItems.slice(0, inboxLimit) : inboxItems;
-
-    const formattedInbox: ReviewItem[] = pageItems.map((item: any) => {
-      const hasAthleteComment = (item.comments?.length ?? 0) > 0;
-
-      const latestCompletedActivity = item.completedActivities?.[0] ?? null;
-      const persisted = item.actionAt ? new Date(item.actionAt) : null;
-      const fallback = latestCompletedActivity?.startTime ? new Date(latestCompletedActivity.startTime) : new Date(item.updatedAt);
-      const actionAt = persisted && !Number.isNaN(persisted.getTime()) ? persisted : fallback;
-
-      return {
-        id: item.id,
-        date: item.date,
-        actionAt: actionAt.toISOString(),
-        plannedStartTimeLocal: item.plannedStartTimeLocal,
-        discipline: item.discipline,
-        title: item.title,
-        plannedDurationMinutes: item.plannedDurationMinutes,
-        plannedDistanceKm: item.plannedDistanceKm,
-        workoutDetail: item.workoutDetail,
-        status: item.status,
-        athlete: item.athlete?.user ?? null,
-        latestCompletedActivity,
-        hasAthleteComment,
-        commentCount: item._count?.comments ?? 0,
-      };
-    });
-
-    formattedInbox.sort((a, b) => {
-      const ap = getInboxPriority(a);
-      const bp = getInboxPriority(b);
-      if (ap !== bp) return ap - bp;
-      return new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime();
+    const inboxPage = await getDashboardReviewInbox({
+      coachId: user.id,
+      rangeFilter,
+      athleteFilter,
+      disciplineFilter,
+      inboxOffset,
+      inboxLimit,
+      cacheKey: inboxCacheKey,
+      bypassCache: bypassCaches,
+      profiler: prof,
     });
 
     prof.mark('format');
     prof.done({
       athleteCount: aggregates.value.athletes.length,
       completedItemCount: aggregates.value.meta.completedItemCount,
-      inboxItemCount: formattedInbox.length,
-      inboxHasMore: hasMoreInboxItems,
+      inboxItemCount: inboxPage.value.items.length,
+      inboxHasMore: inboxPage.value.hasMore,
       aggregateCacheHit: aggregates.cacheHit,
-      aggregateBypassed: bypassAggregateCache,
+      inboxCacheHit: inboxPage.cacheHit,
+      cachesBypassed: bypassCaches,
     });
 
     return success(
@@ -477,11 +576,11 @@ export async function GET(request: NextRequest) {
         kpis: aggregates.value.kpis,
         attention: aggregates.value.attention,
         disciplineLoad: aggregates.value.disciplineLoad,
-        reviewInbox: formattedInbox,
+        reviewInbox: inboxPage.value.items,
         reviewInboxPage: {
           offset: inboxOffset,
           limit: inboxLimit,
-          hasMore: hasMoreInboxItems,
+          hasMore: inboxPage.value.hasMore,
         },
       },
       {
