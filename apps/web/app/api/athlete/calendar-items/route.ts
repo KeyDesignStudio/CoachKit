@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
         workoutDetail: payload.workoutDetail ?? null,
         attachmentsJson: (payload.attachmentsJson ?? null) as Prisma.InputJsonValue,
         status: CalendarItemStatus.PLANNED,
+        origin: 'MANUAL',
+        planningStatus: 'UNPLANNED',
         template: template
           ? {
               connect: { id: template.id },

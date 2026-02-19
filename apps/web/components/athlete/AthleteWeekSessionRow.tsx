@@ -92,8 +92,13 @@ function getStatusBarConfig(params: {
     };
   }
   const isAthleteScheduledSession = item.planningStatus === 'UNPLANNED' && item.origin !== 'STRAVA';
+  const isExplicitlyPublished = item.planningStatus === 'PUBLISHED';
+  const isExplicitlyUnpublished = item.planningStatus === 'DRAFT';
   const isPublishedPlanSession = item.publicationStatus === 'PUBLISHED';
-  if (isAthleteScheduledSession || isPublishedPlanSession) {
+  if (isExplicitlyUnpublished) {
+    return { iconName: 'planned', ariaLabel: 'Draft', bgClassName: 'bg-transparent', title: null, showBar: false };
+  }
+  if (isAthleteScheduledSession || isExplicitlyPublished || isPublishedPlanSession) {
     return { iconName: 'planned', ariaLabel: 'Published', bgClassName: 'bg-amber-500/45', title: null, showBar: true };
   }
 

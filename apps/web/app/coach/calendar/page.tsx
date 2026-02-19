@@ -222,6 +222,14 @@ function toAthleteWeekKey(athleteId: string, dayKey: string): string {
   return `${athleteId}:${startOfWeekDayKey(dayKey)}`;
 }
 
+function isSessionPublishedForDisplay(item: CalendarItem | null | undefined): boolean {
+  if (!item) return false;
+  if (item.planningStatus === 'UNPLANNED') return true;
+  if (item.planningStatus === 'PUBLISHED') return true;
+  if (item.planningStatus === 'DRAFT') return false;
+  return item.publicationStatus === 'PUBLISHED';
+}
+
 export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -891,6 +899,38 @@ export default function CoachCalendarPage() {
     const { type, data: contextData } = contextMenu;
     closeContextMenu();
 
+    if (action === 'publish-session' && type === 'session') {
+      try {
+        setLoading(true);
+        await request(`/api/coach/calendar-items/${contextData.id}`, {
+          method: 'PATCH',
+          data: { planningStatus: 'PUBLISHED' },
+        });
+        await loadCalendar();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to publish session.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (action === 'unpublish-session' && type === 'session') {
+      try {
+        setLoading(true);
+        await request(`/api/coach/calendar-items/${contextData.id}`, {
+          method: 'PATCH',
+          data: { planningStatus: 'DRAFT' },
+        });
+        await loadCalendar();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to unpublish session.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (action === 'copy' && type === 'session') {
       if (!isManualCalendarItem(contextData)) {
         setPasteToast({ type: 'error', message: 'Only manual sessions can be copied.' });
@@ -972,6 +1012,17 @@ export default function CoachCalendarPage() {
   }, [contextMenu, clipboard, effectiveAthleteId, singleAthleteId, request, loadCalendar, groupSessions]);
 
   const canCopySession = contextMenu.type === 'session' ? isManualCalendarItem(contextMenu.data) : true;
+  const contextSession = contextMenu.type === 'session' ? (contextMenu.data as CalendarItem | null) : null;
+  const canPublishSession =
+    contextMenu.type === 'session' &&
+    Boolean(contextSession) &&
+    contextSession?.status === 'PLANNED' &&
+    !isSessionPublishedForDisplay(contextSession);
+  const canUnpublishSession =
+    contextMenu.type === 'session' &&
+    Boolean(contextSession) &&
+    contextSession?.status === 'PLANNED' &&
+    isSessionPublishedForDisplay(contextSession);
   const clipboardIsManual = isManualCalendarItem(clipboard);
   const canPasteSession = Boolean(clipboard) && clipboardIsManual;
 
@@ -1572,6 +1623,27 @@ export default function CoachCalendarPage() {
             )}
           </div>
         </div>
+        <div className="flex justify-end pt-1">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-[var(--muted)]">
+            <span className="font-medium text-[var(--text)]">Legend:</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
+              Draft
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
+              Published
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
+              Missed or skipped
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
+              Completed
+            </span>
+          </div>
+        </div>
         {copyMessage ? <p className="text-sm text-emerald-600">{copyMessage}</p> : null}
         {error && drawerMode === 'closed' ? <p className="text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="text-sm text-[var(--muted)]">Loading calendar…</p> : null}
@@ -1894,6 +1966,8 @@ export default function CoachCalendarPage() {
         type={contextMenu.type}
         canPaste={canPasteSession}
         canCopy={canCopySession}
+        canPublishSession={canPublishSession}
+        canUnpublishSession={canUnpublishSession}
         copyDisabledLabel="Copy session (manual only)"
         pasteDisabledLabel={clipboard && !clipboardIsManual ? 'Paste session (manual only)' : undefined}
         onClose={closeContextMenu}
