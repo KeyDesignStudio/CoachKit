@@ -647,6 +647,43 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return labels;
   }, [requestSetupDefaults, setup]);
 
+  const applyRequestDefaultsToSetup = useCallback(
+    (options?: { force?: boolean }) => {
+      const draftExists = Boolean(draftPlanLatest?.id);
+      if (draftExists && !options?.force) return;
+      const key = JSON.stringify(requestSetupDefaults);
+      if (!options?.force && key === lastRequestDefaultsKeyRef.current) return;
+      lastRequestDefaultsKeyRef.current = key;
+
+      setSetup((prev) => {
+        const next = { ...prev };
+        if (requestSetupDefaults.completionDate) {
+          next.completionDate = requestSetupDefaults.completionDate;
+        }
+        if (requestSetupDefaults.startDate) {
+          next.startDate = requestSetupDefaults.startDate;
+        }
+        if (requestSetupDefaults.weeksToEventOverride) {
+          next.weeksToEventOverride = requestSetupDefaults.weeksToEventOverride;
+        }
+        if (requestSetupDefaults.weeklyAvailabilityMinutes) {
+          next.weeklyAvailabilityMinutes = requestSetupDefaults.weeklyAvailabilityMinutes;
+        }
+        if (requestSetupDefaults.weeklyAvailabilityDays.length) {
+          next.weeklyAvailabilityDays = requestSetupDefaults.weeklyAvailabilityDays;
+        }
+        if (requestSetupDefaults.coachGuidanceText) {
+          if (!prev.coachGuidanceText || prev.coachGuidanceText === lastAutoGuidanceRef.current || options?.force) {
+            next.coachGuidanceText = requestSetupDefaults.coachGuidanceText;
+            lastAutoGuidanceRef.current = requestSetupDefaults.coachGuidanceText;
+          }
+        }
+        return next;
+      });
+    },
+    [draftPlanLatest?.id, requestSetupDefaults]
+  );
+
   const athleteTimeZone = useMemo(() => {
     const tz = (draftPlanLatest as any)?.athlete?.user?.timezone;
     if (typeof tz === 'string' && tz.trim()) return tz.trim();
@@ -964,37 +1001,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   }, [athleteProfile, intakeLifecycle?.latestSubmittedIntake?.id, intakeLifecycle?.openDraftIntake?.id]);
 
   useEffect(() => {
-    if (hasDraft) return;
-    const key = JSON.stringify(requestSetupDefaults);
-    if (key === lastRequestDefaultsKeyRef.current) return;
-    lastRequestDefaultsKeyRef.current = key;
-
-    setSetup((prev) => {
-      const next = { ...prev };
-      if (requestSetupDefaults.completionDate) {
-        next.completionDate = requestSetupDefaults.completionDate;
-      }
-      if (requestSetupDefaults.startDate) {
-        next.startDate = requestSetupDefaults.startDate;
-      }
-      if (requestSetupDefaults.weeksToEventOverride) {
-        next.weeksToEventOverride = requestSetupDefaults.weeksToEventOverride;
-      }
-      if (requestSetupDefaults.weeklyAvailabilityMinutes) {
-        next.weeklyAvailabilityMinutes = requestSetupDefaults.weeklyAvailabilityMinutes;
-      }
-      if (requestSetupDefaults.weeklyAvailabilityDays.length) {
-        next.weeklyAvailabilityDays = requestSetupDefaults.weeklyAvailabilityDays;
-      }
-      if (requestSetupDefaults.coachGuidanceText) {
-        if (!prev.coachGuidanceText || prev.coachGuidanceText === lastAutoGuidanceRef.current) {
-          next.coachGuidanceText = requestSetupDefaults.coachGuidanceText;
-          lastAutoGuidanceRef.current = requestSetupDefaults.coachGuidanceText;
-        }
-      }
-      return next;
-    });
-  }, [hasDraft, requestSetupDefaults]);
+    applyRequestDefaultsToSetup();
+  }, [applyRequestDefaultsToSetup]);
 
   const openCoachTrainingRequest = useCallback(async () => {
     setBusy('open-training-request');
@@ -1921,6 +1929,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
               <Button
                 type="button"
                 variant="secondary"
+                disabled={busy != null}
+                onClick={() => applyRequestDefaultsToSetup({ force: true })}
+                data-testid="apb-apply-request-to-setup"
+              >
+                Apply request to block setup
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 disabled={busy != null || !intakeLifecycle?.openDraftIntake}
                 onClick={submitOpenTrainingRequest}
                 data-testid="apb-submit-training-request"
@@ -1928,6 +1945,11 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 {busy === 'submit-training-request' ? 'Submitting…' : 'Mark request complete'}
               </Button>
             </div>
+            {hasDraft ? (
+              <div className="text-xs text-[var(--fg-muted)]">
+                Existing draft detected. Use "Apply request to block setup" to overwrite setup defaults from this request.
+              </div>
+            ) : null}
           </div>
         </Block>
 
@@ -2163,11 +2185,11 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           )}
           {effectiveInputPreflight?.preflight?.hasConflicts ? (
             <div
-              className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900"
+              className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-3 text-xs text-[var(--fg)]"
               data-testid="apb-effective-input-conflicts"
             >
               <div className="font-semibold">
-                Input conflicts detected ({Number(effectiveInputPreflight?.preflight?.conflictCount ?? 0)})
+                Input source reconciliation ({Number(effectiveInputPreflight?.preflight?.conflictCount ?? 0)} fields)
               </div>
               <div className="mt-1">
                 Priority used: approved profile overrides, then submitted request, then athlete profile.
