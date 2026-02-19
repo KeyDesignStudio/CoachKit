@@ -65,7 +65,7 @@ export function AskFloatingPopup() {
           <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2">
             <div className="flex items-center gap-2 min-w-0">
               <Icon name="chat" size="sm" className="text-[var(--primary)]" aria-hidden />
-              <h2 className="truncate text-xs font-semibold tracking-wide uppercase text-[var(--text)]">Ask AI</h2>
+              <h2 className="truncate text-xs font-semibold tracking-wide uppercase text-[var(--text)]">Ask CoachKit</h2>
             </div>
             <button
               type="button"
@@ -126,11 +126,11 @@ export function AskFloatingPopup() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="h-12 w-12 rounded-full bg-[var(--primary)] text-white shadow-lg hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+        className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-lg hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
         aria-label={open ? 'Close Ask popup' : 'Open Ask popup'}
-        title={open ? 'Close Ask' : 'Ask AI'}
+        title={open ? 'Close Ask' : 'Ask CoachKit'}
       >
-        <Icon name="chat" size="md" className="leading-none" aria-hidden />
+        <Icon name="chat" size="lg" className="leading-none" aria-hidden />
       </button>
     </div>
   );
