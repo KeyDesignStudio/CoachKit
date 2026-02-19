@@ -30,6 +30,12 @@ type AthleteOption = {
   };
 };
 
+type NearbyAthleteSuggestion = {
+  athleteId: string;
+  name: string;
+  distanceKm: number;
+};
+
 type SessionFormState = {
   title: string;
   discipline: string;
@@ -213,6 +219,9 @@ export function GroupSessionDrawer({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateActionError, setTemplateActionError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [nearbySuggestions, setNearbySuggestions] = useState<NearbyAthleteSuggestion[]>([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState('');
 
   // Update form when session changes
   useState(() => {
@@ -228,6 +237,11 @@ export function GroupSessionDrawer({
     setApplyFrom(toDayKey(today));
     setApplyTo(toDayKey(addDays(today, 27)));
   }, [applyFrom, applyTo, session]);
+
+  useEffect(() => {
+    if (form.locationLat != null && form.locationLon != null) return;
+    setNearbySuggestions([]);
+  }, [form.locationLat, form.locationLon]);
 
   if (!session) return null;
 
@@ -292,6 +306,43 @@ export function GroupSessionDrawer({
       set.add(day);
     }
     setForm({ ...form, selectedDays: Array.from(set).sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b)) });
+  };
+
+  const fetchNearbyAthletes = async () => {
+    if (form.locationLat == null || form.locationLon == null) {
+      setNearbyError('Select a geocoded location first.');
+      return;
+    }
+
+    setNearbyLoading(true);
+    setNearbyError('');
+    try {
+      const response = await fetch(
+        `/api/coach/group-sessions/proximity?lat=${encodeURIComponent(String(form.locationLat))}&lon=${encodeURIComponent(
+          String(form.locationLon)
+        )}&radiusKm=15&limit=20`,
+        { method: 'GET', cache: 'no-store' }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to load nearby athletes.');
+      }
+      const json = (await response.json()) as { data?: { athletes?: NearbyAthleteSuggestion[] } };
+      setNearbySuggestions(json?.data?.athletes ?? []);
+    } catch (error) {
+      setNearbySuggestions([]);
+      setNearbyError(error instanceof Error ? error.message : 'Failed to load nearby athletes.');
+    } finally {
+      setNearbyLoading(false);
+    }
+  };
+
+  const addNearbyToTargets = () => {
+    const ids = nearbySuggestions.map((item) => item.athleteId);
+    if (!ids.length) return;
+    setForm((prev) => ({
+      ...prev,
+      targetAthleteIds: Array.from(new Set([...prev.targetAthleteIds, ...ids])),
+    }));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -579,6 +630,24 @@ export function GroupSessionDrawer({
 
               {form.visibilityType === 'SELECTED' && (
                 <div className="mt-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Button type="button" variant="secondary" className="min-h-[36px]" onClick={fetchNearbyAthletes} disabled={nearbyLoading}>
+                      {nearbyLoading ? 'Finding nearby...' : 'Suggest nearby athletes'}
+                    </Button>
+                    {nearbySuggestions.length > 0 ? (
+                      <Button type="button" variant="ghost" className="min-h-[36px]" onClick={addNearbyToTargets}>
+                        Add all suggested
+                      </Button>
+                    ) : null}
+                  </div>
+                  {nearbyError ? <p className="mb-2 text-xs text-rose-500">{nearbyError}</p> : null}
+                  {nearbySuggestions.length > 0 ? (
+                    <div className="mb-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
+                      <p className="text-xs text-[var(--muted)]">
+                        Nearby ({nearbySuggestions.length}) within 15km: {nearbySuggestions.map((item) => `${item.name} (${item.distanceKm}km)`).join(', ')}
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="mb-2 text-xs text-[var(--muted)]">Select athletes:</p>
                   <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
                     {athletes.map((athlete) => (
