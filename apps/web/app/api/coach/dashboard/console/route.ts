@@ -8,7 +8,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { createServerProfiler } from '@/lib/server-profiler';
-import { getStravaVitalsForAthletes, type StravaVitalsSnapshot } from '@/lib/strava-vitals';
+import { getStravaVitalsComparisonForAthletes, type StravaVitalsComparison } from '@/lib/strava-vitals';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +27,10 @@ const querySchema = z.object({
   discipline: z.string().optional().nullable(),
   inboxOffset: z.string().optional().nullable(),
   inboxLimit: z.string().optional().nullable(),
+  includeLoadModel: z
+    .enum(['1', 'true', 'TRUE'])
+    .optional()
+    .nullable(),
 });
 
 const COMPLETED_STATUSES: CalendarItemStatus[] = [
@@ -98,7 +102,7 @@ type DashboardAggregates = {
     awaitingCoachReview: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
-  stravaVitals: StravaVitalsSnapshot;
+  stravaVitals: StravaVitalsComparison;
   meta: {
     completedItemCount: number;
   };
@@ -134,8 +138,16 @@ function buildDashboardAggregateCacheKey(params: {
   to: string | null;
   athleteId: string | null;
   discipline: string | null;
+  includeLoadModel: boolean;
 }) {
-  return [params.coachId, params.from ?? '', params.to ?? '', params.athleteId ?? '', params.discipline ?? ''].join('|');
+  return [
+    params.coachId,
+    params.from ?? '',
+    params.to ?? '',
+    params.athleteId ?? '',
+    params.discipline ?? '',
+    params.includeLoadModel ? '1' : '0',
+  ].join('|');
 }
 
 function buildDashboardInboxCacheKey(params: {
@@ -163,7 +175,10 @@ async function getDashboardAggregates(params: {
   rangeFilter: Record<string, unknown>;
   athleteFilter: Record<string, unknown>;
   athleteId: string | null;
+  fromDate: Date | null;
+  toDate: Date | null;
   disciplineFilter: Record<string, unknown>;
+  includeLoadModel: boolean;
   cacheKey: string;
   bypassCache: boolean;
   profiler?: ReturnType<typeof createServerProfiler>;
@@ -274,7 +289,12 @@ async function getDashboardAggregates(params: {
             reviewedAt: null,
           },
         }),
-        getStravaVitalsForAthletes(targetAthleteIdsForVitals, { windowDays: 90 }),
+        getStravaVitalsComparisonForAthletes(targetAthleteIdsForVitals, {
+          windowDays: params.fromDate && params.toDate ? undefined : 90,
+          from: params.fromDate ?? undefined,
+          to: params.toDate ?? undefined,
+          includeLoadModel: params.includeLoadModel,
+        }),
       ]);
 
     let totalMinutes = 0;
@@ -504,6 +524,7 @@ export async function GET(request: NextRequest) {
       discipline: searchParams.get('discipline'),
       inboxOffset: searchParams.get('inboxOffset'),
       inboxLimit: searchParams.get('inboxLimit'),
+      includeLoadModel: searchParams.get('includeLoadModel'),
     });
 
     const fromDate = params.from ? parseDateOnly(params.from, 'from') : null;
@@ -514,6 +535,7 @@ export async function GET(request: NextRequest) {
 
     const athleteId = (params.athleteId ?? '').trim() || null;
     const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
+    const includeLoadModel = Boolean(params.includeLoadModel);
     const parsedInboxOffset = Number(params.inboxOffset ?? '0');
     const parsedInboxLimit = Number(params.inboxLimit ?? '25');
     const inboxOffset = Number.isFinite(parsedInboxOffset) && parsedInboxOffset >= 0 ? Math.floor(parsedInboxOffset) : 0;
@@ -531,6 +553,7 @@ export async function GET(request: NextRequest) {
       to: params.to ?? null,
       athleteId,
       discipline,
+      includeLoadModel,
     });
     const inboxCacheKey = buildDashboardInboxCacheKey({
       coachId: user.id,
@@ -548,7 +571,10 @@ export async function GET(request: NextRequest) {
       rangeFilter,
       athleteFilter,
       athleteId,
+      fromDate,
+      toDate,
       disciplineFilter,
+      includeLoadModel,
       cacheKey: aggregateCacheKey,
       bypassCache: bypassCaches,
       profiler: prof,

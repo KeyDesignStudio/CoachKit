@@ -19,9 +19,9 @@ import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
-import type { StravaVitalsSnapshot } from '@/lib/strava-vitals';
+import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 
-type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
+type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 
 type AthleteDashboardResponse = {
   attention: {
@@ -75,7 +75,7 @@ type AthleteDashboardResponse = {
     discipline: string | null;
     plannedStartTimeLocal: string | null;
   }>;
-  stravaVitals: StravaVitalsSnapshot;
+  stravaVitals: StravaVitalsComparison;
 };
 
 function NeedsAttentionItem({
@@ -137,9 +137,12 @@ function formatCalories(kcal: number | null): string {
   return formatKcal(kcal).replace(' kcal', 'kcal');
 }
 
-function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string) {
+function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string, customFrom: string, customTo: string) {
   const todayKey = getZonedDateKeyForNow(athleteTimeZone);
   const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
+  if (preset === 'CUSTOM') {
+    return { from: customFrom || todayKey, to: customTo || todayKey };
+  }
   const days = preset === 'LAST_14' ? 14 : preset === 'LAST_30' ? 30 : 7;
   const from = toDateInput(addDays(todayUtcMidnight, -(days - 1)));
   const to = toDateInput(todayUtcMidnight);
@@ -156,7 +159,10 @@ export default function AthleteDashboardConsolePage() {
   );
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [discipline, setDiscipline] = useState<string | null>(null);
+  const [showLoadPanel, setShowLoadPanel] = useState(false);
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -166,7 +172,10 @@ export default function AthleteDashboardConsolePage() {
   const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
 
   const athleteTimeZone = user?.timezone ?? 'UTC';
-  const dateRange = useMemo(() => getDateRangeFromPreset(timeRange, athleteTimeZone), [timeRange, athleteTimeZone]);
+  const dateRange = useMemo(
+    () => getDateRangeFromPreset(timeRange, athleteTimeZone, customFrom, customTo),
+    [timeRange, athleteTimeZone, customFrom, customTo]
+  );
 
   const reload = useCallback(
     async (bypassCache = false) => {
@@ -179,6 +188,7 @@ export default function AthleteDashboardConsolePage() {
       qs.set('from', dateRange.from);
       qs.set('to', dateRange.to);
       if (discipline) qs.set('discipline', discipline);
+      if (showLoadPanel) qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
@@ -193,7 +203,7 @@ export default function AthleteDashboardConsolePage() {
         setLoading(false);
       }
     },
-    [dateRange.from, dateRange.to, discipline, request, user?.role, user?.userId]
+    [dateRange.from, dateRange.to, discipline, request, showLoadPanel, user?.role, user?.userId]
   );
 
   useEffect(() => {
@@ -336,7 +346,30 @@ export default function AthleteDashboardConsolePage() {
                         <option value="LAST_7">Last 7 days</option>
                         <option value="LAST_14">Last 14 days</option>
                         <option value="LAST_30">Last 30 days</option>
+                        <option value="CUSTOM">Custom</option>
                       </SelectField>
+                      {timeRange === 'CUSTOM' ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <label className="text-xs text-[var(--muted)]">
+                            From
+                            <input
+                              type="date"
+                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              value={customFrom}
+                              onChange={(e) => setCustomFrom(e.target.value)}
+                            />
+                          </label>
+                          <label className="text-xs text-[var(--muted)]">
+                            To
+                            <input
+                              type="date"
+                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              value={customTo}
+                              onChange={(e) => setCustomTo(e.target.value)}
+                            />
+                          </label>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="min-w-0 col-start-2 row-start-2">
@@ -589,9 +622,11 @@ export default function AthleteDashboardConsolePage() {
           </Block>
 
           <StravaVitalsSummaryCard
-            vitals={data?.stravaVitals ?? null}
+            comparison={data?.stravaVitals ?? null}
             loading={loading && !data}
-            title="Strava Vitals (90d)"
+            title="Strava Vitals"
+            showLoadPanel={showLoadPanel}
+            onToggleLoadPanel={setShowLoadPanel}
           />
         </div>
 

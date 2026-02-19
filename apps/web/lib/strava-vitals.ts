@@ -31,6 +31,77 @@ export type StravaVitalsSnapshot = {
   };
 };
 
+export type StravaVitalsMetricDelta = {
+  current: number | null;
+  previous: number | null;
+  delta: number | null;
+  trend: 'up' | 'down' | 'flat' | 'none';
+};
+
+export type StravaLoadModel = {
+  current: {
+    ctl: number;
+    atl: number;
+    tsb: number;
+  };
+  previous: {
+    ctl: number;
+    atl: number;
+    tsb: number;
+  };
+  delta: {
+    ctl: number;
+    atl: number;
+    tsb: number;
+  };
+  sourceDays: number;
+};
+
+export type StravaVitalsComparison = {
+  current: StravaVitalsSnapshot;
+  previous: StravaVitalsSnapshot;
+  range: {
+    from: string;
+    to: string;
+    windowDays: number;
+  };
+  previousRange: {
+    from: string;
+    to: string;
+    windowDays: number;
+  };
+  deltas: {
+    overall: {
+      avgHrBpm: StravaVitalsMetricDelta;
+      avgDistanceKm: StravaVitalsMetricDelta;
+      avgDurationMinutes: StravaVitalsMetricDelta;
+    };
+    bike: {
+      avgPowerW: StravaVitalsMetricDelta;
+      avgHrBpm: StravaVitalsMetricDelta;
+      avgSpeedKmh: StravaVitalsMetricDelta;
+      avgCadenceRpm: StravaVitalsMetricDelta;
+    };
+    run: {
+      avgPaceSecPerKm: StravaVitalsMetricDelta;
+      avgHrBpm: StravaVitalsMetricDelta;
+      avgCadenceRpm: StravaVitalsMetricDelta;
+    };
+    swim: {
+      avgPaceSecPer100m: StravaVitalsMetricDelta;
+      avgHrBpm: StravaVitalsMetricDelta;
+    };
+  };
+  loadModel: StravaLoadModel | null;
+};
+
+type StravaVitalsWindowOptions = {
+  windowDays?: number;
+  from?: Date;
+  to?: Date;
+  includeLoadModel?: boolean;
+};
+
 type ActivityRow = {
   startTime: Date;
   durationMinutes: number;
@@ -89,6 +160,164 @@ function round(value: number | null, decimals = 1) {
 
 function average(sum: number, count: number) {
   return count > 0 ? sum / count : null;
+}
+
+function startOfUtcDay(date: Date) {
+  const copy = new Date(date);
+  copy.setUTCHours(0, 0, 0, 0);
+  return copy;
+}
+
+function endOfUtcDay(date: Date) {
+  const copy = new Date(date);
+  copy.setUTCHours(23, 59, 59, 999);
+  return copy;
+}
+
+function addUtcDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+function dayKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildDelta(current: number | null, previous: number | null): StravaVitalsMetricDelta {
+  if (current == null && previous == null) {
+    return { current, previous, delta: null, trend: 'none' };
+  }
+  if (current == null || previous == null) {
+    return { current, previous, delta: null, trend: 'none' };
+  }
+  const delta = current - previous;
+  const abs = Math.abs(delta);
+  const trend = abs < 0.1 ? 'flat' : delta > 0 ? 'up' : 'down';
+  return {
+    current,
+    previous,
+    delta: round(delta, 1),
+    trend,
+  };
+}
+
+async function loadRowsForAthletes(athleteIds: string[], from: Date, to: Date) {
+  return prisma.completedActivity.findMany({
+    where: {
+      athleteId: { in: athleteIds },
+      source: CompletionSource.STRAVA,
+      startTime: { gte: from, lte: to },
+    },
+    orderBy: [{ startTime: 'desc' }],
+    select: {
+      startTime: true,
+      durationMinutes: true,
+      distanceKm: true,
+      metricsJson: true,
+      calendarItem: {
+        select: {
+          discipline: true,
+        },
+      },
+    },
+  });
+}
+
+function parseWindow(options?: StravaVitalsWindowOptions) {
+  const now = new Date();
+  if (options?.from && options?.to) {
+    const currentFrom = startOfUtcDay(options.from);
+    const currentTo = endOfUtcDay(options.to);
+    const rawWindowDays = Math.max(
+      1,
+      Math.floor((currentTo.getTime() - currentFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1
+    );
+    const windowDays = Math.min(365, Math.max(1, rawWindowDays));
+    const previousTo = endOfUtcDay(addUtcDays(currentFrom, -1));
+    const previousFrom = startOfUtcDay(addUtcDays(previousTo, -(windowDays - 1)));
+    return { currentFrom, currentTo, previousFrom, previousTo, windowDays };
+  }
+
+  const windowDays = Math.min(365, Math.max(14, options?.windowDays ?? 90));
+  const currentTo = endOfUtcDay(now);
+  const currentFrom = startOfUtcDay(addUtcDays(currentTo, -(windowDays - 1)));
+  const previousTo = endOfUtcDay(addUtcDays(currentFrom, -1));
+  const previousFrom = startOfUtcDay(addUtcDays(previousTo, -(windowDays - 1)));
+  return { currentFrom, currentTo, previousFrom, previousTo, windowDays };
+}
+
+function disciplineLoadWeight(discipline: Discipline) {
+  if (discipline === 'RUN') return 1.1;
+  if (discipline === 'BIKE') return 1;
+  if (discipline === 'SWIM') return 0.9;
+  return 0.8;
+}
+
+function computeDailyLoad(rows: ActivityRow[]) {
+  const byDay = new Map<string, number>();
+  rows.forEach((row) => {
+    const key = dayKey(row.startTime);
+    const discipline = normalizeDiscipline(row);
+    const weighted = Math.max(0, row.durationMinutes) * disciplineLoadWeight(discipline);
+    byDay.set(key, (byDay.get(key) ?? 0) + weighted);
+  });
+  return byDay;
+}
+
+function computeLoadAtDay(dailyLoad: Map<string, number>, fromDay: Date, toDay: Date) {
+  const ctlTau = 42;
+  const atlTau = 7;
+  const ctlAlpha = 1 - Math.exp(-1 / ctlTau);
+  const atlAlpha = 1 - Math.exp(-1 / atlTau);
+
+  let ctl = 0;
+  let atl = 0;
+  let cursor = startOfUtcDay(fromDay);
+  const end = startOfUtcDay(toDay);
+  let days = 0;
+
+  while (cursor.getTime() <= end.getTime()) {
+    const load = dailyLoad.get(dayKey(cursor)) ?? 0;
+    ctl = ctl + ctlAlpha * (load - ctl);
+    atl = atl + atlAlpha * (load - atl);
+    cursor = addUtcDays(cursor, 1);
+    days += 1;
+  }
+
+  const tsb = ctl - atl;
+  return {
+    ctl: round(ctl, 1) ?? 0,
+    atl: round(atl, 1) ?? 0,
+    tsb: round(tsb, 1) ?? 0,
+    days,
+  };
+}
+
+async function computeLoadModelForAthletes(athleteIds: string[], previousTo: Date, currentTo: Date): Promise<StravaLoadModel> {
+  const warmupFrom = startOfUtcDay(addUtcDays(previousTo, -84));
+  const rows = await loadRowsForAthletes(athleteIds, warmupFrom, currentTo);
+  const dailyLoad = computeDailyLoad(rows);
+  const previous = computeLoadAtDay(dailyLoad, warmupFrom, previousTo);
+  const current = computeLoadAtDay(dailyLoad, warmupFrom, currentTo);
+  return {
+    current: {
+      ctl: current.ctl,
+      atl: current.atl,
+      tsb: current.tsb,
+    },
+    previous: {
+      ctl: previous.ctl,
+      atl: previous.atl,
+      tsb: previous.tsb,
+    },
+    delta: {
+      ctl: round(current.ctl - previous.ctl, 1) ?? 0,
+      atl: round(current.atl - previous.atl, 1) ?? 0,
+      tsb: round(current.tsb - previous.tsb, 1) ?? 0,
+    },
+    sourceDays: current.days,
+  };
 }
 
 export function buildStravaVitalsSnapshot(rows: ActivityRow[], windowDays: number): StravaVitalsSnapshot {
@@ -227,39 +456,111 @@ export function buildStravaVitalsSnapshot(rows: ActivityRow[], windowDays: numbe
   };
 }
 
+export async function getStravaVitalsComparisonForAthlete(athleteId: string, options?: StravaVitalsWindowOptions) {
+  return getStravaVitalsComparisonForAthletes([athleteId], options);
+}
+
+export async function getStravaVitalsComparisonForAthletes(athleteIds: string[], options?: StravaVitalsWindowOptions) {
+  const uniqueAthleteIds = Array.from(new Set(athleteIds.filter(Boolean)));
+  const windows = parseWindow(options);
+
+  if (!uniqueAthleteIds.length) {
+    const empty = buildStravaVitalsSnapshot([], windows.windowDays);
+    return {
+      current: empty,
+      previous: empty,
+      range: {
+        from: dayKey(windows.currentFrom),
+        to: dayKey(windows.currentTo),
+        windowDays: windows.windowDays,
+      },
+      previousRange: {
+        from: dayKey(windows.previousFrom),
+        to: dayKey(windows.previousTo),
+        windowDays: windows.windowDays,
+      },
+      deltas: {
+        overall: {
+          avgHrBpm: buildDelta(null, null),
+          avgDistanceKm: buildDelta(null, null),
+          avgDurationMinutes: buildDelta(null, null),
+        },
+        bike: {
+          avgPowerW: buildDelta(null, null),
+          avgHrBpm: buildDelta(null, null),
+          avgSpeedKmh: buildDelta(null, null),
+          avgCadenceRpm: buildDelta(null, null),
+        },
+        run: {
+          avgPaceSecPerKm: buildDelta(null, null),
+          avgHrBpm: buildDelta(null, null),
+          avgCadenceRpm: buildDelta(null, null),
+        },
+        swim: {
+          avgPaceSecPer100m: buildDelta(null, null),
+          avgHrBpm: buildDelta(null, null),
+        },
+      },
+      loadModel: null,
+    } satisfies StravaVitalsComparison;
+  }
+
+  const [currentRows, previousRows, loadModel] = await Promise.all([
+    loadRowsForAthletes(uniqueAthleteIds, windows.currentFrom, windows.currentTo),
+    loadRowsForAthletes(uniqueAthleteIds, windows.previousFrom, windows.previousTo),
+    options?.includeLoadModel
+      ? computeLoadModelForAthletes(uniqueAthleteIds, windows.previousTo, windows.currentTo)
+      : Promise.resolve(null),
+  ]);
+
+  const current = buildStravaVitalsSnapshot(currentRows, windows.windowDays);
+  const previous = buildStravaVitalsSnapshot(previousRows, windows.windowDays);
+
+  return {
+    current,
+    previous,
+    range: {
+      from: dayKey(windows.currentFrom),
+      to: dayKey(windows.currentTo),
+      windowDays: windows.windowDays,
+    },
+    previousRange: {
+      from: dayKey(windows.previousFrom),
+      to: dayKey(windows.previousTo),
+      windowDays: windows.windowDays,
+    },
+    deltas: {
+      overall: {
+        avgHrBpm: buildDelta(current.overall.avgHrBpm, previous.overall.avgHrBpm),
+        avgDistanceKm: buildDelta(current.overall.avgDistanceKm, previous.overall.avgDistanceKm),
+        avgDurationMinutes: buildDelta(current.overall.avgDurationMinutes, previous.overall.avgDurationMinutes),
+      },
+      bike: {
+        avgPowerW: buildDelta(current.bike.avgPowerW, previous.bike.avgPowerW),
+        avgHrBpm: buildDelta(current.bike.avgHrBpm, previous.bike.avgHrBpm),
+        avgSpeedKmh: buildDelta(current.bike.avgSpeedKmh, previous.bike.avgSpeedKmh),
+        avgCadenceRpm: buildDelta(current.bike.avgCadenceRpm, previous.bike.avgCadenceRpm),
+      },
+      run: {
+        avgPaceSecPerKm: buildDelta(current.run.avgPaceSecPerKm, previous.run.avgPaceSecPerKm),
+        avgHrBpm: buildDelta(current.run.avgHrBpm, previous.run.avgHrBpm),
+        avgCadenceRpm: buildDelta(current.run.avgCadenceRpm, previous.run.avgCadenceRpm),
+      },
+      swim: {
+        avgPaceSecPer100m: buildDelta(current.swim.avgPaceSecPer100m, previous.swim.avgPaceSecPer100m),
+        avgHrBpm: buildDelta(current.swim.avgHrBpm, previous.swim.avgHrBpm),
+      },
+    },
+    loadModel,
+  } satisfies StravaVitalsComparison;
+}
+
 export async function getStravaVitalsForAthlete(athleteId: string, options?: { windowDays?: number }) {
-  return getStravaVitalsForAthletes([athleteId], options);
+  const comparison = await getStravaVitalsComparisonForAthlete(athleteId, options);
+  return comparison.current;
 }
 
 export async function getStravaVitalsForAthletes(athleteIds: string[], options?: { windowDays?: number }) {
-  const uniqueAthleteIds = Array.from(new Set(athleteIds.filter(Boolean)));
-  if (!uniqueAthleteIds.length) {
-    return buildStravaVitalsSnapshot([], Math.min(365, Math.max(14, options?.windowDays ?? 90)));
-  }
-
-  const windowDays = Math.min(365, Math.max(14, options?.windowDays ?? 90));
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - windowDays);
-
-  const rows = await prisma.completedActivity.findMany({
-    where: {
-      athleteId: { in: uniqueAthleteIds },
-      source: CompletionSource.STRAVA,
-      startTime: { gte: since },
-    },
-    orderBy: [{ startTime: 'desc' }],
-    select: {
-      startTime: true,
-      durationMinutes: true,
-      distanceKm: true,
-      metricsJson: true,
-      calendarItem: {
-        select: {
-          discipline: true,
-        },
-      },
-    },
-  });
-
-  return buildStravaVitalsSnapshot(rows, windowDays);
+  const comparison = await getStravaVitalsComparisonForAthletes(athleteIds, options);
+  return comparison.current;
 }

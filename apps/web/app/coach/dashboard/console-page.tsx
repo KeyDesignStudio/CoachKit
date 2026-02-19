@@ -20,7 +20,7 @@ import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
-import type { StravaVitalsSnapshot } from '@/lib/strava-vitals';
+import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -72,7 +72,7 @@ type DashboardResponse = {
     awaitingCoachReview: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
-  stravaVitals: StravaVitalsSnapshot;
+  stravaVitals: StravaVitalsComparison;
   reviewInbox: ReviewItem[];
   reviewInboxPage: {
     offset: number;
@@ -316,6 +316,7 @@ export default function CoachDashboardConsolePage() {
   const [athleteId, setAthleteId] = useState<string | null>(null);
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [inboxPreset, setInboxPreset] = useState<InboxPreset>('ALL');
+  const [showLoadPanel, setShowLoadPanel] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -361,6 +362,7 @@ export default function CoachDashboardConsolePage() {
       qs.set('inboxOffset', String(inboxOffset));
       if (athleteId) qs.set('athleteId', athleteId);
       if (discipline) qs.set('discipline', discipline);
+      if (showLoadPanel) qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
@@ -387,7 +389,7 @@ export default function CoachDashboardConsolePage() {
         }
       }
     },
-    [athleteId, dateRange.from, dateRange.to, discipline, request, user?.role, user?.userId]
+    [athleteId, dateRange.from, dateRange.to, discipline, request, showLoadPanel, user?.role, user?.userId]
   );
 
   useEffect(() => {
@@ -811,9 +813,11 @@ export default function CoachDashboardConsolePage() {
 
         <div className="mt-6">
           <StravaVitalsSummaryCard
-            vitals={data?.stravaVitals ?? null}
+            comparison={data?.stravaVitals ?? null}
             loading={loading && !data}
-            title={athleteId ? 'Athlete Strava Vitals (90d)' : 'Squad Strava Vitals (90d)'}
+            title={athleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
+            showLoadPanel={showLoadPanel}
+            onToggleLoadPanel={setShowLoadPanel}
           />
         </div>
 
