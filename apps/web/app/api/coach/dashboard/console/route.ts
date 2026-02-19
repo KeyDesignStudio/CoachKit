@@ -82,6 +82,228 @@ function getInboxPriority(item: ReviewItem): number {
   return 5;
 }
 
+type DashboardAggregates = {
+  athletes: Array<{ id: string; name: string | null; disciplines: string[] }>;
+  kpis: {
+    workoutsCompleted: number;
+    workoutsSkipped: number;
+    totalTrainingMinutes: number;
+    totalDistanceKm: number;
+  };
+  attention: {
+    painFlagWorkouts: number;
+    athleteCommentWorkouts: number;
+    skippedWorkouts: number;
+    awaitingCoachReview: number;
+  };
+  disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
+  meta: {
+    completedItemCount: number;
+  };
+};
+
+const DASHBOARD_AGG_CACHE_TTL_MS = 30_000;
+const dashboardAggregateCache = new Map<
+  string,
+  {
+    value: DashboardAggregates;
+    expiresAtMs: number;
+  }
+>();
+const dashboardAggregateInFlight = new Map<string, Promise<DashboardAggregates>>();
+
+function buildDashboardAggregateCacheKey(params: {
+  coachId: string;
+  from: string | null;
+  to: string | null;
+  athleteId: string | null;
+  discipline: string | null;
+}) {
+  return [params.coachId, params.from ?? '', params.to ?? '', params.athleteId ?? '', params.discipline ?? ''].join('|');
+}
+
+async function getDashboardAggregates(params: {
+  coachId: string;
+  rangeFilter: Record<string, unknown>;
+  athleteFilter: Record<string, unknown>;
+  disciplineFilter: Record<string, unknown>;
+  cacheKey: string;
+  bypassCache: boolean;
+  profiler?: ReturnType<typeof createServerProfiler>;
+}) {
+  const now = Date.now();
+  if (!params.bypassCache) {
+    const cached = dashboardAggregateCache.get(params.cacheKey);
+    if (cached && cached.expiresAtMs > now) {
+      params.profiler?.mark('aggregate:cache-hit');
+      return { value: cached.value, cacheHit: true as const };
+    }
+  }
+
+  const existing = !params.bypassCache ? dashboardAggregateInFlight.get(params.cacheKey) : null;
+  if (existing) {
+    params.profiler?.mark('aggregate:inflight-hit');
+    return { value: await existing, cacheHit: true as const };
+  }
+
+  params.profiler?.mark('aggregate:cache-miss');
+  const promise = (async () => {
+    const athletes = await prisma.athleteProfile.findMany({
+      where: { coachId: params.coachId },
+      select: {
+        userId: true,
+        disciplines: true,
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: [{ user: { name: 'asc' } }],
+    });
+
+    const athleteRows = athletes.map((a) => ({
+      id: a.userId,
+      name: a.user.name,
+      disciplines: a.disciplines,
+    }));
+
+    const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount] =
+      await Promise.all([
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            status: { in: COMPLETED_STATUSES },
+          },
+        }),
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            status: CalendarItemStatus.SKIPPED,
+          },
+        }),
+        prisma.calendarItem.findMany({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            status: { in: COMPLETED_STATUSES },
+          },
+          select: {
+            discipline: true,
+            completedActivities: {
+              orderBy: [{ startTime: 'desc' as const }],
+              take: 1,
+              select: { durationMinutes: true, distanceKm: true },
+            },
+          },
+        }),
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            completedActivities: { some: { painFlag: true } },
+          },
+        }),
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            comments: { some: { author: { role: 'ATHLETE' } } },
+          },
+        }),
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            status: { in: REVIEWABLE_STATUSES },
+            reviewedAt: null,
+          },
+        }),
+      ]);
+
+    let totalMinutes = 0;
+    let totalDistanceKm = 0;
+    const disciplineTotals = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+
+    completedItems.forEach((item) => {
+      const latest = item.completedActivities?.[0];
+      const m = minutesOrZero(latest?.durationMinutes);
+      const d = distanceOrZero(latest?.distanceKm);
+
+      totalMinutes += m;
+      totalDistanceKm += d;
+
+      const key = (item.discipline || 'OTHER').toUpperCase();
+      const prev = disciplineTotals.get(key) ?? { totalMinutes: 0, totalDistanceKm: 0 };
+      prev.totalMinutes += m;
+      prev.totalDistanceKm += d;
+      disciplineTotals.set(key, prev);
+    });
+
+    const disciplines = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+    const disciplineLoad = disciplines.map((disc) => {
+      const v = disciplineTotals.get(disc) ?? { totalMinutes: 0, totalDistanceKm: 0 };
+      return { discipline: disc, totalMinutes: v.totalMinutes, totalDistanceKm: v.totalDistanceKm };
+    });
+
+    return {
+      athletes: athleteRows,
+      kpis: {
+        workoutsCompleted: completedCount,
+        workoutsSkipped: skippedCount,
+        totalTrainingMinutes: totalMinutes,
+        totalDistanceKm,
+      },
+      attention: {
+        painFlagWorkouts: painFlagCount,
+        athleteCommentWorkouts: athleteCommentWorkoutCount,
+        skippedWorkouts: skippedCount,
+        awaitingCoachReview: awaitingReviewCount,
+      },
+      disciplineLoad,
+      meta: {
+        completedItemCount: completedItems.length,
+      },
+    } satisfies DashboardAggregates;
+  })();
+
+  if (!params.bypassCache) {
+    dashboardAggregateInFlight.set(params.cacheKey, promise);
+  }
+
+  try {
+    const value = await promise;
+    if (!params.bypassCache) {
+      dashboardAggregateCache.set(params.cacheKey, {
+        value,
+        expiresAtMs: now + DASHBOARD_AGG_CACHE_TTL_MS,
+      });
+    }
+    params.profiler?.mark('aggregate:computed');
+    return { value, cacheHit: false as const };
+  } finally {
+    if (!params.bypassCache) {
+      dashboardAggregateInFlight.delete(params.cacheKey);
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const prof = createServerProfiler('coach/dashboard/console');
@@ -116,132 +338,26 @@ export async function GET(request: NextRequest) {
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
     const athleteFilter = athleteId ? { athleteId } : {};
     const disciplineFilter = discipline ? { discipline } : {};
+    const bypassAggregateCache = searchParams.has('t');
+    const aggregateCacheKey = buildDashboardAggregateCacheKey({
+      coachId: user.id,
+      from: params.from ?? null,
+      to: params.to ?? null,
+      athleteId,
+      discipline,
+    });
     prof.mark('auth+parse');
 
-    const athletes = await prisma.athleteProfile.findMany({
-      where: { coachId: user.id },
-      select: {
-        userId: true,
-        disciplines: true,
-        user: { select: { id: true, name: true } },
-      },
-      orderBy: [{ user: { name: 'asc' } }],
-    });
-
-    const athleteRows = athletes.map((a) => ({
-      id: a.userId,
-      name: a.user.name,
-      disciplines: a.disciplines,
-    }));
-
-    // KPI counts
-    const [completedCount, skippedCount] = await Promise.all([
-      prisma.calendarItem.count({
-        where: {
-          coachId: user.id,
-          deletedAt: null,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          status: { in: COMPLETED_STATUSES },
-        },
-      }),
-      prisma.calendarItem.count({
-        where: {
-          coachId: user.id,
-          deletedAt: null,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          status: CalendarItemStatus.SKIPPED,
-        },
-      }),
-    ]);
-
-    // Total time/distance: sum of latest completed activity per calendar item.
-    // We pull the latest activity per item to avoid double-counting multiple activities.
-    const completedItems = await prisma.calendarItem.findMany({
-      where: {
-        coachId: user.id,
-        deletedAt: null,
-        ...rangeFilter,
-        ...athleteFilter,
-        ...disciplineFilter,
-        status: { in: COMPLETED_STATUSES },
-      },
-      select: {
-        id: true,
-        athleteId: true,
-        discipline: true,
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: 1,
-          select: { durationMinutes: true, distanceKm: true, painFlag: true },
-        },
-      },
-    });
-
-    let totalMinutes = 0;
-    let totalDistanceKm = 0;
-
-    const disciplineTotals = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-
-    completedItems.forEach((item) => {
-      const latest = item.completedActivities?.[0];
-      const m = minutesOrZero(latest?.durationMinutes);
-      const d = distanceOrZero(latest?.distanceKm);
-
-      totalMinutes += m;
-      totalDistanceKm += d;
-
-      const key = (item.discipline || 'OTHER').toUpperCase();
-      const prev = disciplineTotals.get(key) ?? { totalMinutes: 0, totalDistanceKm: 0 };
-      prev.totalMinutes += m;
-      prev.totalDistanceKm += d;
-      disciplineTotals.set(key, prev);
-    });
-
-    const disciplines = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
-    const disciplineLoad = disciplines.map((disc) => {
-      const v = disciplineTotals.get(disc) ?? { totalMinutes: 0, totalDistanceKm: 0 };
-      return { discipline: disc, totalMinutes: v.totalMinutes, totalDistanceKm: v.totalDistanceKm };
+    const aggregates = await getDashboardAggregates({
+      coachId: user.id,
+      rangeFilter,
+      athleteFilter,
+      disciplineFilter,
+      cacheKey: aggregateCacheKey,
+      bypassCache: bypassAggregateCache,
+      profiler: prof,
     });
     prof.mark('kpis');
-
-    // Attention counts
-    const [painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount] = await Promise.all([
-      prisma.calendarItem.count({
-        where: {
-          coachId: user.id,
-          deletedAt: null,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          completedActivities: { some: { painFlag: true } },
-        },
-      }),
-      prisma.calendarItem.count({
-        where: {
-          coachId: user.id,
-          deletedAt: null,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          comments: { some: { author: { role: 'ATHLETE' } } },
-        },
-      }),
-      prisma.calendarItem.count({
-        where: {
-          coachId: user.id,
-          deletedAt: null,
-          ...rangeFilter,
-          ...athleteFilter,
-          ...disciplineFilter,
-          status: { in: REVIEWABLE_STATUSES },
-          reviewedAt: null,
-        },
-      }),
-    ]);
 
     // Review inbox items (unreviewed completed/skipped) for this range
     const inboxItems = await prisma.calendarItem.findMany({
@@ -347,28 +463,20 @@ export async function GET(request: NextRequest) {
 
     prof.mark('format');
     prof.done({
-      athleteCount: athleteRows.length,
-      completedItemCount: completedItems.length,
+      athleteCount: aggregates.value.athletes.length,
+      completedItemCount: aggregates.value.meta.completedItemCount,
       inboxItemCount: formattedInbox.length,
       inboxHasMore: hasMoreInboxItems,
+      aggregateCacheHit: aggregates.cacheHit,
+      aggregateBypassed: bypassAggregateCache,
     });
 
     return success(
       {
-        athletes: athleteRows,
-        kpis: {
-          workoutsCompleted: completedCount,
-          workoutsSkipped: skippedCount,
-          totalTrainingMinutes: totalMinutes,
-          totalDistanceKm,
-        },
-        attention: {
-          painFlagWorkouts: painFlagCount,
-          athleteCommentWorkouts: athleteCommentWorkoutCount,
-          skippedWorkouts: skippedCount,
-          awaitingCoachReview: awaitingReviewCount,
-        },
-        disciplineLoad,
+        athletes: aggregates.value.athletes,
+        kpis: aggregates.value.kpis,
+        attention: aggregates.value.attention,
+        disciplineLoad: aggregates.value.disciplineLoad,
         reviewInbox: formattedInbox,
         reviewInboxPage: {
           offset: inboxOffset,
