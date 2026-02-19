@@ -62,4 +62,32 @@ describe('AI Plan Builder v1: deterministic constraints', () => {
     expect(daysWithDouble).toBeLessThanOrEqual(1);
     expect(maxSessionsOnAnyDay).toBeLessThanOrEqual(2);
   });
+
+  it('applies beginner guardrails in early weeks (run caps + no early brick stack)', () => {
+    const out = generateDraftPlanDeterministicV1({
+      weekStart: 'monday',
+      eventDate: '2026-10-30',
+      weeksToEvent: 24,
+      weeklyAvailabilityDays: [0, 2, 3, 4, 6],
+      weeklyAvailabilityMinutes: 400,
+      disciplineEmphasis: 'balanced',
+      riskTolerance: 'low',
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      longSessionDay: 6,
+      coachGuidanceText: 'Beginner athlete returning to training',
+    });
+
+    const week0 = out.weeks[0];
+    expect(week0).toBeDefined();
+
+    const week0Sessions = week0?.sessions ?? [];
+    const runDurations = week0Sessions.filter((s) => s.discipline === 'run').map((s) => s.durationMinutes);
+    for (const duration of runDurations) {
+      expect(duration).toBeLessThanOrEqual(45);
+    }
+
+    const brickLike = week0Sessions.filter((s) => /brick/i.test(String(s.notes ?? '')));
+    expect(brickLike.length).toBe(0);
+  });
 });

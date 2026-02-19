@@ -10,6 +10,8 @@ export type PlanSourceMatch = {
   score: number;
   semanticScore: number;
   metadataScore: number;
+  sourcePriorityScore: number;
+  sourceOrigin: 'coach' | 'global';
   reasons: string[];
 };
 
@@ -71,6 +73,7 @@ export async function selectPlanSources(params: {
   durationWeeks: number;
   season?: PlanSeason | null;
   queryText?: string | null;
+  coachId?: string | null;
 }) {
   const inferredSport = inferSport(params.athleteProfile);
   const inferredLevel = (params.athleteProfile?.experienceLevel?.toUpperCase() ?? null) as PlanLevel | null;
@@ -133,12 +136,19 @@ export async function selectPlanSources(params: {
       reasons.push(`duration delta ${diff}w`);
     }
 
+    const coachPrefix = params.coachId ? `coach:${params.coachId}` : null;
+    const isCoachSource = Boolean(coachPrefix && source.sourceFilePath?.startsWith(coachPrefix));
+    const sourcePriorityScore = isCoachSource ? 6 : 0;
+    if (isCoachSource) {
+      reasons.push('coach library priority');
+    }
+
     const semanticCorpus = `${source.title} ${source.rawText.slice(0, 7000)}`;
     const sourceTokens = tokenize(semanticCorpus);
     const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
 
     if (semanticScore >= 0.08) reasons.push(`semantic ${(semanticScore * 100).toFixed(0)}%`);
-    const score = metadataScore + semanticScore * 4;
+    const score = metadataScore + semanticScore * 4 + sourcePriorityScore;
 
     matches.push({
       planSourceVersionId: version.id,
@@ -147,6 +157,8 @@ export async function selectPlanSources(params: {
       score,
       semanticScore,
       metadataScore,
+      sourcePriorityScore,
+      sourceOrigin: isCoachSource ? 'coach' : 'global',
       reasons,
     });
   }

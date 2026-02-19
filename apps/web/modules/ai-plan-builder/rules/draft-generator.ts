@@ -203,6 +203,55 @@ function daySortKey(dayOfWeek: number, weekStart: 'monday' | 'sunday') {
   return (d + 6) % 7;
 }
 
+function isBeginnerProfile(setup: DraftPlanSetupV1): boolean {
+  const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
+  if (setup.programPolicy === 'COUCH_TO_5K' || setup.programPolicy === 'COUCH_TO_IRONMAN_26') return true;
+  if (setup.riskTolerance === 'low') return true;
+  return /\bbeginner\b|\bnovice\b|\bcouch\b/.test(guidance);
+}
+
+function applyBeginnerWeekMinutesGuardrail(params: {
+  setup: DraftPlanSetupV1;
+  weekIndex: number;
+  weekTotalMinutes: number;
+}): number {
+  if (!isBeginnerProfile(params.setup)) return params.weekTotalMinutes;
+  const progression = [0.62, 0.72, 0.82, 0.9];
+  const factor = progression[params.weekIndex] ?? 1;
+  return clampInt(params.weekTotalMinutes * factor, 60, Math.max(60, params.weekTotalMinutes));
+}
+
+function applyBeginnerSessionGuardrail(params: {
+  setup: DraftPlanSetupV1;
+  weekIndex: number;
+  session: DraftWeekV1['sessions'][number];
+}): DraftWeekV1['sessions'][number] {
+  if (!isBeginnerProfile(params.setup)) return params.session;
+
+  const s = { ...params.session };
+  const week = params.weekIndex;
+  const isEarlyBlock = week < 4;
+  const isVeryEarlyBlock = week < 2;
+
+  const isBrick = /\bbrick\b/i.test(String(s.notes ?? ''));
+  if (isBrick && isEarlyBlock) {
+    s.notes = 'Endurance focus';
+    s.durationMinutes = clampInt(s.durationMinutes * 0.7, 20, 45);
+  }
+
+  if (s.discipline === 'run') {
+    const runCap = isVeryEarlyBlock ? 45 : isEarlyBlock ? 55 : 70;
+    s.durationMinutes = Math.min(s.durationMinutes, runCap);
+  } else if (s.discipline === 'swim' && s.type === 'technique') {
+    s.durationMinutes = Math.min(s.durationMinutes, isVeryEarlyBlock ? 45 : 55);
+  } else {
+    s.durationMinutes = Math.min(s.durationMinutes, isVeryEarlyBlock ? 70 : 90);
+  }
+
+  s.durationMinutes = Math.max(20, s.durationMinutes);
+  return s;
+}
+
 function roundToStep(value: number, step: number): number {
   if (!Number.isFinite(value) || step <= 0) return value;
   return Math.round(value / step) * step;
@@ -428,6 +477,12 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekTotalMinutes = clampInt(weekTotalMinutes * recoveryMultiplier, 60, Math.max(60, weekTotalMinutes));
     }
 
+    weekTotalMinutes = applyBeginnerWeekMinutesGuardrail({
+      setup: effectiveSetup,
+      weekIndex,
+      weekTotalMinutes,
+    });
+
     // Per-day capacity guard: 1 session/day + explicit doubles allowance.
     const doublesAllowance = clampInt(effectiveSetup.maxDoublesPerWeek, 0, 3);
     const dayCap = new Map<number, number>();
@@ -479,7 +534,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     if (includesSwim(effectiveSetup)) {
       const d = takeDay(days);
       if (d != null) {
-        pushSession({
+        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: d,
@@ -488,7 +543,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 0.8, 20, 60),
         notes: 'Technique focus',
         locked: false,
-        });
+        } }));
       }
     }
 
@@ -498,7 +553,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       const discipline: DraftDiscipline = longIsBike ? 'bike' : 'run';
       const day = hasCapacity(longDay) ? longDay : takeDay(days);
       if (day != null) {
-        pushSession({
+        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -507,7 +562,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 2.2, 60, 180),
         notes: discipline === 'bike' ? 'Long ride' : 'Long run',
         locked: false,
-        });
+        } }));
       }
     }
 
@@ -515,7 +570,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     if ((effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') && weekIndex % 2 === 1) {
       const day = hasCapacity(longDay) ? longDay : takeDay(days.filter((d) => d !== longDay));
       if (day != null) {
-        pushSession({
+        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -524,7 +579,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 1.3, 40, 120),
         notes: 'Brick (add short run off bike)',
         locked: false,
-        });
+        } }));
       }
     }
 
@@ -555,7 +610,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         return isIntensity ? (effectiveSetup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
       })();
 
-      pushSession({
+      pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -564,7 +619,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes, 20, 120),
         notes: isIntensity ? 'Key session' : null,
         locked: false,
-      });
+      } }));
     }
 
     // Sort by configured week start, then ordinal for a stable UI order.
