@@ -199,6 +199,44 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
   };
 }
 
+function goalTimelineToWeeks(raw: string): number | null {
+  const value = String(raw ?? '').trim();
+  if (!value) return null;
+  if (value === 'In 6-8 weeks') return 8;
+  if (value === 'In 2-3 months') return 12;
+  if (value === 'In 3-6 months') return 24;
+  if (value === 'In 6-12 months') return 48;
+  return null;
+}
+
+function dayIndicesFromShorts(days: string[]): number[] {
+  return Array.from(
+    new Set(
+      (Array.isArray(days) ? days : [])
+        .map((d) => {
+          const idx = DAY_SHORTS.indexOf(String(d ?? '').trim());
+          return idx >= 0 ? idx : null;
+        })
+        .filter((d): d is number => d != null)
+    )
+  ).sort((a, b) => a - b);
+}
+
+function subtractWeeksFromDayKey(dayKey: string, weeks: number): string {
+  if (!isDayKey(dayKey) || !Number.isFinite(weeks) || weeks <= 1) return dayKey;
+  const date = parseDayKeyToUtcDate(dayKey);
+  date.setUTCDate(date.getUTCDate() - (weeks - 1) * 7);
+  return date.toISOString().slice(0, 10);
+}
+
+function arraysEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function normalizeDayIndices(days: string[] | null | undefined): number[] {
   if (!Array.isArray(days)) return [];
   return days
@@ -546,6 +584,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const shouldDeferReview = process.env.NODE_ENV === 'production';
   const [reviewInView, setReviewInView] = useState(!shouldDeferReview);
   const [reviewReady, setReviewReady] = useState(!shouldDeferReview);
+  const lastRequestDefaultsKeyRef = useRef<string>('');
+  const lastAutoGuidanceRef = useRef<string>('');
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -553,6 +593,59 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   );
 
   const orderedDays = useMemo(() => orderedDayIndices(effectiveWeekStart), [effectiveWeekStart]);
+
+  const requestSetupDefaults = useMemo(() => {
+    const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
+    const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
+    const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
+    const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
+    const weeklyAvailabilityDays = dayIndicesFromShorts(trainingRequest.availabilityDays);
+    const guidanceParts = [
+      trainingRequest.goalDetails.trim(),
+      trainingRequest.goalFocus.trim() ? `Focus: ${trainingRequest.goalFocus.trim()}` : '',
+      trainingRequest.constraintsNotes.trim() ? `Constraints: ${trainingRequest.constraintsNotes.trim()}` : '',
+      trainingRequest.injuryStatus.trim() ? `Injury/Pain: ${trainingRequest.injuryStatus.trim()}` : '',
+    ].filter(Boolean);
+    const coachGuidanceText = guidanceParts.join('\n');
+
+    return {
+      completionDate,
+      startDate,
+      weeksToEventOverride,
+      weeklyAvailabilityMinutes: Number.isFinite(weeklyAvailabilityMinutes) && weeklyAvailabilityMinutes > 0 ? weeklyAvailabilityMinutes : null,
+      weeklyAvailabilityDays,
+      coachGuidanceText: coachGuidanceText || null,
+    };
+  }, [trainingRequest]);
+
+  const setupSourceLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    if (requestSetupDefaults.completionDate && setup.completionDate === requestSetupDefaults.completionDate) {
+      labels.completionDate = 'From request';
+    }
+    if (requestSetupDefaults.weeksToEventOverride && setup.weeksToEventOverride === requestSetupDefaults.weeksToEventOverride) {
+      labels.weeksToEventOverride = 'From request';
+    }
+    if (
+      requestSetupDefaults.weeklyAvailabilityMinutes &&
+      Number(setup.weeklyAvailabilityMinutes) === Number(requestSetupDefaults.weeklyAvailabilityMinutes)
+    ) {
+      labels.weeklyAvailabilityMinutes = 'From request';
+    }
+    if (
+      requestSetupDefaults.weeklyAvailabilityDays.length &&
+      arraysEqual(
+        [...setup.weeklyAvailabilityDays].sort((a, b) => a - b),
+        [...requestSetupDefaults.weeklyAvailabilityDays].sort((a, b) => a - b)
+      )
+    ) {
+      labels.weeklyAvailabilityDays = 'From request';
+    }
+    if (requestSetupDefaults.coachGuidanceText && setup.coachGuidanceText === requestSetupDefaults.coachGuidanceText) {
+      labels.coachGuidanceText = 'From request';
+    }
+    return labels;
+  }, [requestSetupDefaults, setup]);
 
   const athleteTimeZone = useMemo(() => {
     const tz = (draftPlanLatest as any)?.athlete?.user?.timezone;
@@ -869,6 +962,39 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     }
     setTrainingRequest(buildTrainingRequestFromProfile(athleteProfile));
   }, [athleteProfile, intakeLifecycle?.latestSubmittedIntake?.id, intakeLifecycle?.openDraftIntake?.id]);
+
+  useEffect(() => {
+    if (hasDraft) return;
+    const key = JSON.stringify(requestSetupDefaults);
+    if (key === lastRequestDefaultsKeyRef.current) return;
+    lastRequestDefaultsKeyRef.current = key;
+
+    setSetup((prev) => {
+      const next = { ...prev };
+      if (requestSetupDefaults.completionDate) {
+        next.completionDate = requestSetupDefaults.completionDate;
+      }
+      if (requestSetupDefaults.startDate) {
+        next.startDate = requestSetupDefaults.startDate;
+      }
+      if (requestSetupDefaults.weeksToEventOverride) {
+        next.weeksToEventOverride = requestSetupDefaults.weeksToEventOverride;
+      }
+      if (requestSetupDefaults.weeklyAvailabilityMinutes) {
+        next.weeklyAvailabilityMinutes = requestSetupDefaults.weeklyAvailabilityMinutes;
+      }
+      if (requestSetupDefaults.weeklyAvailabilityDays.length) {
+        next.weeklyAvailabilityDays = requestSetupDefaults.weeklyAvailabilityDays;
+      }
+      if (requestSetupDefaults.coachGuidanceText) {
+        if (!prev.coachGuidanceText || prev.coachGuidanceText === lastAutoGuidanceRef.current) {
+          next.coachGuidanceText = requestSetupDefaults.coachGuidanceText;
+          lastAutoGuidanceRef.current = requestSetupDefaults.coachGuidanceText;
+        }
+      }
+      return next;
+    });
+  }, [hasDraft, requestSetupDefaults]);
 
   const openCoachTrainingRequest = useCallback(async () => {
     setBusy('open-training-request');
@@ -2026,6 +2152,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           <div className="mb-3 text-xs text-[var(--fg-muted)]">
             Defaults come from the athlete profile. Changes here apply only to this block.
           </div>
+          {(setupSourceLabels.completionDate ||
+            setupSourceLabels.weeksToEventOverride ||
+            setupSourceLabels.weeklyAvailabilityMinutes ||
+            setupSourceLabels.weeklyAvailabilityDays ||
+            setupSourceLabels.coachGuidanceText) && (
+            <div className="mb-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Training Request defaults have been applied to block setup values.
+            </div>
+          )}
           {effectiveInputPreflight?.preflight?.hasConflicts ? (
             <div
               className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900"
@@ -2185,7 +2320,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           ) : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
-              <div className="mb-1 text-sm font-medium">Coach priorities for this block (optional)</div>
+              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                <span>Coach priorities for this block (optional)</span>
+                {setupSourceLabels.coachGuidanceText ? (
+                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                    {setupSourceLabels.coachGuidanceText}
+                  </span>
+                ) : null}
+              </div>
               <Textarea
                 rows={3}
                 value={setup.coachGuidanceText}
@@ -2211,7 +2353,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Block end date</div>
+              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                <span>Block end date</span>
+                {setupSourceLabels.completionDate ? (
+                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                    {setupSourceLabels.completionDate}
+                  </span>
+                ) : null}
+              </div>
               <Input
                 type="date"
                 value={setup.completionDate}
@@ -2227,7 +2376,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
 
             <div className="md:col-span-2">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Block length (weeks)</div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span>Block length (weeks)</span>
+                  {setupSourceLabels.weeksToEventOverride ? (
+                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                      {setupSourceLabels.weeksToEventOverride}
+                    </span>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   size="sm"
@@ -2276,7 +2432,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div>
-              <div className="mb-1 text-sm font-medium">Weekly training time (minutes)</div>
+              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                <span>Weekly training time (minutes)</span>
+                {setupSourceLabels.weeklyAvailabilityMinutes ? (
+                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                    {setupSourceLabels.weeklyAvailabilityMinutes}
+                  </span>
+                ) : null}
+              </div>
               <Input
                 type="number"
                 min={0}
@@ -2288,7 +2451,14 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
             </div>
 
             <div className="md:col-span-2" data-testid="apb-available-days">
-              <div className="mb-1 text-sm font-medium">Available days</div>
+              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                <span>Available days</span>
+                {setupSourceLabels.weeklyAvailabilityDays ? (
+                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                    {setupSourceLabels.weeklyAvailabilityDays}
+                  </span>
+                ) : null}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {orderedDays.map((dayIndex) => {
                   const label = DAY_NAMES_SUN0[dayIndex]?.slice(0, 3) ?? String(dayIndex);
