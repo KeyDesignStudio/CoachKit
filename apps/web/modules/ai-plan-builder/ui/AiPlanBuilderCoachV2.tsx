@@ -925,25 +925,11 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
               Sync setup from request
             </Button>
           </div>
+          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+            Availability days are controlled in Step 1 (Training Request) to avoid duplicate inputs.
+          </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Plan type</label>
-              <Select
-                value={setup.programPolicy}
-                onChange={(e) =>
-                  setSetup((prev) => ({
-                    ...prev,
-                    programPolicy: e.target.value as SetupState['programPolicy'],
-                  }))
-                }
-              >
-                <option value="">Custom block (no template)</option>
-                <option value="COUCH_TO_5K">Couch to 5K</option>
-                <option value="COUCH_TO_IRONMAN_26">Couch to Ironman (26w)</option>
-                <option value="HALF_TO_FULL_MARATHON">Half Marathon to Marathon</option>
-              </Select>
-            </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Week starts on</label>
               <Select
@@ -992,36 +978,6 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
                 }}
                 inputMode="numeric"
               />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium">Available days</label>
-            <div className="flex flex-wrap gap-2">
-              {DAY_SHORTS.map((day, idx) => {
-                const selected = setup.weeklyAvailabilityDays.includes(idx);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() =>
-                      setSetup((prev) => ({
-                        ...prev,
-                        weeklyAvailabilityDays: selected
-                          ? prev.weeklyAvailabilityDays.filter((d) => d !== idx)
-                          : stableDayList([...prev.weeklyAvailabilityDays, idx]),
-                      }))
-                    }
-                    className={`rounded-md border px-3 py-1.5 text-sm ${
-                      selected
-                        ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
-                        : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
