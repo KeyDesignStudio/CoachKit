@@ -273,8 +273,8 @@ export default function AthleteCalendarPage() {
 
     try {
       const url = bypassCache
-        ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&t=${Date.now()}`
-        : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}`;
+        ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1&t=${Date.now()}`
+        : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1`;
 
       const data = await request<{ items: CalendarItem[]; dayWeather?: Record<string, WeatherSummary> }>(
         url,

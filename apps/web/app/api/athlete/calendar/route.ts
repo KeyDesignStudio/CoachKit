@@ -25,9 +25,9 @@ const querySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD.' }),
 });
 
-const includeRefs = {
-  template: { select: { id: true, title: true } },
-  groupSession: { select: { id: true, title: true } },
+const LEAN_CALENDAR_ITEMS = new Set(['1', 'true', 'yes']);
+
+const completedActivitiesSelect = {
   completedActivities: {
     orderBy: [{ startTime: 'desc' as const }],
     take: 5,
@@ -48,6 +48,44 @@ const includeRefs = {
   },
 };
 
+const calendarItemLeanSelect = {
+  id: true,
+  athleteId: true,
+  coachId: true,
+  date: true,
+  plannedStartTimeLocal: true,
+  origin: true,
+  planningStatus: true,
+  sourceActivityId: true,
+  discipline: true,
+  subtype: true,
+  title: true,
+  status: true,
+  plannedDurationMinutes: true,
+  plannedDistanceKm: true,
+  notes: true,
+  workoutDetail: true,
+  ...completedActivitiesSelect,
+};
+
+const calendarItemFullSelect = {
+  ...calendarItemLeanSelect,
+  athletePlanInstanceId: true,
+  coachEdited: true,
+  distanceMeters: true,
+  intensityTarget: true,
+  tags: true,
+  equipment: true,
+  workoutStructure: true,
+  intensityType: true,
+  intensityTargetJson: true,
+  attachmentsJson: true,
+  templateId: true,
+  groupSessionId: true,
+  template: { select: { id: true, title: true } },
+  groupSession: { select: { id: true, title: true } },
+};
+
 export async function GET(request: NextRequest) {
   try {
     const { user } = await requireAthlete();
@@ -57,6 +95,7 @@ export async function GET(request: NextRequest) {
       from: searchParams.get('from'),
       to: searchParams.get('to'),
     });
+    const lean = LEAN_CALENDAR_ITEMS.has(String(searchParams.get('lean') ?? '').toLowerCase());
 
     const fromDate = parseDateOnly(params.from, 'from');
     const toDate = parseDateOnly(params.to, 'to');
@@ -89,7 +128,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-        include: includeRefs,
+        select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
       }),
     ]);
 
@@ -171,10 +210,33 @@ export async function GET(request: NextRequest) {
           }
         : null;
 
+      const baseItem = lean
+        ? {
+            id: item.id,
+            athleteId: item.athleteId,
+            coachId: item.coachId,
+            date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+            plannedStartTimeLocal: item.plannedStartTimeLocal,
+            origin: item.origin ?? null,
+            planningStatus: item.planningStatus ?? null,
+            sourceActivityId: item.sourceActivityId ?? null,
+            discipline: item.discipline,
+            subtype: item.subtype,
+            title: item.title,
+            status: item.status,
+            plannedDurationMinutes: item.plannedDurationMinutes ?? null,
+            plannedDistanceKm: item.plannedDistanceKm ?? null,
+            notes: item.notes ?? null,
+            workoutDetail: item.workoutDetail ?? null,
+          }
+        : {
+            ...item,
+            date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+          };
+
       return {
-        ...item,
+        ...baseItem,
         // IMPORTANT: return a local-day key so the UI groups items by the athlete's timezone.
-        date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
         latestCompletedActivity,
         completedActivities: undefined,
       };

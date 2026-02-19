@@ -23,6 +23,8 @@ const querySchema = z.object({
     .nullable(),
   athleteId: z.string().optional().nullable(),
   discipline: z.string().optional().nullable(),
+  inboxOffset: z.string().optional().nullable(),
+  inboxLimit: z.string().optional().nullable(),
 });
 
 const COMPLETED_STATUSES: CalendarItemStatus[] = [
@@ -102,6 +104,8 @@ export async function GET(request: NextRequest) {
       to: searchParams.get('to'),
       athleteId: searchParams.get('athleteId'),
       discipline: searchParams.get('discipline'),
+      inboxOffset: searchParams.get('inboxOffset'),
+      inboxLimit: searchParams.get('inboxLimit'),
     });
 
     const fromDate = params.from ? parseDateOnly(params.from, 'from') : null;
@@ -112,6 +116,12 @@ export async function GET(request: NextRequest) {
 
     const athleteId = (params.athleteId ?? '').trim() || null;
     const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
+    const parsedInboxOffset = Number(params.inboxOffset ?? '0');
+    const parsedInboxLimit = Number(params.inboxLimit ?? '25');
+    const inboxOffset = Number.isFinite(parsedInboxOffset) && parsedInboxOffset >= 0 ? Math.floor(parsedInboxOffset) : 0;
+    const inboxLimit = Number.isFinite(parsedInboxLimit)
+      ? Math.min(100, Math.max(1, Math.floor(parsedInboxLimit)))
+      : 25;
 
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
     const athleteFilter = athleteId ? { athleteId } : {};
@@ -252,6 +262,8 @@ export async function GET(request: NextRequest) {
         status: { in: REVIEWABLE_STATUSES },
         reviewedAt: null,
       },
+      skip: inboxOffset,
+      take: inboxLimit + 1,
       orderBy: [{ actionAt: 'desc' }, { updatedAt: 'desc' }, { date: 'desc' }],
       select: {
         id: true,
@@ -311,8 +323,10 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    const hasMoreInboxItems = inboxItems.length > inboxLimit;
+    const pageItems = hasMoreInboxItems ? inboxItems.slice(0, inboxLimit) : inboxItems;
 
-    const formattedInbox: ReviewItem[] = inboxItems.map((item: any) => {
+    const formattedInbox: ReviewItem[] = pageItems.map((item: any) => {
       const comments = (item.comments ?? []).slice().reverse();
       const hasAthleteComment = comments.some((c: any) => c.author?.role === 'ATHLETE');
 
@@ -364,6 +378,11 @@ export async function GET(request: NextRequest) {
         },
         disciplineLoad,
         reviewInbox: formattedInbox,
+        reviewInboxPage: {
+          offset: inboxOffset,
+          limit: inboxLimit,
+          hasMore: hasMoreInboxItems,
+        },
       },
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30 }),

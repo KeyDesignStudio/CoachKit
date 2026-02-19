@@ -83,6 +83,11 @@ type DashboardResponse = {
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
   reviewInbox: ReviewItem[];
+  reviewInboxPage: {
+    offset: number;
+    limit: number;
+    hasMore: boolean;
+  };
 };
 
 function formatMinutes(totalMinutes: number): string {
@@ -327,6 +332,7 @@ export default function CoachDashboardConsolePage() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [inboxLoadingMore, setInboxLoadingMore] = useState(false);
 
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
 
@@ -344,27 +350,50 @@ export default function CoachDashboardConsolePage() {
   ]);
 
   const reload = useCallback(
-    async (bypassCache = false) => {
+    async (options?: { bypassCache?: boolean; inboxOffset?: number; appendInbox?: boolean }) => {
       if (!user?.userId || user.role !== 'COACH') return;
+      const bypassCache = options?.bypassCache ?? false;
+      const inboxOffset = options?.inboxOffset ?? 0;
+      const appendInbox = options?.appendInbox ?? false;
 
-      setLoading(true);
+      if (appendInbox) {
+        setInboxLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
       setError('');
 
       const qs = new URLSearchParams();
       qs.set('from', dateRange.from);
       qs.set('to', dateRange.to);
+      qs.set('inboxLimit', '25');
+      qs.set('inboxOffset', String(inboxOffset));
       if (athleteId) qs.set('athleteId', athleteId);
       if (discipline) qs.set('discipline', discipline);
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
         const resp = await request<DashboardResponse>(`/api/coach/dashboard/console?${qs.toString()}`, bypassCache ? { cache: 'no-store' } : undefined);
-        setData(resp);
-        setSelectedIds(new Set());
+        if (appendInbox) {
+          setData((prev) => {
+            if (!prev) return resp;
+            return {
+              ...resp,
+              reviewInbox: [...prev.reviewInbox, ...resp.reviewInbox],
+            };
+          });
+        } else {
+          setData(resp);
+          setSelectedIds(new Set());
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
-        setLoading(false);
+        if (appendInbox) {
+          setInboxLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
       }
     },
     [athleteId, dateRange.from, dateRange.to, discipline, request, user?.role, user?.userId]
@@ -506,7 +535,7 @@ export default function CoachDashboardConsolePage() {
   const markReviewed = useCallback(
     async (id: string) => {
       await request(`/api/coach/calendar-items/${id}/review`, { method: 'POST' });
-      await reload(true);
+      await reload({ bypassCache: true });
     },
     [reload, request]
   );
@@ -842,6 +871,26 @@ export default function CoachDashboardConsolePage() {
                   />
                 ))}
               </div>
+
+              {!loading && (data?.reviewInboxPage?.hasMore ?? false) ? (
+                <div className={cn("border-t border-[var(--border-subtle)]", tokens.spacing.containerPadding)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-[44px]"
+                    onClick={() =>
+                      reload({
+                        bypassCache: true,
+                        inboxOffset: data?.reviewInbox.length ?? 0,
+                        appendInbox: true,
+                      })
+                    }
+                    disabled={inboxLoadingMore}
+                  >
+                    {inboxLoadingMore ? 'Loading more…' : 'Load more'}
+                  </Button>
+                </div>
+              ) : null}
             </Block>
           </div>
         </div>
