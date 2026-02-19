@@ -26,7 +26,7 @@ function buildSummary(params: {
   externalActivityId: string | null;
   externalAthleteId: string | null;
 }) {
-  const parts = [params.provider];
+  const parts: string[] = [params.provider];
   if (params.eventType) parts.push(params.eventType);
   if (params.externalActivityId) parts.push(`activity ${params.externalActivityId}`);
   else if (params.externalAthleteId) parts.push(`athlete ${params.externalAthleteId}`);
