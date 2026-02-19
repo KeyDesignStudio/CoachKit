@@ -269,25 +269,7 @@ export default function CoachCalendarPage() {
 
   // Recurring sessions (for library insert)
   const [groupSessions, setGroupSessions] = useState<{ id: string; title: string; discipline: string; durationMinutes: number; description: string | null; startTimeLocal: string }[]>([]);
-
-  useEffect(() => {
-     if (user?.role === 'COACH') {
-       request<{ groupSessions: any[] }>('/api/coach/group-sessions')
-         .then((data) => {
-           setGroupSessions(
-             data.groupSessions.map((gs) => ({
-               id: gs.id,
-               title: gs.title,
-               discipline: gs.discipline,
-               durationMinutes: gs.durationMinutes,
-               description: gs.description,
-               startTimeLocal: gs.startTimeLocal,
-             }))
-           );
-         })
-         .catch((err) => console.error('Failed to load group sessions for menu', err));
-     }
-  }, [user?.role, request]);
+  const [groupSessionsLoading, setGroupSessionsLoading] = useState(false);
 
   const [clipboard, setClipboard] = useState<CalendarItem | null>(null);
   const [sessionDetailLoadingId, setSessionDetailLoadingId] = useState<string | null>(null);
@@ -524,6 +506,30 @@ export default function CoachCalendarPage() {
     [request, titleOptions]
   );
 
+  const loadGroupSessions = useCallback(async () => {
+    if (user?.role !== 'COACH') return;
+    if (groupSessions.length > 0 || groupSessionsLoading) return;
+
+    setGroupSessionsLoading(true);
+    try {
+      const data = await request<{ groupSessions: any[] }>('/api/coach/group-sessions');
+      setGroupSessions(
+        data.groupSessions.map((gs) => ({
+          id: gs.id,
+          title: gs.title,
+          discipline: gs.discipline,
+          durationMinutes: gs.durationMinutes,
+          description: gs.description,
+          startTimeLocal: gs.startTimeLocal,
+        }))
+      );
+    } catch (err) {
+      console.error('Failed to load group sessions for menu', err);
+    } finally {
+      setGroupSessionsLoading(false);
+    }
+  }, [groupSessions.length, groupSessionsLoading, request, user?.role]);
+
   const handleAddTitle = async () => {
     const titleValue = titleInput.trim();
 
@@ -589,7 +595,7 @@ export default function CoachCalendarPage() {
     const normalized = ensureDiscipline(value);
     setSessionForm((prev) => ({ ...prev, discipline: normalized, title: '' }));
     setTitleInput('');
-    loadTitleOptions(normalized, true);
+    void loadTitleOptions(normalized);
   };
 
   const loadAthletes = useCallback(async () => {
@@ -774,10 +780,6 @@ export default function CoachCalendarPage() {
     loadCalendar();
   }, [loadCalendar]);
 
-  useEffect(() => {
-    loadTitleOptions(sessionForm.discipline);
-  }, [sessionForm.discipline, loadTitleOptions]);
-
   // Persist view mode to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -844,18 +846,22 @@ export default function CoachCalendarPage() {
     setDrawerMode('create');
     setError('');
     setTitleMessage('');
+    void loadTitleOptions(DEFAULT_DISCIPLINE);
   };
 
   const handleContextMenu = useCallback((e: React.MouseEvent, type: 'session' | 'day', data: any) => {
     e.preventDefault();
     e.stopPropagation();
+    if (type === 'day') {
+      void loadGroupSessions();
+    }
     setContextMenu({
       isOpen: true,
       position: { x: e.clientX, y: e.clientY },
       type,
       data,
     });
-  }, []);
+  }, [loadGroupSessions]);
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => ({ ...prev, isOpen: false }));
@@ -957,6 +963,7 @@ export default function CoachCalendarPage() {
     setDrawerMode('create');
     setError('');
     setTitleMessage('');
+    void loadTitleOptions(DEFAULT_DISCIPLINE);
   };
 
   const normalizeCalendarItemDetail = useCallback((detail: CalendarItem, fallback: CalendarItem): CalendarItem => {
@@ -1014,6 +1021,7 @@ export default function CoachCalendarPage() {
     setDrawerMode('edit');
     setError('');
     setTitleMessage('');
+    void loadTitleOptions(ensureDiscipline(item.discipline));
   };
 
   const handleSessionClick = useCallback(async (item: CalendarItem) => {
