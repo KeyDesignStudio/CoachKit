@@ -89,4 +89,31 @@ describe('AI Plan Builder v1: deterministic constraints', () => {
     const brickLike = week0Sessions.filter((s) => /brick/i.test(String(s.notes ?? '')));
     expect(brickLike.length).toBe(0);
   });
+
+  it('does not force doubles when policy is Ironman and maxDoublesPerWeek=0', () => {
+    const out = generateDraftPlanDeterministicV1({
+      weekStart: 'monday',
+      eventDate: '2026-10-30',
+      weeksToEvent: 24,
+      weeklyAvailabilityDays: [0, 2, 3, 4, 6],
+      weeklyAvailabilityMinutes: 400,
+      disciplineEmphasis: 'balanced',
+      riskTolerance: 'med',
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      longSessionDay: 6,
+      programPolicy: 'COUCH_TO_IRONMAN_26',
+    });
+
+    const week0 = out.weeks[0];
+    expect(week0).toBeDefined();
+
+    const perDayCounts = new Map<number, number>();
+    for (const session of week0?.sessions ?? []) {
+      perDayCounts.set(session.dayOfWeek, (perDayCounts.get(session.dayOfWeek) ?? 0) + 1);
+    }
+
+    const maxSessionsOnAnyDay = Math.max(...Array.from(perDayCounts.values()));
+    expect(maxSessionsOnAnyDay).toBeLessThanOrEqual(1);
+  });
 });
