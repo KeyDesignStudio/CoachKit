@@ -359,6 +359,14 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
   const selectedWeekSessions = useMemo(() => {
     return sessionsByWeek.find(([weekIndex]) => weekIndex === selectedWeekIndex)?.[1] ?? [];
   }, [selectedWeekIndex, sessionsByWeek]);
+  const weekOptions = useMemo(
+    () =>
+      sessionsByWeek.map(([weekIndex, weekSessions]) => ({
+        weekIndex,
+        label: `Week ${weekIndex + 1} (${getWeekCommencingLabel(weekSessions)})`,
+      })),
+    [sessionsByWeek]
+  );
 
   const fetchAthleteProfile = useCallback(async () => {
     const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
@@ -660,6 +668,12 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
   const hasOpenRequest = Boolean(intakeLifecycle?.lifecycle?.hasOpenRequest ?? intakeLifecycle?.openDraftIntake?.id);
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
+  const selectedWeekPosition = weekOptions.findIndex((w) => w.weekIndex === selectedWeekIndex);
+  const prevWeekIndex = selectedWeekPosition > 0 ? weekOptions[selectedWeekPosition - 1]?.weekIndex : null;
+  const nextWeekIndex =
+    selectedWeekPosition >= 0 && selectedWeekPosition < weekOptions.length - 1
+      ? weekOptions[selectedWeekPosition + 1]?.weekIndex
+      : null;
 
   return (
     <div className="space-y-4">
@@ -680,6 +694,9 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
 
       <Block title="1) Training Request">
         <div className="space-y-3 text-sm">
+          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+            Step 1 of 3. Capture the event and constraints for this block.
+          </div>
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
             <div>Open request: <strong>{hasOpenRequest ? 'Yes' : 'No'}</strong></div>
             <div className="text-xs text-[var(--fg-muted)]">
@@ -820,6 +837,9 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
 
       <Block title="2) Block Setup" rightAction={<Button onClick={() => void generateWeeklyPlan()} disabled={busy != null}>Generate weekly plan</Button>}>
         <div className="space-y-3 text-sm">
+          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+            Step 2 of 3. Confirm structure and training limits before generation.
+          </div>
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             Apply request values into setup before generation. If a draft already exists, applying will clear it and force a fresh build.
           </div>
@@ -1002,24 +1022,48 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+              Step 3 of 3. Review one week at a time, finalize session details, then approve and schedule.
+            </div>
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
               Status: {isPublished ? 'Published to athlete calendar' : 'Draft only (hidden from athlete)'}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {sessionsByWeek.map(([weekIndex, weekSessions]) => (
-                <button
-                  key={weekIndex}
-                  type="button"
-                  onClick={() => setSelectedWeekIndex(weekIndex)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    selectedWeekIndex === weekIndex
-                      ? 'border-[var(--primary)] bg-[var(--primary)] text-white'
-                      : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
-                  }`}
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Select Week</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (prevWeekIndex != null) setSelectedWeekIndex(prevWeekIndex);
+                  }}
+                  disabled={busy != null || prevWeekIndex == null}
                 >
-                  Week {weekIndex + 1} ({getWeekCommencingLabel(weekSessions)})
-                </button>
-              ))}
+                  Previous
+                </Button>
+                <div className="min-w-[240px] flex-1">
+                  <Select
+                    value={String(selectedWeekIndex)}
+                    onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}
+                  >
+                    {weekOptions.map((week) => (
+                      <option key={week.weekIndex} value={String(week.weekIndex)}>
+                        {week.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (nextWeekIndex != null) setSelectedWeekIndex(nextWeekIndex);
+                  }}
+                  disabled={busy != null || nextWeekIndex == null}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)]">
