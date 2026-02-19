@@ -12,9 +12,11 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
+import { StravaVitalsCard } from '@/components/profile/StravaVitalsCard';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
+import type { StravaVitalsSnapshot } from '@/lib/strava-vitals';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const;
 const AVAILABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
@@ -87,6 +89,9 @@ export default function AthleteProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [vitals, setVitals] = useState<StravaVitalsSnapshot | null>(null);
+  const [vitalsLoading, setVitalsLoading] = useState(false);
+  const [vitalsError, setVitalsError] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('Personal');
 
   const [firstName, setFirstName] = useState('');
@@ -130,9 +135,17 @@ export default function AthleteProfilePage() {
     const loadData = async () => {
       setLoading(true);
       setError('');
+      setVitalsLoading(true);
+      setVitalsError('');
       try {
-        const data = await request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' });
+        const [data, vitalsData] = await Promise.all([
+          request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' }),
+          request<{ vitals: StravaVitalsSnapshot }>(`/api/coach/athletes/${athleteId}/strava-vitals?windowDays=90`, {
+            cache: 'no-store',
+          }),
+        ]);
         const athlete = data.athlete;
+        setVitals(vitalsData.vitals);
 
         setFirstName(athlete.firstName || '');
         setLastName(athlete.lastName || '');
@@ -176,8 +189,11 @@ export default function AthleteProfilePage() {
         setConstraintsNotes(athlete.constraintsNotes || '');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load athlete.');
+        setVitals(null);
+        setVitalsError(err instanceof Error ? err.message : 'Failed to load Strava vitals.');
       } finally {
         setLoading(false);
+        setVitalsLoading(false);
       }
     };
 
@@ -311,6 +327,7 @@ export default function AthleteProfilePage() {
 
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="mb-4 text-sm text-emerald-700">{success}</p> : null}
+      <StravaVitalsCard vitals={vitals} loading={vitalsLoading} error={vitalsError} />
 
       {loading ? <p className={uiMuted}>Loading profile...</p> : null}
 
