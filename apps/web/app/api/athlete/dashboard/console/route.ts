@@ -13,6 +13,7 @@ import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
 import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 import { createServerProfiler } from '@/lib/server-profiler';
+import { getStravaVitalsComparisonForAthlete, type StravaVitalsComparison } from '@/lib/strava-vitals';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,10 @@ const querySchema = z.object({
     .optional()
     .nullable(),
   discipline: z.string().optional().nullable(),
+  includeLoadModel: z
+    .enum(['1', 'true', 'TRUE'])
+    .optional()
+    .nullable(),
 });
 
 type AthleteDashboardResponse = {
@@ -44,6 +49,7 @@ type AthleteDashboardResponse = {
     discipline: string;
     plannedStartTimeLocal: string | null;
   }>;
+  stravaVitals: StravaVitalsComparison;
 };
 
 const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
@@ -63,8 +69,17 @@ function buildAthleteDashboardCacheKey(params: {
   discipline: string | null;
   todayKey: string;
   timezone: string;
+  includeLoadModel: boolean;
 }) {
-  return [params.athleteId, params.fromKey, params.toKey, params.discipline ?? '', params.todayKey, params.timezone].join('|');
+  return [
+    params.athleteId,
+    params.fromKey,
+    params.toKey,
+    params.discipline ?? '',
+    params.todayKey,
+    params.timezone,
+    params.includeLoadModel ? '1' : '0',
+  ].join('|');
 }
 
 async function getAthleteDashboardData(params: {
@@ -74,6 +89,7 @@ async function getAthleteDashboardData(params: {
   fromKey: string;
   toKey: string;
   discipline: string | null;
+  includeLoadModel: boolean;
   bypassCache: boolean;
   profiler?: ReturnType<typeof createServerProfiler>;
 }) {
@@ -84,6 +100,7 @@ async function getAthleteDashboardData(params: {
     discipline: params.discipline,
     todayKey: params.todayKey,
     timezone: params.timezone,
+    includeLoadModel: params.includeLoadModel,
   });
   const now = Date.now();
 
@@ -113,38 +130,45 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const items = await prisma.calendarItem.findMany({
-      where: {
-        athleteId: params.athleteId,
-        deletedAt: null,
-        ...rangeFilter,
-        ...disciplineFilter,
-      },
-      select: {
-        id: true,
-        date: true,
-        discipline: true,
-        status: true,
-        title: true,
-        plannedDurationMinutes: true,
-        plannedDistanceKm: true,
-        plannedStartTimeLocal: true,
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: 1,
-          select: {
-            startTime: true,
-            durationMinutes: true,
-            distanceKm: true,
-            confirmedAt: true,
-            painFlag: true,
-            metricsJson: true,
-            matchDayDiff: true,
+    const [items, stravaVitals] = await Promise.all([
+      prisma.calendarItem.findMany({
+        where: {
+          athleteId: params.athleteId,
+          deletedAt: null,
+          ...rangeFilter,
+          ...disciplineFilter,
+        },
+        select: {
+          id: true,
+          date: true,
+          discipline: true,
+          status: true,
+          title: true,
+          plannedDurationMinutes: true,
+          plannedDistanceKm: true,
+          plannedStartTimeLocal: true,
+          completedActivities: {
+            orderBy: [{ startTime: 'desc' as const }],
+            take: 1,
+            select: {
+              startTime: true,
+              durationMinutes: true,
+              distanceKm: true,
+              confirmedAt: true,
+              painFlag: true,
+              metricsJson: true,
+              matchDayDiff: true,
+            },
           },
         },
-      },
-      orderBy: [{ date: 'asc' as const }],
-    });
+        orderBy: [{ date: 'asc' as const }],
+      }),
+      getStravaVitalsComparisonForAthlete(params.athleteId, {
+        from: parseDateOnly(params.fromKey, 'from'),
+        to: parseDateOnly(params.toKey, 'to'),
+        includeLoadModel: params.includeLoadModel,
+      }),
+    ]);
 
     const filteredItems = items
       .map((item) => {
@@ -227,6 +251,7 @@ async function getAthleteDashboardData(params: {
       },
       rangeSummary,
       nextUp,
+      stravaVitals,
     } satisfies AthleteDashboardResponse;
   })();
 
@@ -262,6 +287,7 @@ export async function GET(request: NextRequest) {
       from: searchParams.get('from'),
       to: searchParams.get('to'),
       discipline: searchParams.get('discipline'),
+      includeLoadModel: searchParams.get('includeLoadModel'),
     });
 
     const todayKey = getZonedDateKeyForNow(user.timezone);
@@ -273,6 +299,7 @@ export async function GET(request: NextRequest) {
     assertValidDateRange(fromDate, toDate);
 
     const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
+    const includeLoadModel = Boolean(params.includeLoadModel);
     const bypassCache = searchParams.has('t');
     const dashboard = await getAthleteDashboardData({
       athleteId: user.id,
@@ -281,6 +308,7 @@ export async function GET(request: NextRequest) {
       fromKey,
       toKey,
       discipline,
+      includeLoadModel,
       bypassCache,
       profiler: prof,
     });
