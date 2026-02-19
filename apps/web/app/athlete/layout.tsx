@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { requireAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { RoleForbiddenCard } from '@/components/RoleForbiddenCard';
+import { AskFloatingPopup } from '@/components/knowledge/AskFloatingPopup';
 
 /**
  * Athlete Layout - Role-Based Access Control
@@ -34,7 +35,12 @@ export default async function AthleteLayout({ children }: { children: ReactNode 
       );
     }
 
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <AskFloatingPopup />
+      </>
+    );
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 401) {
