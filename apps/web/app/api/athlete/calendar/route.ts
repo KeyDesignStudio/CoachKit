@@ -8,6 +8,7 @@ import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
+import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
@@ -26,6 +27,21 @@ const querySchema = z.object({
 });
 
 const LEAN_CALENDAR_ITEMS = new Set(['1', 'true', 'yes']);
+const ATHLETE_CALENDAR_CACHE_TTL_MS = 30_000;
+
+type AthleteCalendarResponse = {
+  items: any[];
+  dayWeather?: Record<string, any>;
+};
+
+const athleteCalendarCache = new Map<
+  string,
+  {
+    value: AthleteCalendarResponse;
+    expiresAtMs: number;
+  }
+>();
+const athleteCalendarInFlight = new Map<string, Promise<AthleteCalendarResponse>>();
 
 const completedActivitiesSelect = {
   completedActivities: {
@@ -86,8 +102,28 @@ const calendarItemFullSelect = {
   groupSession: { select: { id: true, title: true } },
 };
 
+function buildAthleteCalendarCacheKey(params: {
+  athleteId: string;
+  from: string;
+  to: string;
+  lean: boolean;
+  timezone: string;
+  includeDebug: boolean;
+}) {
+  return [
+    params.athleteId,
+    params.from,
+    params.to,
+    params.lean ? 'lean' : 'full',
+    params.timezone,
+    params.includeDebug ? 'debug' : 'nodebug',
+  ].join('|');
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const prof = createServerProfiler('athlete/calendar');
+    prof.mark('start');
     const { user } = await requireAthlete();
     const includeDebug = isStravaTimeDebugEnabled();
     const { searchParams } = new URL(request.url);
@@ -96,177 +132,229 @@ export async function GET(request: NextRequest) {
       to: searchParams.get('to'),
     });
     const lean = LEAN_CALENDAR_ITEMS.has(String(searchParams.get('lean') ?? '').toLowerCase());
+    const bypassCache = searchParams.has('t');
 
     const fromDate = parseDateOnly(params.from, 'from');
     const toDate = parseDateOnly(params.to, 'to');
     assertValidDateRange(fromDate, toDate);
 
     const athleteTimezone = user.timezone ?? 'Australia/Brisbane';
-    const utcRange = getUtcRangeForLocalDayKeyRange({
-      fromDayKey: params.from,
-      toDayKey: params.to,
-      timeZone: athleteTimezone,
+    const cacheKey = buildAthleteCalendarCacheKey({
+      athleteId: user.id,
+      from: params.from,
+      to: params.to,
+      lean,
+      timezone: athleteTimezone,
+      includeDebug,
     });
+    const now = Date.now();
 
-    // Candidate fetch window: widen by a day on either side to account for timezone offsets
-    // and date-only storage quirks.
-    const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
-    const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
-
-    const [athleteProfile, items] = await Promise.all([
-      prisma.athleteProfile.findUnique({
-        where: { userId: user.id },
-        select: { coachId: true, defaultLat: true, defaultLon: true },
-      }),
-      prisma.calendarItem.findMany({
-        where: {
-          athleteId: user.id,
-          deletedAt: null,
-          date: {
-            gte: candidateFromDate,
-            lte: candidateToDate,
-          },
-        },
-        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-        select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
-      }),
-    ]);
-
-    if (!athleteProfile) {
-      return success(
-        { items: [] },
-        {
+    if (!bypassCache) {
+      const cached = athleteCalendarCache.get(cacheKey);
+      if (cached && cached.expiresAtMs > now) {
+        prof.mark('cache-hit');
+        prof.done({ cacheHit: true, cachesBypassed: false, itemCount: cached.value.items.length });
+        return success(cached.value, {
           headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
-        }
-      );
+        });
+      }
     }
 
-    const preparedItems = items.map((item: any) => {
-      const completions = (item.completedActivities ?? []) as Array<{
-        id: string;
-        painFlag: boolean;
-        startTime: Date;
-        confirmedAt?: Date | null;
-        source: string;
-        durationMinutes?: number | null;
-        distanceKm?: number | null;
-        metricsJson?: any;
-        matchDayDiff?: number | null;
-      }>;
+    const existing = !bypassCache ? athleteCalendarInFlight.get(cacheKey) : null;
+    if (existing) {
+      prof.mark('cache-inflight-hit');
+      const value = await existing;
+      prof.done({ cacheHit: true, cachesBypassed: false, inFlightHit: true, itemCount: value.items.length });
+      return success(value, {
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+      });
+    }
+    prof.mark('cache-miss');
 
-      const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
-      const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
-      const metricsCompletion = latestStrava ?? latestManual;
-
-      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({
-        item,
-        completion: metricsCompletion,
+    const computePromise = (async (): Promise<AthleteCalendarResponse> => {
+      const utcRange = getUtcRangeForLocalDayKeyRange({
+        fromDayKey: params.from,
+        toDayKey: params.to,
         timeZone: athleteTimezone,
       });
 
-      return {
-        item,
-        completions,
-        latestManual,
-        latestStrava,
-        metricsCompletion,
-        effectiveStartUtc,
-      };
-    });
+      // Candidate fetch window: widen by a day on either side to account for timezone offsets
+      // and date-only storage quirks.
+      const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
+      const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
 
-    // Filter down to items whose effective start time falls within the requested local-day range.
-    const filteredItems = preparedItems
-      .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange))
-      .sort((a, b) => a.effectiveStartUtc.getTime() - b.effectiveStartUtc.getTime());
+      const [athleteProfile, items] = await Promise.all([
+        prisma.athleteProfile.findUnique({
+          where: { userId: user.id },
+          select: { coachId: true, defaultLat: true, defaultLon: true },
+        }),
+        prisma.calendarItem.findMany({
+          where: {
+            athleteId: user.id,
+            deletedAt: null,
+            date: {
+              gte: candidateFromDate,
+              lte: candidateToDate,
+            },
+          },
+          orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+          select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
+        }),
+      ]);
 
-    // Format items to include latestCompletedActivity.
-    // We prefer STRAVA for metrics (duration/distance/calories) because manual completions
-    // are often used for notes/pain flags on top of a synced activity.
-    const formattedItems = filteredItems.map(({ item, latestManual, latestStrava, metricsCompletion, effectiveStartUtc }) => {
-      const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
-      const latestCompletedActivity = metricsCompletion
-        ? {
-            id: metricsCompletion.id,
-            painFlag,
-            source: metricsCompletion.source,
-            confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
-            effectiveStartTimeUtc: getEffectiveStartUtcFromCompletion(metricsCompletion).toISOString(),
-            durationMinutes: metricsCompletion.durationMinutes ?? null,
-            distanceKm: metricsCompletion.distanceKm ?? null,
-            caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
-            // DEV-ONLY DEBUG — Strava time diagnostics
-            // Never enabled in production. Do not rely on this data.
-            debug:
-              includeDebug && metricsCompletion.source === CompletionSource.STRAVA
-                ? {
-                    stravaTime: {
-                      tzUsed: athleteTimezone,
-                      stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
-                      stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
-                      storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
-                    },
-                  }
-                : undefined,
-          }
-        : null;
+      if (!athleteProfile) {
+        return { items: [] };
+      }
 
-      const baseItem = lean
-        ? {
-            id: item.id,
-            athleteId: item.athleteId,
-            coachId: item.coachId,
-            date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
-            plannedStartTimeLocal: item.plannedStartTimeLocal,
-            origin: item.origin ?? null,
-            planningStatus: item.planningStatus ?? null,
-            sourceActivityId: item.sourceActivityId ?? null,
-            discipline: item.discipline,
-            subtype: item.subtype,
-            title: item.title,
-            status: item.status,
-            plannedDurationMinutes: item.plannedDurationMinutes ?? null,
-            plannedDistanceKm: item.plannedDistanceKm ?? null,
-            notes: item.notes ?? null,
-            workoutDetail: item.workoutDetail ?? null,
-          }
-        : {
-            ...item,
-            date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
-          };
+      const preparedItems = items.map((item: any) => {
+        const completions = (item.completedActivities ?? []) as Array<{
+          id: string;
+          painFlag: boolean;
+          startTime: Date;
+          confirmedAt?: Date | null;
+          source: string;
+          durationMinutes?: number | null;
+          distanceKm?: number | null;
+          metricsJson?: any;
+          matchDayDiff?: number | null;
+        }>;
 
-      return {
-        ...baseItem,
-        // IMPORTANT: return a local-day key so the UI groups items by the athlete's timezone.
-        latestCompletedActivity,
-        completedActivities: undefined,
-      };
-    });
+        const latestManual = completions.find((c) => c.source === CompletionSource.MANUAL) ?? null;
+        const latestStrava = completions.find((c) => c.source === CompletionSource.STRAVA) ?? null;
+        const metricsCompletion = latestStrava ?? latestManual;
 
-    let dayWeather: Record<string, any> | undefined;
-    if (athleteProfile?.defaultLat != null && athleteProfile?.defaultLon != null) {
-      try {
-        const map = await getWeatherSummariesForRange({
-          lat: athleteProfile.defaultLat,
-          lon: athleteProfile.defaultLon,
-          from: params.from,
-          to: params.to,
-          timezone: athleteTimezone,
+        const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({
+          item,
+          completion: metricsCompletion,
+          timeZone: athleteTimezone,
         });
 
-        if (Object.keys(map).length > 0) {
-          dayWeather = map;
+        return {
+          item,
+          latestManual,
+          latestStrava,
+          metricsCompletion,
+          effectiveStartUtc,
+        };
+      });
+
+      // Filter down to items whose effective start time falls within the requested local-day range.
+      const filteredItems = preparedItems
+        .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange))
+        .sort((a, b) => a.effectiveStartUtc.getTime() - b.effectiveStartUtc.getTime());
+
+      // Format items to include latestCompletedActivity.
+      // We prefer STRAVA for metrics (duration/distance/calories) because manual completions
+      // are often used for notes/pain flags on top of a synced activity.
+      const formattedItems = filteredItems.map(({ item, latestManual, latestStrava, metricsCompletion, effectiveStartUtc }) => {
+        const painFlag = Boolean(latestManual?.painFlag ?? latestStrava?.painFlag ?? false);
+        const latestCompletedActivity = metricsCompletion
+          ? {
+              id: metricsCompletion.id,
+              painFlag,
+              source: metricsCompletion.source,
+              confirmedAt: metricsCompletion.confirmedAt?.toISOString?.() ?? null,
+              effectiveStartTimeUtc: getEffectiveStartUtcFromCompletion(metricsCompletion).toISOString(),
+              durationMinutes: metricsCompletion.durationMinutes ?? null,
+              distanceKm: metricsCompletion.distanceKm ?? null,
+              caloriesKcal: getStravaCaloriesKcal(metricsCompletion.metricsJson?.strava),
+              // DEV-ONLY DEBUG — Strava time diagnostics
+              // Never enabled in production. Do not rely on this data.
+              debug:
+                includeDebug && metricsCompletion.source === CompletionSource.STRAVA
+                  ? {
+                      stravaTime: {
+                        tzUsed: athleteTimezone,
+                        stravaStartDateUtcRaw: metricsCompletion.metricsJson?.strava?.startDateUtc ?? null,
+                        stravaStartDateLocalRaw: metricsCompletion.metricsJson?.strava?.startDateLocal ?? null,
+                        storedStartTimeUtc: metricsCompletion.startTime?.toISOString?.() ?? null,
+                      },
+                    }
+                  : undefined,
+            }
+          : null;
+
+        const baseItem = lean
+          ? {
+              id: item.id,
+              athleteId: item.athleteId,
+              coachId: item.coachId,
+              date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+              plannedStartTimeLocal: item.plannedStartTimeLocal,
+              origin: item.origin ?? null,
+              planningStatus: item.planningStatus ?? null,
+              sourceActivityId: item.sourceActivityId ?? null,
+              discipline: item.discipline,
+              subtype: item.subtype,
+              title: item.title,
+              status: item.status,
+              plannedDurationMinutes: item.plannedDurationMinutes ?? null,
+              plannedDistanceKm: item.plannedDistanceKm ?? null,
+              notes: item.notes ?? null,
+              workoutDetail: item.workoutDetail ?? null,
+            }
+          : {
+              ...item,
+              date: getLocalDayKey(effectiveStartUtc, athleteTimezone),
+            };
+
+        return {
+          ...baseItem,
+          // IMPORTANT: return a local-day key so the UI groups items by the athlete's timezone.
+          latestCompletedActivity,
+          completedActivities: undefined,
+        };
+      });
+
+      let dayWeather: Record<string, any> | undefined;
+      if (athleteProfile.defaultLat != null && athleteProfile.defaultLon != null) {
+        try {
+          const map = await getWeatherSummariesForRange({
+            lat: athleteProfile.defaultLat,
+            lon: athleteProfile.defaultLon,
+            from: params.from,
+            to: params.to,
+            timezone: athleteTimezone,
+          });
+
+          if (Object.keys(map).length > 0) {
+            dayWeather = map;
+          }
+        } catch {
+          // Best-effort: calendar should still load.
         }
-      } catch {
-        // Best-effort: calendar should still load.
       }
+
+      return { items: formattedItems, dayWeather };
+    })();
+
+    if (!bypassCache) {
+      athleteCalendarInFlight.set(cacheKey, computePromise);
     }
 
-    return success(
-      { items: formattedItems, dayWeather },
-      {
-        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+    try {
+      const value = await computePromise;
+      if (!bypassCache) {
+        athleteCalendarCache.set(cacheKey, {
+          value,
+          expiresAtMs: now + ATHLETE_CALENDAR_CACHE_TTL_MS,
+        });
       }
-    );
+      prof.mark('computed');
+      prof.done({
+        cacheHit: false,
+        cachesBypassed: bypassCache,
+        itemCount: value.items.length,
+        hasWeather: Boolean(value.dayWeather && Object.keys(value.dayWeather).length > 0),
+      });
+      return success(value, {
+        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+      });
+    } finally {
+      if (!bypassCache) {
+        athleteCalendarInFlight.delete(cacheKey);
+      }
+    }
   } catch (error) {
     return handleError(error);
   }
