@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { requireAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { RoleForbiddenCard } from '@/components/RoleForbiddenCard';
+import { AskFloatingPopup } from '@/components/knowledge/AskFloatingPopup';
 
 /**
  * Coach Layout - Role-Based Access Control
@@ -35,7 +36,12 @@ export default async function CoachLayout({ children }: { children: ReactNode })
       );
     }
 
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <AskFloatingPopup />
+      </>
+    );
   } catch (error) {
     if (error instanceof ApiError) {
       // Middleware usually handles this, but keep a server-side fallback.

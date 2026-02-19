@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { AskCard } from '@/components/knowledge/AskCard';
 import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -808,11 +807,6 @@ export default function CoachDashboardConsolePage() {
         </div>
 
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
-
-        <div className="mt-6">
-          <AskCard />
-        </div>
-
 
         {/* Review Inbox + Notifications split (desktop/tablet); centered on page */}
         <div className="mt-10 mx-auto w-full px-4 md:px-0 md:max-w-[50%] md:min-w-[340px]">
