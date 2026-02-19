@@ -189,53 +189,55 @@ export default function CoachAthletesPage() {
                 {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <button 
-                        type="button" 
-                        onClick={() => handleAthleteClick(athlete.userId)}
-                        className="font-medium truncate hover:underline text-left"
-                      >
-                       {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
-                     </button>
+                    <p className="font-medium truncate text-left">
+                      {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
+                    </p>
                     <a
                       href={`/coach/notifications?athleteId=${athlete.userId}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
                       title="Send Message"
                     >
                       <Icon name="chat" size="sm" />
                     </a>
                   </div>
-                  <div className="text-xs text-[var(--muted)] truncate mt-1">{athlete.user.email}</div>
-                  <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
-                  {athlete.dateOfBirth ? (
-                    <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
-                  ) : null}
-                  {athlete.primaryGoal ? (
-                     <div className="text-xs text-[var(--muted)] mt-1 truncate">
-                      <span className="font-medium">Goal:</span> {athlete.primaryGoal}
-                     </div>
-                  ) : null}
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAthleteClick(athlete.userId)}
+                    className="mt-1 w-full text-left"
+                  >
+                    <div className="text-xs text-[var(--muted)] truncate mt-1">{athlete.user.email}</div>
+                    <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
+                    {athlete.dateOfBirth ? (
+                      <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
+                    ) : null}
+                    {athlete.primaryGoal ? (
+                       <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                        <span className="font-medium">Goal:</span> {athlete.primaryGoal}
+                       </div>
+                    ) : null}
 
-                {/* Footer: disciplines */}
-                <div 
-                   className="mt-4 flex items-end justify-end gap-2 flex-wrap flex-1 cursor-pointer"
-                   onClick={() => handleAthleteClick(athlete.userId)}
-                >
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {athlete.disciplines.map((discipline) => {
-                      const theme = getDisciplineTheme(discipline);
-                      return (
-                        <div
-                          key={discipline}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-structure)]"
-                          title={discipline}
-                        >
-                          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-                        </div>
-                      );
-                    })}
-                  </div>
+                    {/* Footer: disciplines */}
+                    <div className="mt-4 flex items-end justify-end gap-2 flex-wrap flex-1 cursor-pointer">
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {athlete.disciplines.map((discipline) => {
+                          const theme = getDisciplineTheme(discipline);
+                          return (
+                            <div
+                              key={discipline}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--bg-structure)]"
+                              title={discipline}
+                            >
+                              <Icon name={theme.iconName} size="sm" className={theme.textClass} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </button>
                 </div>
+                
+                <div className="pointer-events-none absolute inset-0 rounded-2xl ring-0 transition group-hover:ring-1 group-hover:ring-[var(--ring)]" aria-hidden />
               </Block>
             ))}
           </div>

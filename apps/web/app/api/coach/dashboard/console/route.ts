@@ -24,6 +24,7 @@ const querySchema = z.object({
     .optional()
     .nullable(),
   athleteId: z.string().optional().nullable(),
+  athleteIds: z.string().optional().nullable(),
   discipline: z.string().optional().nullable(),
   inboxOffset: z.string().optional().nullable(),
   inboxLimit: z.string().optional().nullable(),
@@ -136,7 +137,7 @@ function buildDashboardAggregateCacheKey(params: {
   coachId: string;
   from: string | null;
   to: string | null;
-  athleteId: string | null;
+  athleteScopeKey: string;
   discipline: string | null;
   includeLoadModel: boolean;
 }) {
@@ -144,7 +145,7 @@ function buildDashboardAggregateCacheKey(params: {
     params.coachId,
     params.from ?? '',
     params.to ?? '',
-    params.athleteId ?? '',
+    params.athleteScopeKey,
     params.discipline ?? '',
     params.includeLoadModel ? '1' : '0',
   ].join('|');
@@ -154,7 +155,7 @@ function buildDashboardInboxCacheKey(params: {
   coachId: string;
   from: string | null;
   to: string | null;
-  athleteId: string | null;
+  athleteScopeKey: string;
   discipline: string | null;
   inboxOffset: number;
   inboxLimit: number;
@@ -163,7 +164,7 @@ function buildDashboardInboxCacheKey(params: {
     params.coachId,
     params.from ?? '',
     params.to ?? '',
-    params.athleteId ?? '',
+    params.athleteScopeKey,
     params.discipline ?? '',
     String(params.inboxOffset),
     String(params.inboxLimit),
@@ -174,7 +175,7 @@ async function getDashboardAggregates(params: {
   coachId: string;
   rangeFilter: Record<string, unknown>;
   athleteFilter: Record<string, unknown>;
-  athleteId: string | null;
+  selectedAthleteIds: string[];
   fromDate: Date | null;
   toDate: Date | null;
   disciplineFilter: Record<string, unknown>;
@@ -216,7 +217,7 @@ async function getDashboardAggregates(params: {
       disciplines: a.disciplines,
     }));
 
-    const targetAthleteIdsForVitals = params.athleteId ? [params.athleteId] : athleteRows.map((row) => row.id);
+    const targetAthleteIdsForVitals = params.selectedAthleteIds.length > 0 ? params.selectedAthleteIds : athleteRows.map((row) => row.id);
 
     const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount, stravaVitals] =
       await Promise.all([
@@ -521,6 +522,7 @@ export async function GET(request: NextRequest) {
       from: searchParams.get('from'),
       to: searchParams.get('to'),
       athleteId: searchParams.get('athleteId'),
+      athleteIds: searchParams.get('athleteIds'),
       discipline: searchParams.get('discipline'),
       inboxOffset: searchParams.get('inboxOffset'),
       inboxLimit: searchParams.get('inboxLimit'),
@@ -533,7 +535,16 @@ export async function GET(request: NextRequest) {
       assertValidDateRange(fromDate, toDate);
     }
 
-    const athleteId = (params.athleteId ?? '').trim() || null;
+    const parsedAthleteIds = new Set<string>();
+    const singleAthleteId = (params.athleteId ?? '').trim();
+    if (singleAthleteId) parsedAthleteIds.add(singleAthleteId);
+    const multiAthleteIds = (params.athleteIds ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    multiAthleteIds.forEach((id) => parsedAthleteIds.add(id));
+    const selectedAthleteIds = Array.from(parsedAthleteIds);
+    const athleteScopeKey = selectedAthleteIds.slice().sort().join(',') || 'all';
     const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
     const includeLoadModel = Boolean(params.includeLoadModel);
     const parsedInboxOffset = Number(params.inboxOffset ?? '0');
@@ -544,14 +555,15 @@ export async function GET(request: NextRequest) {
       : 25;
 
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
-    const athleteFilter = athleteId ? { athleteId } : {};
+    const athleteFilter =
+      selectedAthleteIds.length > 0 ? { athleteId: { in: selectedAthleteIds } } : {};
     const disciplineFilter = discipline ? { discipline } : {};
     const bypassCaches = searchParams.has('t');
     const aggregateCacheKey = buildDashboardAggregateCacheKey({
       coachId: user.id,
       from: params.from ?? null,
       to: params.to ?? null,
-      athleteId,
+      athleteScopeKey,
       discipline,
       includeLoadModel,
     });
@@ -559,7 +571,7 @@ export async function GET(request: NextRequest) {
       coachId: user.id,
       from: params.from ?? null,
       to: params.to ?? null,
-      athleteId,
+      athleteScopeKey,
       discipline,
       inboxOffset,
       inboxLimit,
@@ -570,7 +582,7 @@ export async function GET(request: NextRequest) {
       coachId: user.id,
       rangeFilter,
       athleteFilter,
-      athleteId,
+      selectedAthleteIds,
       fromDate,
       toDate,
       disciplineFilter,

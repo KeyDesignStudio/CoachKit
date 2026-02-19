@@ -312,7 +312,6 @@ export default function AthleteProfilePage() {
 
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="mb-4 text-sm text-emerald-700">{success}</p> : null}
-      <StravaVitalsCard endpoint={`/api/coach/athletes/${athleteId}/strava-vitals`} />
 
       {loading ? <p className={uiMuted}>Loading profile...</p> : null}
 
@@ -340,61 +339,69 @@ export default function AthleteProfilePage() {
       </div>
 
       {activeTab === 'Personal' ? (
-        <FormGrid role="tabpanel" id="tab-panel-Personal" columns={gridColumns}>
-          <FormSection title="Identity" />
-          <FormFieldSpan span={span1}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              First Name
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span1}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Last Name
-              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span1}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Gender
-              <Input value={gender} onChange={(e) => setGender(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span1}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Date of Birth
-              <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
-            </label>
-          </FormFieldSpan>
+        <div role="tabpanel" id="tab-panel-Personal" className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
+          <div className="order-1">
+            <FormGrid columns={gridColumns}>
+              <FormSection title="Identity" />
+              <FormFieldSpan span={span1}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  First Name
+                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </label>
+              </FormFieldSpan>
+              <FormFieldSpan span={span1}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Last Name
+                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </label>
+              </FormFieldSpan>
+              <FormFieldSpan span={span1}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Gender
+                  <Input value={gender} onChange={(e) => setGender(e.target.value)} />
+                </label>
+              </FormFieldSpan>
+              <FormFieldSpan span={span1}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Date of Birth
+                  <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+                </label>
+              </FormFieldSpan>
 
-          <FormSection title="Contact" className="mt-2" />
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Email
-              <Input value={email} disabled className="bg-[var(--bg-structure)]" />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Mobile phone
-              <Input value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
-            </label>
-          </FormFieldSpan>
+              <FormSection title="Contact" className="mt-2" />
+              <FormFieldSpan span={span2}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Email
+                  <Input value={email} disabled className="bg-[var(--bg-structure)]" />
+                </label>
+              </FormFieldSpan>
+              <FormFieldSpan span={span2}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Mobile phone
+                  <Input value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
+                </label>
+              </FormFieldSpan>
 
-          <FormSection title="Location & Timezone" className="mt-2" />
-          <FormFieldSpan span={span2}>
-            <div className="flex flex-col gap-2 text-sm font-medium">
-              Athlete timezone
-              <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
-            </div>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Training suburb
-              <Input value={trainingSuburb} onChange={(e) => setTrainingSuburb(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-        </FormGrid>
+              <FormSection title="Locations & Timezone" className="mt-2" />
+              <FormFieldSpan span={span2}>
+                <div className="flex flex-col gap-2 text-sm font-medium">
+                  Athlete timezone
+                  <TimezoneSelect value={timezone} onChange={setTimezone} disabled={saving} />
+                </div>
+              </FormFieldSpan>
+              <FormFieldSpan span={span2}>
+                <label className="flex flex-col gap-2 text-sm font-medium">
+                  Training suburb
+                  <Input value={trainingSuburb} onChange={(e) => setTrainingSuburb(e.target.value)} />
+                </label>
+              </FormFieldSpan>
+            </FormGrid>
+          </div>
+
+          <div className="order-2">
+            <StravaVitalsCard endpoint={`/api/coach/athletes/${athleteId}/strava-vitals`} />
+          </div>
+        </div>
       ) : null}
 
       {activeTab === 'Training Basics' ? (
