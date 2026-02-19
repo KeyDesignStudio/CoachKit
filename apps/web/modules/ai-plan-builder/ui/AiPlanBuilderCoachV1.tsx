@@ -170,11 +170,22 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
     .filter((d) => DAY_SHORTS.includes(d) || Object.keys(DAY_NAME_TO_SHORT).includes(d))
     .map((d) => (DAY_SHORTS.includes(d) ? d : DAY_NAME_TO_SHORT[d]));
 
+  const normalizeDayKeyLike = (value: unknown): string => {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    if (isDayKey(text)) return text;
+    const m = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return '';
+    const [, dd, mm, yyyy] = m;
+    const candidate = `${yyyy}-${mm}-${dd}`;
+    return isDayKey(candidate) ? candidate : '';
+  };
+
   return {
     goalDetails: String(map.goal_details ?? ''),
     goalFocus: String(map.goal_focus ?? ''),
     eventName: String(map.event_name ?? ''),
-    eventDate: typeof map.event_date === 'string' ? map.event_date.slice(0, 10) : '',
+    eventDate: normalizeDayKeyLike(map.event_date),
     goalTimeline: String(map.goal_timeline ?? ''),
     weeklyMinutes: map.weekly_minutes != null ? String(map.weekly_minutes) : '',
     availabilityDays: Array.from(new Set(availabilityDays)),
@@ -227,6 +238,17 @@ function subtractWeeksFromDayKey(dayKey: string, weeks: number): string {
   const date = parseDayKeyToUtcDate(dayKey);
   date.setUTCDate(date.getUTCDate() - (weeks - 1) * 7);
   return date.toISOString().slice(0, 10);
+}
+
+function normalizeDayKeyLike(value: string): string | null {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (isDayKey(text)) return text;
+  const m = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const candidate = `${yyyy}-${mm}-${dd}`;
+  return isDayKey(candidate) ? candidate : null;
 }
 
 function arraysEqual(a: number[], b: number[]): boolean {
@@ -574,6 +596,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [performanceModel, setPerformanceModel] = useState<PerformanceModelPreview | null>(null);
   const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycle | null>(null);
   const [trainingRequest, setTrainingRequest] = useState<TrainingRequestForm>(() => buildTrainingRequestFromProfile(null));
+  const [requestApplyMessage, setRequestApplyMessage] = useState<string>('');
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -595,7 +618,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const orderedDays = useMemo(() => orderedDayIndices(effectiveWeekStart), [effectiveWeekStart]);
 
   const requestSetupDefaults = useMemo(() => {
-    const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
+    const completionDate = normalizeDayKeyLike(trainingRequest.eventDate);
     const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
     const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
@@ -655,31 +678,62 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       if (!options?.force && key === lastRequestDefaultsKeyRef.current) return;
       lastRequestDefaultsKeyRef.current = key;
 
+      let appliedCount = 0;
       setSetup((prev) => {
         const next = { ...prev };
         if (requestSetupDefaults.completionDate) {
+          if (next.completionDate !== requestSetupDefaults.completionDate) appliedCount += 1;
           next.completionDate = requestSetupDefaults.completionDate;
         }
         if (requestSetupDefaults.startDate) {
+          if (next.startDate !== requestSetupDefaults.startDate) appliedCount += 1;
           next.startDate = requestSetupDefaults.startDate;
         }
         if (requestSetupDefaults.weeksToEventOverride) {
+          if (next.weeksToEventOverride !== requestSetupDefaults.weeksToEventOverride) appliedCount += 1;
           next.weeksToEventOverride = requestSetupDefaults.weeksToEventOverride;
         }
         if (requestSetupDefaults.weeklyAvailabilityMinutes) {
+          if (Number(next.weeklyAvailabilityMinutes) !== Number(requestSetupDefaults.weeklyAvailabilityMinutes)) appliedCount += 1;
           next.weeklyAvailabilityMinutes = requestSetupDefaults.weeklyAvailabilityMinutes;
         }
         if (requestSetupDefaults.weeklyAvailabilityDays.length) {
+          if (!arraysEqual([...next.weeklyAvailabilityDays].sort((a, b) => a - b), [...requestSetupDefaults.weeklyAvailabilityDays].sort((a, b) => a - b))) {
+            appliedCount += 1;
+          }
           next.weeklyAvailabilityDays = requestSetupDefaults.weeklyAvailabilityDays;
         }
         if (requestSetupDefaults.coachGuidanceText) {
           if (!prev.coachGuidanceText || prev.coachGuidanceText === lastAutoGuidanceRef.current || options?.force) {
+            if (next.coachGuidanceText !== requestSetupDefaults.coachGuidanceText) appliedCount += 1;
             next.coachGuidanceText = requestSetupDefaults.coachGuidanceText;
             lastAutoGuidanceRef.current = requestSetupDefaults.coachGuidanceText;
           }
         }
         return next;
       });
+
+      setDraftPlanLatest((prev: any) => {
+        if (!prev || !prev.setupJson) return prev;
+        return {
+          ...prev,
+          setupJson: {
+            ...prev.setupJson,
+            ...(requestSetupDefaults.completionDate ? { completionDate: requestSetupDefaults.completionDate, eventDate: requestSetupDefaults.completionDate } : {}),
+            ...(requestSetupDefaults.startDate ? { startDate: requestSetupDefaults.startDate } : {}),
+            ...(requestSetupDefaults.weeksToEventOverride ? { weeksToEventOverride: requestSetupDefaults.weeksToEventOverride } : {}),
+            ...(requestSetupDefaults.weeklyAvailabilityMinutes ? { weeklyAvailabilityMinutes: requestSetupDefaults.weeklyAvailabilityMinutes } : {}),
+            ...(requestSetupDefaults.weeklyAvailabilityDays.length ? { weeklyAvailabilityDays: requestSetupDefaults.weeklyAvailabilityDays } : {}),
+            ...(requestSetupDefaults.coachGuidanceText ? { coachGuidanceText: requestSetupDefaults.coachGuidanceText } : {}),
+          },
+        };
+      });
+
+      if (appliedCount > 0) {
+        setRequestApplyMessage(`Applied ${appliedCount} request defaults to Block Setup.`);
+      } else {
+        setRequestApplyMessage('No changes applied. Request values already match Block Setup or are missing.');
+      }
     },
     [draftPlanLatest?.id, requestSetupDefaults]
   );
@@ -1950,6 +2004,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 Existing draft detected. Use "Apply request to block setup" to overwrite setup defaults from this request.
               </div>
             ) : null}
+            {requestApplyMessage ? <div className="text-xs text-emerald-700">{requestApplyMessage}</div> : null}
           </div>
         </Block>
 
