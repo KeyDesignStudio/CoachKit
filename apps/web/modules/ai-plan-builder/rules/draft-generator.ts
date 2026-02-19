@@ -321,7 +321,8 @@ function applyProgramPolicy(setup: DraftPlanSetupV1): DraftPlanSetupV1 {
       disciplineEmphasis: 'balanced',
       riskTolerance: 'med',
       maxIntensityDaysPerWeek: Math.max(1, Math.min(2, setup.maxIntensityDaysPerWeek)),
-      maxDoublesPerWeek: Math.max(1, Math.min(2, setup.maxDoublesPerWeek)),
+      // Respect explicit coach/athlete cap, including 0 doubles.
+      maxDoublesPerWeek: Math.max(0, Math.min(2, setup.maxDoublesPerWeek)),
       sessionsPerWeekOverride: Math.max(6, Math.min(9, setup.sessionsPerWeekOverride ?? 7)),
       disciplineSplitTargets: { swim: 0.23, bike: 0.45, run: 0.27, strength: 0.05 },
       sessionTypeDistribution: { endurance: 0.56, technique: 0.16, tempo: 0.14, threshold: 0.08, recovery: 0.06 },
