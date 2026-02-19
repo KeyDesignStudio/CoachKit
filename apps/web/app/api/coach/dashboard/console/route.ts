@@ -7,6 +7,7 @@ import { requireCoach } from '@/lib/auth';
 import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
+import { createServerProfiler } from '@/lib/server-profiler';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +36,6 @@ const COMPLETED_STATUSES: CalendarItemStatus[] = [
 
 const REVIEWABLE_STATUSES: CalendarItemStatus[] = [...COMPLETED_STATUSES, CalendarItemStatus.SKIPPED];
 
-const COMMENTS_LIMIT = 10;
-
 function minutesOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
@@ -60,7 +59,6 @@ type ReviewItem = {
     id: string;
     durationMinutes: number | null;
     distanceKm: number | null;
-    rpe: number | null;
     painFlag: boolean;
     startTime: string;
   } | null;
@@ -68,16 +66,6 @@ type ReviewItem = {
     id: string;
     name: string | null;
   } | null;
-  comments: Array<{
-    id: string;
-    body: string;
-    createdAt: string;
-    author: {
-      id: string;
-      name: string | null;
-      role: 'COACH' | 'ATHLETE';
-    };
-  }>;
   hasAthleteComment: boolean;
   commentCount: number;
 };
@@ -96,6 +84,8 @@ function getInboxPriority(item: ReviewItem): number {
 
 export async function GET(request: NextRequest) {
   try {
+    const prof = createServerProfiler('coach/dashboard/console');
+    prof.mark('start');
     const { user } = await requireCoach();
     const { searchParams } = new URL(request.url);
 
@@ -126,6 +116,7 @@ export async function GET(request: NextRequest) {
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
     const athleteFilter = athleteId ? { athleteId } : {};
     const disciplineFilter = discipline ? { discipline } : {};
+    prof.mark('auth+parse');
 
     const athletes = await prisma.athleteProfile.findMany({
       where: { coachId: user.id },
@@ -215,6 +206,7 @@ export async function GET(request: NextRequest) {
       const v = disciplineTotals.get(disc) ?? { totalMinutes: 0, totalDistanceKm: 0 };
       return { discipline: disc, totalMinutes: v.totalMinutes, totalDistanceKm: v.totalDistanceKm };
     });
+    prof.mark('kpis');
 
     // Attention counts
     const [painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount] = await Promise.all([
@@ -297,25 +289,19 @@ export async function GET(request: NextRequest) {
             source: true,
             durationMinutes: true,
             distanceKm: true,
-            rpe: true,
             painFlag: true,
             startTime: true,
           },
         },
         comments: {
-          orderBy: [{ createdAt: 'desc' as const }],
-          take: COMMENTS_LIMIT,
+          where: {
+            author: {
+              role: 'ATHLETE',
+            },
+          },
+          take: 1,
           select: {
             id: true,
-            body: true,
-            createdAt: true,
-            author: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
           },
         },
         _count: {
@@ -327,8 +313,7 @@ export async function GET(request: NextRequest) {
     const pageItems = hasMoreInboxItems ? inboxItems.slice(0, inboxLimit) : inboxItems;
 
     const formattedInbox: ReviewItem[] = pageItems.map((item: any) => {
-      const comments = (item.comments ?? []).slice().reverse();
-      const hasAthleteComment = comments.some((c: any) => c.author?.role === 'ATHLETE');
+      const hasAthleteComment = (item.comments?.length ?? 0) > 0;
 
       const latestCompletedActivity = item.completedActivities?.[0] ?? null;
       const persisted = item.actionAt ? new Date(item.actionAt) : null;
@@ -348,9 +333,8 @@ export async function GET(request: NextRequest) {
         status: item.status,
         athlete: item.athlete?.user ?? null,
         latestCompletedActivity,
-        comments,
         hasAthleteComment,
-        commentCount: item._count?.comments ?? comments.length,
+        commentCount: item._count?.comments ?? 0,
       };
     });
 
@@ -359,6 +343,14 @@ export async function GET(request: NextRequest) {
       const bp = getInboxPriority(b);
       if (ap !== bp) return ap - bp;
       return new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime();
+    });
+
+    prof.mark('format');
+    prof.done({
+      athleteCount: athleteRows.length,
+      completedItemCount: completedItems.length,
+      inboxItemCount: formattedInbox.length,
+      inboxHasMore: hasMoreInboxItems,
     });
 
     return success(
