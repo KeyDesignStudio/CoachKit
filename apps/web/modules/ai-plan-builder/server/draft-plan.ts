@@ -27,6 +27,7 @@ import {
 } from '../rules/session-detail';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
+import { buildEffectivePlanInputContext } from './effective-input';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -359,8 +360,14 @@ export async function generateAiDraftPlanV1(params: {
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
-  const athleteProfile =
-    (await loadAthleteProfileSnapshot({ coachId: params.coachId, athleteId: params.athleteId })) ?? ({} as any);
+  const effectiveInput = await buildEffectivePlanInputContext({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+  });
+  const athleteProfile = {
+    ...(effectiveInput.athleteProfileSnapshot ?? ({} as any)),
+    ...effectiveInput.mergedSignals,
+  } as any;
 
   if (!setup.coachGuidanceText && athleteProfile?.primaryGoal) {
     const bits = [athleteProfile.primaryGoal, athleteProfile.focus, athleteProfile.timelineWeeks ? `${athleteProfile.timelineWeeks} weeks` : null]
@@ -484,6 +491,12 @@ export async function generateAiDraftPlanV1(params: {
     setup: blended.adjustedSetup as any,
     memory: adaptationMemory,
   }) as any;
+  adjustedSetup.effectiveInputV1 = {
+    generatedAt: new Date().toISOString(),
+    preflight: effectiveInput.preflight,
+    mergedSignals: effectiveInput.mergedSignals,
+    conflicts: effectiveInput.conflicts,
+  };
   const primarySelected = appliedBySource[0] ?? null;
 
   const suggestion = await ai.suggestDraftPlan({

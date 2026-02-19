@@ -41,7 +41,7 @@ const GOAL_TIMELINE_WEEKS: Record<string, number | null> = {
   'In 6–12 months': 48,
 };
 
-function flattenIntakeAnswers(payload: AthleteIntakeSubmissionPayload): Record<string, unknown> {
+export function flattenIntakeAnswers(payload: AthleteIntakeSubmissionPayload): Record<string, unknown> {
   const map: Record<string, unknown> = {};
   for (const section of payload.sections ?? []) {
     for (const answer of section.answers ?? []) {
