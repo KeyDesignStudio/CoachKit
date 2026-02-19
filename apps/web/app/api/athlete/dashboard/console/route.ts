@@ -12,6 +12,7 @@ import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
 import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
+import { createServerProfiler } from '@/lib/server-profiler';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,40 +30,92 @@ const querySchema = z.object({
   discipline: z.string().optional().nullable(),
 });
 
-export async function GET(request: NextRequest) {
-  try {
-    const { user } = await requireAthlete();
-    const { searchParams } = new URL(request.url);
+type AthleteDashboardResponse = {
+  attention: {
+    pendingConfirmation: number;
+    workoutsMissed: number;
+    painFlagWorkouts: number;
+  };
+  rangeSummary: ReturnType<typeof getAthleteRangeSummary>;
+  nextUp: Array<{
+    id: string;
+    date: string;
+    title: string;
+    discipline: string;
+    plannedStartTimeLocal: string | null;
+  }>;
+};
 
-    const params = querySchema.parse({
-      from: searchParams.get('from'),
-      to: searchParams.get('to'),
-      discipline: searchParams.get('discipline'),
-    });
+const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
+const athleteDashboardCache = new Map<
+  string,
+  {
+    value: AthleteDashboardResponse;
+    expiresAtMs: number;
+  }
+>();
+const athleteDashboardInFlight = new Map<string, Promise<AthleteDashboardResponse>>();
 
-    const todayKey = getZonedDateKeyForNow(user.timezone);
-    const fromKey = (params.from ?? '').trim() || todayKey;
-    const toKey = (params.to ?? '').trim() || todayKey;
+function buildAthleteDashboardCacheKey(params: {
+  athleteId: string;
+  fromKey: string;
+  toKey: string;
+  discipline: string | null;
+  todayKey: string;
+  timezone: string;
+}) {
+  return [params.athleteId, params.fromKey, params.toKey, params.discipline ?? '', params.todayKey, params.timezone].join('|');
+}
 
-    const fromDate = parseDateOnly(fromKey, 'from');
-    const toDate = parseDateOnly(toKey, 'to');
-    assertValidDateRange(fromDate, toDate);
+async function getAthleteDashboardData(params: {
+  athleteId: string;
+  timezone: string;
+  todayKey: string;
+  fromKey: string;
+  toKey: string;
+  discipline: string | null;
+  bypassCache: boolean;
+  profiler?: ReturnType<typeof createServerProfiler>;
+}) {
+  const cacheKey = buildAthleteDashboardCacheKey({
+    athleteId: params.athleteId,
+    fromKey: params.fromKey,
+    toKey: params.toKey,
+    discipline: params.discipline,
+    todayKey: params.todayKey,
+    timezone: params.timezone,
+  });
+  const now = Date.now();
 
-    const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
+  if (!params.bypassCache) {
+    const cached = athleteDashboardCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > now) {
+      params.profiler?.mark('dashboard:cache-hit');
+      return { value: cached.value, cacheHit: true as const };
+    }
+  }
 
-    const candidateFromDate = parseDateOnly(addDaysToDayKey(fromKey, -1), 'from');
-    const candidateToDate = parseDateOnly(addDaysToDayKey(toKey, 1), 'to');
+  const existing = !params.bypassCache ? athleteDashboardInFlight.get(cacheKey) : null;
+  if (existing) {
+    params.profiler?.mark('dashboard:inflight-hit');
+    return { value: await existing, cacheHit: true as const };
+  }
+
+  params.profiler?.mark('dashboard:cache-miss');
+  const promise = (async () => {
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(params.fromKey, -1), 'from');
+    const candidateToDate = parseDateOnly(addDaysToDayKey(params.toKey, 1), 'to');
     const rangeFilter = { date: { gte: candidateFromDate, lte: candidateToDate } };
-    const disciplineFilter = discipline ? { discipline } : {};
+    const disciplineFilter = params.discipline ? { discipline: params.discipline } : {};
     const utcRange = getUtcRangeForLocalDayKeyRange({
-      fromDayKey: fromKey,
-      toDayKey: toKey,
-      timeZone: user.timezone,
+      fromDayKey: params.fromKey,
+      toDayKey: params.toKey,
+      timeZone: params.timezone,
     });
 
     const items = await prisma.calendarItem.findMany({
       where: {
-        athleteId: user.id,
+        athleteId: params.athleteId,
         deletedAt: null,
         ...rangeFilter,
         ...disciplineFilter,
@@ -108,7 +161,7 @@ export async function GET(request: NextRequest) {
               return base;
             })()
           : null;
-        const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, user.timezone ?? 'UTC');
+        const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, params.timezone ?? 'UTC');
         return { item, completion, effectiveStartUtc, stravaMetrics };
       })
       .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
@@ -132,10 +185,10 @@ export async function GET(request: NextRequest) {
             }
           : null,
       })),
-      timeZone: user.timezone,
-      fromDayKey: fromKey,
-      toDayKey: toKey,
-      todayDayKey: todayKey,
+      timeZone: params.timezone,
+      fromDayKey: params.fromKey,
+      toDayKey: params.toKey,
+      todayDayKey: params.todayKey,
       weightKg: null,
     });
 
@@ -148,7 +201,7 @@ export async function GET(request: NextRequest) {
     const nextUp = filteredItems
       .map(({ item }) => item)
       .filter((item) => item.status === CalendarItemStatus.PLANNED)
-      .filter((item) => getLocalDayKey(item.date, user.timezone) >= todayKey)
+      .filter((item) => getLocalDayKey(item.date, params.timezone) >= params.todayKey)
       .sort((a, b) => {
         const dayA = a.date.getTime();
         const dayB = b.date.getTime();
@@ -166,16 +219,81 @@ export async function GET(request: NextRequest) {
         plannedStartTimeLocal: item.plannedStartTimeLocal,
       }));
 
-    return success(
-      {
-        attention: {
-          pendingConfirmation: pendingConfirmationCount,
-          workoutsMissed: rangeSummary.totals.workoutsMissed,
-          painFlagWorkouts,
-        },
-        rangeSummary,
-        nextUp,
+    return {
+      attention: {
+        pendingConfirmation: pendingConfirmationCount,
+        workoutsMissed: rangeSummary.totals.workoutsMissed,
+        painFlagWorkouts,
       },
+      rangeSummary,
+      nextUp,
+    } satisfies AthleteDashboardResponse;
+  })();
+
+  if (!params.bypassCache) {
+    athleteDashboardInFlight.set(cacheKey, promise);
+  }
+
+  try {
+    const value = await promise;
+    if (!params.bypassCache) {
+      athleteDashboardCache.set(cacheKey, {
+        value,
+        expiresAtMs: now + ATHLETE_DASHBOARD_CACHE_TTL_MS,
+      });
+    }
+    params.profiler?.mark('dashboard:computed');
+    return { value, cacheHit: false as const };
+  } finally {
+    if (!params.bypassCache) {
+      athleteDashboardInFlight.delete(cacheKey);
+    }
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const prof = createServerProfiler('athlete/dashboard/console');
+    prof.mark('start');
+    const { user } = await requireAthlete();
+    const { searchParams } = new URL(request.url);
+
+    const params = querySchema.parse({
+      from: searchParams.get('from'),
+      to: searchParams.get('to'),
+      discipline: searchParams.get('discipline'),
+    });
+
+    const todayKey = getZonedDateKeyForNow(user.timezone);
+    const fromKey = (params.from ?? '').trim() || todayKey;
+    const toKey = (params.to ?? '').trim() || todayKey;
+
+    const fromDate = parseDateOnly(fromKey, 'from');
+    const toDate = parseDateOnly(toKey, 'to');
+    assertValidDateRange(fromDate, toDate);
+
+    const discipline = (params.discipline ?? '').trim().toUpperCase() || null;
+    const bypassCache = searchParams.has('t');
+    const dashboard = await getAthleteDashboardData({
+      athleteId: user.id,
+      timezone: user.timezone,
+      todayKey,
+      fromKey,
+      toKey,
+      discipline,
+      bypassCache,
+      profiler: prof,
+    });
+
+    prof.mark('format');
+    prof.done({
+      cacheHit: dashboard.cacheHit,
+      cachesBypassed: bypassCache,
+      nextUpCount: dashboard.value.nextUp.length,
+    });
+
+    return success(
+      dashboard.value,
       {
         headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
       }
