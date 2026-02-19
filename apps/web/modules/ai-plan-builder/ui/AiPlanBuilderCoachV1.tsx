@@ -734,6 +734,21 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       } else {
         setRequestApplyMessage('No changes applied. Request values already match Block Setup or are missing.');
       }
+
+      // If an old draft exists, switch the screen back to pre-draft mode so the
+      // coach sees request-driven setup only until generating a new plan.
+      if (draftExists && options?.force) {
+        setDraftPlanLatest(null);
+        setPublishStatus(null);
+        setPerformanceModel(null);
+        setSessionDetailsById({});
+        setSessionDraftEdits({});
+        setRequestApplyMessage((prev) =>
+          prev
+            ? `${prev} Previous draft context cleared. Generate weekly plan to build a fresh draft from this request.`
+            : 'Previous draft context cleared. Generate weekly plan to build a fresh draft from this request.'
+        );
+      }
     },
     [draftPlanLatest?.id, requestSetupDefaults]
   );
