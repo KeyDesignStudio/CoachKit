@@ -29,6 +29,12 @@ type AthleteOption = {
   };
 };
 
+type NearbyAthleteSuggestion = {
+  athleteId: string;
+  name: string;
+  distanceKm: number;
+};
+
 type SessionFormState = {
   title: string;
   discipline: string;
@@ -98,6 +104,9 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
   const [form, setForm] = useState<SessionFormState>(defaultForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [nearbySuggestions, setNearbySuggestions] = useState<NearbyAthleteSuggestion[]>([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState('');
 
   // Re-initialize form each time the modal opens (supports template injection).
   useEffect(() => {
@@ -111,7 +120,14 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
     };
     setForm(merged);
     setError('');
+    setNearbySuggestions([]);
+    setNearbyError('');
   }, [defaultForm, initialValues, isOpen]);
+
+  useEffect(() => {
+    if (form.locationLat != null && form.locationLon != null) return;
+    setNearbySuggestions([]);
+  }, [form.locationLat, form.locationLon]);
 
   if (!isOpen) return null;
 
@@ -214,6 +230,43 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
     } finally {
       setCreating(false);
     }
+  };
+
+  const fetchNearbyAthletes = async () => {
+    if (form.locationLat == null || form.locationLon == null) {
+      setNearbyError('Select a geocoded location first.');
+      return;
+    }
+
+    setNearbyLoading(true);
+    setNearbyError('');
+    try {
+      const response = await fetch(
+        `/api/coach/group-sessions/proximity?lat=${encodeURIComponent(String(form.locationLat))}&lon=${encodeURIComponent(
+          String(form.locationLon)
+        )}&radiusKm=15&limit=20`,
+        { method: 'GET', cache: 'no-store' }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to load nearby athletes.');
+      }
+      const json = (await response.json()) as { data?: { athletes?: NearbyAthleteSuggestion[] } };
+      setNearbySuggestions(json?.data?.athletes ?? []);
+    } catch (err) {
+      setNearbySuggestions([]);
+      setNearbyError(err instanceof Error ? err.message : 'Failed to load nearby athletes.');
+    } finally {
+      setNearbyLoading(false);
+    }
+  };
+
+  const addNearbyToTargets = () => {
+    const ids = nearbySuggestions.map((item) => item.athleteId);
+    if (!ids.length) return;
+    setForm((prev) => ({
+      ...prev,
+      targetAthleteIds: Array.from(new Set([...prev.targetAthleteIds, ...ids])),
+    }));
   };
 
   const handleClose = () => {
@@ -357,6 +410,24 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
 
               {form.visibilityType === 'SELECTED' && (
                 <div className="mt-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Button type="button" variant="secondary" className="min-h-[36px]" onClick={fetchNearbyAthletes} disabled={nearbyLoading}>
+                      {nearbyLoading ? 'Finding nearby...' : 'Suggest nearby athletes'}
+                    </Button>
+                    {nearbySuggestions.length > 0 ? (
+                      <Button type="button" variant="ghost" className="min-h-[36px]" onClick={addNearbyToTargets}>
+                        Add all suggested
+                      </Button>
+                    ) : null}
+                  </div>
+                  {nearbyError ? <p className="mb-2 text-xs text-rose-500">{nearbyError}</p> : null}
+                  {nearbySuggestions.length > 0 ? (
+                    <div className="mb-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
+                      <p className="text-xs text-[var(--muted)]">
+                        Nearby ({nearbySuggestions.length}) within 15km: {nearbySuggestions.map((item) => `${item.name} (${item.distanceKm}km)`).join(', ')}
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="mb-2 text-xs text-[var(--muted)]">Select athletes:</p>
                   <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2">
                     {athletes.map((athlete) => (
