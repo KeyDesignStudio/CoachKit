@@ -113,6 +113,7 @@ const updateSchema = z.object({
   workoutDetail: z.union([z.string().trim().max(20000), z.null()]).optional(),
   attachmentsJson: z.unknown().optional(),
   status: z.nativeEnum(CalendarItemStatus).optional(),
+  planningStatus: z.union([z.literal('UNPLANNED'), z.literal('PUBLISHED'), z.literal('DRAFT'), z.null()]).optional(),
   templateId: z.union([idSchema, z.null()]).optional(),
 });
 
@@ -273,6 +274,10 @@ export async function PATCH(
 
     if (payload.status) {
       data.status = payload.status;
+    }
+
+    if (payload.planningStatus !== undefined) {
+      data.planningStatus = payload.planningStatus;
     }
 
     if (payload.templateId !== undefined) {

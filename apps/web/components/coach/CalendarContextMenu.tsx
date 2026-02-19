@@ -9,7 +9,15 @@ import type { IconName } from '@/components/ui/iconRegistry';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 
 export type Position = { x: number; y: number };
-export type ContextMenuAction = 'copy' | 'paste' | 'delete' | 'edit' | 'library-insert' | 'library-insert-item';
+export type ContextMenuAction =
+  | 'copy'
+  | 'paste'
+  | 'delete'
+  | 'edit'
+  | 'library-insert'
+  | 'library-insert-item'
+  | 'publish-session'
+  | 'unpublish-session';
 
 type GroupSessionItem = {
   id: string;
@@ -30,6 +38,8 @@ type CalendarContextMenuProps = {
   onAction: (action: ContextMenuAction, payload?: any) => void;
   libraryItems?: GroupSessionItem[];
   showLibraryInsert?: boolean;
+  canPublishSession?: boolean;
+  canUnpublishSession?: boolean;
 };
 
 export function CalendarContextMenu({
@@ -44,6 +54,8 @@ export function CalendarContextMenu({
   onAction,
   libraryItems = [],
   showLibraryInsert = true,
+  canPublishSession = false,
+  canUnpublishSession = false,
 }: CalendarContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [showLibraryList, setShowLibraryList] = useState(false);
@@ -84,6 +96,18 @@ export function CalendarContextMenu({
 
     if (type === 'session') {
       list.push({
+        label: 'Publish session',
+        icon: 'completed',
+        action: 'publish-session',
+        disabled: !canPublishSession,
+      });
+      list.push({
+        label: 'Unpublish session',
+        icon: 'planned',
+        action: 'unpublish-session',
+        disabled: !canUnpublishSession,
+      });
+      list.push({
         label: canCopy ? 'Copy session' : copyDisabledLabel ?? 'Copy session',
         icon: 'copyWeek',
         action: 'copy',
@@ -108,14 +132,14 @@ export function CalendarContextMenu({
     }
 
     return list;
-  }, [type, canPaste, showLibraryList, showLibraryInsert]);
+  }, [type, canPaste, showLibraryList, showLibraryInsert, canPublishSession, canUnpublishSession, canCopy, copyDisabledLabel, pasteDisabledLabel]);
 
   if (!isOpen) return null;
 
   // Simple positioning logic to keep in viewport
   const menuWidth = 240;
   // If showing library list, expand height, otherwise calc standard
-  const standardHeight = (type === 'session' ? 2 : 2) * 40 + 16; 
+  const standardHeight = (type === 'session' ? 4 : 2) * 40 + 16;
   const menuHeight = showLibraryList ? 320 : standardHeight;
   
   let x = position.x;
