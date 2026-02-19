@@ -42,6 +42,24 @@ enum PlanWeekStatus {
 
 enum OAuthProvider {
   STRAVA
+  GARMIN
+  WAHOO
+  COROS
+}
+
+enum ExternalProvider {
+  STRAVA
+  GARMIN
+  WAHOO
+  COROS
+  POLAR
+}
+
+enum ExternalWebhookEventStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
 }
 
 enum TrainingPlanFrequency {
@@ -464,6 +482,8 @@ model AthleteProfile {
   coachJournalEntries CoachJournalEntry[]
   stravaConnection    StravaConnection?
   stravaSyncIntents   StravaSyncIntent[]
+  externalConnections ExternalConnection[]
+  externalWebhookEvents ExternalWebhookEvent[]
 
   // AI Plan Builder (v1)
   aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
@@ -1046,6 +1066,49 @@ model StravaSyncIntent {
   @@unique([athleteId, stravaActivityId])
   @@index([status, createdAt])
   @@index([athleteId, status])
+}
+
+model ExternalConnection {
+  id               String           @id @default(cuid())
+  athleteId        String
+  provider         ExternalProvider
+  externalAthleteId String
+  accessToken      String
+  refreshToken     String?
+  expiresAt        DateTime?
+  scope            String?
+  lastSyncAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@unique([athleteId, provider])
+  @@unique([provider, externalAthleteId])
+  @@index([provider, lastSyncAt])
+}
+
+model ExternalWebhookEvent {
+  id                 String                    @id @default(cuid())
+  provider           ExternalProvider
+  athleteId          String?
+  externalAthleteId  String?
+  externalActivityId String?
+  eventType          String?
+  status             ExternalWebhookEventStatus @default(PENDING)
+  attempts           Int                        @default(0)
+  nextAttemptAt      DateTime?
+  processedAt        DateTime?
+  lastError          String?
+  payloadJson        Json
+  receivedAt         DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  athlete AthleteProfile? @relation(fields: [athleteId], references: [userId], onDelete: SetNull)
+
+  @@index([provider, status, nextAttemptAt])
+  @@index([athleteId, provider])
+  @@index([provider, externalActivityId])
 }
 
 model CronRun {
