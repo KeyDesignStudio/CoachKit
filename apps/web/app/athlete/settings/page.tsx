@@ -381,10 +381,7 @@ export default function AthleteSettingsPage() {
 
   const connected = Boolean(status?.connected);
   const stravaAthleteId = status?.connection?.stravaAthleteId ?? '';
-  const openIssues = useMemo(
-    () => issues.filter((issue) => issue.status === 'FAILED' || issue.status === 'PENDING'),
-    [issues]
-  );
+  const openIssues = issues.filter((issue) => issue.status === 'FAILED' || issue.status === 'PENDING');
 
   return (
     <section className="flex flex-col gap-6">
