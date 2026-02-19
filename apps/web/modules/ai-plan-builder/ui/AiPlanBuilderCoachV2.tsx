@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiClientError, useApi } from '@/components/api-client';
 import { Block } from '@/components/ui/Block';
@@ -180,6 +180,21 @@ function goalTimelineToWeeks(raw: string): number | null {
   return null;
 }
 
+function subtractWeeksFromDayKey(dayKey: string, weeks: number): string {
+  if (!isDayKey(dayKey) || !Number.isFinite(weeks) || weeks <= 1) return dayKey;
+  const date = parseDayKeyToUtcDate(dayKey);
+  date.setUTCDate(date.getUTCDate() - (weeks - 1) * 7);
+  return date.toISOString().slice(0, 10);
+}
+
+function arraysEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function dayIndicesFromShorts(days: string[]): number[] {
   return Array.from(
     new Set(
@@ -278,6 +293,7 @@ function getWeekCommencingLabel(weekSessions: any[]): string {
 
 export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
+  const hasAutoSyncedRequestRef = useRef(false);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +331,7 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
   const requestDefaults = useMemo(() => {
     const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
     const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
+    const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
     const weeklyAvailabilityDays = dayIndicesFromShorts(trainingRequest.availabilityDays);
     const coachGuidanceText = [
@@ -327,6 +344,7 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
       .join('\n');
 
     return {
+      startDate,
       completionDate,
       weeksToEventOverride,
       weeklyAvailabilityMinutes: Number.isFinite(weeklyAvailabilityMinutes) && weeklyAvailabilityMinutes > 0 ? weeklyAvailabilityMinutes : null,
@@ -463,6 +481,7 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
     (forceClearDraft = false) => {
       setSetup((prev) => {
         const next = { ...prev };
+        if (requestDefaults.startDate) next.startDate = requestDefaults.startDate;
         if (requestDefaults.completionDate) next.completionDate = requestDefaults.completionDate;
         if (requestDefaults.weeksToEventOverride) next.weeksToEventOverride = requestDefaults.weeksToEventOverride;
         if (requestDefaults.weeklyAvailabilityMinutes) next.weeklyAvailabilityMinutes = requestDefaults.weeklyAvailabilityMinutes;
@@ -475,6 +494,7 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
         return next;
       });
 
+      hasAutoSyncedRequestRef.current = true;
       if (forceClearDraft && draftPlanLatest?.id) {
         setDraftPlanLatest(null);
         setPublishStatus(null);
@@ -487,6 +507,18 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
     [draftPlanLatest?.id, requestDefaults]
   );
 
+  useEffect(() => {
+    if (hasAutoSyncedRequestRef.current) return;
+    const hasRequestSignal =
+      Boolean(requestDefaults.startDate) ||
+      Boolean(requestDefaults.completionDate) ||
+      Boolean(requestDefaults.weeksToEventOverride) ||
+      Boolean(requestDefaults.weeklyAvailabilityMinutes) ||
+      requestDefaults.weeklyAvailabilityDays.length > 0;
+    if (!hasRequestSignal) return;
+    applyRequestToSetup(false);
+  }, [applyRequestToSetup, requestDefaults]);
+
   const openTrainingRequest = useCallback(async () => {
     setBusy('open-request');
     setError(null);
@@ -497,13 +529,14 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
         data: { draftJson: buildDraftJsonFromTrainingRequest(trainingRequest) },
       });
       await fetchIntakeLifecycle();
+      applyRequestToSetup(false);
       setInfo('Training request opened.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to open request.');
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchIntakeLifecycle, request, trainingRequest]);
+  }, [applyRequestToSetup, athleteId, fetchIntakeLifecycle, request, trainingRequest]);
 
   const saveTrainingRequestDraft = useCallback(async () => {
     const intakeResponseId = String(intakeLifecycle?.openDraftIntake?.id ?? '');
@@ -521,13 +554,14 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
         },
       });
       await fetchIntakeLifecycle();
+      applyRequestToSetup(false);
       setInfo('Training request draft saved.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to save request draft.');
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
+  }, [applyRequestToSetup, athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   const markRequestComplete = useCallback(async () => {
     const intakeResponseId = String(intakeLifecycle?.openDraftIntake?.id ?? '');
@@ -549,13 +583,14 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
         data: { intakeResponseId },
       });
       await fetchIntakeLifecycle();
+      applyRequestToSetup(false);
       setInfo('Training request marked complete.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to complete request.');
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
+  }, [applyRequestToSetup, athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   const generateWeeklyPlan = useCallback(async () => {
     setBusy('generate-plan');
@@ -668,6 +703,34 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
   const hasOpenRequest = Boolean(intakeLifecycle?.lifecycle?.hasOpenRequest ?? intakeLifecycle?.openDraftIntake?.id);
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
+  const setupSync = useMemo(() => {
+    const issues: string[] = [];
+    if (requestDefaults.startDate && setup.startDate !== requestDefaults.startDate) issues.push('start date');
+    if (requestDefaults.completionDate && setup.completionDate !== requestDefaults.completionDate) issues.push('completion date');
+    if (requestDefaults.weeksToEventOverride && setup.weeksToEventOverride !== requestDefaults.weeksToEventOverride) issues.push('block length');
+    if (
+      requestDefaults.weeklyAvailabilityMinutes &&
+      Number(setup.weeklyAvailabilityMinutes) !== Number(requestDefaults.weeklyAvailabilityMinutes)
+    ) {
+      issues.push('weekly minutes');
+    }
+    if (requestDefaults.weeklyAvailabilityDays.length) {
+      const a = [...requestDefaults.weeklyAvailabilityDays].sort((x, y) => x - y);
+      const b = [...setup.weeklyAvailabilityDays].sort((x, y) => x - y);
+      if (!arraysEqual(a, b)) issues.push('available days');
+    }
+    const hasRequestValues =
+      Boolean(requestDefaults.startDate) ||
+      Boolean(requestDefaults.completionDate) ||
+      Boolean(requestDefaults.weeksToEventOverride) ||
+      Boolean(requestDefaults.weeklyAvailabilityMinutes) ||
+      requestDefaults.weeklyAvailabilityDays.length > 0;
+    return {
+      hasRequestValues,
+      inSync: hasRequestValues && issues.length === 0,
+      issues,
+    };
+  }, [requestDefaults, setup]);
   const selectedWeekPosition = weekOptions.findIndex((w) => w.weekIndex === selectedWeekIndex);
   const prevWeekIndex = selectedWeekPosition > 0 ? weekOptions[selectedWeekPosition - 1]?.weekIndex : null;
   const nextWeekIndex =
@@ -840,13 +903,26 @@ export function AiPlanBuilderCoachV2({ athleteId }: { athleteId: string }) {
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             Step 2 of 3. Confirm structure and training limits before generation.
           </div>
+          {!setupSync.hasRequestValues ? (
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+              No request values to sync yet. Complete Step 1 first.
+            </div>
+          ) : setupSync.inSync ? (
+            <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Block Setup is synced with Step 1 request values.
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Block Setup is out of sync with Step 1 for: {setupSync.issues.join(', ')}.
+            </div>
+          )}
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             Apply request values into setup before generation. If a draft already exists, applying will clear it and force a fresh build.
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => applyRequestToSetup(true)} disabled={busy != null}>
-              Apply request to block setup
+              Sync setup from request
             </Button>
           </div>
 
