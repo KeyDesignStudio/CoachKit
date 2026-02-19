@@ -42,10 +42,16 @@ type SetupState = {
 };
 
 type AthleteProfileSummary = {
+  primaryGoal?: string | null;
+  focus?: string | null;
+  eventName?: string | null;
+  eventDate?: string | null;
   weeklyMinutesTarget?: number | null;
   availableDays?: string[] | null;
   disciplines?: string[] | null;
   experienceLevel?: string | null;
+  injuryStatus?: string | null;
+  constraintsNotes?: string | null;
 };
 
 type ReferencePlanOption = {
@@ -95,6 +101,19 @@ type IntakeLifecycle = {
   lifecycle?: { hasOpenRequest: boolean; canOpenNewRequest: boolean } | null;
 };
 
+type TrainingRequestForm = {
+  goalDetails: string;
+  goalFocus: string;
+  eventName: string;
+  eventDate: string;
+  goalTimeline: string;
+  weeklyMinutes: string;
+  availabilityDays: string[];
+  experienceLevel: string;
+  injuryStatus: string;
+  constraintsNotes: string;
+};
+
 const DAY_NAME_TO_INDEX: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -104,6 +123,81 @@ const DAY_NAME_TO_INDEX: Record<string, number> = {
   Friday: 5,
   Saturday: 6,
 };
+const DAY_NAME_TO_SHORT: Record<string, string> = {
+  Sunday: 'Sun',
+  Monday: 'Mon',
+  Tuesday: 'Tue',
+  Wednesday: 'Wed',
+  Thursday: 'Thu',
+  Friday: 'Fri',
+  Saturday: 'Sat',
+};
+const DAY_SHORTS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const GOAL_TIMELINE_OPTIONS = ['No date in mind', 'In 6-8 weeks', 'In 2-3 months', 'In 3-6 months', 'In 6-12 months'];
+
+function dayShortsFromProfileDays(days: string[] | null | undefined): string[] {
+  if (!Array.isArray(days)) return [];
+  const normalized = days
+    .map((d) => {
+      const trimmed = String(d ?? '').trim();
+      if (!trimmed) return null;
+      return DAY_NAME_TO_SHORT[trimmed] ?? (DAY_SHORTS.includes(trimmed) ? trimmed : null);
+    })
+    .filter((d): d is string => Boolean(d));
+  return Array.from(new Set(normalized));
+}
+
+function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null): TrainingRequestForm {
+  return {
+    goalDetails: String(profile?.primaryGoal ?? ''),
+    goalFocus: String(profile?.focus ?? ''),
+    eventName: String(profile?.eventName ?? ''),
+    eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
+    goalTimeline: '',
+    weeklyMinutes: profile?.weeklyMinutesTarget != null ? String(profile.weeklyMinutesTarget) : '',
+    availabilityDays: dayShortsFromProfileDays(profile?.availableDays ?? null),
+    experienceLevel: String(profile?.experienceLevel ?? ''),
+    injuryStatus: String(profile?.injuryStatus ?? ''),
+    constraintsNotes: String(profile?.constraintsNotes ?? ''),
+  };
+}
+
+function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
+  const map = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const availability = Array.isArray(map.availability_days) ? map.availability_days : [];
+  const availabilityDays = availability
+    .map((d) => String(d ?? '').trim())
+    .filter((d) => DAY_SHORTS.includes(d) || Object.keys(DAY_NAME_TO_SHORT).includes(d))
+    .map((d) => (DAY_SHORTS.includes(d) ? d : DAY_NAME_TO_SHORT[d]));
+
+  return {
+    goalDetails: String(map.goal_details ?? ''),
+    goalFocus: String(map.goal_focus ?? ''),
+    eventName: String(map.event_name ?? ''),
+    eventDate: typeof map.event_date === 'string' ? map.event_date.slice(0, 10) : '',
+    goalTimeline: String(map.goal_timeline ?? ''),
+    weeklyMinutes: map.weekly_minutes != null ? String(map.weekly_minutes) : '',
+    availabilityDays: Array.from(new Set(availabilityDays)),
+    experienceLevel: String(map.experience_level ?? ''),
+    injuryStatus: String(map.injury_status ?? ''),
+    constraintsNotes: String(map.constraints_notes ?? ''),
+  };
+}
+
+function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<string, unknown> {
+  return {
+    goal_details: form.goalDetails.trim() || null,
+    goal_focus: form.goalFocus.trim() || null,
+    event_name: form.eventName.trim() || null,
+    event_date: form.eventDate || null,
+    goal_timeline: form.goalTimeline || null,
+    weekly_minutes: form.weeklyMinutes ? Number(form.weeklyMinutes) : null,
+    availability_days: form.availabilityDays,
+    experience_level: form.experienceLevel.trim() || null,
+    injury_status: form.injuryStatus.trim() || null,
+    constraints_notes: form.constraintsNotes.trim() || null,
+  };
+}
 
 function normalizeDayIndices(days: string[] | null | undefined): number[] {
   if (!Array.isArray(days)) return [];
@@ -441,6 +535,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const [performanceModel, setPerformanceModel] = useState<PerformanceModelPreview | null>(null);
   const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycle | null>(null);
+  const [trainingRequest, setTrainingRequest] = useState<TrainingRequestForm>(() => buildTrainingRequestFromProfile(null));
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -473,6 +568,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     setupSeededForAthlete.current = null;
     setSetup(buildSetupFromProfile(null));
     setAthleteProfile(null);
+    setTrainingRequest(buildTrainingRequestFromProfile(null));
   }, [athleteId]);
 
   // Hydrate setup defaults from latest draft setupJson when available.
@@ -760,13 +856,29 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     };
   }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchIntakeLifecycle, fetchPerformanceModel, fetchPublishStatus, fetchReferencePlans, request]);
 
+  useEffect(() => {
+    const openDraftJson = intakeLifecycle?.openDraftIntake?.draftJson;
+    const submittedDraftJson = intakeLifecycle?.latestSubmittedIntake?.draftJson;
+    if (openDraftJson && typeof openDraftJson === 'object') {
+      setTrainingRequest(buildTrainingRequestFromDraftJson(openDraftJson));
+      return;
+    }
+    if (submittedDraftJson && typeof submittedDraftJson === 'object') {
+      setTrainingRequest(buildTrainingRequestFromDraftJson(submittedDraftJson));
+      return;
+    }
+    setTrainingRequest(buildTrainingRequestFromProfile(athleteProfile));
+  }, [athleteProfile, intakeLifecycle?.latestSubmittedIntake?.id, intakeLifecycle?.openDraftIntake?.id]);
+
   const openCoachTrainingRequest = useCallback(async () => {
     setBusy('open-training-request');
     setError(null);
     try {
       await request<{ intakeResponse: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
         method: 'POST',
-        data: {},
+        data: {
+          draftJson: buildDraftJsonFromTrainingRequest(trainingRequest),
+        },
       });
       await fetchIntakeLifecycle();
     } catch (e) {
@@ -775,7 +887,29 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchIntakeLifecycle, request]);
+  }, [athleteId, fetchIntakeLifecycle, request, trainingRequest]);
+
+  const saveOpenTrainingRequest = useCallback(async () => {
+    const intakeId = String(intakeLifecycle?.openDraftIntake?.id ?? '');
+    if (!intakeId) return;
+    setBusy('save-training-request');
+    setError(null);
+    try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
+        method: 'PATCH',
+        data: {
+          intakeResponseId: intakeId,
+          draftJson: buildDraftJsonFromTrainingRequest(trainingRequest),
+        },
+      });
+      await fetchIntakeLifecycle();
+    } catch (e) {
+      const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to save request.';
+      setError(message);
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   const submitOpenTrainingRequest = useCallback(async () => {
     const intakeId = String(intakeLifecycle?.openDraftIntake?.id ?? '');
@@ -783,6 +917,13 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     setBusy('submit-training-request');
     setError(null);
     try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
+        method: 'PATCH',
+        data: {
+          intakeResponseId: intakeId,
+          draftJson: buildDraftJsonFromTrainingRequest(trainingRequest),
+        },
+      });
       await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
         method: 'POST',
         data: { intakeResponseId: intakeId },
@@ -794,7 +935,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request]);
+  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   useEffect(() => {
     if (!shouldDeferReview) return;
@@ -1503,7 +1644,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         <Block title="1) Training Request">
           <div className="space-y-3 text-sm">
             <div className="text-[var(--fg-muted)]">
-              One open request at a time. Coach can start it, or athlete can submit it from their intake flow.
+              Coach completes this request with event-specific inputs. One open request at a time.
             </div>
             <div className="rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2">
               <div>
@@ -1519,6 +1660,119 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                   : 'None'}
               </div>
             </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Primary goal for this block</div>
+                <Input
+                  value={trainingRequest.goalDetails}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, goalDetails: e.target.value }))}
+                  placeholder="e.g. Build to complete Olympic triathlon"
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Goal focus</div>
+                <Input
+                  value={trainingRequest.goalFocus}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, goalFocus: e.target.value }))}
+                  placeholder="e.g. Improve run durability"
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Event name</div>
+                <Input
+                  value={trainingRequest.eventName}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, eventName: e.target.value }))}
+                  placeholder="e.g. Noosa Triathlon"
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Event date</div>
+                <Input
+                  type="date"
+                  value={trainingRequest.eventDate}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, eventDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Target timeline</div>
+                <Select
+                  value={trainingRequest.goalTimeline}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, goalTimeline: e.target.value }))}
+                >
+                  <option value="">Select timeline</option>
+                  {GOAL_TIMELINE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Weekly time budget (minutes)</div>
+                <Input
+                  inputMode="numeric"
+                  value={trainingRequest.weeklyMinutes}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, weeklyMinutes: e.target.value }))}
+                  placeholder="e.g. 360"
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Experience level</div>
+                <Select
+                  value={trainingRequest.experienceLevel}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, experienceLevel: e.target.value }))}
+                >
+                  <option value="">Select level</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </Select>
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Available days</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_SHORTS.map((day) => {
+                    const selected = trainingRequest.availabilityDays.includes(day);
+                    return (
+                      <Button
+                        key={day}
+                        type="button"
+                        size="sm"
+                        variant={selected ? 'primary' : 'secondary'}
+                        onClick={() =>
+                          setTrainingRequest((s) => ({
+                            ...s,
+                            availabilityDays: selected ? s.availabilityDays.filter((d) => d !== day) : [...s.availabilityDays, day],
+                          }))
+                        }
+                      >
+                        {day}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Current injury or pain status</div>
+                <Textarea
+                  value={trainingRequest.injuryStatus}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, injuryStatus: e.target.value }))}
+                  rows={3}
+                  placeholder="e.g. Mild Achilles soreness after hard runs"
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-[var(--fg-muted)]">Other constraints and coach notes</div>
+                <Textarea
+                  value={trainingRequest.constraintsNotes}
+                  onChange={(e) => setTrainingRequest((s) => ({ ...s, constraintsNotes: e.target.value }))}
+                  rows={3}
+                  placeholder="e.g. Travel Tue-Thu next fortnight"
+                />
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -1528,6 +1782,15 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
                 data-testid="apb-open-training-request"
               >
                 {busy === 'open-training-request' ? 'Opening…' : 'Open training request'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy != null || !intakeLifecycle?.openDraftIntake}
+                onClick={saveOpenTrainingRequest}
+                data-testid="apb-save-training-request"
+              >
+                {busy === 'save-training-request' ? 'Saving…' : 'Save request draft'}
               </Button>
               <Button
                 type="button"
