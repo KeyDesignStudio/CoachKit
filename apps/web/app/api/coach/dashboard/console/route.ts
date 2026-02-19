@@ -8,6 +8,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { createServerProfiler } from '@/lib/server-profiler';
+import { getStravaVitalsForAthletes, type StravaVitalsSnapshot } from '@/lib/strava-vitals';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,7 @@ type DashboardAggregates = {
     awaitingCoachReview: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
+  stravaVitals: StravaVitalsSnapshot;
   meta: {
     completedItemCount: number;
   };
@@ -160,6 +162,7 @@ async function getDashboardAggregates(params: {
   coachId: string;
   rangeFilter: Record<string, unknown>;
   athleteFilter: Record<string, unknown>;
+  athleteId: string | null;
   disciplineFilter: Record<string, unknown>;
   cacheKey: string;
   bypassCache: boolean;
@@ -198,7 +201,9 @@ async function getDashboardAggregates(params: {
       disciplines: a.disciplines,
     }));
 
-    const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount] =
+    const targetAthleteIdsForVitals = params.athleteId ? [params.athleteId] : athleteRows.map((row) => row.id);
+
+    const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount, stravaVitals] =
       await Promise.all([
         prisma.calendarItem.count({
           where: {
@@ -269,6 +274,7 @@ async function getDashboardAggregates(params: {
             reviewedAt: null,
           },
         }),
+        getStravaVitalsForAthletes(targetAthleteIdsForVitals, { windowDays: 90 }),
       ]);
 
     let totalMinutes = 0;
@@ -311,6 +317,7 @@ async function getDashboardAggregates(params: {
         awaitingCoachReview: awaitingReviewCount,
       },
       disciplineLoad,
+      stravaVitals,
       meta: {
         completedItemCount: completedItems.length,
       },
@@ -540,6 +547,7 @@ export async function GET(request: NextRequest) {
       coachId: user.id,
       rangeFilter,
       athleteFilter,
+      athleteId,
       disciplineFilter,
       cacheKey: aggregateCacheKey,
       bypassCache: bypassCaches,
@@ -576,6 +584,7 @@ export async function GET(request: NextRequest) {
         kpis: aggregates.value.kpis,
         attention: aggregates.value.attention,
         disciplineLoad: aggregates.value.disciplineLoad,
+        stravaVitals: aggregates.value.stravaVitals,
         reviewInbox: inboxPage.value.items,
         reviewInboxPage: {
           offset: inboxOffset,

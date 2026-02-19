@@ -13,12 +13,14 @@ import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
+import type { StravaVitalsSnapshot } from '@/lib/strava-vitals';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -70,6 +72,7 @@ type DashboardResponse = {
     awaitingCoachReview: number;
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
+  stravaVitals: StravaVitalsSnapshot;
   reviewInbox: ReviewItem[];
   reviewInboxPage: {
     offset: number;
@@ -804,6 +807,14 @@ export default function CoachDashboardConsolePage() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-6">
+          <StravaVitalsSummaryCard
+            vitals={data?.stravaVitals ?? null}
+            loading={loading && !data}
+            title={athleteId ? 'Athlete Strava Vitals (90d)' : 'Squad Strava Vitals (90d)'}
+          />
         </div>
 
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
