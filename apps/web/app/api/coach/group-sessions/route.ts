@@ -19,11 +19,14 @@ const localTime = z
 const nonEmptyString = z.string().trim().min(1);
 
 const idSchema = z.string().cuid().or(z.string().cuid2());
+const coordinateSchema = z.number().finite();
 
 const createGroupSessionSchema = z.object({
   title: nonEmptyString,
   discipline: nonEmptyString,
   location: nonEmptyString.optional(),
+  locationLat: coordinateSchema.min(-90).max(90).optional().nullable(),
+  locationLon: coordinateSchema.min(-180).max(180).optional().nullable(),
   startTimeLocal: localTime,
   durationMinutes: z.number().int().min(1).max(600),
   distanceMeters: z.number().positive().optional().nullable(),
@@ -37,6 +40,16 @@ const createGroupSessionSchema = z.object({
   visibilityType: z.nativeEnum(GroupVisibilityType).default(GroupVisibilityType.ALL),
   targetAthleteIds: z.array(idSchema).optional(),
   targetSquadIds: z.array(idSchema).optional(),
+}).superRefine((payload, ctx) => {
+  const hasLat = payload.locationLat !== undefined && payload.locationLat !== null;
+  const hasLon = payload.locationLon !== undefined && payload.locationLon !== null;
+  if (hasLat !== hasLon) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'locationLat and locationLon must be provided together.',
+      path: hasLat ? ['locationLon'] : ['locationLat'],
+    });
+  }
 });
 
 const groupSessionInclude = {
@@ -90,6 +103,8 @@ export async function POST(request: NextRequest) {
           title: payload.title,
           discipline: payload.discipline,
           location: payload.location ?? null,
+          locationLat: payload.locationLat ?? null,
+          locationLon: payload.locationLon ?? null,
           startTimeLocal: payload.startTimeLocal,
           durationMinutes: payload.durationMinutes,
           distanceMeters: payload.distanceMeters ?? null,

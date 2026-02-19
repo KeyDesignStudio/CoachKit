@@ -754,6 +754,8 @@ model GroupSession {
   title            String
   discipline       String
   location         String?
+  locationLat      Float?
+  locationLon      Float?
   startTimeLocal   String // "06:00" etc (keep MVP simple)
   durationMinutes  Int
   distanceMeters   Float?

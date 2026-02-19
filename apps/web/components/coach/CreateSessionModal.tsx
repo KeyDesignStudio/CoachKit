@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
+import { LocationInputWithGeocode } from '@/components/coach/LocationInputWithGeocode';
 
 const WEEKDAY_OPTIONS = [
   { label: 'Mon', value: 'MO' },
@@ -32,6 +33,8 @@ type SessionFormState = {
   title: string;
   discipline: string;
   location: string;
+  locationLat: number | null;
+  locationLon: number | null;
   startTimeLocal: string;
   durationMinutes: string;
   distanceMeters: number | null;
@@ -73,6 +76,8 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
       title: '',
       discipline: '',
       location: '',
+      locationLat: null,
+      locationLon: null,
       startTimeLocal: '05:30',
       durationMinutes: '60',
       distanceMeters: null,
@@ -153,6 +158,10 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
     if (form.location.trim()) {
       payload.location = form.location.trim();
     }
+    if (form.locationLat != null && form.locationLon != null) {
+      payload.locationLat = form.locationLat;
+      payload.locationLon = form.locationLon;
+    }
 
     if (form.description.trim()) {
       payload.description = form.description.trim();
@@ -183,6 +192,8 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
         title: '',
         discipline: '',
         location: '',
+        locationLat: null,
+        locationLon: null,
         startTimeLocal: '05:30',
         durationMinutes: '60',
         distanceMeters: null,
@@ -286,9 +297,12 @@ export function CreateSessionModal({ isOpen, athletes, onClose, onCreate, initia
 
                 <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
                   Location (optional)
-                  <Input
+                  <LocationInputWithGeocode
                     value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    onValueChange={(location) => setForm((prev) => ({ ...prev, location }))}
+                    latitude={form.locationLat}
+                    longitude={form.locationLon}
+                    onCoordinatesChange={(locationLat, locationLon) => setForm((prev) => ({ ...prev, locationLat, locationLon }))}
                   />
                 </label>
 

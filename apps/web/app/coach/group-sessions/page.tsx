@@ -40,6 +40,8 @@ type GroupSessionRecord = {
   title: string;
   discipline: string;
   location: string | null;
+  locationLat: number | null;
+  locationLon: number | null;
   startTimeLocal: string;
   durationMinutes: number;
   description: string | null;
@@ -257,6 +259,8 @@ export default function CoachGroupSessionsPage() {
       title: `${session.title} (Copy)`,
       discipline: session.discipline,
       location: session.location ?? '',
+      locationLat: session.locationLat ?? null,
+      locationLon: session.locationLon ?? null,
       startTimeLocal: session.startTimeLocal,
       durationMinutes: String(session.durationMinutes),
       description: session.description ?? '',
@@ -288,6 +292,10 @@ export default function CoachGroupSessionsPage() {
       title: typeof preset.title === 'string' ? preset.title : '',
       discipline: typeof preset.discipline === 'string' ? preset.discipline : '',
       location: typeof preset.location === 'string' ? preset.location : '',
+      locationLat:
+        typeof preset.locationLat === 'number' && Number.isFinite(preset.locationLat) ? preset.locationLat : null,
+      locationLon:
+        typeof preset.locationLon === 'number' && Number.isFinite(preset.locationLon) ? preset.locationLon : null,
       startTimeLocal: typeof preset.startTimeLocal === 'string' ? preset.startTimeLocal : '05:30',
       durationMinutes:
         typeof preset.durationMinutes === 'number' && Number.isFinite(preset.durationMinutes)
@@ -326,6 +334,8 @@ export default function CoachGroupSessionsPage() {
               title: session.title,
               discipline: session.discipline,
               location: session.location ?? '',
+              locationLat: session.locationLat ?? null,
+              locationLon: session.locationLon ?? null,
               startTimeLocal: session.startTimeLocal,
               durationMinutes: session.durationMinutes,
               description: session.description ?? '',

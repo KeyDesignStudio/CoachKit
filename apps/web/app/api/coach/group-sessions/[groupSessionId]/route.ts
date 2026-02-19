@@ -19,12 +19,15 @@ const localTime = z
 const nonEmptyString = z.string().trim().min(1);
 
 const idSchema = z.string().cuid().or(z.string().cuid2());
+const coordinateSchema = z.number().finite();
 
 const updateGroupSessionSchema = z
   .object({
     title: nonEmptyString.optional(),
     discipline: nonEmptyString.optional(),
     location: nonEmptyString.optional().nullable(),
+    locationLat: coordinateSchema.min(-90).max(90).optional().nullable(),
+    locationLon: coordinateSchema.min(-180).max(180).optional().nullable(),
     startTimeLocal: localTime.optional(),
     durationMinutes: z.number().int().min(1).max(600).optional(),
     distanceMeters: z.number().positive().optional().nullable(),
@@ -38,6 +41,17 @@ const updateGroupSessionSchema = z
     visibilityType: z.nativeEnum(GroupVisibilityType).optional(),
     targetAthleteIds: z.array(idSchema).optional(),
     targetSquadIds: z.array(idSchema).optional(),
+  })
+  .superRefine((payload, ctx) => {
+    const hasLatField = Object.prototype.hasOwnProperty.call(payload, 'locationLat');
+    const hasLonField = Object.prototype.hasOwnProperty.call(payload, 'locationLon');
+    if (hasLatField !== hasLonField) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'locationLat and locationLon must be patched together.',
+        path: hasLatField ? ['locationLon'] : ['locationLat'],
+      });
+    }
   })
   .refine((payload) => Object.keys(payload).length > 0, {
     message: 'At least one field must be provided.',
@@ -92,6 +106,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (payload.location !== undefined) {
       patchData.location = payload.location ?? null;
+    }
+    if (payload.locationLat !== undefined) {
+      patchData.locationLat = payload.locationLat ?? null;
+    }
+    if (payload.locationLon !== undefined) {
+      patchData.locationLon = payload.locationLon ?? null;
     }
 
     if (payload.startTimeLocal !== undefined) {
