@@ -106,6 +106,16 @@ type ApplyResult = {
   createdIds: string[];
 };
 
+type PlacementSuggestionResult = {
+  suggestion: {
+    model: string;
+    confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+    selectedDays: string[];
+    suggestedStartTimeLocal: string;
+    rationale: string;
+  };
+};
+
 type GroupSessionDrawerProps = {
   session: GroupSessionRecord | null;
   athletes: AthleteOption[];
@@ -219,6 +229,9 @@ export function GroupSessionDrawer({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateActionError, setTemplateActionError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [placementSuggestion, setPlacementSuggestion] = useState<PlacementSuggestionResult['suggestion'] | null>(null);
+  const [placementLoading, setPlacementLoading] = useState(false);
+  const [placementError, setPlacementError] = useState('');
   const [nearbySuggestions, setNearbySuggestions] = useState<NearbyAthleteSuggestion[]>([]);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState('');
@@ -343,6 +356,35 @@ export function GroupSessionDrawer({
       ...prev,
       targetAthleteIds: Array.from(new Set([...prev.targetAthleteIds, ...ids])),
     }));
+  };
+
+  const suggestPlacement = async () => {
+    setPlacementLoading(true);
+    setPlacementError('');
+    try {
+      const response = await fetch(`/api/coach/group-sessions/${encodeURIComponent(session.id)}/placement-suggestion?lookbackDays=21`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to get placement suggestion.');
+      }
+      const json = (await response.json()) as { data?: PlacementSuggestionResult };
+      const suggestion = json?.data?.suggestion;
+      if (!suggestion) {
+        throw new Error('No placement suggestion returned.');
+      }
+      setPlacementSuggestion(suggestion);
+      setForm((prev) => ({
+        ...prev,
+        selectedDays: suggestion.selectedDays.filter((day): day is string => DAY_ORDER.includes(day)),
+        startTimeLocal: suggestion.suggestedStartTimeLocal || prev.startTimeLocal,
+      }));
+    } catch (error) {
+      setPlacementError(error instanceof Error ? error.message : 'Failed to get placement suggestion.');
+    } finally {
+      setPlacementLoading(false);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -593,7 +635,12 @@ export function GroupSessionDrawer({
 
             {/* Weekdays */}
             <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Weekdays</h3>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Weekdays</h3>
+                <Button type="button" variant="secondary" className="min-h-[36px]" onClick={suggestPlacement} disabled={placementLoading}>
+                  {placementLoading ? 'Analysing...' : 'Suggest placement'}
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {WEEKDAY_OPTIONS.map((day) => (
                   <button
@@ -610,6 +657,12 @@ export function GroupSessionDrawer({
                   </button>
                 ))}
               </div>
+              {placementError ? <p className="mt-2 text-xs text-rose-500">{placementError}</p> : null}
+              {placementSuggestion ? (
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Suggestion ({placementSuggestion.confidence}): {placementSuggestion.rationale}
+                </p>
+              ) : null}
             </div>
 
             {/* Visibility */}
