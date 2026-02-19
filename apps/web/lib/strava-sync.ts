@@ -3,7 +3,9 @@ import { CalendarItemStatus, CompletionSource } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { addDaysToDayKey, getLocalDayKey, parseDayKeyToUtcDate, toAthleteLocalDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
+import { upsertExternalCompletedActivity } from '@/lib/external-sync/ingest-core';
+import { stravaProviderAdapter } from '@/lib/external-sync/adapters/strava';
 
 export type PollSummary = {
   polledAthletes: number;
@@ -67,100 +69,11 @@ type StravaActivity = {
   };
 };
 
-function sanitizeStravaActivityForStorage(activity: StravaActivity): any {
-  // Strava activity detail payloads may include large arrays (laps/segments/etc).
-  // We store a compact version so future fields can be derived without re-fetching.
-  const raw = activity as any;
-  const {
-    segment_efforts,
-    splits_metric,
-    splits_standard,
-    laps,
-    best_efforts,
-    photos,
-    similar_activities,
-    ...rest
-  } = raw ?? {};
-
-  // Ensure the payload is JSON-serializable (no `undefined`, functions, etc)
-  // so Prisma can persist it safely.
-  try {
-    return JSON.parse(JSON.stringify(rest));
-  } catch {
-    return rest;
-  }
-}
-
-function mapStravaDiscipline(activity: StravaActivity) {
-  const raw = (activity.sport_type || activity.type || '').toLowerCase();
-
-  if (raw.includes('run')) return 'RUN';
-  if (raw.includes('ride') || raw.includes('bike')) return 'BIKE';
-  if (raw.includes('swim')) return 'SWIM';
-
-  if (
-    raw.includes('workout') ||
-    raw.includes('weight') ||
-    raw.includes('strength') ||
-    raw.includes('training') ||
-    raw.includes('crossfit') ||
-    raw.includes('yoga') ||
-    raw.includes('pilates')
-  ) {
-    return 'STRENGTH';
-  }
-
-  return 'OTHER';
-}
-
-function secondsToMinutesRounded(seconds: number) {
-  return Math.max(1, Math.round(seconds / 60));
-}
-
 function minutesToTimeString(totalMinutes: number): string {
   const safe = Math.max(0, Math.min(23 * 60 + 59, Math.floor(totalMinutes)));
   const hh = Math.floor(safe / 60);
   const mm = safe % 60;
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
-
-function metersToKm(meters: number) {
-  return meters / 1000;
-}
-
-function compactObject<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const out: Partial<T> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === undefined) continue;
-    out[key as keyof T] = value as T[keyof T];
-  }
-  return out;
-}
-
-function deriveAvgPaceSecPerKm(avgSpeedMps: number | undefined) {
-  if (!avgSpeedMps || !Number.isFinite(avgSpeedMps) || avgSpeedMps <= 0) return undefined;
-  return Math.round(1000 / avgSpeedMps);
-}
-
-function shouldUpdateStravaMetrics(existing: unknown, next: Record<string, unknown>) {
-  if (!existing || typeof existing !== 'object') return true;
-  const prev = existing as Record<string, unknown>;
-  for (const [key, value] of Object.entries(next)) {
-    const prevValue = prev[key];
-
-    if (value && typeof value === 'object') {
-      if (!prevValue || typeof prevValue !== 'object') return true;
-      try {
-        if (JSON.stringify(prevValue) !== JSON.stringify(value)) return true;
-      } catch {
-        return true;
-      }
-      continue;
-    }
-
-    if (prevValue !== value) return true;
-  }
-  return false;
 }
 
 function parseTimeToMinutes(value: string) {
@@ -169,34 +82,6 @@ function parseTimeToMinutes(value: string) {
   const minutes = Number(mm);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return hours * 60 + minutes;
-}
-
-function getZonedParts(date: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const lookup = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-
-  return {
-    y: Number(lookup.year),
-    m: Number(lookup.month),
-    d: Number(lookup.day),
-    hh: Number(lookup.hour),
-    mm: Number(lookup.minute),
-  };
-}
-
-function toZonedMinutes(instant: Date, timeZone: string) {
-  const p = getZonedParts(instant, timeZone);
-  return p.hh * 60 + p.mm;
 }
 
 function formatLocalDateTime(instant: Date, timeZone: string) {
@@ -643,69 +528,20 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       continue;
     }
 
-    const discipline = mapStravaDiscipline(activity);
-    const startInstant = new Date(activity.start_date);
-    const activityDayKey = toAthleteLocalDayKey(startInstant, entry.athleteTimezone);
-    const activityDateOnly = parseDayKeyToUtcDate(activityDayKey);
-    const activityMinutes = toZonedMinutes(startInstant, entry.athleteTimezone);
-    const durationMinutes = secondsToMinutesRounded(activity.elapsed_time);
-    const distanceKm = typeof activity.distance === 'number' ? metersToKm(activity.distance) : null;
-
-    const stravaType = activity.sport_type ?? activity.type;
-    const distanceMeters = typeof activity.distance === 'number' ? activity.distance : undefined;
-    const movingTimeSec = typeof activity.moving_time === 'number' ? activity.moving_time : undefined;
-    const elapsedTimeSec = typeof activity.elapsed_time === 'number' ? activity.elapsed_time : undefined;
-    const totalElevationGainM = typeof activity.total_elevation_gain === 'number' ? activity.total_elevation_gain : undefined;
-    const elevHighM = typeof activity.elev_high === 'number' ? activity.elev_high : undefined;
-    const elevLowM = typeof activity.elev_low === 'number' ? activity.elev_low : undefined;
-    const averageSpeedMps = typeof activity.average_speed === 'number' ? activity.average_speed : undefined;
-    const maxSpeedMps = typeof activity.max_speed === 'number' ? activity.max_speed : undefined;
-    const averageHeartrateBpm = typeof activity.average_heartrate === 'number' ? activity.average_heartrate : undefined;
-    const maxHeartrateBpm = typeof activity.max_heartrate === 'number' ? activity.max_heartrate : undefined;
-    const averageCadenceRpm = typeof activity.average_cadence === 'number' ? activity.average_cadence : undefined;
-    const caloriesKcal = typeof activity.calories === 'number' ? activity.calories : undefined;
-    const summaryPolyline = typeof activity.map?.summary_polyline === 'string' ? activity.map.summary_polyline : undefined;
-    const storedActivity = sanitizeStravaActivityForStorage(activity);
-
-    const stravaMetrics = compactObject({
-      activityId: externalActivityId,
-      startDateUtc: activity.start_date,
-      startDateLocal: activity.start_date_local,
-      timezone: activity.timezone,
-
-      // Retain a compact version of Strava's payload so newly added fields can be
-      // populated without requiring another Strava API fetch.
-      activity: storedActivity,
-
-      name: activity.name,
-      sportType: activity.sport_type,
-      type: activity.type ?? stravaType,
-      distanceMeters,
-      movingTimeSec,
-      elapsedTimeSec,
-
-      totalElevationGainM,
-      elevHighM,
-      elevLowM,
-      averageSpeedMps,
-      maxSpeedMps,
-      averageHeartrateBpm,
-      maxHeartrateBpm,
-      averageCadenceRpm,
-
-      caloriesKcal,
-
-      summaryPolyline,
-
-      avgSpeedMps: averageSpeedMps,
-      avgPaceSecPerKm: discipline === 'RUN' ? deriveAvgPaceSecPerKm(averageSpeedMps) : undefined,
-      avgHr: typeof averageHeartrateBpm === 'number' ? Math.round(averageHeartrateBpm) : undefined,
-      maxHr: typeof maxHeartrateBpm === 'number' ? Math.round(maxHeartrateBpm) : undefined,
+    const normalized = stravaProviderAdapter.normalize(activity, {
+      athleteTimezone: entry.athleteTimezone,
     });
+    if (!normalized) {
+      inc(summary.skippedByReason, 'invalid_payload');
+      continue;
+    }
 
-    const canonicalStartUtc = (stravaMetrics as any)?.startDateUtc ?? activity.start_date;
-    const canonicalStart = new Date(canonicalStartUtc);
-    const startTime = !Number.isNaN(canonicalStart.getTime()) ? canonicalStart : startInstant;
+    const activityDayKey = normalized.activityDayKey;
+    const activityDateOnly = parseDayKeyToUtcDate(activityDayKey);
+    const activityMinutes = normalized.activityMinutes;
+    const durationMinutes = normalized.durationMinutes;
+    const distanceKm = normalized.distanceKm;
+    const discipline = normalized.discipline;
 
     if (isStravaSyncDebugEnabled()) {
       console.info('[strava-sync] activity placement', {
@@ -714,106 +550,26 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
         stravaActivityId: externalActivityId,
         startDateUtc: activity.start_date,
         startDateLocal: activity.start_date_local,
-        derivedLocalDateTime: formatLocalDateTime(startInstant, entry.athleteTimezone),
+        derivedLocalDateTime: formatLocalDateTime(normalized.startTime, entry.athleteTimezone),
         derivedDayKey: activityDayKey,
       });
     }
 
-    let completed: any;
+    const ingest = await upsertExternalCompletedActivity({
+      athleteId: entry.athleteId,
+      activity: normalized,
+    });
+    let completed: any = ingest.completed;
     let activityUpdated = false;
 
-    try {
-      completed = await prisma.completedActivity.create({
-        data: {
-          athleteId: entry.athleteId,
-          source: CompletionSource.STRAVA,
-          externalProvider: 'STRAVA',
-          externalActivityId,
-          startTime,
-          durationMinutes,
-          distanceKm,
-          notes: null,
-          painFlag: false,
-          confirmedAt: null,
-          metricsJson: {
-            strava: stravaMetrics,
-          },
-        },
-        select: {
-          id: true,
-          calendarItemId: true,
-          durationMinutes: true,
-          distanceKm: true,
-          startTime: true,
-          confirmedAt: true,
-          matchDayDiff: true,
-        },
-      });
+    if (ingest.kind === 'created') {
       summary.created += 1;
-    } catch (error: any) {
-      if (error?.code !== 'P2002') throw error;
-
-      const existing = await prisma.completedActivity.findUnique({
-        where: {
-          athleteId_source_externalActivityId: {
-            athleteId: entry.athleteId,
-            source: CompletionSource.STRAVA,
-            externalActivityId,
-          },
-        } as any,
-        select: {
-          id: true,
-          calendarItemId: true,
-          durationMinutes: true,
-          distanceKm: true,
-          startTime: true,
-          confirmedAt: true,
-          metricsJson: true,
-          matchDayDiff: true,
-        },
-      });
-
-      if (
-        existing &&
-        existing.durationMinutes === durationMinutes &&
-        (existing.distanceKm ?? null) === (distanceKm ?? null) &&
-        new Date(existing.startTime).getTime() === startTime.getTime() &&
-        !shouldUpdateStravaMetrics((existing.metricsJson as any)?.strava, stravaMetrics as any)
-      ) {
-        completed = existing;
-        summary.skippedExisting += 1;
-        inc(summary.skippedByReason, 'duplicate_no_changes');
-      } else {
-        completed = await prisma.completedActivity.update({
-          where: {
-            athleteId_source_externalActivityId: {
-              athleteId: entry.athleteId,
-              source: CompletionSource.STRAVA,
-              externalActivityId,
-            },
-          } as any,
-          data: {
-            startTime,
-            durationMinutes,
-            distanceKm,
-            metricsJson: {
-              ...(existing?.metricsJson as any),
-              strava: stravaMetrics,
-            },
-          },
-          select: {
-            id: true,
-            calendarItemId: true,
-            durationMinutes: true,
-            distanceKm: true,
-            startTime: true,
-            confirmedAt: true,
-            matchDayDiff: true,
-          },
-        });
-        summary.updated += 1;
-        activityUpdated = true;
-      }
+    } else if (ingest.kind === 'updated') {
+      summary.updated += 1;
+      activityUpdated = true;
+    } else {
+      summary.skippedExisting += 1;
+      inc(summary.skippedByReason, 'duplicate_no_changes');
     }
 
     const initialCalendarItemId: string | null = completed?.calendarItemId ?? null;
@@ -903,7 +659,7 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
       const nextStatus = completed.confirmedAt ? CalendarItemStatus.COMPLETED_SYNCED : CalendarItemStatus.COMPLETED_SYNCED_DRAFT;
 
       const plannedStartTimeLocal = minutesToTimeString(activityMinutes);
-      const title = (activity.name ?? '').trim() || 'Unplanned (Imported from Strava)';
+      const title = normalized.title;
 
       const item = await prisma.calendarItem.upsert({
         where: {
@@ -922,12 +678,12 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
           planningStatus: 'UNPLANNED',
           sourceActivityId: externalActivityId,
           discipline,
-          subtype: stravaType ?? null,
+          subtype: normalized.subtype ?? null,
           title,
           notes: 'Imported from Strava.',
           plannedDurationMinutes: durationMinutes,
           plannedDistanceKm: distanceKm,
-          distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
+          distanceMeters: (normalized.metrics.distanceMeters as number | undefined) ?? null,
           status: nextStatus,
         } as any,
         update: {
@@ -938,11 +694,11 @@ async function ingestActivities(entry: StravaConnectionEntry, activities: Strava
           planningStatus: 'UNPLANNED',
           sourceActivityId: externalActivityId,
           discipline,
-          subtype: stravaType ?? null,
+          subtype: normalized.subtype ?? null,
           title,
           plannedDurationMinutes: durationMinutes,
           plannedDistanceKm: distanceKm,
-          distanceMeters: typeof distanceMeters === 'number' ? distanceMeters : null,
+          distanceMeters: (normalized.metrics.distanceMeters as number | undefined) ?? null,
           status: nextStatus,
         } as any,
         select: { id: true },
