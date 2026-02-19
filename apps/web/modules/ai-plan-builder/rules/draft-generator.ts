@@ -401,9 +401,9 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
   const effectiveSetup = applyProgramPolicy(setup);
 
   const totalMinutesBase = availabilityTotalMinutes(effectiveSetup.weeklyAvailabilityMinutes);
-  const targetSessions = sessionsPerWeek(effectiveSetup, days.length);
+  const requestedTargetSessions = sessionsPerWeek(effectiveSetup, days.length);
   const longDay = pickLongDay(effectiveSetup, days);
-  const disciplineQueue = disciplineSequence(effectiveSetup, targetSessions);
+  const disciplineQueue = disciplineSequence(effectiveSetup, requestedTargetSessions);
   const typeQueues = sessionTypeQueues(effectiveSetup);
 
   const weeks: DraftWeekV1[] = [];
@@ -428,20 +428,19 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekTotalMinutes = clampInt(weekTotalMinutes * recoveryMultiplier, 60, Math.max(60, weekTotalMinutes));
     }
 
-    // Assign sessions deterministically across available days.
-    // Build a day->slots list (1 per day, plus doubles on earliest days).
-    const slots: number[] = [];
-    for (const d of days) slots.push(d);
-    for (let i = 0; i < maxDoublesPerWeek; i++) {
+    // Per-day capacity guard: 1 session/day + explicit doubles allowance.
+    const doublesAllowance = clampInt(effectiveSetup.maxDoublesPerWeek, 0, 3);
+    const dayCap = new Map<number, number>();
+    for (const d of days) dayCap.set(d, 1);
+    for (let i = 0; i < doublesAllowance; i += 1) {
       const extraDay = days[i % days.length];
-      if (extraDay !== undefined) slots.push(extraDay);
+      if (extraDay !== undefined) dayCap.set(extraDay, (dayCap.get(extraDay) ?? 1) + 1);
     }
-
-    const weekSlots = slots.slice(0, targetSessions).sort((a, b) => a - b);
-
+    const maxSessionsByCapacity = Array.from(dayCap.values()).reduce((sum, n) => sum + n, 0);
+    const targetSessions = Math.max(1, Math.min(requestedTargetSessions, maxSessionsByCapacity));
     // Determine which days are "intensity" (avoid consecutive).
     const intensityDays: number[] = [];
-    for (const d of weekSlots) {
+    for (const d of days) {
       if (intensityDays.length >= maxIntensityDaysPerWeek) break;
       const last = intensityDays[intensityDays.length - 1];
       if (last !== undefined && Math.abs(d - last) <= 1) continue;
@@ -450,16 +449,37 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       intensityDays.push(d);
     }
 
-    const avgMinutes = clampInt(weekTotalMinutes / Math.max(1, weekSlots.length), 20, 120);
+    const avgMinutes = clampInt(weekTotalMinutes / Math.max(1, targetSessions), 20, 120);
 
     const sessions: DraftWeekV1['sessions'] = [];
+    const dayCounts = new Map<number, number>();
+    for (const d of days) dayCounts.set(d, 0);
 
     let ordinal = 0;
+    const hasCapacity = (day: number) => (dayCounts.get(day) ?? 0) < (dayCap.get(day) ?? 0);
+    const takeDay = (preferred?: number[]): number | null => {
+      const candidates = (preferred && preferred.length ? preferred : days).filter((d) => hasCapacity(d));
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => {
+        const countDiff = (dayCounts.get(a) ?? 0) - (dayCounts.get(b) ?? 0);
+        if (countDiff !== 0) return countDiff;
+        return daySortKey(a, weekStart) - daySortKey(b, weekStart);
+      });
+      return candidates[0] ?? null;
+    };
+    const pushSession = (session: DraftWeekV1['sessions'][number]) => {
+      if (!days.includes(session.dayOfWeek)) return false;
+      if (!hasCapacity(session.dayOfWeek)) return false;
+      sessions.push(session);
+      dayCounts.set(session.dayOfWeek, (dayCounts.get(session.dayOfWeek) ?? 0) + 1);
+      return true;
+    };
 
     // Technique swim once per week if swim included (on the first available day).
-    if (includesSwim(effectiveSetup) && weekSlots.length > 0) {
-      const d = weekSlots[0];
-      sessions.push({
+    if (includesSwim(effectiveSetup)) {
+      const d = takeDay(days);
+      if (d != null) {
+        pushSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: d,
@@ -468,44 +488,52 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 0.8, 20, 60),
         notes: 'Technique focus',
         locked: false,
-      });
+        });
+      }
     }
 
     // Long session weekly if >= 6 weeks.
     if (weeksToEvent >= 6) {
       const longIsBike = weekIndex % 2 === 0;
       const discipline: DraftDiscipline = longIsBike ? 'bike' : 'run';
-      sessions.push({
+      const day = hasCapacity(longDay) ? longDay : takeDay(days);
+      if (day != null) {
+        pushSession({
         weekIndex,
         ordinal: ordinal++,
-        dayOfWeek: longDay,
+        dayOfWeek: day,
         discipline,
         type: 'endurance',
         durationMinutes: clampInt(avgMinutes * 2.2, 60, 180),
         notes: discipline === 'bike' ? 'Long ride' : 'Long run',
         locked: false,
-      });
+        });
+      }
     }
 
     // Brick every 2 weeks for med/high.
     if ((effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') && weekIndex % 2 === 1) {
-      sessions.push({
+      const day = hasCapacity(longDay) ? longDay : takeDay(days.filter((d) => d !== longDay));
+      if (day != null) {
+        pushSession({
         weekIndex,
         ordinal: ordinal++,
-        dayOfWeek: longDay,
+        dayOfWeek: day,
         discipline: 'bike',
         type: 'endurance',
         durationMinutes: clampInt(avgMinutes * 1.3, 40, 120),
         notes: 'Brick (add short run off bike)',
         locked: false,
-      });
+        });
+      }
     }
 
     // Fill remaining slots deterministically.
     const preferredMain = mainDiscipline(effectiveSetup);
 
-    while (sessions.length < weekSlots.length) {
-      const day = weekSlots[sessions.length % weekSlots.length];
+    while (sessions.length < targetSessions) {
+      const day = takeDay(days);
+      if (day == null) break;
       const isIntensity = intensityDays.includes(day);
 
       const discipline: DraftDiscipline = disciplineQueue
@@ -527,7 +555,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         return isIntensity ? (effectiveSetup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
       })();
 
-      sessions.push({
+      pushSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
