@@ -34,11 +34,11 @@ export function getSessionStatusIndicator({ status, date, timeZone, now }: Param
   }
 
   if (status === 'SKIPPED') {
-    return { iconName: 'skipped', ariaLabel: 'Missed', colorClass: 'text-[var(--muted)]' };
+    return { iconName: 'skipped', ariaLabel: 'Missed', colorClass: 'text-rose-600' };
   }
 
   if (status === 'PLANNED' && dayEnded) {
-    return { iconName: 'missed', ariaLabel: 'Missed workout', colorClass: 'text-amber-700/70' };
+    return { iconName: 'missed', ariaLabel: 'Missed workout', colorClass: 'text-rose-600' };
   }
 
   return { iconName: 'planned', ariaLabel: 'Planned', colorClass: 'text-[var(--muted)]' };

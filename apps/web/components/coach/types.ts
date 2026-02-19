@@ -9,6 +9,7 @@ export type CalendarItem = {
   origin?: string | null;
   subtype?: string | null;
   planningStatus?: string | null;
+  publicationStatus?: 'DRAFT' | 'PUBLISHED' | null;
   athleteId?: string;
   athleteName?: string | null;
   athleteTimezone?: string;

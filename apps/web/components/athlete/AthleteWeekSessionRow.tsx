@@ -15,6 +15,7 @@ export type AthleteWeekSessionRowItem = {
   displayTimeLocal?: string | null;
   origin?: string | null;
   planningStatus?: string | null;
+  publicationStatus?: 'DRAFT' | 'PUBLISHED' | null;
   sourceActivityId?: string | null;
   discipline: string;
   status: string;
@@ -49,7 +50,7 @@ function getStatusBarConfig(params: {
   item: AthleteWeekSessionRowItem;
   now: Date;
   timeZone: string;
-}): { iconName: IconName; ariaLabel: string; bgClassName: string; title: string | null } {
+}): { iconName: IconName; ariaLabel: string; bgClassName: string; title: string | null; showBar: boolean } {
   const { item, now, timeZone } = params;
 
   const indicator = getSessionStatusIndicator({
@@ -64,11 +65,11 @@ function getStatusBarConfig(params: {
   const isMissed = indicator.iconName === 'missed';
 
   if (isCompleted) {
-    return { iconName: 'completed', ariaLabel: 'Completed', bgClassName: 'bg-emerald-600/45', title: null };
+    return { iconName: 'completed', ariaLabel: 'Completed', bgClassName: 'bg-emerald-600/45', title: null, showBar: true };
   }
 
   if (isSkipped) {
-    return { iconName: 'skipped', ariaLabel: 'Missed', bgClassName: 'bg-rose-600/45', title: null };
+    return { iconName: 'skipped', ariaLabel: 'Missed', bgClassName: 'bg-rose-600/45', title: null, showBar: true };
   }
 
   if (isMissed) {
@@ -77,6 +78,7 @@ function getStatusBarConfig(params: {
       ariaLabel: 'Missed workout',
       bgClassName: 'bg-rose-600/45',
       title: 'Missed workout – this workout was planned but not completed',
+      showBar: true,
     };
   }
 
@@ -86,10 +88,16 @@ function getStatusBarConfig(params: {
       ariaLabel: 'Draft completion (pending confirmation)',
       bgClassName: 'bg-amber-500/45',
       title: null,
+      showBar: true,
     };
   }
+  const isAthleteScheduledSession = item.planningStatus === 'UNPLANNED' && item.origin !== 'STRAVA';
+  const isPublishedPlanSession = item.publicationStatus === 'PUBLISHED';
+  if (isAthleteScheduledSession || isPublishedPlanSession) {
+    return { iconName: 'planned', ariaLabel: 'Published', bgClassName: 'bg-amber-500/45', title: null, showBar: true };
+  }
 
-  return { iconName: 'planned', ariaLabel: 'Planned', bgClassName: 'bg-amber-500/45', title: null };
+  return { iconName: 'planned', ariaLabel: 'Draft', bgClassName: 'bg-transparent', title: null, showBar: false };
 }
 
 export function AthleteWeekSessionRow({
@@ -250,7 +258,7 @@ export function AthleteWeekSessionRow({
         </div>
       )}
 
-      {statusIndicatorVariant === 'bar' ? (
+      {statusIndicatorVariant === 'bar' && statusBar.showBar ? (
         <div
           className={cn(
             'absolute right-0 top-0 bottom-0 w-2 md:w-4',

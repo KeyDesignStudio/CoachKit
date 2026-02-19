@@ -221,15 +221,15 @@ export function AthleteMonthDayCell({
                     <Icon
                       name={statusIcon}
                       size="xs"
-                      className={cn(
-                        'leading-none',
-                        CALENDAR_ACTION_ICON_CLASS,
-                        statusIcon === 'completed'
-                          ? 'text-emerald-600'
-                          : statusIcon === 'needsReview'
-                            ? 'text-amber-600'
-                            : statusIcon === 'missed'
-                              ? 'text-amber-700/70'
+                        className={cn(
+                          'leading-none',
+                          CALENDAR_ACTION_ICON_CLASS,
+                          statusIcon === 'completed'
+                            ? 'text-emerald-600'
+                            : statusIcon === 'needsReview'
+                              ? 'text-amber-600'
+                              : statusIcon === 'missed' || statusIcon === 'skipped'
+                                ? 'text-rose-600'
                               : 'text-[var(--muted)]'
                       )}
                     />

@@ -70,6 +70,7 @@ type WorkoutTitleOption = {
 
 type CopyMode = 'skipExisting' | 'overwrite';
 type ViewMode = 'week' | 'month';
+type PublicationStatus = 'DRAFT' | 'PUBLISHED';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -215,6 +216,10 @@ function buildCalendarItemCreatePayload(
 function isManualCalendarItem(item: CalendarItem | null | undefined): boolean {
   const origin = item?.origin ?? null;
   return origin == null || origin === 'MANUAL';
+}
+
+function toAthleteWeekKey(athleteId: string, dayKey: string): string {
+  return `${athleteId}:${startOfWeekDayKey(dayKey)}`;
 }
 
 export default function CoachCalendarPage() {
@@ -656,12 +661,9 @@ export default function CoachCalendarPage() {
           `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
 
-        const planWeeksPromise =
-          viewMode === 'week'
-            ? request<{ weeks: Array<{ weekStart: string; status: 'DRAFT' | 'PUBLISHED' }> }>(
-                `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
-              )
-            : Promise.resolve({ weeks: [] });
+        const planWeeksPromise = request<{ weeks: Array<{ weekStart: string; status: PublicationStatus }> }>(
+          `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+        );
 
         const [itemsResult, weekResult] = await Promise.allSettled([itemsPromise, planWeeksPromise]);
         if (itemsResult.status !== 'fulfilled') {
@@ -669,7 +671,10 @@ export default function CoachCalendarPage() {
         }
 
         const itemsData = itemsResult.value;
-        const weekData = weekResult.status === 'fulfilled' ? weekResult.value : { weeks: [] };
+        const weekData = weekResult.status === 'fulfilled' ? weekResult.value : { weeks: [] as Array<{ weekStart: string; status: PublicationStatus }> };
+        const publicationByWeek = new Map<string, PublicationStatus>(
+          weekData.weeks.map((week) => [toAthleteWeekKey(athleteId, week.weekStart), week.status] as const)
+        );
 
         const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
         setItems(
@@ -679,6 +684,7 @@ export default function CoachCalendarPage() {
             athleteId,
             athleteName,
             athleteTimezone: itemsData.athleteTimezone,
+            publicationStatus: publicationByWeek.get(toAthleteWeekKey(athleteId, item.date)) ?? 'DRAFT',
           }))
         );
         setDayWeatherByDate(itemsData.dayWeather ?? {});
@@ -688,10 +694,10 @@ export default function CoachCalendarPage() {
 
         markCalendarPerf('data');
 
-        if (viewMode === 'week' && weekData.weeks.length > 0) {
-          const currentWeekData = weekData.weeks[0];
-          setWeekStatus(currentWeekData?.status || 'DRAFT');
-        } else if (viewMode === 'week') {
+        if (viewMode === 'week') {
+          const currentWeekStatus = publicationByWeek.get(toAthleteWeekKey(athleteId, weekStartKey)) ?? 'DRAFT';
+          setWeekStatus(currentWeekStatus);
+        } else {
           setWeekStatus('DRAFT');
         }
       } else {
@@ -701,6 +707,19 @@ export default function CoachCalendarPage() {
         const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
           `/api/coach/calendar?athleteIds=${encodeURIComponent(selected.join(','))}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
+        const publicationByWeek = new Map<string, PublicationStatus>();
+        await mapWithConcurrency(selected, 4, async (athleteId) => {
+          try {
+            const weekData = await request<{ weeks: Array<{ weekStart: string; status: PublicationStatus }> }>(
+              `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
+            );
+            weekData.weeks.forEach((week) => {
+              publicationByWeek.set(toAthleteWeekKey(athleteId, week.weekStart), week.status);
+            });
+          } catch {
+            // Best-effort only for color display.
+          }
+        });
         setItems(
           itemsData.items.map((item) => {
             const athlete = athletes.find((a) => a.userId === item.athleteId);
@@ -709,6 +728,7 @@ export default function CoachCalendarPage() {
               title: resolveCalendarItemTitle(item),
               athleteName: athlete?.user.name ?? null,
               athleteTimezone: athlete?.user.timezone ?? itemsData.athleteTimezone,
+              publicationStatus: publicationByWeek.get(toAthleteWeekKey(String(item.athleteId ?? ''), item.date)) ?? 'DRAFT',
             };
           })
         );
@@ -720,7 +740,7 @@ export default function CoachCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [athletes, dateRange.from, dateRange.to, request, selectedAthleteIds, viewMode]);
+  }, [athletes, dateRange.from, dateRange.to, request, selectedAthleteIds, viewMode, weekStartKey]);
 
   useEffect(() => {
     setMounted(true);
@@ -1410,15 +1430,6 @@ export default function CoachCalendarPage() {
             <p className={uiEyebrow}>Planning</p>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className={`${uiH1} font-semibold`}>{mounted && viewMode === 'month' ? 'Monthly Calendar' : 'Weekly Calendar'}</h1>
-              {viewMode === 'week' && mounted && (
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium border border-[var(--border-subtle)] bg-[var(--bg-card)] ${
-                    weekStatus === 'PUBLISHED' ? 'text-emerald-700' : 'text-amber-700'
-                  }`}
-                >
-                  {weekStatus === 'PUBLISHED' ? 'Published' : 'Draft'}
-                </span>
-              )}
             </div>
             <p className={`${uiMuted} text-xs md:text-sm`}>
               {mounted ? (
