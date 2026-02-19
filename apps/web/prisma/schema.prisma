@@ -275,6 +275,7 @@ model User {
   messageThreadsAsAthlete         MessageThread[]          @relation("AthleteThreads")
   messages                        Message[]
   squads                          Squad[]
+  squadTemplates                  SquadTemplate[]
   workoutTemplates                WorkoutTemplate[]
   groupSessions                   GroupSession[]
   calendarItemsCoached            CalendarItem[]
@@ -495,9 +496,40 @@ model Squad {
   coach               User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
   members             SquadMember[]
   groupSessionTargets GroupSessionTarget[]
+  squadTemplateTargets SquadTemplateTarget[]
 
   @@unique([coachId, name])
   @@index([coachId])
+}
+
+model SquadTemplate {
+  id             String   @id @default(cuid())
+  coachId        String
+  name           String
+  description    String?
+  targetPresetJson Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  coach   User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  targets SquadTemplateTarget[]
+
+  @@unique([coachId, name])
+  @@index([coachId, createdAt])
+}
+
+model SquadTemplateTarget {
+  id              String   @id @default(cuid())
+  squadTemplateId String
+  squadId         String
+  createdAt       DateTime @default(now())
+
+  squadTemplate SquadTemplate @relation(fields: [squadTemplateId], references: [id], onDelete: Cascade)
+  squad         Squad         @relation(fields: [squadId], references: [id], onDelete: Cascade)
+
+  @@unique([squadTemplateId, squadId])
+  @@index([squadTemplateId])
+  @@index([squadId])
 }
 
 model SquadMember {
