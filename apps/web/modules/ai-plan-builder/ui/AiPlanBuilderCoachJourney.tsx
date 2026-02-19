@@ -298,6 +298,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const coachGuidanceText = [
       trainingRequest.goalDetails.trim(),
       trainingRequest.goalFocus.trim() ? `Focus: ${trainingRequest.goalFocus.trim()}` : '',
+      trainingRequest.experienceLevel.trim() ? `Experience: ${trainingRequest.experienceLevel.trim()}` : '',
       trainingRequest.constraintsNotes.trim() ? `Constraints: ${trainingRequest.constraintsNotes.trim()}` : '',
       trainingRequest.injuryStatus.trim() ? `Injury/Pain: ${trainingRequest.injuryStatus.trim()}` : '',
     ]

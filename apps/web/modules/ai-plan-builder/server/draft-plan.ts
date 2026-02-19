@@ -389,6 +389,7 @@ export async function generateAiDraftPlanV1(params: {
     athleteProfile: athleteProfile as any,
     durationWeeks: setup.weeksToEvent,
     queryText: [setup.coachGuidanceText, athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
+    coachId: params.coachId,
   });
 
   const requestedVersionIds = Array.isArray(setup.selectedPlanSourceVersionIds)
@@ -619,6 +620,7 @@ export async function listReferencePlansForAthlete(params: { coachId: string; at
     athleteProfile: athleteProfile as any,
     durationWeeks: Number(athleteProfile?.timelineWeeks ?? 12) || 12,
     queryText: [athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
+    coachId: params.coachId,
   });
   const recommendedMap = new Map(matches.map((m) => [m.planSourceVersionId, m]));
 
