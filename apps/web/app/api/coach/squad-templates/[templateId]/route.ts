@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
+import { GroupVisibilityType } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -11,13 +12,28 @@ import { assertCoachOwnsTargets } from '@/lib/group-sessions';
 export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().cuid().or(z.string().cuid2());
+const weekdaySchema = z.enum(['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']);
+const localTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'startTimeLocal must be HH:MM (24h).' });
+const targetPresetSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    discipline: z.string().trim().min(1).max(100).optional(),
+    location: z.string().trim().max(200).optional(),
+    startTimeLocal: localTimeSchema.optional(),
+    durationMinutes: z.number().int().min(1).max(600).optional(),
+    description: z.string().trim().max(20000).optional(),
+    visibilityType: z.nativeEnum(GroupVisibilityType).optional(),
+    selectedDays: z.array(weekdaySchema).min(1).max(7).optional(),
+    targetAthleteIds: z.array(idSchema).max(200).optional(),
+  })
+  .strict();
 
 const updateSquadTemplateSchema = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
     description: z.string().trim().max(2000).optional().nullable(),
-    targetSquadIds: z.array(idSchema).min(1).optional(),
-    targetPresetJson: z.unknown().optional().nullable(),
+    targetSquadIds: z.array(idSchema).min(1).max(200).optional(),
+    targetPresetJson: targetPresetSchema.optional().nullable(),
   })
   .refine((payload) => Object.keys(payload).length > 0, {
     message: 'At least one field must be provided.',
@@ -49,6 +65,7 @@ type RouteParams = {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { user } = await requireCoach();
+    idSchema.parse(params.templateId);
     const payload = updateSquadTemplateSchema.parse(await request.json());
 
     const existing = await prisma.squadTemplate.findFirst({
@@ -120,6 +137,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { user } = await requireCoach();
+    idSchema.parse(params.templateId);
 
     const existing = await prisma.squadTemplate.findFirst({
       where: {
