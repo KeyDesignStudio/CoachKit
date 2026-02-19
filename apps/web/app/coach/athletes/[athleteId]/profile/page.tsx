@@ -2,23 +2,47 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
 import { FormFieldSpan, FormGrid, FormPageContainer, FormSection } from '@/components/ui/FormLayout';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { StravaVitalsCard } from '@/components/profile/StravaVitalsCard';
-import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
 
-const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'OTHER'] as const;
-const AVAILABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+type IntakeLifecycleSummary = {
+  latestSubmittedIntake?: { draftJson?: Record<string, unknown> | null; createdAt?: string | null } | null;
+  openDraftIntake?: { id?: string | null; createdAt?: string | null } | null;
+};
+
+function readDraftText(draft: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = draft?.[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function readDraftNumber(draft: Record<string, unknown> | null | undefined, key: string): number | null {
+  const value = draft?.[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return Math.round(parsed);
+  }
+  return null;
+}
+
+function readDraftList(draft: Record<string, unknown> | null | undefined, key: string): string[] {
+  const value = draft?.[key];
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v ?? '').trim()).filter(Boolean);
+}
 
 type AthleteProfile = {
   userId: string;
@@ -122,6 +146,7 @@ export default function AthleteProfilePage() {
   const [scheduleVariability, setScheduleVariability] = useState('');
   const [injuryStatus, setInjuryStatus] = useState('');
   const [constraintsNotes, setConstraintsNotes] = useState('');
+  const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycleSummary | null>(null);
 
   useEffect(() => {
     if (!athleteId) return;
@@ -132,8 +157,12 @@ export default function AthleteProfilePage() {
       setLoading(true);
       setError('');
       try {
-        const data = await request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' });
-        const athlete = data.athlete;
+        const [profileData, intakeData] = await Promise.all([
+          request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' }),
+          request<IntakeLifecycleSummary>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`, { cache: 'no-store' }),
+        ]);
+        const athlete = profileData.athlete;
+        setIntakeLifecycle(intakeData ?? null);
 
         setFirstName(athlete.firstName || '');
         setLastName(athlete.lastName || '');
@@ -185,16 +214,6 @@ export default function AthleteProfilePage() {
     loadData();
   }, [athleteId, request, user, userLoading]);
 
-  const toggleDiscipline = (discipline: string) => {
-    setSelectedDisciplines((prev) =>
-      prev.includes(discipline) ? prev.filter((d) => d !== discipline) : [...prev, discipline]
-    );
-  };
-
-  const toggleAvailableDay = (day: string) => {
-    setAvailableDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-  };
-
   const formattedTabs = useMemo(
     () =>
       TABS.map((tab) => ({
@@ -203,6 +222,47 @@ export default function AthleteProfilePage() {
       })),
     []
   );
+
+  const currentRequestDraft = useMemo(() => {
+    const raw = intakeLifecycle?.latestSubmittedIntake?.draftJson;
+    return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  }, [intakeLifecycle?.latestSubmittedIntake?.draftJson]);
+
+  const planSummary = useMemo(() => {
+    const fallbackDays = Array.isArray(availableDays) ? availableDays : [];
+    return {
+      source: currentRequestDraft ? 'Latest Training Request' : 'Athlete Profile fallback',
+      openRequest: Boolean(intakeLifecycle?.openDraftIntake?.id),
+      goal: readDraftText(currentRequestDraft, 'goal_details') ?? (primaryGoal.trim() || '-'),
+      focus: readDraftText(currentRequestDraft, 'goal_focus') ?? (focus.trim() || '-'),
+      eventName: readDraftText(currentRequestDraft, 'event_name') ?? (eventName.trim() || '-'),
+      eventDate: readDraftText(currentRequestDraft, 'event_date') ?? (eventDate.trim() || '-'),
+      timeline: readDraftText(currentRequestDraft, 'goal_timeline') ?? (timelineWeeks ? `${timelineWeeks} weeks` : '-'),
+      weeklyMinutes: readDraftNumber(currentRequestDraft, 'weekly_minutes') ?? (weeklyMinutesTarget ? Number(weeklyMinutesTarget) : null),
+      availableDays: (() => {
+        const fromRequest = readDraftList(currentRequestDraft, 'availability_days').map((day) =>
+          day.replace(/^\w/, (c) => c.toUpperCase())
+        );
+        return fromRequest.length ? fromRequest : fallbackDays;
+      })(),
+      experienceLevel: readDraftText(currentRequestDraft, 'experience_level') ?? (experienceLevel.trim() || '-'),
+      injuryStatus: readDraftText(currentRequestDraft, 'injury_status') ?? (injuryStatus.trim() || '-'),
+      constraints: readDraftText(currentRequestDraft, 'constraints_notes') ?? (constraintsNotes.trim() || '-'),
+    };
+  }, [
+    intakeLifecycle?.openDraftIntake?.id,
+    currentRequestDraft,
+    availableDays,
+    primaryGoal,
+    focus,
+    eventName,
+    eventDate,
+    timelineWeeks,
+    weeklyMinutesTarget,
+    experienceLevel,
+    injuryStatus,
+    constraintsNotes,
+  ]);
 
   const handleSave = async () => {
     if (!athleteId) return;
@@ -566,110 +626,34 @@ export default function AthleteProfilePage() {
 
       {activeTab === 'Current Training Plan' ? (
         <FormGrid role="tabpanel" id="tab-panel-Current-Training-Plan" columns={gridColumns}>
-          <FormSection title="Plan Focus & Event" />
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Focus
-              <Input value={focus} onChange={(e) => setFocus(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Next event name
-              <Input value={eventName} onChange={(e) => setEventName(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Next event date
-              <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Timeline (weeks)
-              <Input
-                type="number"
-                min={1}
-                max={104}
-                value={timelineWeeks}
-                onChange={(e) => setTimelineWeeks(e.target.value)}
-              />
-            </label>
-          </FormFieldSpan>
-
-          <FormSection title="Disciplines & Availability" className="mt-2" />
+          <FormSection title="Current Block Context" />
           <FormFieldSpan span={span4}>
-            <div className="space-y-2 text-sm font-medium">
-              Disciplines
-              <div className="flex flex-wrap gap-2">
-                {DISCIPLINES.map((discipline) => {
-                  const theme = getDisciplineTheme(discipline);
-                  const isSelected = selectedDisciplines.includes(discipline);
-                  return (
-                    <button
-                      key={discipline}
-                      type="button"
-                      onClick={() => toggleDiscipline(discipline)}
-                      className={cn(
-                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
-                        isSelected
-                          ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
-                      )}
-                    >
-                      <Icon name={theme.iconName} size="sm" className={isSelected ? theme.textClass : ''} />
-                      {discipline}
-                    </button>
-                  );
-                })}
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+              <div className="mb-2 text-sm">
+                Source: <strong>{planSummary.source}</strong>
+              </div>
+              <div className="mb-3 text-sm text-[var(--muted)]">
+                This tab is read-only. Training block details are managed in the AI Plan Builder Training Request step.
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div><span className="text-xs text-[var(--muted)]">Primary goal</span><div className="text-sm font-medium">{planSummary.goal}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Focus</span><div className="text-sm font-medium">{planSummary.focus}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Event name</span><div className="text-sm font-medium">{planSummary.eventName}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Event date</span><div className="text-sm font-medium">{planSummary.eventDate}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Target timeline</span><div className="text-sm font-medium">{planSummary.timeline}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Weekly budget (minutes)</span><div className="text-sm font-medium">{planSummary.weeklyMinutes ?? '-'}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Available days</span><div className="text-sm font-medium">{planSummary.availableDays.length ? planSummary.availableDays.join(', ') : '-'}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Experience level</span><div className="text-sm font-medium">{planSummary.experienceLevel}</div></div>
+                <div><span className="text-xs text-[var(--muted)]">Injury/pain status</span><div className="text-sm font-medium">{planSummary.injuryStatus}</div></div>
+                <div className="md:col-span-2"><span className="text-xs text-[var(--muted)]">Constraints / notes</span><div className="text-sm font-medium whitespace-pre-wrap">{planSummary.constraints}</div></div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Link href={`/coach/athletes/${athleteId}/ai-plan-builder`}>
+                  <Button type="button">Open AI Plan Builder</Button>
+                </Link>
+                {planSummary.openRequest ? <span className="text-xs text-amber-700">There is an open training request draft for this athlete.</span> : null}
               </div>
             </div>
-          </FormFieldSpan>
-          <FormFieldSpan span={span4}>
-            <div className="space-y-2 text-sm font-medium">
-              Available days
-              <div className="flex flex-wrap gap-2">
-                {AVAILABLE_DAYS.map((day) => {
-                  const isSelected = availableDays.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => toggleAvailableDay(day)}
-                      className={cn(
-                        'rounded-xl border px-3 py-2 text-sm font-medium transition-all',
-                        isSelected
-                          ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--muted)] hover:bg-[var(--bg-card)]'
-                      )}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </FormFieldSpan>
-
-          <FormSection title="Constraints & Risk Notes" className="mt-2" />
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Schedule variability
-              <Input value={scheduleVariability} onChange={(e) => setScheduleVariability(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span2}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Injury status
-              <Input value={injuryStatus} onChange={(e) => setInjuryStatus(e.target.value)} />
-            </label>
-          </FormFieldSpan>
-          <FormFieldSpan span={span4}>
-            <label className="flex flex-col gap-2 text-sm font-medium">
-              Constraints notes
-              <Textarea value={constraintsNotes} onChange={(e) => setConstraintsNotes(e.target.value)} rows={3} />
-            </label>
           </FormFieldSpan>
         </FormGrid>
       ) : null}
