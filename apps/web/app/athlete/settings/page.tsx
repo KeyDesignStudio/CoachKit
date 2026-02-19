@@ -55,6 +55,25 @@ type DeviceProviderStatus = {
   } | null;
 };
 
+type ReconciliationIssue = {
+  id: string;
+  provider: 'GARMIN' | 'WAHOO' | 'COROS';
+  status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
+  severity: 'info' | 'warning' | 'error';
+  summary: string;
+  hint: string;
+  attempts: number;
+  updatedAt: string;
+};
+
+type ReconciliationCounts = {
+  total: number;
+  PENDING: number;
+  PROCESSING: number;
+  DONE: number;
+  FAILED: number;
+};
+
 export default function AthleteSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -66,6 +85,12 @@ export default function AthleteSettingsPage() {
   const [deviceProviders, setDeviceProviders] = useState<DeviceProviderStatus[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const [providerWorking, setProviderWorking] = useState<string | null>(null);
+  const [issues, setIssues] = useState<ReconciliationIssue[]>([]);
+  const [issuesCounts, setIssuesCounts] = useState<ReconciliationCounts | null>(null);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesError, setIssuesError] = useState('');
+  const [retryingIssues, setRetryingIssues] = useState(false);
+  const [retryingIssueId, setRetryingIssueId] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [working, setWorking] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -160,11 +185,47 @@ export default function AthleteSettingsPage() {
     }
   }, [request]);
 
+  const loadIssues = useCallback(async () => {
+    setIssuesLoading(true);
+    setIssuesError('');
+    try {
+      const data = await request<{ items: ReconciliationIssue[]; counts: ReconciliationCounts }>(
+        '/api/integrations/providers/issues?limit=50'
+      );
+      setIssues(data.items);
+      setIssuesCounts(data.counts);
+    } catch (err) {
+      setIssues([]);
+      setIssuesCounts(null);
+      setIssuesError(err instanceof Error ? err.message : 'Failed to load provider sync issues.');
+    } finally {
+      setIssuesLoading(false);
+    }
+  }, [request]);
+
+  const retryIssues = useCallback(
+    async (ids: string[]) => {
+      if (!ids.length) return;
+      setIssuesError('');
+      try {
+        await request<{ updated: number }>('/api/integrations/providers/issues', {
+          method: 'PATCH',
+          data: { ids },
+        });
+        await loadIssues();
+      } catch (err) {
+        setIssuesError(err instanceof Error ? err.message : 'Failed to queue retry for provider sync issues.');
+      }
+    },
+    [loadIssues, request]
+  );
+
   useEffect(() => {
     if (user?.role !== 'ATHLETE') return;
     void loadStatus();
     void loadDeviceProviders();
-  }, [user?.role, loadStatus, loadDeviceProviders]);
+    void loadIssues();
+  }, [user?.role, loadStatus, loadDeviceProviders, loadIssues]);
 
   const loadIcalLink = useCallback(async () => {
     setLoadingIcal(true);
@@ -265,6 +326,27 @@ export default function AthleteSettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to sync Strava.');
     } finally {
       setSyncing(false);
+      await loadIssues();
+    }
+  };
+
+  const handleRetryOpenIssues = async () => {
+    const retryableIds = issues.filter((issue) => issue.status === 'FAILED' || issue.status === 'PENDING').map((issue) => issue.id);
+    if (!retryableIds.length) return;
+    setRetryingIssues(true);
+    try {
+      await retryIssues(retryableIds);
+    } finally {
+      setRetryingIssues(false);
+    }
+  };
+
+  const handleRetryIssue = async (id: string) => {
+    setRetryingIssueId(id);
+    try {
+      await retryIssues([id]);
+    } finally {
+      setRetryingIssueId(null);
     }
   };
 
@@ -299,6 +381,10 @@ export default function AthleteSettingsPage() {
 
   const connected = Boolean(status?.connected);
   const stravaAthleteId = status?.connection?.stravaAthleteId ?? '';
+  const openIssues = useMemo(
+    () => issues.filter((issue) => issue.status === 'FAILED' || issue.status === 'PENDING'),
+    [issues]
+  );
 
   return (
     <section className="flex flex-col gap-6">
@@ -519,6 +605,71 @@ export default function AthleteSettingsPage() {
               {!providersLoading && deviceProviders.length === 0 ? (
                 <p className="text-sm text-[var(--muted)]">No provider scaffolds returned.</p>
               ) : null}
+            </div>
+          </Block>
+
+          <Block
+            title="Sync issues and reconciliation"
+            rightAction={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge className="text-[var(--muted)]">Open: {issuesCounts ? issuesCounts.FAILED + issuesCounts.PENDING : openIssues.length}</Badge>
+                <Badge className="text-[var(--muted)]">Total: {issuesCounts?.total ?? issues.length}</Badge>
+              </div>
+            }
+          >
+            <p className="text-sm text-[var(--muted)] mb-3">
+              Review webhook sync issues from Garmin, Wahoo, and COROS and retry failed/pending items.
+            </p>
+
+            <div className="mb-3 flex flex-wrap gap-3">
+              <Button variant="secondary" onClick={() => void loadIssues()} disabled={issuesLoading}>
+                {issuesLoading ? 'Refreshing…' : 'Refresh issues'}
+              </Button>
+              <Button onClick={() => void handleRetryOpenIssues()} disabled={retryingIssues || openIssues.length === 0}>
+                {retryingIssues ? 'Retrying…' : 'Retry open issues'}
+              </Button>
+            </div>
+
+            {issuesError ? <p className="text-sm text-red-700 mb-3">{issuesError}</p> : null}
+            {issuesLoading ? <p className="text-sm text-[var(--muted)]">Loading issues…</p> : null}
+
+            {!issuesLoading && issues.length === 0 ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3">
+                <p className="text-sm text-[var(--muted)]">No provider sync issues found.</p>
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3">
+              {issues.slice(0, 12).map((issue) => {
+                const isRetryable = issue.status === 'FAILED' || issue.status === 'PENDING';
+                const severityClass =
+                  issue.severity === 'error'
+                    ? 'text-rose-700'
+                    : issue.severity === 'warning'
+                      ? 'text-amber-700'
+                      : 'text-[var(--muted)]';
+                return (
+                  <div key={issue.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-[var(--text)]">{issue.summary}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge className={severityClass}>{issue.status}</Badge>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void handleRetryIssue(issue.id)}
+                          disabled={!isRetryable || retryingIssueId === issue.id}
+                        >
+                          {retryingIssueId === issue.id ? 'Retrying…' : 'Retry'}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--muted)]">{issue.hint}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      Attempts: {issue.attempts} · Updated: {new Date(issue.updatedAt).toLocaleString()}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </Block>
         </div>
