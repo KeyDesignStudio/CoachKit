@@ -45,7 +45,6 @@ type ReviewItem = {
     id: string;
     durationMinutes: number | null;
     distanceKm: number | null;
-    rpe: number | null;
     painFlag: boolean;
     startTime: string;
   } | null;
@@ -53,16 +52,6 @@ type ReviewItem = {
     id: string;
     name: string | null;
   } | null;
-  comments: Array<{
-    id: string;
-    body: string;
-    createdAt: string;
-    author: {
-      id: string;
-      name: string | null;
-      role: 'COACH' | 'ATHLETE';
-    };
-  }>;
   hasAthleteComment: boolean;
   commentCount: number;
 };
