@@ -62,7 +62,6 @@ describe('AI Plan Builder v1: deterministic constraints', () => {
     expect(daysWithDouble).toBeLessThanOrEqual(1);
     expect(maxSessionsOnAnyDay).toBeLessThanOrEqual(2);
   });
-
   it('applies beginner guardrails in early weeks (run caps + no early brick stack)', () => {
     const out = generateDraftPlanDeterministicV1({
       weekStart: 'monday',

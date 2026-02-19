@@ -482,7 +482,6 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekIndex,
       weekTotalMinutes,
     });
-
     // Per-day capacity guard: 1 session/day + explicit doubles allowance.
     const doublesAllowance = clampInt(effectiveSetup.maxDoublesPerWeek, 0, 3);
     const dayCap = new Map<number, number>();
