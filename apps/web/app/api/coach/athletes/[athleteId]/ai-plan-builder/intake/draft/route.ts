@@ -22,6 +22,9 @@ export async function POST(
     const created = await createIntakeDraft({
       coachId: user.id,
       athleteId: context.params.athleteId,
+      source: 'coach_initiated',
+      enforceSingleOpen: true,
+      initialDraftJson: draftJson,
     });
 
     // Optional initial draft payload.

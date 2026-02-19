@@ -4,7 +4,7 @@ import { requireCoach } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 
 import { guardAiPlanBuilderRequest } from '@/modules/ai-plan-builder/server/guard';
-import { getLatestSubmittedIntake } from '@/modules/ai-plan-builder/server/intake';
+import { getLatestSubmittedIntake, getOpenIntakeDraft } from '@/modules/ai-plan-builder/server/intake';
 
 export async function GET(request: Request, context: { params: { athleteId: string } }) {
   const requestId = crypto.randomUUID();
@@ -13,12 +13,26 @@ export async function GET(request: Request, context: { params: { athleteId: stri
     guardAiPlanBuilderRequest();
     const { user } = await requireCoach();
 
-    const intakeResponse = await getLatestSubmittedIntake({
-      coachId: user.id,
-      athleteId: context.params.athleteId,
-    });
+    const [latestSubmittedIntake, openDraftIntake] = await Promise.all([
+      getLatestSubmittedIntake({
+        coachId: user.id,
+        athleteId: context.params.athleteId,
+      }),
+      getOpenIntakeDraft({
+        coachId: user.id,
+        athleteId: context.params.athleteId,
+      }),
+    ]);
 
-    return success({ intakeResponse });
+    return success({
+      intakeResponse: latestSubmittedIntake,
+      latestSubmittedIntake,
+      openDraftIntake,
+      lifecycle: {
+        hasOpenRequest: Boolean(openDraftIntake),
+        canOpenNewRequest: !openDraftIntake,
+      },
+    });
   } catch (error) {
     const prismaCode = typeof (error as any)?.code === 'string' ? String((error as any).code) : null;
     const prismaName = typeof (error as any)?.name === 'string' ? String((error as any).name) : null;

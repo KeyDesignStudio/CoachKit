@@ -34,19 +34,84 @@ export async function getLatestSubmittedIntake(params: { coachId: string; athlet
   });
 }
 
-export async function createIntakeDraft(params: { coachId: string; athleteId: string }) {
+export async function getOpenIntakeDraft(params: { coachId: string; athleteId: string }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  return prisma.athleteIntakeResponse.findFirst({
+    where: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      status: 'DRAFT',
+    },
+    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+  });
+}
+
+export async function createIntakeDraft(params: {
+  coachId: string;
+  athleteId: string;
+  source?: string | null;
+  enforceSingleOpen?: boolean;
+  initialDraftJson?: unknown;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  if (params.enforceSingleOpen !== false) {
+    const existing = await getOpenIntakeDraft({ coachId: params.coachId, athleteId: params.athleteId });
+    if (existing) return existing;
+  }
 
   return prisma.athleteIntakeResponse.create({
     data: {
       athleteId: params.athleteId,
       coachId: params.coachId,
       status: 'DRAFT',
-      source: 'manual',
+      source: params.source ?? 'manual',
       aiMode: null,
-      draftJson: {},
+      draftJson: (params.initialDraftJson ?? {}) as Prisma.InputJsonValue,
     } as Prisma.AthleteIntakeResponseUncheckedCreateInput,
+  });
+}
+
+export async function createSubmittedIntake(params: {
+  coachId: string;
+  athleteId: string;
+  source: string;
+  draftJson: Record<string, unknown>;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const entries = Object.entries(params.draftJson ?? {});
+
+  return prisma.$transaction(async (tx) => {
+    const intakeResponse = await tx.athleteIntakeResponse.create({
+      data: {
+        athleteId: params.athleteId,
+        coachId: params.coachId,
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        source: params.source,
+        aiMode: null,
+        draftJson: params.draftJson as Prisma.InputJsonValue,
+      } as Prisma.AthleteIntakeResponseUncheckedCreateInput,
+    });
+
+    if (entries.length > 0) {
+      await tx.intakeEvidence.createMany({
+        data: entries.map(([questionKey, answerJson]) => ({
+          athleteId: params.athleteId,
+          coachId: params.coachId,
+          intakeResponseId: intakeResponse.id,
+          questionKey,
+          answerJson: answerJson as Prisma.InputJsonValue,
+        })),
+      });
+    }
+
+    return { intakeResponse, evidenceCreatedCount: entries.length };
   });
 }
 

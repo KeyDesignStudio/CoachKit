@@ -88,6 +88,25 @@ type WeekStats = {
   intensity: number;
 };
 
+type CoachPlanSource = {
+  id: string;
+  title: string;
+  sport: string;
+  distance: string;
+  level: string;
+  durationWeeks: number;
+  isActive: boolean;
+  createdAt: string;
+  latestVersion?: { version: number; extractionMetaJson?: any } | null;
+};
+
+type IntakeLifecycle = {
+  intakeResponse?: any | null;
+  latestSubmittedIntake: any | null;
+  openDraftIntake: any | null;
+  lifecycle?: { hasOpenRequest: boolean; canOpenNewRequest: boolean } | null;
+};
+
 const DAY_NAME_TO_INDEX: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -433,6 +452,23 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
   const [commandPaletteActiveIndex, setCommandPaletteActiveIndex] = useState(0);
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const [performanceModel, setPerformanceModel] = useState<PerformanceModelPreview | null>(null);
+  const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycle | null>(null);
+  const [coachPlanSources, setCoachPlanSources] = useState<CoachPlanSource[]>([]);
+  const [uploadForm, setUploadForm] = useState<{
+    title: string;
+    sport: string;
+    distance: string;
+    level: string;
+    durationWeeks: string;
+    file: File | null;
+  }>({
+    title: '',
+    sport: 'TRIATHLON',
+    distance: 'OTHER',
+    level: 'BEGINNER',
+    durationWeeks: '12',
+    file: null,
+  });
 
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -565,6 +601,11 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return Array.isArray(rows) ? rows : [];
   }, [draftPlanLatest]);
 
+  const effectiveInputPreflight = useMemo(() => {
+    const raw = (draftPlanLatest as any)?.setupJson?.effectiveInputV1;
+    return raw && typeof raw === 'object' ? (raw as Record<string, any>) : null;
+  }, [draftPlanLatest]);
+
 
   const adaptationMemory = useMemo(() => {
     const mem = (draftPlanLatest as any)?.planSourceSelectionJson?.adaptationMemory;
@@ -617,6 +658,24 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     setReferencePlanOptions(rows);
     return rows;
   }, [athleteId, request]);
+
+  const fetchIntakeLifecycle = useCallback(async () => {
+    const data = await request<IntakeLifecycle>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`);
+    const next: IntakeLifecycle = {
+      latestSubmittedIntake: data.latestSubmittedIntake ?? data.intakeResponse ?? null,
+      openDraftIntake: data.openDraftIntake ?? null,
+      lifecycle: data.lifecycle ?? null,
+    };
+    setIntakeLifecycle(next);
+    return next;
+  }, [athleteId, request]);
+
+  const fetchCoachPlanSources = useCallback(async () => {
+    const data = await request<{ sources: CoachPlanSource[] }>(`/api/coach/plan-library/sources`);
+    const rows = Array.isArray(data.sources) ? data.sources : [];
+    setCoachPlanSources(rows);
+    return rows;
+  }, [request]);
 
   const fetchPerformanceModel = useCallback(
     async (aiPlanDraftId?: string | null) => {
@@ -709,6 +768,8 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           fetchDraftPlanLatest(),
           fetchAthleteProfile(),
           fetchReferencePlans(),
+          fetchCoachPlanSources(),
+          fetchIntakeLifecycle(),
         ]);
 
         if (cancelled) return;
@@ -733,7 +794,81 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchDraftPlanLatest, fetchPerformanceModel, fetchPublishStatus, fetchReferencePlans, request]);
+  }, [athleteId, fetchAthleteProfile, fetchBriefLatest, fetchCoachPlanSources, fetchDraftPlanLatest, fetchIntakeLifecycle, fetchPerformanceModel, fetchPublishStatus, fetchReferencePlans, request]);
+
+  const openCoachTrainingRequest = useCallback(async () => {
+    setBusy('open-training-request');
+    setError(null);
+    try {
+      await request<{ intakeResponse: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
+        method: 'POST',
+        data: {},
+      });
+      await fetchIntakeLifecycle();
+    } catch (e) {
+      const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to open request.';
+      setError(message);
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, fetchIntakeLifecycle, request]);
+
+  const submitOpenTrainingRequest = useCallback(async () => {
+    const intakeId = String(intakeLifecycle?.openDraftIntake?.id ?? '');
+    if (!intakeId) return;
+    setBusy('submit-training-request');
+    setError(null);
+    try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/submit`, {
+        method: 'POST',
+        data: { intakeResponseId: intakeId },
+      });
+      await fetchIntakeLifecycle();
+    } catch (e) {
+      const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to submit request.';
+      setError(message);
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request]);
+
+  const uploadCoachPlanSource = useCallback(async () => {
+    if (!uploadForm.file) {
+      setError('Choose a PDF file first.');
+      return;
+    }
+
+    setBusy('upload-plan-source');
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set('type', 'PDF');
+      form.set('title', uploadForm.title.trim() || uploadForm.file.name.replace(/\.pdf$/i, ''));
+      form.set('sport', uploadForm.sport);
+      form.set('distance', uploadForm.distance);
+      form.set('level', uploadForm.level);
+      form.set('durationWeeks', uploadForm.durationWeeks.trim() || '12');
+      form.set('file', uploadForm.file);
+
+      const response = await fetch('/api/coach/plan-library/ingest', {
+        method: 'POST',
+        body: form,
+        credentials: 'same-origin',
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = payload?.error?.message || 'Failed to upload plan source.';
+        throw new Error(message);
+      }
+
+      await Promise.all([fetchCoachPlanSources(), fetchReferencePlans()]);
+      setUploadForm((prev) => ({ ...prev, title: '', durationWeeks: prev.durationWeeks, file: null }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to upload plan source.');
+    } finally {
+      setBusy(null);
+    }
+  }, [fetchCoachPlanSources, fetchReferencePlans, uploadForm]);
 
   useEffect(() => {
     if (!shouldDeferReview) return;
@@ -1439,6 +1574,129 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
       )}
 
       <div className="mt-6 space-y-4">
+        <Block title="0) Coach Library Upload">
+          <div className="space-y-3">
+            <div className="text-sm text-[var(--fg-muted)]">
+              Upload your proven plans first so CoachKit can prioritize them while building athlete-specific drafts.
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Input
+                value={uploadForm.title}
+                onChange={(e) => setUploadForm((s) => ({ ...s, title: e.target.value }))}
+                placeholder="Plan title (e.g. 12wk Olympic Beginner)"
+              />
+              <Input
+                value={uploadForm.durationWeeks}
+                onChange={(e) => setUploadForm((s) => ({ ...s, durationWeeks: e.target.value }))}
+                placeholder="Duration weeks"
+                inputMode="numeric"
+              />
+              <Select value={uploadForm.sport} onChange={(e) => setUploadForm((s) => ({ ...s, sport: e.target.value }))}>
+                <option value="TRIATHLON">Triathlon</option>
+                <option value="RUN">Run</option>
+                <option value="BIKE">Bike</option>
+                <option value="SWIM">Swim</option>
+                <option value="DUATHLON">Duathlon</option>
+              </Select>
+              <Select value={uploadForm.level} onChange={(e) => setUploadForm((s) => ({ ...s, level: e.target.value }))}>
+                <option value="BEGINNER">Beginner</option>
+                <option value="INTERMEDIATE">Intermediate</option>
+                <option value="ADVANCED">Advanced</option>
+              </Select>
+              <Select value={uploadForm.distance} onChange={(e) => setUploadForm((s) => ({ ...s, distance: e.target.value }))}>
+                <option value="OTHER">Other</option>
+                <option value="SPRINT">Sprint</option>
+                <option value="OLYMPIC">Olympic</option>
+                <option value="HALF_IRONMAN">Half Ironman</option>
+                <option value="IRONMAN">Ironman</option>
+                <option value="FIVE_K">5K</option>
+                <option value="TEN_K">10K</option>
+                <option value="HALF_MARATHON">Half Marathon</option>
+                <option value="MARATHON">Marathon</option>
+              </Select>
+              <Input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(e) =>
+                  setUploadForm((s) => ({
+                    ...s,
+                    file: e.currentTarget.files && e.currentTarget.files.length ? e.currentTarget.files[0] : null,
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={uploadCoachPlanSource}
+                disabled={busy != null}
+                data-testid="apb-upload-plan-source"
+              >
+                {busy === 'upload-plan-source' ? 'Uploading…' : 'Upload coach plan'}
+              </Button>
+              <div className="text-xs text-[var(--fg-muted)]">PDF plans are parsed into session/rule templates automatically.</div>
+            </div>
+            {coachPlanSources.length ? (
+              <div className="rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Recently uploaded</div>
+                <ul className="space-y-1 text-sm">
+                  {coachPlanSources.slice(0, 5).map((src) => (
+                    <li key={src.id} className="flex items-center justify-between gap-3">
+                      <span>{src.title}</span>
+                      <span className="text-xs text-[var(--fg-muted)]">
+                        {src.durationWeeks}w · v{src.latestVersion?.version ?? 1} · {src.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </Block>
+
+        <Block title="1) Training Request">
+          <div className="space-y-3 text-sm">
+            <div className="text-[var(--fg-muted)]">
+              One open request at a time. Coach can start it, or athlete can submit it from their intake flow.
+            </div>
+            <div className="rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-2">
+              <div>
+                Open request:{' '}
+                <span className="font-medium">
+                  {intakeLifecycle?.openDraftIntake ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div className="text-xs text-[var(--fg-muted)]">
+                Latest submitted:{' '}
+                {intakeLifecycle?.latestSubmittedIntake?.submittedAt
+                  ? new Date(String(intakeLifecycle.latestSubmittedIntake.submittedAt)).toLocaleString()
+                  : 'None'}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                disabled={busy != null || Boolean(intakeLifecycle?.openDraftIntake)}
+                onClick={openCoachTrainingRequest}
+                data-testid="apb-open-training-request"
+              >
+                {busy === 'open-training-request' ? 'Opening…' : 'Open training request'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy != null || !intakeLifecycle?.openDraftIntake}
+                onClick={submitOpenTrainingRequest}
+                data-testid="apb-submit-training-request"
+              >
+                {busy === 'submit-training-request' ? 'Submitting…' : 'Mark request complete'}
+              </Button>
+            </div>
+          </div>
+        </Block>
+
         <Block title="Athlete Snapshot">
           {!briefLatest ? (
             <div className="text-sm text-[var(--fg-muted)]">No snapshot yet. Ask the athlete to complete intake.</div>
@@ -1616,7 +1874,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           )}
         </Block>
 
-        <Block title="1) Confirm Athlete Snapshot">
+        <Block title="2) Confirm Athlete Snapshot">
           <div className="space-y-3">
             <div className="text-sm text-[var(--fg-muted)]">
               Pull the latest intake and profile information before building this block.
@@ -1643,7 +1901,7 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
         </Block>
 
         <Block
-          title="2) Block Setup"
+          title="3) Block Setup"
           rightAction={
             <Button
               type="button"
@@ -1660,6 +1918,28 @@ export function AiPlanBuilderCoachV1({ athleteId }: { athleteId: string }) {
           <div className="mb-3 text-xs text-[var(--fg-muted)]">
             Defaults come from the athlete profile. Changes here apply only to this block.
           </div>
+          {effectiveInputPreflight?.preflight?.hasConflicts ? (
+            <div
+              className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-900"
+              data-testid="apb-effective-input-conflicts"
+            >
+              <div className="font-semibold">
+                Input conflicts detected ({Number(effectiveInputPreflight?.preflight?.conflictCount ?? 0)})
+              </div>
+              <div className="mt-1">
+                Priority used: approved profile overrides, then submitted request, then athlete profile.
+              </div>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                {(Array.isArray(effectiveInputPreflight?.conflicts) ? effectiveInputPreflight.conflicts : [])
+                  .slice(0, 4)
+                  .map((item: any, idx: number) => (
+                    <li key={`conflict-${idx}`}>
+                      {String(item?.field ?? 'field')} resolved from {String(item?.chosenSource ?? 'source')}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg-structure)] px-3 py-3">
             <div className="mb-2 text-sm font-semibold">Plan Type</div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
