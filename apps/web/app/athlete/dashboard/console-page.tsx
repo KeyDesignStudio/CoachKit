@@ -11,6 +11,7 @@ import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { cn } from '@/lib/cn';
@@ -18,6 +19,7 @@ import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
+import type { StravaVitalsSnapshot } from '@/lib/strava-vitals';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30';
 
@@ -73,6 +75,7 @@ type AthleteDashboardResponse = {
     discipline: string | null;
     plannedStartTimeLocal: string | null;
   }>;
+  stravaVitals: StravaVitalsSnapshot;
 };
 
 function NeedsAttentionItem({
@@ -584,6 +587,12 @@ export default function AthleteDashboardConsolePage() {
               );
             })()}
           </Block>
+
+          <StravaVitalsSummaryCard
+            vitals={data?.stravaVitals ?? null}
+            loading={loading && !data}
+            title="Strava Vitals (90d)"
+          />
         </div>
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}

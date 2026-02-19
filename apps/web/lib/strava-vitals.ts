@@ -228,13 +228,22 @@ export function buildStravaVitalsSnapshot(rows: ActivityRow[], windowDays: numbe
 }
 
 export async function getStravaVitalsForAthlete(athleteId: string, options?: { windowDays?: number }) {
+  return getStravaVitalsForAthletes([athleteId], options);
+}
+
+export async function getStravaVitalsForAthletes(athleteIds: string[], options?: { windowDays?: number }) {
+  const uniqueAthleteIds = Array.from(new Set(athleteIds.filter(Boolean)));
+  if (!uniqueAthleteIds.length) {
+    return buildStravaVitalsSnapshot([], Math.min(365, Math.max(14, options?.windowDays ?? 90)));
+  }
+
   const windowDays = Math.min(365, Math.max(14, options?.windowDays ?? 90));
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - windowDays);
 
   const rows = await prisma.completedActivity.findMany({
     where: {
-      athleteId,
+      athleteId: { in: uniqueAthleteIds },
       source: CompletionSource.STRAVA,
       startTime: { gte: since },
     },

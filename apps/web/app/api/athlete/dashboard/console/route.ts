@@ -13,6 +13,7 @@ import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
 import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 import { createServerProfiler } from '@/lib/server-profiler';
+import { getStravaVitalsForAthlete, type StravaVitalsSnapshot } from '@/lib/strava-vitals';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,7 @@ type AthleteDashboardResponse = {
     discipline: string;
     plannedStartTimeLocal: string | null;
   }>;
+  stravaVitals: StravaVitalsSnapshot;
 };
 
 const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
@@ -113,38 +115,41 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const items = await prisma.calendarItem.findMany({
-      where: {
-        athleteId: params.athleteId,
-        deletedAt: null,
-        ...rangeFilter,
-        ...disciplineFilter,
-      },
-      select: {
-        id: true,
-        date: true,
-        discipline: true,
-        status: true,
-        title: true,
-        plannedDurationMinutes: true,
-        plannedDistanceKm: true,
-        plannedStartTimeLocal: true,
-        completedActivities: {
-          orderBy: [{ startTime: 'desc' as const }],
-          take: 1,
-          select: {
-            startTime: true,
-            durationMinutes: true,
-            distanceKm: true,
-            confirmedAt: true,
-            painFlag: true,
-            metricsJson: true,
-            matchDayDiff: true,
+    const [items, stravaVitals] = await Promise.all([
+      prisma.calendarItem.findMany({
+        where: {
+          athleteId: params.athleteId,
+          deletedAt: null,
+          ...rangeFilter,
+          ...disciplineFilter,
+        },
+        select: {
+          id: true,
+          date: true,
+          discipline: true,
+          status: true,
+          title: true,
+          plannedDurationMinutes: true,
+          plannedDistanceKm: true,
+          plannedStartTimeLocal: true,
+          completedActivities: {
+            orderBy: [{ startTime: 'desc' as const }],
+            take: 1,
+            select: {
+              startTime: true,
+              durationMinutes: true,
+              distanceKm: true,
+              confirmedAt: true,
+              painFlag: true,
+              metricsJson: true,
+              matchDayDiff: true,
+            },
           },
         },
-      },
-      orderBy: [{ date: 'asc' as const }],
-    });
+        orderBy: [{ date: 'asc' as const }],
+      }),
+      getStravaVitalsForAthlete(params.athleteId, { windowDays: 90 }),
+    ]);
 
     const filteredItems = items
       .map((item) => {
@@ -227,6 +232,7 @@ async function getAthleteDashboardData(params: {
       },
       rangeSummary,
       nextUp,
+      stravaVitals,
     } satisfies AthleteDashboardResponse;
   })();
 
