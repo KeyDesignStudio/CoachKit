@@ -41,6 +41,20 @@ type PollSummary = {
   errors: Array<{ athleteId?: string; message: string }>;
 };
 
+type DeviceProviderStatus = {
+  provider: 'GARMIN' | 'WAHOO' | 'COROS';
+  slug: string;
+  configured: boolean;
+  connected: boolean;
+  connection: {
+    externalAthleteId: string;
+    expiresAt: string | null;
+    scope: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+};
+
 export default function AthleteSettingsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -49,6 +63,9 @@ export default function AthleteSettingsPage() {
   const { preference: themePreference, setThemePreference } = useThemePreference();
 
   const [status, setStatus] = useState<StravaStatusResponse | null>(null);
+  const [deviceProviders, setDeviceProviders] = useState<DeviceProviderStatus[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [providerWorking, setProviderWorking] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [working, setWorking] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -94,6 +111,29 @@ export default function AthleteSettingsPage() {
     return 'Strava connection failed. Please try again.';
   }, [searchParams]);
 
+  const providerResultMessage = useMemo(() => {
+    const providers: Array<{ slug: string; label: string }> = [
+      { slug: 'garmin', label: 'Garmin' },
+      { slug: 'wahoo', label: 'Wahoo' },
+      { slug: 'coros', label: 'COROS' },
+    ];
+
+    for (const provider of providers) {
+      const result = searchParams.get(provider.slug);
+      if (!result) continue;
+      if (result === 'connected') return `${provider.label} connected.`;
+      if (result === 'cancelled') return `${provider.label} connection cancelled.`;
+      if (result === 'expired_state') return `${provider.label} connection expired. Please try again.`;
+      if (result === 'invalid_state' || result === 'missing_state') {
+        return `${provider.label} connection could not be verified. Please try again.`;
+      }
+      if (result === 'missing_code') return `${provider.label} did not return a code. Please try again.`;
+      return `${provider.label} connection failed. Please try again.`;
+    }
+
+    return '';
+  }, [searchParams]);
+
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     setError('');
@@ -108,10 +148,23 @@ export default function AthleteSettingsPage() {
     }
   }, [request]);
 
+  const loadDeviceProviders = useCallback(async () => {
+    setProvidersLoading(true);
+    try {
+      const data = await request<{ providers: DeviceProviderStatus[] }>('/api/integrations/providers/status');
+      setDeviceProviders(data.providers);
+    } catch {
+      setDeviceProviders([]);
+    } finally {
+      setProvidersLoading(false);
+    }
+  }, [request]);
+
   useEffect(() => {
     if (user?.role !== 'ATHLETE') return;
     void loadStatus();
-  }, [user?.role, loadStatus]);
+    void loadDeviceProviders();
+  }, [user?.role, loadStatus, loadDeviceProviders]);
 
   const loadIcalLink = useCallback(async () => {
     setLoadingIcal(true);
@@ -183,6 +236,23 @@ export default function AthleteSettingsPage() {
     }
   };
 
+  const handleProviderConnect = (slug: string) => {
+    window.location.href = `/api/integrations/${slug}/connect?redirectTo=/athlete/settings`;
+  };
+
+  const handleProviderDisconnect = async (slug: string) => {
+    setProviderWorking(slug);
+    setError('');
+    try {
+      await request(`/api/integrations/${slug}/disconnect`, { method: 'POST' });
+      await loadDeviceProviders();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to disconnect ${slug}.`);
+    } finally {
+      setProviderWorking(null);
+    }
+  };
+
   const handleSyncNow = async () => {
     setSyncing(true);
     setError('');
@@ -244,6 +314,12 @@ export default function AthleteSettingsPage() {
             <p className="text-sm text-[var(--text)]">{resultMessage}</p>
             <Badge>{searchParams.get('strava') || ''}</Badge>
           </div>
+        </Block>
+      ) : null}
+
+      {providerResultMessage ? (
+        <Block>
+          <p className="text-sm text-[var(--text)]">{providerResultMessage}</p>
         </Block>
       ) : null}
 
@@ -400,6 +476,49 @@ export default function AthleteSettingsPage() {
               </div>
 
               {icalMessage ? <p className="text-sm text-[var(--text-success)]">{icalMessage}</p> : null}
+            </div>
+          </Block>
+
+          <Block title="Other device connectors (beta)">
+            <p className="text-sm text-[var(--muted)] mb-3">
+              Garmin, Wahoo, and COROS scaffolds are available for staged beta integration testing.
+            </p>
+            {providersLoading ? <p className="text-sm text-[var(--muted)]">Loading connectors…</p> : null}
+            <div className="flex flex-col gap-3">
+              {deviceProviders.map((provider) => (
+                <div key={provider.provider} className="rounded-2xl border border-[var(--border-subtle)] px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{provider.provider}</p>
+                      <Badge className={provider.connected ? 'text-emerald-700' : 'text-[var(--muted)]'}>
+                        {provider.connected ? 'Connected' : provider.configured ? 'Ready to connect' : 'Not configured'}
+                      </Badge>
+                    </div>
+                    {provider.connected ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => void handleProviderDisconnect(provider.slug)}
+                        disabled={providerWorking === provider.slug}
+                      >
+                        {providerWorking === provider.slug ? 'Disconnecting…' : 'Disconnect'}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleProviderConnect(provider.slug)}
+                        disabled={!provider.configured || providerWorking === provider.slug}
+                      >
+                        Connect
+                      </Button>
+                    )}
+                  </div>
+                  {provider.connection?.externalAthleteId ? (
+                    <p className="mt-2 text-xs text-[var(--muted)]">External athlete ID: {provider.connection.externalAthleteId}</p>
+                  ) : null}
+                </div>
+              ))}
+              {!providersLoading && deviceProviders.length === 0 ? (
+                <p className="text-sm text-[var(--muted)]">No provider scaffolds returned.</p>
+              ) : null}
             </div>
           </Block>
         </div>
