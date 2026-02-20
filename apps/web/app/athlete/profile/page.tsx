@@ -747,10 +747,9 @@ export default function AthleteProfilePage() {
                 <div><span className="text-xs text-[var(--muted)]">Injury/pain status</span><div className="text-sm font-medium">{planSummary.injuryStatus}</div></div>
                 <div className="md:col-span-2"><span className="text-xs text-[var(--muted)]">Constraints / notes</span><div className="text-sm font-medium whitespace-pre-wrap">{planSummary.constraints}</div></div>
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={() => router.push('/athlete/intake')}>Update training request</Button>
-                {planSummary.openRequest ? <span className="text-xs text-amber-700">You currently have an open training request draft.</span> : null}
-              </div>
+              {planSummary.openRequest ? (
+                <div className="mt-4 text-xs text-amber-700">You currently have an open training request draft with your coach.</div>
+              ) : null}
             </div>
           </FormFieldSpan>
         </FormGrid>
