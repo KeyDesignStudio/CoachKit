@@ -329,6 +329,57 @@ function applyAdaptationMemoryToSetup(params: { setup: any; memory: Awaited<Retu
   return setup;
 }
 
+function enforceCoachHardConstraints(params: { baseSetup: any; adjustedSetup: any }) {
+  const base = params.baseSetup ?? {};
+  const adjusted = { ...(params.adjustedSetup ?? {}) };
+
+  const requestedDays = Array.isArray(base.weeklyAvailabilityDays)
+    ? Array.from(
+        new Set(
+          base.weeklyAvailabilityDays
+            .map((d: unknown) => Number(d))
+            .filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6)
+        )
+      ).sort((a, b) => a - b)
+    : [];
+
+  if (requestedDays.length) {
+    adjusted.weeklyAvailabilityDays = requestedDays;
+  }
+
+  if (typeof base.maxDoublesPerWeek === 'number' && Number.isFinite(base.maxDoublesPerWeek)) {
+    adjusted.maxDoublesPerWeek = Math.max(0, Math.min(3, Math.round(base.maxDoublesPerWeek)));
+  }
+
+  if (typeof base.maxIntensityDaysPerWeek === 'number' && Number.isFinite(base.maxIntensityDaysPerWeek)) {
+    adjusted.maxIntensityDaysPerWeek = Math.max(1, Math.min(3, Math.round(base.maxIntensityDaysPerWeek)));
+  }
+
+  if (typeof base.weeklyAvailabilityMinutes === 'number' && Number.isFinite(base.weeklyAvailabilityMinutes)) {
+    adjusted.weeklyAvailabilityMinutes = Math.max(0, Math.round(base.weeklyAvailabilityMinutes));
+  } else if (base.weeklyAvailabilityMinutes && typeof base.weeklyAvailabilityMinutes === 'object') {
+    adjusted.weeklyAvailabilityMinutes = base.weeklyAvailabilityMinutes;
+  }
+
+  if (typeof base.weeksToEvent === 'number' && Number.isFinite(base.weeksToEvent)) {
+    adjusted.weeksToEvent = Math.max(1, Math.min(52, Math.round(base.weeksToEvent)));
+  }
+  if (typeof base.weeksToEventOverride === 'number' && Number.isFinite(base.weeksToEventOverride)) {
+    adjusted.weeksToEventOverride = Math.max(1, Math.min(52, Math.round(base.weeksToEventOverride)));
+  }
+  if (typeof base.eventDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(base.eventDate)) {
+    adjusted.eventDate = base.eventDate;
+  }
+  if (typeof base.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(base.startDate)) {
+    adjusted.startDate = base.startDate;
+  }
+  if (typeof base.weekStart === 'string' && (base.weekStart === 'monday' || base.weekStart === 'sunday')) {
+    adjusted.weekStart = base.weekStart;
+  }
+
+  return adjusted;
+}
+
 export async function createAiDraftPlan(params: { coachId: string; athleteId: string; planJson: unknown }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -489,9 +540,13 @@ export async function generateAiDraftPlanV1(params: {
     coachId: params.coachId,
     athleteId: params.athleteId,
   });
-  const adjustedSetup = applyAdaptationMemoryToSetup({
+  const adaptedSetup = applyAdaptationMemoryToSetup({
     setup: blended.adjustedSetup as any,
     memory: adaptationMemory,
+  }) as any;
+  const adjustedSetup = enforceCoachHardConstraints({
+    baseSetup: setup as any,
+    adjustedSetup: adaptedSetup,
   }) as any;
   adjustedSetup.effectiveInputV1 = {
     generatedAt: new Date().toISOString(),
