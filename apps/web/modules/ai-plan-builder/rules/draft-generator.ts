@@ -203,11 +203,90 @@ function daySortKey(dayOfWeek: number, weekStart: 'monday' | 'sunday') {
   return (d + 6) % 7;
 }
 
+function hasInjurySignal(setup: DraftPlanSetupV1): boolean {
+  const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
+  return /\binjury\b|\bpain\b|\bsplint\b|\bashilles\b|\bachilles\b|\bknee\b|\bcalf\b|\bhamstring\b/.test(guidance);
+}
+
+function parseTravelWindows(params: { text: string; fallbackYear?: number }): Array<{ start: Date; end: Date }> {
+  const text = String(params.text ?? '');
+  if (!text.trim()) return [];
+  const months: Record<string, number> = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    sept: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  };
+
+  const windows: Array<{ start: Date; end: Date }> = [];
+  const regex = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*(?:-|–|to)\s*(\d{1,2}))?(?:[,\s]+(\d{4}))?/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) != null) {
+    const monthKey = String(match[1] ?? '').toLowerCase();
+    const month = months[monthKey];
+    if (month == null) continue;
+    const startDay = Number(match[2] ?? 0);
+    const endDay = Number(match[3] ?? match[2] ?? 0);
+    const year = Number(match[4] ?? params.fallbackYear ?? new Date().getUTCFullYear());
+    if (!Number.isInteger(startDay) || !Number.isInteger(endDay) || startDay <= 0 || endDay <= 0) continue;
+
+    const start = new Date(Date.UTC(year, month, startDay));
+    const end = new Date(Date.UTC(year, month, endDay));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    if (end.getTime() < start.getTime()) continue;
+    windows.push({ start, end });
+  }
+  return windows;
+}
+
+function overlapsWindow(params: { weekStartDate: Date | null; weekEndDate: Date | null; windows: Array<{ start: Date; end: Date }> }): boolean {
+  if (!params.weekStartDate || !params.weekEndDate || !params.windows.length) return false;
+  const weekStartTs = params.weekStartDate.getTime();
+  const weekEndTs = params.weekEndDate.getTime();
+  return params.windows.some((w) => w.start.getTime() <= weekEndTs && w.end.getTime() >= weekStartTs);
+}
+
 function isBeginnerProfile(setup: DraftPlanSetupV1): boolean {
   const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
   if (setup.programPolicy === 'COUCH_TO_5K' || setup.programPolicy === 'COUCH_TO_IRONMAN_26') return true;
   if (setup.riskTolerance === 'low') return true;
   return /\bbeginner\b|\bnovice\b|\bcouch\b/.test(guidance);
+}
+
+function applyInjurySessionGuardrail(params: {
+  setup: DraftPlanSetupV1;
+  session: DraftWeekV1['sessions'][number];
+}): DraftWeekV1['sessions'][number] {
+  if (!hasInjurySignal(params.setup)) return params.session;
+
+  const s = { ...params.session };
+  if (s.discipline === 'run') {
+    if (s.type === 'tempo' || s.type === 'threshold') s.type = 'endurance';
+    s.durationMinutes = Math.min(s.durationMinutes, 45);
+    if (!s.notes) s.notes = 'Injury-adjusted';
+  }
+  return s;
+}
+
+function applySessionGuardrails(params: {
+  setup: DraftPlanSetupV1;
+  weekIndex: number;
+  session: DraftWeekV1['sessions'][number];
+}): DraftWeekV1['sessions'][number] {
+  const beginnerAdjusted = applyBeginnerSessionGuardrail(params);
+  return applyInjurySessionGuardrail({
+    setup: params.setup,
+    session: beginnerAdjusted,
+  });
 }
 
 function applyBeginnerWeekMinutesGuardrail(params: {
@@ -455,10 +534,29 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
   const longDay = pickLongDay(effectiveSetup, days);
   const disciplineQueue = disciplineSequence(effectiveSetup, requestedTargetSessions);
   const typeQueues = sessionTypeQueues(effectiveSetup);
+  const injuryFlag = hasInjurySignal(effectiveSetup);
+  const setupStartDate = typeof effectiveSetup.startDate === 'string' ? new Date(`${effectiveSetup.startDate}T00:00:00.000Z`) : null;
+  const travelWindows = parseTravelWindows({
+    text: String(effectiveSetup.coachGuidanceText ?? ''),
+    fallbackYear: setupStartDate && !Number.isNaN(setupStartDate.getTime()) ? setupStartDate.getUTCFullYear() : undefined,
+  });
 
   const weeks: DraftWeekV1[] = [];
 
   for (let weekIndex = 0; weekIndex < weeksToEvent; weekIndex++) {
+    const weekStartDate =
+      setupStartDate && !Number.isNaN(setupStartDate.getTime())
+        ? new Date(Date.UTC(setupStartDate.getUTCFullYear(), setupStartDate.getUTCMonth(), setupStartDate.getUTCDate() + weekIndex * 7))
+        : null;
+    const weekEndDate = weekStartDate
+      ? new Date(Date.UTC(weekStartDate.getUTCFullYear(), weekStartDate.getUTCMonth(), weekStartDate.getUTCDate() + 6))
+      : null;
+    const weekHasTravel = overlapsWindow({
+      weekStartDate,
+      weekEndDate,
+      windows: travelWindows,
+    });
+
     const baseMinutesFromSource = Array.isArray(effectiveSetup.weeklyMinutesByWeek)
       ? effectiveSetup.weeklyMinutesByWeek[weekIndex]
       : undefined;
@@ -467,6 +565,10 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
 
     if (typeof baseMinutesFromSource === 'number' && Number.isFinite(baseMinutesFromSource)) {
       weekTotalMinutes = clampInt(baseMinutesFromSource, 60, Math.max(60, baseMinutesFromSource));
+    }
+
+    if (weekHasTravel) {
+      weekTotalMinutes = clampInt(weekTotalMinutes * 0.75, 45, Math.max(45, weekTotalMinutes));
     }
 
     if (
@@ -484,7 +586,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekTotalMinutes,
     });
     // Per-day capacity guard: 1 session/day + explicit doubles allowance.
-    const doublesAllowance = clampInt(effectiveSetup.maxDoublesPerWeek, 0, 3);
+    const doublesAllowance = weekHasTravel ? 0 : clampInt(effectiveSetup.maxDoublesPerWeek, 0, 3);
     const dayCap = new Map<number, number>();
     for (const d of days) dayCap.set(d, 1);
     for (let i = 0; i < doublesAllowance; i += 1) {
@@ -493,10 +595,11 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     }
     const maxSessionsByCapacity = Array.from(dayCap.values()).reduce((sum, n) => sum + n, 0);
     const targetSessions = Math.max(1, Math.min(requestedTargetSessions, maxSessionsByCapacity));
+    const weekMaxIntensityDays = injuryFlag || weekHasTravel ? 1 : maxIntensityDaysPerWeek;
     // Determine which days are "intensity" (avoid consecutive).
     const intensityDays: number[] = [];
     for (const d of days) {
-      if (intensityDays.length >= maxIntensityDaysPerWeek) break;
+      if (intensityDays.length >= weekMaxIntensityDays) break;
       const last = intensityDays[intensityDays.length - 1];
       if (last !== undefined && Math.abs(d - last) <= 1) continue;
       // Avoid using long day as intensity.
@@ -534,7 +637,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     if (includesSwim(effectiveSetup)) {
       const d = takeDay(days);
       if (d != null) {
-        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: d,
@@ -553,7 +656,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       const discipline: DraftDiscipline = longIsBike ? 'bike' : 'run';
       const day = hasCapacity(longDay) ? longDay : takeDay(days);
       if (day != null) {
-        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -570,7 +673,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     if ((effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') && weekIndex % 2 === 1) {
       const day = hasCapacity(longDay) ? longDay : takeDay(days.filter((d) => d !== longDay));
       if (day != null) {
-        pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -607,10 +710,11 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
           if (entry === 'technique') return 'technique';
           if (entry === 'endurance') return 'endurance';
         }
+        if (injuryFlag && discipline === 'run') return 'endurance';
         return isIntensity ? (effectiveSetup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
       })();
 
-      pushSession(applyBeginnerSessionGuardrail({ setup: effectiveSetup, weekIndex, session: {
+      pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,

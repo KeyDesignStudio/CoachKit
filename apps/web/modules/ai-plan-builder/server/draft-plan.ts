@@ -333,14 +333,14 @@ function enforceCoachHardConstraints(params: { baseSetup: any; adjustedSetup: an
   const base = params.baseSetup ?? {};
   const adjusted = { ...(params.adjustedSetup ?? {}) };
 
-  const requestedDays = Array.isArray(base.weeklyAvailabilityDays)
+  const requestedDays: number[] = Array.isArray(base.weeklyAvailabilityDays)
     ? Array.from(
-        new Set(
+        new Set<number>(
           base.weeklyAvailabilityDays
             .map((d: unknown) => Number(d))
             .filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6)
         )
-      ).sort((a, b) => a - b)
+      ).sort((a: number, b: number) => a - b)
     : [];
 
   if (requestedDays.length) {
