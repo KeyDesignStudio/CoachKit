@@ -741,8 +741,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       ) : null}
       {info ? <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</div> : null}
 
-      <Block title="1) Training Request">
-        <div className="space-y-3 text-sm">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Block title="1) Training Request">
+          <div className="space-y-3 text-sm">
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             One open request at a time. Coach can initiate and complete this step.
           </div>
@@ -835,23 +836,23 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            {!hasOpenRequest ? (
-              <Button onClick={() => void openTrainingRequest()} disabled={busy != null}>
-                {hasSubmittedRequest ? 'Start revision request' : 'Start new request'}
-              </Button>
-            ) : (
-              <>
-                <Button onClick={() => void saveTrainingRequestDraft()} disabled={busy != null}>Save draft</Button>
-                <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null}>Submit request</Button>
-              </>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {!hasOpenRequest ? (
+                <Button onClick={() => void openTrainingRequest()} disabled={busy != null}>
+                  {hasSubmittedRequest ? 'Start revision request' : 'Start new request'}
+                </Button>
+              ) : (
+                <>
+                  <Button onClick={() => void saveTrainingRequestDraft()} disabled={busy != null}>Save draft</Button>
+                  <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null}>Submit request</Button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </Block>
+        </Block>
 
-      <Block title="2) Block Blueprint" rightAction={<Button onClick={() => void generateWeeklyStructure()} disabled={busy != null}>Generate weekly structure</Button>}>
-        <div className="space-y-3 text-sm">
+        <Block title="2) Block Blueprint" rightAction={<Button onClick={() => void generateWeeklyStructure()} disabled={busy != null}>Generate weekly structure</Button>}>
+          <div className="space-y-3 text-sm">
           {setupSync.inSync ? (
             <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">Blueprint is synced with Training Request.</div>
           ) : (
@@ -951,22 +952,23 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <Textarea value={setup.coachGuidanceText} onChange={(e) => setSetup((prev) => ({ ...prev, coachGuidanceText: e.target.value }))} rows={3} />
           </div>
 
-          {requestContextApplied ? (
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
-              <ul className="list-disc pl-4">
-                {Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
-                  (requestContextApplied.effects as unknown[]).map((effect, idx) => (
-                    <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
-                  ))
-                ) : (
-                  <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
-                )}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </Block>
+            {requestContextApplied ? (
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+                <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
+                <ul className="list-disc pl-4">
+                  {Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
+                    (requestContextApplied.effects as unknown[]).map((effect, idx) => (
+                      <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
+                    ))
+                  ) : (
+                    <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
+                  )}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </Block>
+      </div>
 
       <Block title="3) Week-by-Week Draft Review">
         {!hasDraft ? (
