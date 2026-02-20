@@ -692,8 +692,16 @@ export async function generateAiDraftPlanV1(params: {
     athleteProfile: athleteProfile as any,
     athleteBrief: ensured.brief ?? null,
   });
-  const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
-  const effectiveSetupForValidation = ((draft as any)?.setup ?? adjustedSetup) as any;
+  const draftRaw: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
+  const aiReturnedSetup = ((draftRaw as any)?.setup ?? adjustedSetup) as any;
+  const effectiveSetupForValidation = enforceCoachHardConstraints({
+    baseSetup: setup as any,
+    adjustedSetup: aiReturnedSetup,
+  }) as any;
+  const draft: DraftPlanV1 = {
+    ...(draftRaw as any),
+    setup: effectiveSetupForValidation,
+  } as DraftPlanV1;
   const constraintViolations = validateDraftPlanAgainstSetup({
     setup: effectiveSetupForValidation,
     draft,
