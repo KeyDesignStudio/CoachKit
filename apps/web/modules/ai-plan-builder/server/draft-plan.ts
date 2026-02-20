@@ -447,12 +447,12 @@ function enforceCoachHardConstraints(params: { baseSetup: any; adjustedSetup: an
   } else if (base.weeklyAvailabilityMinutes && typeof base.weeklyAvailabilityMinutes === 'object') {
     adjusted.weeklyAvailabilityMinutes = base.weeklyAvailabilityMinutes;
   }
-  const coachWeeklyBudget = (() => {
+  const coachWeeklyBudget: number = (() => {
     if (typeof adjusted.weeklyAvailabilityMinutes === 'number' && Number.isFinite(adjusted.weeklyAvailabilityMinutes)) {
       return Math.max(0, Math.round(adjusted.weeklyAvailabilityMinutes));
     }
     if (adjusted.weeklyAvailabilityMinutes && typeof adjusted.weeklyAvailabilityMinutes === 'object') {
-      return Object.values(adjusted.weeklyAvailabilityMinutes as Record<string, unknown>).reduce((sum, value) => {
+      return Object.values(adjusted.weeklyAvailabilityMinutes as Record<string, unknown>).reduce<number>((sum, value) => {
         const n = Number(value);
         return sum + (Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0);
       }, 0);
