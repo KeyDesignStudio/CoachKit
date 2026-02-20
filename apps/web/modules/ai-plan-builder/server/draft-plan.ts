@@ -447,6 +447,27 @@ function enforceCoachHardConstraints(params: { baseSetup: any; adjustedSetup: an
   } else if (base.weeklyAvailabilityMinutes && typeof base.weeklyAvailabilityMinutes === 'object') {
     adjusted.weeklyAvailabilityMinutes = base.weeklyAvailabilityMinutes;
   }
+  const coachWeeklyBudget: number = (() => {
+    if (typeof adjusted.weeklyAvailabilityMinutes === 'number' && Number.isFinite(adjusted.weeklyAvailabilityMinutes)) {
+      return Math.max(0, Math.round(adjusted.weeklyAvailabilityMinutes));
+    }
+    if (adjusted.weeklyAvailabilityMinutes && typeof adjusted.weeklyAvailabilityMinutes === 'object') {
+      return Object.values(adjusted.weeklyAvailabilityMinutes as Record<string, unknown>).reduce<number>((sum, value) => {
+        const n = Number(value);
+        return sum + (Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0);
+      }, 0);
+    }
+    return 0;
+  })();
+  if (Array.isArray(adjusted.weeklyMinutesByWeek) && adjusted.weeklyMinutesByWeek.length && coachWeeklyBudget > 0) {
+    // Keep source/policy influence, but never let expected weekly targets drift far beyond coach-requested budget.
+    const maxTarget = Math.max(60, Math.round(coachWeeklyBudget * 1.15));
+    adjusted.weeklyMinutesByWeek = adjusted.weeklyMinutesByWeek.map((value: unknown) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return 60;
+      return Math.max(45, Math.min(maxTarget, Math.round(n)));
+    });
+  }
 
   if (typeof base.weeksToEvent === 'number' && Number.isFinite(base.weeksToEvent)) {
     adjusted.weeksToEvent = Math.max(1, Math.min(52, Math.round(base.weeksToEvent)));
