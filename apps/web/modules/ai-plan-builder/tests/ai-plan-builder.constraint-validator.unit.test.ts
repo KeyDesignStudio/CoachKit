@@ -59,5 +59,20 @@ describe('constraint-validator', () => {
     expect(violations.some((v) => v.code === 'BEGINNER_RUN_CAP_EXCEEDED')).toBe(true);
     expect(violations.some((v) => v.code === 'BEGINNER_BRICK_TOO_EARLY')).toBe(true);
   });
-});
 
+  it('allows lower weekly minutes band when injury/travel constraints are present', () => {
+    const setup = {
+      ...buildBaseSetup(),
+      weeklyAvailabilityMinutes: 320,
+      coachGuidanceText: 'Beginner athlete. Injury/Pain: shin soreness. Constraints: travelling for business Mar 3-8',
+    };
+    const draft = buildDraftWithSessions([
+      { weekIndex: 0, ordinal: 0, dayOfWeek: 2, discipline: 'run', type: 'endurance', durationMinutes: 45, locked: false },
+      { weekIndex: 0, ordinal: 1, dayOfWeek: 3, discipline: 'swim', type: 'technique', durationMinutes: 45, locked: false },
+      { weekIndex: 0, ordinal: 2, dayOfWeek: 4, discipline: 'bike', type: 'endurance', durationMinutes: 45, locked: false },
+    ]);
+
+    const violations = validateDraftPlanAgainstSetup({ setup, draft });
+    expect(violations.some((v) => v.code === 'WEEKLY_MINUTES_OUT_OF_BOUNDS')).toBe(false);
+  });
+});
