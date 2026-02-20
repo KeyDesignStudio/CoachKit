@@ -253,10 +253,17 @@ function deriveWeeksToCompletionFromDates(params: { startDate: string; completio
 }
 
 function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
-  const first = weekSessions.find((s) => isDayKey(String(s?.dayKey ?? '')))?.dayKey;
-  if (!first || !isDayKey(String(first))) return `Week ${weekIndex + 1}`;
-  const d = parseDayKeyToUtcDate(String(first));
-  return `Week ${weekIndex + 1} (${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCFullYear()).slice(-2)})`;
+  const dayKeys = weekSessions
+    .map((s) => String(s?.dayKey ?? ''))
+    .filter((dayKey) => isDayKey(dayKey))
+    .sort();
+  if (!dayKeys.length) return `Week ${weekIndex + 1}`;
+
+  const start = parseDayKeyToUtcDate(dayKeys[0]);
+  const end = parseDayKeyToUtcDate(dayKeys[dayKeys.length - 1]);
+  const startLabel = `${String(start.getUTCDate()).padStart(2, '0')}/${String(start.getUTCMonth() + 1).padStart(2, '0')}/${String(start.getUTCFullYear()).slice(-2)}`;
+  const endLabel = `${String(end.getUTCDate()).padStart(2, '0')}/${String(end.getUTCMonth() + 1).padStart(2, '0')}/${String(end.getUTCFullYear()).slice(-2)}`;
+  return `Week ${weekIndex + 1} (${startLabel} - ${endLabel})`;
 }
 
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
