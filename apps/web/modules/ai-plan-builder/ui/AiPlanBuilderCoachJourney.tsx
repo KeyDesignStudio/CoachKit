@@ -411,19 +411,19 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const hasSubmittedRequest = Boolean(intakeLifecycle?.latestSubmittedIntake?.id);
   const requestStatus: 'none' | 'draft' | 'submitted' = hasOpenRequest ? 'draft' : hasSubmittedRequest ? 'submitted' : 'none';
   const requestStatusLabel =
-    requestStatus === 'draft' ? 'Draft request in progress' : requestStatus === 'submitted' ? 'Request submitted' : 'No active request';
+    requestStatus === 'draft' ? 'Step 1 in progress: request draft open' : requestStatus === 'submitted' ? 'Step 1 complete: request submitted' : 'Step 1 not started';
   const requestStatusToneClass =
     requestStatus === 'draft'
-      ? 'border-amber-300 bg-amber-50 text-amber-800'
+      ? 'border-blue-300 bg-blue-50 text-blue-900'
       : requestStatus === 'submitted'
         ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
         : 'border-[var(--border-subtle)] bg-[var(--bg-structure)] text-[var(--fg-muted)]';
   const requestGuidanceText =
     requestStatus === 'draft'
-      ? 'You are editing a draft request. Save anytime, then submit when ready.'
+      ? 'You are editing the request. Next: Submit request when details are ready.'
       : requestStatus === 'submitted'
-        ? 'Request submitted. You can now generate the block blueprint.'
-        : 'Start a new request to update this athlete’s next block.';
+        ? 'Next: Review Block Blueprint and click Generate weekly structure.'
+        : 'Next: Start new request to capture this training block.';
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
   const requestContextApplied = useMemo(() => {
@@ -435,6 +435,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const prevWeekIndex = selectedWeekPosition > 0 ? weekOptions[selectedWeekPosition - 1]?.weekIndex : null;
   const nextWeekIndex =
     selectedWeekPosition >= 0 && selectedWeekPosition < weekOptions.length - 1 ? weekOptions[selectedWeekPosition + 1]?.weekIndex : null;
+  const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
+  const hasWeeklyDraft = hasDraft && weekOptions.length > 0;
 
   const fetchAthleteProfile = useCallback(async () => {
     const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
@@ -721,10 +723,29 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Build This Athlete&apos;s Next Training Block</h1>
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">Request | Blueprint | Weekly Draft | Publish</p>
+          <p className="mt-1 text-sm text-[var(--fg-muted)]">Follow the steps: capture request, confirm blueprint, review weekly draft, publish.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => window.location.reload()} disabled={busy != null}>Refresh</Button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-4">
+        <div className={`rounded-md border px-3 py-2 text-xs ${hasSubmittedRequest ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+          <div className="font-medium">Step 1 Request</div>
+          <div>{hasSubmittedRequest ? 'Complete' : hasOpenRequest ? 'In progress' : 'Not started'}</div>
+        </div>
+        <div className={`rounded-md border px-3 py-2 text-xs ${isBlueprintReady ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+          <div className="font-medium">Step 2 Blueprint</div>
+          <div>{isBlueprintReady ? 'Ready to generate' : 'Waiting for request submit/sync'}</div>
+        </div>
+        <div className={`rounded-md border px-3 py-2 text-xs ${hasWeeklyDraft ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+          <div className="font-medium">Step 3 Weekly Draft</div>
+          <div>{hasWeeklyDraft ? 'Generated' : 'Pending generation'}</div>
+        </div>
+        <div className={`rounded-md border px-3 py-2 text-xs ${isPublished ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+          <div className="font-medium">Step 4 Publish</div>
+          <div>{isPublished ? 'Published' : 'Not published yet'}</div>
         </div>
       </div>
 
@@ -745,7 +766,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         <Block title="1) Training Request">
           <div className="space-y-3 text-sm">
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-            One open request at a time. Coach can initiate and complete this step.
+            Capture or update this athlete&apos;s block request. Only one open request can be edited at a time.
           </div>
           <div className={`rounded-md border px-3 py-2 ${requestStatusToneClass}`}>
             <div className="font-medium">{requestStatusLabel}</div>
@@ -832,7 +853,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
           {!hasOpenRequest ? (
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              Fields are read-only until you start a new request.
+              Read-only mode. Click Start new request to edit these fields.
             </div>
           ) : null}
 
@@ -854,10 +875,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         <Block title="2) Block Blueprint" rightAction={<Button onClick={() => void generateWeeklyStructure()} disabled={busy != null}>Generate weekly structure</Button>}>
           <div className="space-y-3 text-sm">
           {setupSync.inSync ? (
-            <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">Blueprint is synced with Training Request.</div>
+            <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">Blueprint is aligned with the request. Next: Generate weekly structure.</div>
           ) : (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Blueprint is out of sync {setupSync.issues.length ? `for: ${setupSync.issues.join(', ')}` : 'with request values'}.
+              Blueprint needs update {setupSync.issues.length ? `for: ${setupSync.issues.join(', ')}` : 'from request values'}. Click Sync blueprint from request.
             </div>
           )}
 
