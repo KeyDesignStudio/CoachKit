@@ -35,6 +35,18 @@ export type DraftPlanSetupV1 = {
   recoveryEveryNWeeks?: number;
   recoveryWeekMultiplier?: number;
   sessionsPerWeekOverride?: number;
+  requestContext?: {
+    goalDetails?: string;
+    goalFocus?: string;
+    eventName?: string;
+    eventDate?: string;
+    goalTimeline?: string;
+    weeklyMinutes?: number;
+    availabilityDays?: string[];
+    experienceLevel?: string;
+    injuryStatus?: string;
+    constraintsNotes?: string;
+  };
 };
 
 export type DraftWeekV1 = {
@@ -365,6 +377,29 @@ function progressionCurve(params: {
   return values;
 }
 
+function buildDefaultPeriodization(setup: DraftPlanSetupV1): number[] | undefined {
+  if (Array.isArray(setup.weeklyMinutesByWeek) && setup.weeklyMinutesByWeek.length) return undefined;
+  const weeks = Math.max(1, Math.round(setup.weeksToEvent || 1));
+  if (weeks <= 1) return [Math.max(45, availabilityTotalMinutes(setup.weeklyAvailabilityMinutes))];
+
+  const endMinutes = Math.max(90, availabilityTotalMinutes(setup.weeklyAvailabilityMinutes));
+  const experience = String(setup.requestContext?.experienceLevel ?? '').toLowerCase();
+  const beginner = /\bbeginner\b|\bnovice\b|\bcouch\b/.test(experience) || setup.riskTolerance === 'low';
+  const startRatio = beginner ? 0.62 : setup.riskTolerance === 'high' ? 0.78 : 0.7;
+  const recoveryEveryNWeeks = beginner ? 3 : 4;
+  const recoveryWeekMultiplier = beginner ? 0.8 : 0.85;
+  const taperWeeks = weeks >= 8 ? 2 : 1;
+
+  return progressionCurve({
+    weeks,
+    startMinutes: Math.max(60, Math.round(endMinutes * startRatio)),
+    endMinutes,
+    recoveryEveryNWeeks,
+    recoveryWeekMultiplier,
+    taperWeeks,
+  });
+}
+
 function applyProgramPolicy(setup: DraftPlanSetupV1): DraftPlanSetupV1 {
   if (!setup.programPolicy) return setup;
   const weeks = Math.max(1, Math.round(setup.weeksToEvent || 1));
@@ -444,7 +479,14 @@ function applyProgramPolicy(setup: DraftPlanSetupV1): DraftPlanSetupV1 {
     };
   }
 
-  return setup;
+  const generatedMinutes = buildDefaultPeriodization(setup);
+  if (!generatedMinutes) return setup;
+  return {
+    ...setup,
+    weeklyMinutesByWeek: generatedMinutes,
+    recoveryEveryNWeeks: setup.recoveryEveryNWeeks ?? 4,
+    recoveryWeekMultiplier: setup.recoveryWeekMultiplier ?? 0.85,
+  };
 }
 
 function humanizeWeekDurations(params: {
