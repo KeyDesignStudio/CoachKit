@@ -426,6 +426,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         : 'Start a new request to update this athlete’s next block.';
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
+  const requestContextApplied = useMemo(() => {
+    const source = (draftPlanLatest as any)?.setupJson?.requestContextApplied;
+    return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
+  }, [draftPlanLatest]);
 
   const selectedWeekPosition = weekOptions.findIndex((w) => w.weekIndex === selectedWeekIndex);
   const prevWeekIndex = selectedWeekPosition > 0 ? weekOptions[selectedWeekPosition - 1]?.weekIndex : null;
@@ -615,6 +619,18 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         weeksToEventOverride: setup.weeksToEventOverride ?? undefined,
         weeklyAvailabilityDays: stableDayList(setup.weeklyAvailabilityDays),
         weeklyAvailabilityMinutes: Number(setup.weeklyAvailabilityMinutes),
+        requestContext: {
+          goalDetails: trainingRequest.goalDetails || undefined,
+          goalFocus: trainingRequest.goalFocus || undefined,
+          eventName: trainingRequest.eventName || undefined,
+          eventDate: trainingRequest.eventDate || undefined,
+          goalTimeline: trainingRequest.goalTimeline || undefined,
+          weeklyMinutes: trainingRequest.weeklyMinutes ? Number(trainingRequest.weeklyMinutes) : undefined,
+          availabilityDays: trainingRequest.availabilityDays,
+          experienceLevel: trainingRequest.experienceLevel || undefined,
+          injuryStatus: trainingRequest.injuryStatus || undefined,
+          constraintsNotes: trainingRequest.constraintsNotes || undefined,
+        },
       };
 
       const data = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
@@ -640,7 +656,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     } finally {
       setBusy(null);
     }
-  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup]);
+  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup, trainingRequest]);
 
   const loadSessionDetail = useCallback(
     async (sessionId: string) => {
@@ -934,6 +950,21 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <label className="mb-1 block text-xs font-medium">Coach blueprint priorities</label>
             <Textarea value={setup.coachGuidanceText} onChange={(e) => setSetup((prev) => ({ ...prev, coachGuidanceText: e.target.value }))} rows={3} />
           </div>
+
+          {requestContextApplied ? (
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+              <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
+              <ul className="list-disc pl-4">
+                {Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
+                  (requestContextApplied.effects as unknown[]).map((effect, idx) => (
+                    <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
+                  ))
+                ) : (
+                  <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
+                )}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </Block>
 

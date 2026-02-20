@@ -58,6 +58,20 @@ export const draftPlanSetupV1Schema = z.object({
   maxDoublesPerWeek: z.number().int().min(0).max(3),
   longSessionDay: z.number().int().min(0).max(6).nullable().optional(),
   coachGuidanceText: z.string().max(2_000).optional(),
+  requestContext: z
+    .object({
+      goalDetails: z.string().max(500).optional(),
+      goalFocus: z.string().max(500).optional(),
+      eventName: z.string().max(500).optional(),
+      eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      goalTimeline: z.string().max(120).optional(),
+      weeklyMinutes: z.number().int().min(0).max(10_000).optional(),
+      availabilityDays: z.array(z.string().max(16)).max(7).optional(),
+      experienceLevel: z.string().max(120).optional(),
+      injuryStatus: z.string().max(500).optional(),
+      constraintsNotes: z.string().max(2_000).optional(),
+    })
+    .optional(),
   programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
   selectedPlanSourceVersionIds: z.array(z.string().min(1)).max(4).optional(),
 }).transform((raw) => {
@@ -166,6 +180,79 @@ function inferProgramPolicy(params: {
     return 'HALF_TO_FULL_MARATHON' as const;
   }
   return undefined;
+}
+
+function applyRequestContextToSetup(params: { setup: any }) {
+  const setup = { ...(params.setup ?? {}) };
+  const requestContext = setup.requestContext && typeof setup.requestContext === 'object' ? setup.requestContext : null;
+  if (!requestContext) return setup;
+
+  const effects: string[] = [];
+  const goalText = [requestContext.goalDetails, requestContext.goalFocus, requestContext.eventName].filter(Boolean).join(' ').toLowerCase();
+  const injuryText = String(requestContext.injuryStatus ?? '').toLowerCase();
+  const experienceText = String(requestContext.experienceLevel ?? '').toLowerCase();
+  const constraintsText = String(requestContext.constraintsNotes ?? '').toLowerCase();
+
+  if (goalText.includes('triathlon') || goalText.includes('ironman')) {
+    setup.disciplineEmphasis = 'balanced';
+    effects.push('Goal indicates multi-discipline event: emphasis set to Balanced.');
+  } else if (goalText.includes('run') || goalText.includes('marathon') || goalText.includes('5k') || goalText.includes('10k')) {
+    setup.disciplineEmphasis = 'run';
+    effects.push('Goal indicates run-focused event: emphasis set to Run.');
+  } else if (goalText.includes('bike') || goalText.includes('cycling')) {
+    setup.disciplineEmphasis = 'bike';
+    effects.push('Goal indicates bike-focused event: emphasis set to Bike.');
+  } else if (goalText.includes('swim')) {
+    setup.disciplineEmphasis = 'swim';
+    effects.push('Goal indicates swim-focused event: emphasis set to Swim.');
+  }
+
+  if (/\bbeginner\b|\bnovice\b|\bcouch\b/.test(experienceText)) {
+    setup.riskTolerance = 'low';
+    setup.maxIntensityDaysPerWeek = 1;
+    setup.maxDoublesPerWeek = 0;
+    effects.push('Beginner profile: conservative load, no doubles, max 1 intensity day.');
+  } else if (/\badvanced\b|\belite\b|\bexperienced\b/.test(experienceText) && setup.riskTolerance === 'low') {
+    setup.riskTolerance = 'med';
+    effects.push('Experienced profile: lifted risk tolerance to Moderate.');
+  }
+
+  if (/\binjury\b|\bpain\b|\bsplint\b|\bachilles\b|\bknee\b|\bcalf\b|\bhamstring\b/.test(injuryText)) {
+    setup.riskTolerance = 'low';
+    setup.maxIntensityDaysPerWeek = 1;
+    setup.maxDoublesPerWeek = 0;
+    effects.push('Injury/pain noted: intensity capped and doubles disabled.');
+  }
+
+  if (constraintsText.includes('travel') || constraintsText.includes('travell')) {
+    effects.push('Travel constraints detected: overlapping travel weeks are reduced in volume and doubles blocked.');
+  }
+
+  const guidanceParts = [
+    setup.coachGuidanceText,
+    requestContext.goalDetails ? `Goal: ${requestContext.goalDetails}` : null,
+    requestContext.goalFocus ? `Focus: ${requestContext.goalFocus}` : null,
+    requestContext.experienceLevel ? `Experience: ${requestContext.experienceLevel}` : null,
+    requestContext.injuryStatus ? `Injury/Pain: ${requestContext.injuryStatus}` : null,
+    requestContext.constraintsNotes ? `Constraints: ${requestContext.constraintsNotes}` : null,
+  ].filter(Boolean);
+  setup.coachGuidanceText = Array.from(new Set(guidanceParts.map((s) => String(s)))).join('\n');
+
+  setup.requestContextApplied = {
+    goalDetails: requestContext.goalDetails ?? null,
+    goalFocus: requestContext.goalFocus ?? null,
+    eventName: requestContext.eventName ?? null,
+    eventDate: requestContext.eventDate ?? null,
+    goalTimeline: requestContext.goalTimeline ?? null,
+    weeklyMinutes: requestContext.weeklyMinutes ?? null,
+    availabilityDays: requestContext.availabilityDays ?? [],
+    experienceLevel: requestContext.experienceLevel ?? null,
+    injuryStatus: requestContext.injuryStatus ?? null,
+    constraintsNotes: requestContext.constraintsNotes ?? null,
+    effects,
+  };
+
+  return setup;
 }
 
 function normalizeWeight(score: number): number {
@@ -404,11 +491,13 @@ export async function generateAiDraftPlanV1(params: {
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
 
   const parsedSetup = draftPlanSetupV1Schema.parse(params.setup);
-  const setup = {
+  const setup = applyRequestContextToSetup({
+    setup: {
     ...parsedSetup,
     weekStart: parsedSetup.weekStart ?? 'monday',
     coachGuidanceText: parsedSetup.coachGuidanceText ?? '',
-  };
+    },
+  });
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
@@ -443,18 +532,39 @@ export async function generateAiDraftPlanV1(params: {
     queryText: [setup.coachGuidanceText, athleteProfile?.primaryGoal, athleteProfile?.focus].filter(Boolean).join(' · '),
     coachId: params.coachId,
   });
+  type PlanSourceMatch = {
+    planSourceVersionId: string;
+    planSourceId: string;
+    title: string;
+    score: number;
+    semanticScore: number;
+    metadataScore: number;
+    reasons: string[];
+  };
+  const planSourceMatchesNormalized: PlanSourceMatch[] = planSourceMatches.map((m) => ({
+    planSourceVersionId: m.planSourceVersionId,
+    planSourceId: m.planSourceId,
+    title: m.title,
+    score: m.score,
+    semanticScore: m.semanticScore,
+    metadataScore: m.metadataScore,
+    reasons: [...m.reasons],
+  }));
 
-  const requestedVersionIds = Array.isArray(setup.selectedPlanSourceVersionIds)
-    ? setup.selectedPlanSourceVersionIds.filter((id) => typeof id === 'string' && id.trim().length > 0).slice(0, 4)
-    : [];
-  const selectedMatches =
+  const selectedPlanSourceVersionIdsRaw: unknown[] = Array.isArray(setup.selectedPlanSourceVersionIds) ? setup.selectedPlanSourceVersionIds : [];
+  const requestedVersionIds: string[] = selectedPlanSourceVersionIdsRaw
+    .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+    .slice(0, 4)
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const selectedMatches: PlanSourceMatch[] =
     requestedVersionIds.length > 0
       ? requestedVersionIds
-          .map((id) => planSourceMatches.find((m) => m.planSourceVersionId === id) ?? null)
-          .filter((m): m is (typeof planSourceMatches)[number] => m != null)
-      : planSourceMatches.slice(0, 4);
-  const selectedVersionIds =
-    requestedVersionIds.length > 0 ? requestedVersionIds : selectedMatches.map((m) => m.planSourceVersionId);
+          .map((id: string) => planSourceMatchesNormalized.find((m: PlanSourceMatch) => m.planSourceVersionId === id) ?? null)
+          .filter((m): m is PlanSourceMatch => m != null)
+      : planSourceMatchesNormalized.slice(0, 4);
+  const selectedVersionIds: string[] =
+    requestedVersionIds.length > 0 ? requestedVersionIds : selectedMatches.map((m: PlanSourceMatch) => m.planSourceVersionId);
   const selectedPlanSources = selectedVersionIds.length
     ? await prisma.planSourceVersion.findMany({
         where: { id: { in: selectedVersionIds }, planSource: { isActive: true } },
@@ -475,14 +585,14 @@ export async function generateAiDraftPlanV1(params: {
       })
     : [];
   const selectedPlanSourcesOrdered = selectedVersionIds
-    .map((id) => selectedPlanSources.find((row) => row.id === id) ?? null)
+    .map((id: string) => selectedPlanSources.find((row) => row.id === id) ?? null)
     .filter(Boolean) as typeof selectedPlanSources;
 
   const sourceById = new Map(selectedPlanSourcesOrdered.map((s) => [s.id, s]));
-  const effectiveSelectedMatches =
+  const effectiveSelectedMatches: PlanSourceMatch[] =
     requestedVersionIds.length > 0
       ? selectedPlanSourcesOrdered.map((source) => {
-          const existing = selectedMatches.find((m) => m.planSourceVersionId === source.id);
+          const existing = selectedMatches.find((m: PlanSourceMatch) => m.planSourceVersionId === source.id);
           if (existing) return existing;
           return {
             planSourceVersionId: source.id,
@@ -496,7 +606,7 @@ export async function generateAiDraftPlanV1(params: {
         })
       : selectedMatches;
   const appliedBySource = effectiveSelectedMatches
-    .map((match) => {
+    .map((match: PlanSourceMatch) => {
       const source = sourceById.get(match.planSourceVersionId);
       if (!source) return null;
       const selectedPlanSourceForApply = {
@@ -579,11 +689,11 @@ export async function generateAiDraftPlanV1(params: {
     requestedVersionIds.length > 0
       ? [
           ...effectiveSelectedMatches,
-          ...planSourceMatches.filter(
-            (m) => !effectiveSelectedMatches.some((sel) => sel.planSourceVersionId === m.planSourceVersionId)
+          ...planSourceMatchesNormalized.filter(
+            (m: PlanSourceMatch) => !effectiveSelectedMatches.some((sel: PlanSourceMatch) => sel.planSourceVersionId === m.planSourceVersionId)
           ),
         ].slice(0, 6)
-      : planSourceMatches;
+      : planSourceMatchesNormalized;
   const reasoning = buildPlanReasoningV1({
     athleteProfile: athleteProfile as any,
     setup: adjustedSetup,
@@ -603,7 +713,7 @@ export async function generateAiDraftPlanV1(params: {
       setupHash,
       reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
       planSourceSelectionJson: {
-        selectedPlanSourceVersionIds: effectiveSelectedMatches.map((m) => m.planSourceVersionId),
+        selectedPlanSourceVersionIds: effectiveSelectedMatches.map((m: PlanSourceMatch) => m.planSourceVersionId),
         selectedPlanSource: primarySelected
           ? {
               planSourceId: primarySelected.source.planSource.id,
@@ -625,7 +735,7 @@ export async function generateAiDraftPlanV1(params: {
           metadataScore: row.match.metadataScore,
           reasons: row.match.reasons,
         })),
-        matchScores: planSourceMatchesForReasoning.map((m) => ({
+        matchScores: planSourceMatchesForReasoning.map((m: PlanSourceMatch) => ({
           planSourceVersionId: m.planSourceVersionId,
           planSourceId: m.planSourceId,
           title: m.title,
