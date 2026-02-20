@@ -265,6 +265,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [constraintErrors, setConstraintErrors] = useState<string[]>([]);
   const [info, setInfo] = useState<string | null>(null);
 
   const [athleteProfile, setAthleteProfile] = useState<AthleteProfileSummary | null>(null);
@@ -587,6 +588,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const generateWeeklyStructure = useCallback(async () => {
     setBusy('generate-plan');
     setError(null);
+    setConstraintErrors([]);
     setInfo(null);
 
     try {
@@ -619,6 +621,14 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       else setPublishStatus(null);
       setInfo('Weekly structure generated. Continue to week-by-week review.');
     } catch (e) {
+      if (e instanceof ApiClientError && e.code === 'PLAN_CONSTRAINT_VIOLATION') {
+        const violations = Array.isArray(e.diagnostics?.violations) ? (e.diagnostics?.violations as Array<{ message?: unknown }>) : [];
+        const messages = violations
+          .map((v) => (typeof v?.message === 'string' ? v.message : null))
+          .filter((m): m is string => Boolean(m))
+          .slice(0, 8);
+        setConstraintErrors(messages);
+      }
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate weekly structure.');
     } finally {
       setBusy(null);
@@ -696,6 +706,16 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       </div>
 
       {error ? <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+      {constraintErrors.length ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className="font-medium">Constraint issues found:</div>
+          <ul className="mt-1 list-disc pl-5">
+            {constraintErrors.map((message, idx) => (
+              <li key={`${idx}:${message}`}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {info ? <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</div> : null}
 
       <Block title="1) Training Request">

@@ -12,6 +12,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
+import { validateDraftPlanAgainstSetup } from '../rules/constraint-validator';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import { ensureAthleteBrief, getLatestAthleteBriefSummary, loadAthleteProfileSnapshot } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
@@ -506,6 +507,18 @@ export async function generateAiDraftPlanV1(params: {
     athleteBrief: ensured.brief ?? null,
   });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
+  const constraintViolations = validateDraftPlanAgainstSetup({
+    setup: adjustedSetup as any,
+    draft,
+  });
+  if (constraintViolations.length) {
+    throw new ApiError(400, 'PLAN_CONSTRAINT_VIOLATION', 'Draft plan violates hard planning constraints.', {
+      diagnostics: {
+        violations: constraintViolations.slice(0, 40),
+        count: constraintViolations.length,
+      },
+    });
+  }
   const setupHash = computeStableSha256(adjustedSetup);
   const planSourceMatchesForReasoning =
     requestedVersionIds.length > 0
