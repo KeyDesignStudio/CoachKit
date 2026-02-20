@@ -35,6 +35,35 @@ function isBeginner(setup: DraftPlanSetupV1): boolean {
   return /\bbeginner\b|\bnovice\b|\bcouch\b/.test(guidance);
 }
 
+function hasInjuryOrPainSignal(setup: DraftPlanSetupV1): boolean {
+  const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
+  return /\binjury\b|\bpain\b|\bsplint\b|\bachilles\b|\bknee\b|\bcalf\b|\bhamstring\b/.test(guidance);
+}
+
+function hasTravelConstraintSignal(setup: DraftPlanSetupV1): boolean {
+  const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
+  return /\btravel\b|\btravell(?:ing)?\b|\bbusiness trip\b|\baway\b/.test(guidance);
+}
+
+function minuteBandRatios(params: {
+  setup: DraftPlanSetupV1;
+  weekIndex: number;
+  beginner: boolean;
+}): { minRatio: number; maxRatio: number } {
+  const injuryOrPain = hasInjuryOrPainSignal(params.setup);
+  const travel = hasTravelConstraintSignal(params.setup);
+
+  if (injuryOrPain || travel) {
+    return { minRatio: 0.4, maxRatio: 1.2 };
+  }
+
+  if (params.beginner && params.weekIndex < 4) {
+    return { minRatio: 0.45, maxRatio: 1.2 };
+  }
+
+  return { minRatio: 0.5, maxRatio: 1.15 };
+}
+
 export function validateDraftPlanAgainstSetup(params: {
   setup: DraftPlanSetupV1;
   draft: DraftPlanV1;
@@ -112,8 +141,9 @@ export function validateDraftPlanAgainstSetup(params: {
 
     const expected = weeklyMinutesTarget(setup, week.weekIndex);
     if (expected > 0) {
-      const minBound = Math.floor(expected * 0.55);
-      const maxBound = Math.ceil(expected * 1.1);
+      const ratios = minuteBandRatios({ setup, weekIndex: week.weekIndex, beginner });
+      const minBound = Math.floor(expected * ratios.minRatio);
+      const maxBound = Math.ceil(expected * ratios.maxRatio);
       if (totalWeekMinutes < minBound || totalWeekMinutes > maxBound) {
         violations.push({
           code: 'WEEKLY_MINUTES_OUT_OF_BOUNDS',
@@ -126,4 +156,3 @@ export function validateDraftPlanAgainstSetup(params: {
 
   return violations;
 }
-
