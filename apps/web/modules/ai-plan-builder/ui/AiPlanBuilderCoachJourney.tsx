@@ -400,6 +400,22 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [requestDefaults, setup]);
 
   const hasOpenRequest = Boolean(intakeLifecycle?.lifecycle?.hasOpenRequest ?? intakeLifecycle?.openDraftIntake?.id);
+  const hasSubmittedRequest = Boolean(intakeLifecycle?.latestSubmittedIntake?.id);
+  const requestStatus: 'none' | 'draft' | 'submitted' = hasOpenRequest ? 'draft' : hasSubmittedRequest ? 'submitted' : 'none';
+  const requestStatusLabel =
+    requestStatus === 'draft' ? 'Draft request in progress' : requestStatus === 'submitted' ? 'Request submitted' : 'No active request';
+  const requestStatusToneClass =
+    requestStatus === 'draft'
+      ? 'border-amber-300 bg-amber-50 text-amber-800'
+      : requestStatus === 'submitted'
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+        : 'border-[var(--border-subtle)] bg-[var(--bg-structure)] text-[var(--fg-muted)]';
+  const requestGuidanceText =
+    requestStatus === 'draft'
+      ? 'You are editing a draft request. Save anytime, then submit when ready.'
+      : requestStatus === 'submitted'
+        ? 'Request submitted. You can now generate the block blueprint.'
+        : 'Start a new request to update this athlete’s next block.';
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
 
@@ -512,7 +528,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       });
       await fetchIntakeLifecycle();
       applyRequestToSetup(false);
-      setInfo('Training request opened.');
+      setInfo('Draft request started. You can now edit and save.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to open request.');
     } finally {
@@ -560,7 +576,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       });
       await fetchIntakeLifecycle();
       applyRequestToSetup(false);
-      setInfo('Training request marked complete.');
+      setInfo('Request submitted. Continue to Block Blueprint.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to complete request.');
     } finally {
@@ -687,8 +703,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             One open request at a time. Coach can initiate and complete this step.
           </div>
-          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
-            <div>Open request: <strong>{hasOpenRequest ? 'Yes' : 'No'}</strong></div>
+          <div className={`rounded-md border px-3 py-2 ${requestStatusToneClass}`}>
+            <div className="font-medium">{requestStatusLabel}</div>
+            <div className="text-xs">{requestGuidanceText}</div>
             <div className="text-xs text-[var(--fg-muted)]">
               Latest submitted: {intakeLifecycle?.latestSubmittedIntake?.createdAt ? new Date(intakeLifecycle.latestSubmittedIntake.createdAt).toLocaleString() : 'None'}
             </div>
@@ -697,23 +714,23 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium">Primary goal</label>
-              <Input value={trainingRequest.goalDetails} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalDetails: e.target.value }))} />
+              <Input value={trainingRequest.goalDetails} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalDetails: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Goal focus</label>
-              <Input value={trainingRequest.goalFocus} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalFocus: e.target.value }))} />
+              <Input value={trainingRequest.goalFocus} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalFocus: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Event name</label>
-              <Input value={trainingRequest.eventName} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventName: e.target.value }))} />
+              <Input value={trainingRequest.eventName} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventName: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Event date</label>
-              <Input type="date" value={trainingRequest.eventDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventDate: e.target.value }))} />
+              <Input type="date" value={trainingRequest.eventDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventDate: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Target timeline</label>
-              <Select value={trainingRequest.goalTimeline} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalTimeline: e.target.value }))}>
+              <Select value={trainingRequest.goalTimeline} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalTimeline: e.target.value }))} disabled={!hasOpenRequest}>
                 <option value="">Select timeline</option>
                 {GOAL_TIMELINE_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -722,7 +739,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Weekly time budget (minutes)</label>
-              <Input value={trainingRequest.weeklyMinutes} onChange={(e) => setTrainingRequest((p) => ({ ...p, weeklyMinutes: e.target.value }))} inputMode="numeric" />
+              <Input value={trainingRequest.weeklyMinutes} onChange={(e) => setTrainingRequest((p) => ({ ...p, weeklyMinutes: e.target.value }))} inputMode="numeric" disabled={!hasOpenRequest} />
             </div>
           </div>
 
@@ -735,6 +752,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   <button
                     key={day}
                     type="button"
+                    disabled={!hasOpenRequest}
                     onClick={() =>
                       setTrainingRequest((prev) => ({
                         ...prev,
@@ -755,23 +773,36 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium">Experience level</label>
-              <Input value={trainingRequest.experienceLevel} onChange={(e) => setTrainingRequest((p) => ({ ...p, experienceLevel: e.target.value }))} />
+              <Input value={trainingRequest.experienceLevel} onChange={(e) => setTrainingRequest((p) => ({ ...p, experienceLevel: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Current injury/pain status</label>
-              <Input value={trainingRequest.injuryStatus} onChange={(e) => setTrainingRequest((p) => ({ ...p, injuryStatus: e.target.value }))} />
+              <Input value={trainingRequest.injuryStatus} onChange={(e) => setTrainingRequest((p) => ({ ...p, injuryStatus: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium">Constraints and coach notes</label>
-            <Textarea value={trainingRequest.constraintsNotes} onChange={(e) => setTrainingRequest((p) => ({ ...p, constraintsNotes: e.target.value }))} rows={3} />
+            <Textarea value={trainingRequest.constraintsNotes} onChange={(e) => setTrainingRequest((p) => ({ ...p, constraintsNotes: e.target.value }))} rows={3} disabled={!hasOpenRequest} />
           </div>
 
+          {!hasOpenRequest ? (
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+              Fields are read-only until you start a new request.
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void openTrainingRequest()} disabled={busy != null || hasOpenRequest}>Open training request</Button>
-            <Button variant="secondary" onClick={() => void saveTrainingRequestDraft()} disabled={busy != null || !hasOpenRequest}>Save request draft</Button>
-            <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null || !hasOpenRequest}>Mark request complete</Button>
+            {!hasOpenRequest ? (
+              <Button onClick={() => void openTrainingRequest()} disabled={busy != null}>
+                {hasSubmittedRequest ? 'Start revision request' : 'Start new request'}
+              </Button>
+            ) : (
+              <>
+                <Button onClick={() => void saveTrainingRequestDraft()} disabled={busy != null}>Save draft</Button>
+                <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null}>Submit request</Button>
+              </>
+            )}
           </div>
         </div>
       </Block>
