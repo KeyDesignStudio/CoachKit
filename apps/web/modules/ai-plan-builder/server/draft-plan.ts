@@ -672,8 +672,9 @@ export async function generateAiDraftPlanV1(params: {
     athleteBrief: ensured.brief ?? null,
   });
   const draft: DraftPlanV1 = normalizeDraftPlanJsonDurations({ setup: adjustedSetup, planJson: suggestion.planJson });
+  const effectiveSetupForValidation = ((draft as any)?.setup ?? adjustedSetup) as any;
   const constraintViolations = validateDraftPlanAgainstSetup({
-    setup: adjustedSetup as any,
+    setup: effectiveSetupForValidation,
     draft,
   });
   if (constraintViolations.length) {
@@ -684,7 +685,7 @@ export async function generateAiDraftPlanV1(params: {
       },
     });
   }
-  const setupHash = computeStableSha256(adjustedSetup);
+  const setupHash = computeStableSha256(effectiveSetupForValidation);
   const planSourceMatchesForReasoning =
     requestedVersionIds.length > 0
       ? [
@@ -696,7 +697,7 @@ export async function generateAiDraftPlanV1(params: {
       : planSourceMatchesNormalized;
   const reasoning = buildPlanReasoningV1({
     athleteProfile: athleteProfile as any,
-    setup: adjustedSetup,
+    setup: effectiveSetupForValidation,
     draftPlanJson: draft as any,
     planSources: planSourceMatchesForReasoning,
     planSourceInfluence: blended.influenceSummary,
@@ -709,7 +710,7 @@ export async function generateAiDraftPlanV1(params: {
       source: 'AI_DRAFT',
       status: 'DRAFT',
       planJson: draft as unknown as Prisma.InputJsonValue,
-      setupJson: adjustedSetup as unknown as Prisma.InputJsonValue,
+      setupJson: effectiveSetupForValidation as unknown as Prisma.InputJsonValue,
       setupHash,
       reasoningJson: reasoning as unknown as Prisma.InputJsonValue,
       planSourceSelectionJson: {
