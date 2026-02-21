@@ -50,9 +50,15 @@ describe('adaptation action engine hard safety', () => {
         removeCount: 0,
         noteCount: 2,
       },
+      rewriteSafety: {
+        droppedOps: 1,
+        rewrites: ['Clamped W5 delta'],
+      },
     });
     expect(summary).toContain('Why: TOO_HARD, SORENESS');
     expect(summary).toContain('W5 -10%');
-    expect(summary).toContain('-20 min total duration');
+    expect(summary).toContain('-20 min total');
+    expect(summary).toContain('future weeks only');
+    expect(summary).toContain('unsafe op');
   });
 });

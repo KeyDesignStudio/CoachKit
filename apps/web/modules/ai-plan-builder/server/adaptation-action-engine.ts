@@ -290,24 +290,47 @@ export function evaluateProposalHardSafety(params: {
 export function summarizeProposalAction(params: {
   triggerTypes: AiAdaptationTriggerType[];
   metrics: HardSafetyReview['metrics'];
+  rewriteSafety?: {
+    droppedOps?: number;
+    rewrites?: string[];
+  } | null;
 }) {
   const parts: string[] = [];
   const { metrics } = params;
-  const triggers = params.triggerTypes.length ? params.triggerTypes.join(', ') : 'coach review';
+  const triggerLabels = params.triggerTypes.length ? params.triggerTypes.join(', ') : 'COACH_REVIEW';
+  const triggerExplanation = (() => {
+    if (params.triggerTypes.includes('SORENESS')) return 'Athlete soreness/pain signal increased recently';
+    if (params.triggerTypes.includes('TOO_HARD')) return 'Recent sessions were reported too hard';
+    if (params.triggerTypes.includes('MISSED_KEY')) return 'Key session completion dropped';
+    if (params.triggerTypes.includes('HIGH_COMPLIANCE')) return 'High compliance supports cautious progression';
+    return 'Coach-requested adaptation';
+  })();
+
   if (metrics.weekVolumeAdjustments.length) {
     const weekBits = metrics.weekVolumeAdjustments
       .map((w) => `W${w.weekIndex + 1} ${w.pctDelta >= 0 ? '+' : ''}${Math.round(w.pctDelta * 100)}%`)
       .join(', ');
-    parts.push(`week volume (${weekBits})`);
+    parts.push(`week load ${weekBits}`);
   }
-  if (metrics.swapCount) parts.push(`${metrics.swapCount} type swap${metrics.swapCount === 1 ? '' : 's'}`);
-  if (metrics.updateCount) parts.push(`${metrics.updateCount} session update${metrics.updateCount === 1 ? '' : 's'}`);
+  if (metrics.swapCount) parts.push(`${metrics.swapCount} session type swap${metrics.swapCount === 1 ? '' : 's'}`);
+  if (metrics.updateCount) parts.push(`${metrics.updateCount} session edit${metrics.updateCount === 1 ? '' : 's'}`);
   if (metrics.noteCount) parts.push(`${metrics.noteCount} coaching note${metrics.noteCount === 1 ? '' : 's'}`);
   if (metrics.removeCount) parts.push(`${metrics.removeCount} removal${metrics.removeCount === 1 ? '' : 's'}`);
   if (metrics.totalDurationDeltaMinutes) {
     const signed = metrics.totalDurationDeltaMinutes > 0 ? `+${metrics.totalDurationDeltaMinutes}` : String(metrics.totalDurationDeltaMinutes);
-    parts.push(`${signed} min total duration`);
+    parts.push(`${signed} min total`);
   }
 
-  return `Why: ${triggers}. Changed: ${parts.length ? parts.join(', ') : 'no material edits'}.`;
+  const rewriteNotes: string[] = [];
+  if (params.rewriteSafety?.droppedOps && params.rewriteSafety.droppedOps > 0) {
+    rewriteNotes.push(`${params.rewriteSafety.droppedOps} unsafe op${params.rewriteSafety.droppedOps === 1 ? '' : 's'} removed`);
+  }
+  if (Array.isArray(params.rewriteSafety?.rewrites) && params.rewriteSafety!.rewrites.length > 0) {
+    rewriteNotes.push(`${params.rewriteSafety!.rewrites.length} op${params.rewriteSafety!.rewrites.length === 1 ? '' : 's'} auto-adjusted`);
+  }
+
+  const changed = parts.length ? parts.join(', ') : 'no material edits';
+  const safety = ['future weeks only', 'caps enforced'].concat(rewriteNotes.length ? rewriteNotes : []).join(', ');
+
+  return `Why: ${triggerLabels} (${triggerExplanation}). What changed: ${changed}. Safety: ${safety}.`;
 }

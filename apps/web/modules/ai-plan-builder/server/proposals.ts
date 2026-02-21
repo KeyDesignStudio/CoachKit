@@ -183,6 +183,7 @@ export async function generatePlanChangeProposal(params: {
   const changeSummaryText = summarizeProposalAction({
     triggerTypes,
     metrics: hardSafety.metrics,
+    rewriteSafety,
   });
   const triggerAssessment = assessTriggerQuality(
     triggers.map((t) => ({
