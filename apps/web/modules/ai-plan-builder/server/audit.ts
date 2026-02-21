@@ -32,3 +32,30 @@ export async function createPlanChangeAudit(params: {
     },
   });
 }
+
+export async function listPlanChangeAudits(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  limit?: number;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+  const take = Math.max(1, Math.min(200, params.limit ?? 40));
+  return prisma.planChangeAudit.findMany({
+    where: {
+      coachId: params.coachId,
+      athleteId: params.athleteId,
+      draftPlanId: params.aiPlanDraftId,
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    take,
+    select: {
+      id: true,
+      proposalId: true,
+      eventType: true,
+      changeSummaryText: true,
+      createdAt: true,
+    },
+  });
+}
