@@ -1,5 +1,7 @@
 'use client';
 
+import { useCallback, useRef } from 'react';
+
 import { CalendarShell } from '@/components/calendar/CalendarShell';
 import { SkeletonWeekGrid } from '@/components/calendar/SkeletonWeekGrid';
 import { SkeletonMonthGrid } from '@/components/calendar/SkeletonMonthGrid';
@@ -94,6 +96,50 @@ export function CoachCalendarGrid({
   onMonthAddClick,
   onSessionClick,
 }: CoachCalendarGridProps) {
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const startLongPress = useCallback(
+    (event: React.TouchEvent, type: 'session' | 'day', data: any) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      cancelLongPress();
+      longPressTimerRef.current = setTimeout(() => {
+        suppressNextClickRef.current = true;
+        onContextMenu(
+          {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            preventDefault: () => {},
+            stopPropagation: () => {},
+          } as unknown as React.MouseEvent,
+          type,
+          data
+        );
+      }, 520);
+    },
+    [cancelLongPress, onContextMenu]
+  );
+
+  const handleSessionTap = useCallback(
+    (item: CalendarItem) => {
+      if (suppressNextClickRef.current) {
+        suppressNextClickRef.current = false;
+        return;
+      }
+      onSessionClick(item);
+    },
+    [onSessionClick]
+  );
+
   if (showSkeleton) {
     return (
       <CalendarShell variant={viewMode}>
@@ -134,7 +180,12 @@ export function CoachCalendarGrid({
                         key={row.athlete.userId}
                         data-testid="coach-calendar-athlete-row"
                         onContextMenu={(e) => onContextMenu(e, 'day', { date: day.dateKey, athleteId: row.athlete.userId })}
+                        onTouchStart={(e) => startLongPress(e, 'day', { date: day.dateKey, athleteId: row.athlete.userId })}
+                        onTouchEnd={cancelLongPress}
+                        onTouchCancel={cancelLongPress}
+                        onTouchMove={cancelLongPress}
                         className="flex flex-col gap-1.5"
+                        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                       >
                         <div
                           className={cn('h-8 items-center justify-between gap-2', showAthleteSubheaderOnMobile ? 'flex' : 'hidden')}
@@ -153,18 +204,26 @@ export function CoachCalendarGrid({
 
                         <div className="min-h-[44px] flex flex-col gap-1">
                           {row.dayItems.map((item) => (
-                            <AthleteWeekSessionRow
+                            <div
                               key={item.id}
-                              item={{
-                                ...(item as any),
-                                title: `${item.title || item.discipline || 'Workout'}`,
-                              }}
-                              timeZone={row.timeZone}
-                              onClick={() => onSessionClick(item)}
-                              onContextMenu={(e) => onContextMenu(e, 'session', item)}
-                              showTimeOnMobile={false}
-                              statusIndicatorVariant="bar"
-                            />
+                              onTouchStart={(e) => startLongPress(e, 'session', item)}
+                              onTouchEnd={cancelLongPress}
+                              onTouchCancel={cancelLongPress}
+                              onTouchMove={cancelLongPress}
+                              style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                            >
+                              <AthleteWeekSessionRow
+                                item={{
+                                  ...(item as any),
+                                  title: `${item.title || item.discipline || 'Workout'}`,
+                                }}
+                                timeZone={row.timeZone}
+                                onClick={() => handleSessionTap(item)}
+                                onContextMenu={(e) => onContextMenu(e, 'session', item)}
+                                showTimeOnMobile={false}
+                                statusIndicatorVariant="bar"
+                              />
+                            </div>
                           ))}
                         </div>
 
