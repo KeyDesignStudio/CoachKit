@@ -68,8 +68,12 @@ export const draftPlanSetupV1Schema = z.object({
       goalTimeline: z.string().max(120).optional(),
       weeklyMinutes: z.number().int().min(0).max(10_000).optional(),
       availabilityDays: z.array(z.string().max(16)).max(7).optional(),
+      nonNegotiableDays: z.array(z.string().max(16)).max(7).optional(),
+      preferredKeyDays: z.array(z.string().max(16)).max(7).optional(),
+      dailyTimeWindows: z.record(z.string().max(16), z.enum(['any', 'am', 'midday', 'pm', 'evening'])).optional(),
       experienceLevel: z.string().max(120).optional(),
       injuryStatus: z.string().max(500).optional(),
+      disciplineInjuryNotes: z.string().max(800).optional(),
       constraintsNotes: z.string().max(2_000).optional(),
       equipment: z.string().max(120).optional(),
       environmentTags: z.array(z.string().max(80)).max(8).optional(),
@@ -242,6 +246,24 @@ function applyRequestContextToSetup(params: { setup: any }) {
   if (constraintsText.includes('travel') || constraintsText.includes('travell')) {
     effects.push('Travel constraints detected: overlapping travel weeks are reduced in volume and doubles blocked.');
   }
+  if (Array.isArray(requestContext.nonNegotiableDays) && requestContext.nonNegotiableDays.length) {
+    effects.push(`Non-negotiable off days set: ${requestContext.nonNegotiableDays.join(', ')}.`);
+  }
+  if (Array.isArray(requestContext.preferredKeyDays) && requestContext.preferredKeyDays.length) {
+    effects.push(`Preferred key-session days set: ${requestContext.preferredKeyDays.join(', ')}.`);
+  }
+  if (requestContext.dailyTimeWindows && typeof requestContext.dailyTimeWindows === 'object') {
+    const entries = Object.entries(requestContext.dailyTimeWindows as Record<string, string>)
+      .filter(([, v]) => String(v).trim() && String(v) !== 'any')
+      .map(([k, v]) => `${k}:${String(v).toUpperCase()}`);
+    if (entries.length) effects.push(`Daily time windows captured (${entries.join(', ')}).`);
+  }
+  if (requestContext.equipment) effects.push(`Equipment context: ${requestContext.equipment}.`);
+  if (Array.isArray(requestContext.environmentTags) && requestContext.environmentTags.length) {
+    effects.push(`Environment factors: ${requestContext.environmentTags.join(', ')}.`);
+  }
+  if (requestContext.fatigueState) effects.push(`Readiness flag: ${requestContext.fatigueState}.`);
+  if (requestContext.availableTimeMinutes) effects.push(`Typical session time available: ${requestContext.availableTimeMinutes} min.`);
 
   const guidanceParts = [
     setup.coachGuidanceText,
@@ -249,7 +271,20 @@ function applyRequestContextToSetup(params: { setup: any }) {
     requestContext.goalFocus ? `Focus: ${requestContext.goalFocus}` : null,
     requestContext.experienceLevel ? `Experience: ${requestContext.experienceLevel}` : null,
     requestContext.injuryStatus ? `Injury/Pain: ${requestContext.injuryStatus}` : null,
+    requestContext.disciplineInjuryNotes ? `Discipline injury notes: ${requestContext.disciplineInjuryNotes}` : null,
     requestContext.constraintsNotes ? `Constraints: ${requestContext.constraintsNotes}` : null,
+    requestContext.equipment ? `Equipment: ${requestContext.equipment}` : null,
+    Array.isArray(requestContext.environmentTags) && requestContext.environmentTags.length
+      ? `Environment: ${requestContext.environmentTags.join(', ')}`
+      : null,
+    requestContext.fatigueState ? `Readiness: ${requestContext.fatigueState}` : null,
+    requestContext.availableTimeMinutes ? `Typical session time: ${requestContext.availableTimeMinutes} min` : null,
+    Array.isArray(requestContext.nonNegotiableDays) && requestContext.nonNegotiableDays.length
+      ? `Non-negotiable off days: ${requestContext.nonNegotiableDays.join(', ')}`
+      : null,
+    Array.isArray(requestContext.preferredKeyDays) && requestContext.preferredKeyDays.length
+      ? `Preferred key days: ${requestContext.preferredKeyDays.join(', ')}`
+      : null,
   ].filter(Boolean);
   setup.coachGuidanceText = Array.from(new Set(guidanceParts.map((s) => String(s)))).join('\n');
 
@@ -262,9 +297,17 @@ function applyRequestContextToSetup(params: { setup: any }) {
     goalTimeline: requestContext.goalTimeline ?? null,
     weeklyMinutes: requestContext.weeklyMinutes ?? null,
     availabilityDays: requestContext.availabilityDays ?? [],
+    nonNegotiableDays: requestContext.nonNegotiableDays ?? [],
+    preferredKeyDays: requestContext.preferredKeyDays ?? [],
+    dailyTimeWindows: requestContext.dailyTimeWindows ?? {},
     experienceLevel: requestContext.experienceLevel ?? null,
     injuryStatus: requestContext.injuryStatus ?? null,
+    disciplineInjuryNotes: requestContext.disciplineInjuryNotes ?? null,
     constraintsNotes: requestContext.constraintsNotes ?? null,
+    equipment: requestContext.equipment ?? null,
+    environmentTags: requestContext.environmentTags ?? [],
+    fatigueState: requestContext.fatigueState ?? null,
+    availableTimeMinutes: requestContext.availableTimeMinutes ?? null,
     effects,
   };
 
@@ -987,6 +1030,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
         maxIntensityDaysPerWeek: setup?.maxIntensityDaysPerWeek,
         longSessionDay: setup?.longSessionDay ?? null,
         weeklyMinutesTarget,
+        nonNegotiableDays: Array.isArray(requestContext?.nonNegotiableDays) ? (requestContext.nonNegotiableDays as string[]) : undefined,
+        preferredKeyDays: Array.isArray(requestContext?.preferredKeyDays) ? (requestContext.preferredKeyDays as string[]) : undefined,
+        dailyTimeWindows:
+          requestContext?.dailyTimeWindows && typeof requestContext.dailyTimeWindows === 'object'
+            ? (requestContext.dailyTimeWindows as Record<string, 'any' | 'am' | 'midday' | 'pm' | 'evening'>)
+            : undefined,
         equipment: typeof requestContext?.equipment === 'string' ? requestContext.equipment : undefined,
         environmentTags: environmentTags.length ? environmentTags : undefined,
         fatigueState: contextForDetails.fatigueState as 'fresh' | 'normal' | 'fatigued' | 'cooked' | undefined,
