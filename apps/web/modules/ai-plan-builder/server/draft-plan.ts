@@ -12,7 +12,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeStableSha256 } from '../rules/stable-hash';
 import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 import { normalizeDraftPlanJsonDurations } from '../rules/duration-rounding';
-import { validateDraftPlanAgainstSetup } from '../rules/constraint-validator';
+import { evaluateDraftQualityGate } from '../rules/constraint-validator';
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import { ensureAthleteBrief, getLatestAthleteBriefSummary, loadAthleteProfileSnapshot } from './athlete-brief';
 import { mapWithConcurrency } from '@/lib/concurrency';
@@ -82,6 +82,8 @@ export const draftPlanSetupV1Schema = z.object({
       availableTimeMinutes: z.number().int().min(10).max(600).optional(),
     })
     .optional(),
+  policyProfileId: z.enum(['coachkit-conservative-v1', 'coachkit-safe-v1', 'coachkit-performance-v1']).optional(),
+  policyProfileVersion: z.literal('v1').optional(),
   programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
   selectedPlanSourceVersionIds: z.array(z.string().min(1)).max(4).optional(),
 }).transform((raw) => {
@@ -762,18 +764,31 @@ export async function generateAiDraftPlanV1(params: {
     ...(draftRaw as any),
     setup: effectiveSetupForValidation,
   } as DraftPlanV1;
-  const constraintViolations = validateDraftPlanAgainstSetup({
+  const qualityGate = evaluateDraftQualityGate({
     setup: effectiveSetupForValidation,
     draft,
   });
-  if (constraintViolations.length) {
+  if (qualityGate.hardViolations.length) {
     throw new ApiError(400, 'PLAN_CONSTRAINT_VIOLATION', 'Draft plan violates hard planning constraints.', {
       diagnostics: {
-        violations: constraintViolations.slice(0, 40),
-        count: constraintViolations.length,
+        violations: qualityGate.hardViolations.slice(0, 40),
+        softWarnings: qualityGate.softWarnings.slice(0, 40),
+        count: qualityGate.hardViolations.length,
+        qualityScore: qualityGate.score,
+        policyProfileId: qualityGate.profileId,
+        policyProfileVersion: qualityGate.profileVersion,
       },
     });
   }
+  (effectiveSetupForValidation as any).qualityGate = {
+    score: qualityGate.score,
+    policyProfileId: qualityGate.profileId,
+    policyProfileVersion: qualityGate.profileVersion,
+    hardViolationCount: qualityGate.hardViolations.length,
+    softWarningCount: qualityGate.softWarnings.length,
+    softWarnings: qualityGate.softWarnings.slice(0, 20),
+    generatedAt: new Date().toISOString(),
+  };
   const setupHash = computeStableSha256(effectiveSetupForValidation);
   const planSourceMatchesForReasoning =
     requestedVersionIds.length > 0

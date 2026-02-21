@@ -64,6 +64,7 @@ type SetupState = {
   maxIntensityDaysPerWeek: number;
   maxDoublesPerWeek: number;
   coachGuidanceText: string;
+  policyProfileId: 'coachkit-conservative-v1' | 'coachkit-safe-v1' | 'coachkit-performance-v1';
 };
 
 type SessionEditorState = {
@@ -338,6 +339,7 @@ function buildSetupFromProfile(profile: AthleteProfileSummary | null): SetupStat
     maxIntensityDaysPerWeek: 1,
     maxDoublesPerWeek: 0,
     coachGuidanceText: '',
+    policyProfileId: 'coachkit-safe-v1',
   };
 }
 
@@ -655,6 +657,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const source = (draftPlanLatest as any)?.setupJson?.requestContextApplied;
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
   }, [draftPlanLatest]);
+  const qualityGateSummary = useMemo(() => {
+    const source = (draftPlanLatest as any)?.setupJson?.qualityGate;
+    return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
+  }, [draftPlanLatest]);
 
   const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
   const hasWeeklyDraft = hasDraft && weekCards.length > 0;
@@ -711,10 +717,47 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
         setSetup((prev) => {
           const seeded = buildSetupFromProfile(profile);
+          const fromDraft = draft?.setupJson && typeof draft.setupJson === 'object' ? (draft.setupJson as Record<string, any>) : null;
           return {
             ...seeded,
-            startDate: prev.startDate,
-            completionDate: prev.completionDate,
+            startDate: typeof fromDraft?.startDate === 'string' ? fromDraft.startDate : prev.startDate,
+            completionDate:
+              typeof fromDraft?.completionDate === 'string'
+                ? fromDraft.completionDate
+                : typeof fromDraft?.eventDate === 'string'
+                  ? fromDraft.eventDate
+                  : prev.completionDate,
+            weeksToEventOverride: Number.isFinite(Number(fromDraft?.weeksToEventOverride)) ? Number(fromDraft?.weeksToEventOverride) : seeded.weeksToEventOverride,
+            weeklyAvailabilityDays: Array.isArray(fromDraft?.weeklyAvailabilityDays)
+              ? fromDraft.weeklyAvailabilityDays.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v) && v >= 0 && v <= 6)
+              : seeded.weeklyAvailabilityDays,
+            weeklyAvailabilityMinutes: Number.isFinite(Number(fromDraft?.weeklyAvailabilityMinutes))
+              ? Number(fromDraft.weeklyAvailabilityMinutes)
+              : seeded.weeklyAvailabilityMinutes,
+            disciplineEmphasis:
+              fromDraft?.disciplineEmphasis === 'balanced' ||
+              fromDraft?.disciplineEmphasis === 'swim' ||
+              fromDraft?.disciplineEmphasis === 'bike' ||
+              fromDraft?.disciplineEmphasis === 'run'
+                ? fromDraft.disciplineEmphasis
+                : seeded.disciplineEmphasis,
+            riskTolerance:
+              fromDraft?.riskTolerance === 'low' || fromDraft?.riskTolerance === 'med' || fromDraft?.riskTolerance === 'high'
+                ? fromDraft.riskTolerance
+                : seeded.riskTolerance,
+            maxIntensityDaysPerWeek: Number.isFinite(Number(fromDraft?.maxIntensityDaysPerWeek))
+              ? Number(fromDraft.maxIntensityDaysPerWeek)
+              : seeded.maxIntensityDaysPerWeek,
+            maxDoublesPerWeek: Number.isFinite(Number(fromDraft?.maxDoublesPerWeek))
+              ? Number(fromDraft.maxDoublesPerWeek)
+              : seeded.maxDoublesPerWeek,
+            coachGuidanceText: typeof fromDraft?.coachGuidanceText === 'string' ? fromDraft.coachGuidanceText : seeded.coachGuidanceText,
+            policyProfileId:
+              fromDraft?.policyProfileId === 'coachkit-conservative-v1' ||
+              fromDraft?.policyProfileId === 'coachkit-safe-v1' ||
+              fromDraft?.policyProfileId === 'coachkit-performance-v1'
+                ? fromDraft.policyProfileId
+                : seeded.policyProfileId,
           };
         });
 
@@ -909,6 +952,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         weeksToEventOverride: setup.weeksToEventOverride ?? undefined,
         weeklyAvailabilityDays: stableDayList(setup.weeklyAvailabilityDays),
         weeklyAvailabilityMinutes: Number(setup.weeklyAvailabilityMinutes),
+        policyProfileId: setup.policyProfileId,
         disciplineEmphasis: (trainingRequest.primaryDisciplineFocus || setup.disciplineEmphasis) as SetupState['disciplineEmphasis'],
         requestContext: {
           goalDetails: trainingRequest.goalDetails || undefined,
@@ -1596,6 +1640,22 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               </Select>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium">Planning policy profile</label>
+              <Select
+                value={setup.policyProfileId}
+                onChange={(e) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    policyProfileId: e.target.value as SetupState['policyProfileId'],
+                  }))
+                }
+              >
+                <option value="coachkit-conservative-v1">Conservative v1</option>
+                <option value="coachkit-safe-v1">Safe Balanced v1</option>
+                <option value="coachkit-performance-v1">Performance v1</option>
+              </Select>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium">Max doubles/week</label>
               <Input
                 value={setup.maxDoublesPerWeek}
@@ -1620,6 +1680,16 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               )}
             </ul>
           </div>
+          {qualityGateSummary ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <div className="font-medium">
+                Quality gate score: {String(qualityGateSummary.score ?? 'N/A')} ({String(qualityGateSummary.policyProfileId ?? 'profile')})
+              </div>
+              <div>
+                Hard violations: {String(qualityGateSummary.hardViolationCount ?? 0)} | Soft warnings: {String(qualityGateSummary.softWarningCount ?? 0)}
+              </div>
+            </div>
+          ) : null}
           </div>
         </Block>
       </div>

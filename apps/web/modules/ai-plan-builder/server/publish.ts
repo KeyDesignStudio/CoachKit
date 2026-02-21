@@ -10,6 +10,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 
 import { computeStableSha256 } from '../rules/stable-hash';
 import { summarizePlanChanges } from '../rules/publish-summary';
+import { evaluateDraftQualityGate } from '../rules/constraint-validator';
 
 export const publishDraftPlanSchema = z.object({
   aiPlanDraftId: z.string().min(1),
@@ -45,6 +46,28 @@ export async function publishAiDraftPlan(params: {
       throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
     }
 
+    const setupCandidate = ((draft.setupJson as any) ?? (draft.planJson as any)?.setup) as any;
+    const draftCandidate = draft.planJson as any;
+    if (!setupCandidate || !draftCandidate?.weeks) {
+      throw new ApiError(400, 'INVALID_DRAFT', 'Draft is missing setup/plan structure required for publish quality gate.');
+    }
+    const qualityGate = evaluateDraftQualityGate({
+      setup: setupCandidate,
+      draft: draftCandidate,
+    });
+    if (qualityGate.hardViolations.length) {
+      throw new ApiError(400, 'PLAN_CONSTRAINT_VIOLATION', 'Cannot publish. Draft violates hard planning constraints.', {
+        diagnostics: {
+          violations: qualityGate.hardViolations.slice(0, 40),
+          softWarnings: qualityGate.softWarnings.slice(0, 40),
+          count: qualityGate.hardViolations.length,
+          qualityScore: qualityGate.score,
+          policyProfileId: qualityGate.profileId,
+          policyProfileVersion: qualityGate.profileVersion,
+        },
+      });
+    }
+
     const hash = computeStableSha256(draft.planJson);
 
     // Idempotency: if unchanged since last publish, keep publishedAt stable.
@@ -71,6 +94,10 @@ export async function publishAiDraftPlan(params: {
     });
 
     const summaryText = previous ? summarizePlanChanges(previous.planJson, draft.planJson) : 'Initial publish';
+    const summaryWithQuality =
+      qualityGate.softWarnings.length > 0
+        ? `${summaryText} | Quality score ${qualityGate.score}. Soft warnings: ${qualityGate.softWarnings.length}.`
+        : `${summaryText} | Quality score ${qualityGate.score}.`;
 
     const legacySetupFromPlan = (draft.planJson as any)?.setup ?? null;
     const setupJsonToPersist = (draft.setupJson as any) ?? (legacySetupFromPlan ? (legacySetupFromPlan as Prisma.InputJsonValue) : undefined);
@@ -82,7 +109,7 @@ export async function publishAiDraftPlan(params: {
         publishedAt: now,
         publishedByCoachId: params.coachId ?? null,
         lastPublishedHash: hash,
-        lastPublishedSummaryText: summaryText,
+        lastPublishedSummaryText: summaryWithQuality,
         ...(setupJsonToPersist ? { setupJson: setupJsonToPersist } : {}),
         publishSnapshots: {
           create: {
@@ -90,7 +117,7 @@ export async function publishAiDraftPlan(params: {
             coachId: draft.coachId,
             hash,
             planJson: draft.planJson as Prisma.InputJsonValue,
-            summaryText,
+            summaryText: summaryWithQuality,
             publishedAt: now,
             publishedByCoachId: params.coachId ?? null,
           },
@@ -102,7 +129,7 @@ export async function publishAiDraftPlan(params: {
       },
     });
 
-    return { draft: updated, published: true, summaryText, hash };
+    return { draft: updated, published: true, summaryText: summaryWithQuality, hash };
   });
 }
 
