@@ -96,6 +96,14 @@ type AdaptationSuggestion = {
   why: string;
 };
 
+type QueuedRecommendation = {
+  id: string;
+  rationaleText?: string | null;
+  triggerIds?: string[] | null;
+  createdAt?: string | null;
+  status?: string | null;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -559,6 +567,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [weekEditWeekIndex, setWeekEditWeekIndex] = useState<number | null>(null);
   const [weekEditDurationDelta, setWeekEditDurationDelta] = useState<string>('');
   const [weekEditNoteSuffix, setWeekEditNoteSuffix] = useState<string>('');
+  const [queuedRecommendations, setQueuedRecommendations] = useState<QueuedRecommendation[]>([]);
+  const [recommendationRefreshAt, setRecommendationRefreshAt] = useState<string | null>(null);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -959,6 +969,42 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     },
     [athleteId, request]
   );
+
+  const refreshQueuedRecommendations = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!draftPlanId) {
+        setQueuedRecommendations([]);
+        return;
+      }
+      if (!opts?.silent) setBusy('refresh-recommendations');
+      try {
+        const data = await request<{
+          createdProposal?: any | null;
+          queuedRecommendations?: QueuedRecommendation[];
+          latestTriggerIds?: string[];
+        }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/recommendations/refresh`, {
+          method: 'POST',
+          data: { aiPlanDraftId: draftPlanId },
+        });
+        const queued = Array.isArray(data.queuedRecommendations) ? data.queuedRecommendations : [];
+        setQueuedRecommendations(queued);
+        setRecommendationRefreshAt(new Date().toISOString());
+        if (data.createdProposal?.id && !opts?.silent) {
+          setInfo('New adaptation recommendation queued for coach review.');
+        }
+      } catch {
+        // Non-blocking for planning flow.
+      } finally {
+        if (!opts?.silent) setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, request]
+  );
+
+  useEffect(() => {
+    void refreshQueuedRecommendations({ silent: true });
+  }, [refreshQueuedRecommendations]);
 
   useEffect(() => {
     return () => {
@@ -1485,6 +1531,70 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       }
     },
     [athleteId, draftPlanLatest, request, upcomingWeekTargets, writeAuditEvent]
+  );
+
+  const applyQueuedRecommendation = useCallback(
+    async (proposalId: string) => {
+      const id = String(proposalId ?? '').trim();
+      if (!id) return;
+      setBusy('apply-queued-recommendation');
+      setError(null);
+      setInfo(null);
+      try {
+        const data = await request<{ proposal: any; draft: any }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(id)}/approve`,
+          {
+            method: 'POST',
+            data: {},
+          }
+        );
+        const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+        const afterDraft = data.draft ?? null;
+        const afterSessions = Array.isArray(afterDraft?.sessions) ? afterDraft.sessions : [];
+        const summary = summarizeSessionChanges({
+          beforeSessions,
+          afterSessions,
+          scopeLabel: 'Queued recommendation applied',
+        });
+        setDraftPlanLatest(afterDraft);
+        setChangeSummary(summary);
+        setInfo('Queued recommendation applied to draft.');
+        await refreshQueuedRecommendations({ silent: true });
+        await writeAuditEvent('AI_ADAPTATION_QUEUE_APPLY', {
+          proposalId: id,
+          summary,
+        });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply recommendation.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.sessions, refreshQueuedRecommendations, request, writeAuditEvent]
+  );
+
+  const dismissQueuedRecommendation = useCallback(
+    async (proposalId: string) => {
+      const id = String(proposalId ?? '').trim();
+      if (!id) return;
+      setBusy('dismiss-queued-recommendation');
+      setError(null);
+      setInfo(null);
+      try {
+        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(id)}/reject`, {
+          method: 'POST',
+          data: {},
+        });
+        setQueuedRecommendations((prev) => prev.filter((p) => String(p.id) !== id));
+        setInfo('Recommendation dismissed.');
+        await writeAuditEvent('AI_ADAPTATION_QUEUE_DISMISS', { proposalId: id });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to dismiss recommendation.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, request, writeAuditEvent]
   );
 
   const shareSkeletonWithAthlete = useCallback(async () => {
@@ -2064,7 +2174,19 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
             {adaptationMemory ? (
               <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Adaptation loop (next weeks)</div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Adaptation loop (next weeks)</div>
+                  <div className="flex items-center gap-2">
+                    {queuedRecommendations.length ? (
+                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900">
+                        {queuedRecommendations.length} queued recommendation{queuedRecommendations.length === 1 ? '' : 's'}
+                      </span>
+                    ) : null}
+                    <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshQueuedRecommendations()}>
+                      Refresh recommendations
+                    </Button>
+                  </div>
+                </div>
                 <div className="grid gap-2 text-xs md:grid-cols-5">
                   <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
                     Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}%
@@ -2088,6 +2210,31 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                       <li key={`${idx}:${String(n)}`}>{String(n)}</li>
                     ))}
                   </ul>
+                ) : null}
+                {queuedRecommendations.length ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Queued recommendations</div>
+                    {queuedRecommendations.map((proposal) => (
+                      <div key={String(proposal.id)} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                        <div className="text-xs font-medium">Recommendation #{String(proposal.id).slice(0, 8)}</div>
+                        <div className="mt-1 text-xs">{String(proposal.rationaleText ?? 'CoachKit detected a safe adaptation opportunity based on recent athlete response.')}</div>
+                        <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                          Triggers: {Array.isArray(proposal.triggerIds) && proposal.triggerIds.length ? proposal.triggerIds.length : 0} | Created:{' '}
+                          {proposal.createdAt ? new Date(proposal.createdAt).toLocaleString() : 'N/A'}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(proposal.id))}>
+                            Apply recommendation
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(proposal.id))}>
+                            Dismiss
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recommendationRefreshAt ? (
+                  <div className="mt-2 text-xs text-[var(--fg-muted)]">No queued recommendations right now.</div>
                 ) : null}
                 <div className="mt-3 space-y-2">
                   {adaptationSuggestions.slice(0, 2).map((s) => (
