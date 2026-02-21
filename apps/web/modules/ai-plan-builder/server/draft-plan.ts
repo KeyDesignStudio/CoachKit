@@ -1727,6 +1727,7 @@ export async function applyAiAgentAdjustmentsToDraftPlan(params: {
   instruction: string;
   weekIndex?: number;
   sessionId?: string;
+  dryRun?: boolean;
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
@@ -1786,6 +1787,14 @@ export async function applyAiAgentAdjustmentsToDraftPlan(params: {
 
   if (!sessionEdits.length) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Instruction did not produce any editable changes.');
+  }
+
+  if (params.dryRun) {
+    return {
+      draftPlan: null,
+      appliedCount: sessionEdits.length,
+      sessionEdits,
+    };
   }
 
   const draftPlan = await updateAiDraftPlan({

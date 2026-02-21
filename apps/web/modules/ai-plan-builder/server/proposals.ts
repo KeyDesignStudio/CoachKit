@@ -35,6 +35,50 @@ export const updateProposalDiffSchema = z.object({
   diffJson: planDiffSchema,
 });
 
+export async function createCoachControlProposalFromDiff(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  diffJson: PlanDiffOp[];
+  rationaleText?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const draft = await prisma.aiPlanDraft.findUnique({
+    where: { id: params.aiPlanDraftId },
+    select: { id: true, athleteId: true, coachId: true },
+  });
+  if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
+    throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+  }
+
+  const lockSafety = await diffTouchesLockedEntities({ aiPlanDraftId: draft.id, diff: params.diffJson });
+  const respectsLocks = lockSafety.ok;
+  const status: 'PROPOSED' | 'DRAFT' = respectsLocks ? 'PROPOSED' : 'DRAFT';
+
+  const proposal = await prisma.planChangeProposal.create({
+    data: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      status,
+      draftPlanId: draft.id,
+      proposalJson: {
+        source: 'coach_control_plane',
+        diffJson: params.diffJson,
+        metadata: params.metadata ?? {},
+      } as Prisma.InputJsonValue,
+      diffJson: params.diffJson as unknown as Prisma.InputJsonValue,
+      rationaleText: params.rationaleText ?? 'Coach control plane proposal',
+      triggerIds: [],
+      respectsLocks,
+    },
+  });
+
+  return { proposal, lockSafety };
+}
+
 export async function generatePlanChangeProposal(params: {
   coachId: string;
   athleteId: string;

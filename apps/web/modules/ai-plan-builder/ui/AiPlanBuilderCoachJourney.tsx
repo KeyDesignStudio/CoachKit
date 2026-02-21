@@ -117,6 +117,29 @@ type AdaptationTimelineItem = {
   summary: string;
 };
 
+type AgentProposalPreview = {
+  proposalId: string;
+  proposedCount: number;
+  preview: {
+    summary?: {
+      sessionsChangedCount?: number;
+      totalMinutesDelta?: number;
+      intensitySessionsDelta?: number | null;
+    };
+    weeks?: Array<{
+      weekIndex: number;
+      beforeTotalMinutes: number;
+      afterTotalMinutes: number;
+      items: Array<{ kind: 'session' | 'week' | 'unknown'; text: string }>;
+    }>;
+  } | null;
+  applySafety?: {
+    respectsLocks?: boolean;
+    wouldFailDueToLocks?: boolean;
+    reasons?: Array<{ code: string; message: string }>;
+  } | null;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -574,6 +597,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
   const [agentInstruction, setAgentInstruction] = useState<string>('');
+  const [agentProposalPreview, setAgentProposalPreview] = useState<AgentProposalPreview | null>(null);
   const [progressOverlay, setProgressOverlay] = useState<ProgressOverlayState | null>(null);
   const progressOverlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [changeSummary, setChangeSummary] = useState<ChangeSummaryState | null>(null);
@@ -1465,48 +1489,98 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     if (agentScope === 'week') body.weekIndex = agentWeek?.weekIndex ?? null;
     if (agentScope === 'session') body.sessionId = agentSessionId;
 
-    setBusy('agent-adjust');
+    setBusy('agent-adjust-propose');
     setError(null);
     setInfo(null);
     try {
-      const data = await request<{ draftPlan: any; appliedCount: number }>(
-        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/agent-adjust`,
+      const data = await request<{
+        proposal?: { id?: string };
+        preview?: AgentProposalPreview['preview'];
+        applySafety?: AgentProposalPreview['applySafety'];
+        proposedCount?: number;
+      }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/agent-adjust/propose`,
         {
           method: 'POST',
           data: body,
         }
       );
-      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
-      const afterSessions = Array.isArray(data.draftPlan?.sessions) ? data.draftPlan.sessions : [];
-      const summary = summarizeSessionChanges({
-        beforeSessions,
-        afterSessions:
-          agentScope === 'session'
-            ? afterSessions.filter((s: any) => String(s.id) === String(agentSessionId ?? ''))
-            : agentScope === 'week'
-              ? afterSessions.filter((s: any) => Number(s.weekIndex ?? -1) === Number(agentWeek?.weekIndex ?? -1))
-              : afterSessions,
-        scopeLabel: `AI adjustment applied (${agentScope})`,
+      const proposalId = String(data.proposal?.id ?? '');
+      setAgentProposalPreview({
+        proposalId,
+        proposedCount: Number(data.proposedCount ?? 0),
+        preview: data.preview ?? null,
+        applySafety: data.applySafety ?? null,
       });
-      setDraftPlanLatest(data.draftPlan ?? null);
-      setSessionDetailsById({});
-      setEditingSessionId(null);
-      setSessionEditor(null);
-      setChangeSummary(summary);
-      setInfo(`CoachKit AI applied ${Number(data.appliedCount ?? 0)} adjustment${Number(data.appliedCount ?? 0) === 1 ? '' : 's'}.`);
-      await writeAuditEvent('AI_AGENT_ADJUSTMENT_APPLIED', {
+      setInfo(`AI adjustment proposal ready (${Number(data.proposedCount ?? 0)} changes). Review diff and apply.`);
+      await writeAuditEvent('AI_AGENT_ADJUSTMENT_PROPOSED', {
         scope: agentScope,
         weekIndex: agentScope === 'week' ? agentWeek?.weekIndex ?? null : null,
         sessionId: agentScope === 'session' ? agentSessionId ?? null : null,
         instruction,
-        summary,
+        proposalId,
       });
     } catch (e) {
-      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply AI adjustment.');
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to propose AI adjustment.');
     } finally {
       setBusy(null);
     }
-  }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, writeAuditEvent]);
+  }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, request, writeAuditEvent]);
+
+  const applyProposedAgentAdjustment = useCallback(async () => {
+    const proposalId = String(agentProposalPreview?.proposalId ?? '');
+    if (!proposalId) return;
+
+    setBusy('agent-adjust-apply');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ proposal: any; draft: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(proposalId)}/approve`,
+        { method: 'POST', data: {} }
+      );
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const afterSessions = Array.isArray(data.draft?.sessions) ? data.draft.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions,
+        scopeLabel: `AI adjustment applied (${agentScope})`,
+      });
+      setDraftPlanLatest(data.draft ?? null);
+      setSessionDetailsById({});
+      setEditingSessionId(null);
+      setSessionEditor(null);
+      setChangeSummary(summary);
+      setAgentProposalPreview(null);
+      setInfo('AI adjustment applied.');
+      await writeAuditEvent('AI_AGENT_ADJUSTMENT_APPLIED', { scope: agentScope, proposalId, summary });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply proposed AI adjustment.');
+    } finally {
+      setBusy(null);
+    }
+  }, [agentProposalPreview?.proposalId, agentScope, athleteId, draftPlanLatest?.sessions, request, writeAuditEvent]);
+
+  const rejectProposedAgentAdjustment = useCallback(async () => {
+    const proposalId = String(agentProposalPreview?.proposalId ?? '');
+    if (!proposalId) return;
+    setBusy('agent-adjust-reject');
+    setError(null);
+    setInfo(null);
+    try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(proposalId)}/reject`, {
+        method: 'POST',
+        data: {},
+      });
+      setAgentProposalPreview(null);
+      setInfo('AI adjustment proposal discarded.');
+      await writeAuditEvent('AI_AGENT_ADJUSTMENT_REJECTED', { proposalId });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to discard proposed AI adjustment.');
+    } finally {
+      setBusy(null);
+    }
+  }, [agentProposalPreview?.proposalId, athleteId, request, writeAuditEvent]);
 
   const applyAdaptationSuggestion = useCallback(
     async (suggestion: AdaptationSuggestion, weekCount: 1 | 2) => {
@@ -2486,11 +2560,50 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   disabled={busy != null || !agentInstruction.trim() || (agentScope === 'session' && !agentSessionId)}
                   onClick={() => void applyAgentAdjustment()}
                 >
-                  Apply AI adjustment
+                  Propose AI adjustment
                 </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Applies immediately to session/week/plan based on your instruction.</span>
+                <span className="text-xs text-[var(--fg-muted)]">Creates a diff proposal first, then you review and apply.</span>
               </div>
             </div>
+
+            {agentProposalPreview ? (
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">AI adjustment proposal preview</div>
+                <div className="text-xs text-[var(--fg-muted)]">
+                  Proposal #{String(agentProposalPreview.proposalId).slice(0, 8)} | {agentProposalPreview.proposedCount} change
+                  {agentProposalPreview.proposedCount === 1 ? '' : 's'}
+                </div>
+                {agentProposalPreview.preview?.summary ? (
+                  <div className="mt-2 text-xs">
+                    Sessions changed: {Number(agentProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                    {Number(agentProposalPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
+                    {agentProposalPreview.preview.summary.intensitySessionsDelta == null
+                      ? 'N/A'
+                      : Number(agentProposalPreview.preview.summary.intensitySessionsDelta)}
+                  </div>
+                ) : null}
+                {agentProposalPreview.applySafety?.wouldFailDueToLocks ? (
+                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                    {(agentProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                      <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy != null || Boolean(agentProposalPreview.applySafety?.wouldFailDueToLocks)}
+                    onClick={() => void applyProposedAgentAdjustment()}
+                  >
+                    Apply proposed adjustment
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectProposedAgentAdjustment()}>
+                    Discard proposal
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {changeSummary ? (
               <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
