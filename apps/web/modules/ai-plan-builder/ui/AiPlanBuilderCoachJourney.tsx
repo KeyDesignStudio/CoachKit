@@ -1985,6 +1985,44 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, refreshCoachChangeTimeline, request, writeAuditEvent]
   );
 
+  const createUndoProposalFromTimeline = useCallback(
+    async (proposalId: string) => {
+      const id = String(proposalId ?? '').trim();
+      if (!id) return;
+      setBusy('undo-proposal');
+      setError(null);
+      setInfo(null);
+      try {
+        const data = await request<{
+          proposal?: { id?: string };
+          preview?: AgentProposalPreview['preview'];
+          applySafety?: AgentProposalPreview['applySafety'];
+        }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(id)}/undo`, {
+          method: 'POST',
+          data: {},
+        });
+        const undoProposalId = String(data.proposal?.id ?? '');
+        setManualProposalPreview({
+          proposalId: undoProposalId,
+          proposedCount: Number(data.preview?.summary?.sessionsChangedCount ?? 0),
+          preview: data.preview ?? null,
+          applySafety: data.applySafety ?? null,
+        });
+        setInfo(`Undo proposal created (#${undoProposalId.slice(0, 8)}). Review and apply.`);
+        await writeAuditEvent('COACH_TIMELINE_UNDO_PROPOSAL_CREATED', {
+          sourceProposalId: id,
+          undoProposalId,
+        });
+        await refreshCoachChangeTimeline({ silent: true });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to create undo proposal.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, refreshCoachChangeTimeline, request, writeAuditEvent]
+  );
+
   const applySafeQueuedRecommendations = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!draftPlanId) return;
@@ -2983,6 +3021,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                           <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void reopenTimelineProposal(String(entry.proposalId))}>
                             Re-open as new proposal
                           </Button>
+                          {entry.status === 'APPLIED' ? (
+                            <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void createUndoProposalFromTimeline(String(entry.proposalId))}>
+                              Create undo proposal
+                            </Button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

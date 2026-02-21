@@ -15,6 +15,120 @@ import { assessTriggerQuality, buildReasonChain } from './adaptation-explainabil
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import type { AiAdaptationTriggerType } from '../ai/types';
 
+type SessionBaselineSnapshot = {
+  id: string;
+  weekIndex: number;
+  ordinal: number;
+  dayOfWeek: number;
+  discipline: string;
+  type: string;
+  durationMinutes: number;
+  notes: string | null;
+};
+
+function sessionSnapshotHash(s: SessionBaselineSnapshot) {
+  return JSON.stringify([
+    String(s.id),
+    Number(s.weekIndex),
+    Number(s.ordinal),
+    Number(s.dayOfWeek),
+    String(s.discipline),
+    String(s.type),
+    Number(s.durationMinutes),
+    s.notes == null ? null : String(s.notes),
+  ]);
+}
+
+async function collectTouchedSessionSnapshots(params: {
+  client: typeof prisma | Prisma.TransactionClient;
+  aiPlanDraftId: string;
+  diff: PlanDiffOp[];
+}) {
+  const explicitSessionIds = new Set<string>();
+  const weekIndices = new Set<number>();
+
+  for (const op of params.diff) {
+    if (op.op === 'UPDATE_SESSION' || op.op === 'SWAP_SESSION_TYPE' || op.op === 'REMOVE_SESSION') {
+      explicitSessionIds.add(String(op.draftSessionId));
+      continue;
+    }
+    if (op.op === 'ADD_NOTE' && op.target === 'session') {
+      explicitSessionIds.add(String(op.draftSessionId));
+      continue;
+    }
+    if (op.op === 'ADD_NOTE' && op.target === 'week') {
+      weekIndices.add(Number(op.weekIndex));
+      continue;
+    }
+    if (op.op === 'ADJUST_WEEK_VOLUME') {
+      weekIndices.add(Number(op.weekIndex));
+      continue;
+    }
+  }
+
+  const byId = explicitSessionIds.size
+    ? await params.client.aiPlanDraftSession.findMany({
+        where: { draftId: params.aiPlanDraftId, id: { in: Array.from(explicitSessionIds) } },
+        select: {
+          id: true,
+          weekIndex: true,
+          ordinal: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          notes: true,
+        },
+      })
+    : [];
+
+  const byWeek = weekIndices.size
+    ? await params.client.aiPlanDraftSession.findMany({
+        where: { draftId: params.aiPlanDraftId, weekIndex: { in: Array.from(weekIndices) } },
+        select: {
+          id: true,
+          weekIndex: true,
+          ordinal: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          notes: true,
+        },
+      })
+    : [];
+
+  const merged = [...byId, ...byWeek];
+  const dedup = new Map<string, SessionBaselineSnapshot>();
+  for (const s of merged) {
+    const id = String(s.id);
+    if (!id || dedup.has(id)) continue;
+    dedup.set(id, {
+      id,
+      weekIndex: Number(s.weekIndex ?? 0),
+      ordinal: Number(s.ordinal ?? 0),
+      dayOfWeek: Number(s.dayOfWeek ?? 0),
+      discipline: String(s.discipline ?? ''),
+      type: String(s.type ?? ''),
+      durationMinutes: Number(s.durationMinutes ?? 0),
+      notes: s.notes == null ? null : String(s.notes),
+    });
+  }
+  return Array.from(dedup.values());
+}
+
+async function buildProposalConflictBaseline(params: {
+  aiPlanDraftId: string;
+  diff: PlanDiffOp[];
+}) {
+  const snapshots = await collectTouchedSessionSnapshots({
+    client: prisma,
+    aiPlanDraftId: params.aiPlanDraftId,
+    diff: params.diff,
+  });
+  return snapshots.map((s) => ({ id: s.id, hash: sessionSnapshotHash(s) }));
+}
+
 export const generateProposalSchema = z.object({
   aiPlanDraftId: z.string().min(1),
   triggerIds: z.array(z.string().min(1)).optional(),
@@ -57,6 +171,7 @@ export async function createCoachControlProposalFromDiff(params: {
   const lockSafety = await diffTouchesLockedEntities({ aiPlanDraftId: draft.id, diff: params.diffJson });
   const respectsLocks = lockSafety.ok;
   const status: 'PROPOSED' | 'DRAFT' = respectsLocks ? 'PROPOSED' : 'DRAFT';
+  const baselineSessions = await buildProposalConflictBaseline({ aiPlanDraftId: draft.id, diff: params.diffJson });
 
   const proposal = await prisma.planChangeProposal.create({
     data: {
@@ -67,6 +182,7 @@ export async function createCoachControlProposalFromDiff(params: {
       proposalJson: {
         source: 'coach_control_plane',
         diffJson: params.diffJson,
+        baselineSessions,
         metadata: params.metadata ?? {},
       } as Prisma.InputJsonValue,
       diffJson: params.diffJson as unknown as Prisma.InputJsonValue,
@@ -197,6 +313,7 @@ export async function generatePlanChangeProposal(params: {
     actionSummary: changeSummaryText,
   });
   const proposalStatus: 'PROPOSED' | 'DRAFT' = respectsLocks && hardSafety.ok ? 'PROPOSED' : 'DRAFT';
+  const baselineSessions = await buildProposalConflictBaseline({ aiPlanDraftId: draft.id, diff: ops });
 
   const proposal = await prisma.planChangeProposal.create({
     data: {
@@ -208,6 +325,7 @@ export async function generatePlanChangeProposal(params: {
         diffJson: ops,
         rationaleText,
         triggerIds: triggers.map((t) => t.id),
+        baselineSessions,
         hardSafety,
         rewriteSafety,
         changeSummaryText,
@@ -325,6 +443,92 @@ export async function reopenPlanChangeProposalAsNew(params: {
   return created;
 }
 
+export async function createUndoProposalFromAppliedProposal(params: {
+  coachId: string;
+  athleteId: string;
+  proposalId: string;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const source = await prisma.planChangeProposal.findFirst({
+    where: { id: params.proposalId, athleteId: params.athleteId, coachId: params.coachId },
+    select: { id: true, status: true, draftPlanId: true, rationaleText: true },
+  });
+  if (!source) throw new ApiError(404, 'NOT_FOUND', 'Proposal not found.');
+  if (!source.draftPlanId) throw new ApiError(400, 'INVALID_PROPOSAL', 'Proposal is missing draftPlanId.');
+  if (source.status !== 'APPLIED') {
+    throw new ApiError(409, 'INVALID_STATUS', 'Only applied proposals can be used to create an undo proposal.');
+  }
+
+  const applyAudit = await prisma.planChangeAudit.findFirst({
+    where: {
+      proposalId: source.id,
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      draftPlanId: source.draftPlanId,
+      eventType: 'APPLY_PROPOSAL',
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    select: { id: true, diffJson: true },
+  });
+  if (!applyAudit) {
+    throw new ApiError(404, 'NOT_FOUND', 'No apply audit found for this proposal.');
+  }
+
+  const diffJson = (applyAudit.diffJson ?? null) as Record<string, unknown> | null;
+  const beforeSessions = Array.isArray(diffJson?.undoCheckpointBeforeSessions)
+    ? (diffJson.undoCheckpointBeforeSessions as Array<SessionBaselineSnapshot>)
+    : [];
+  if (!beforeSessions.length) {
+    throw new ApiError(409, 'UNDO_NOT_AVAILABLE', 'Undo checkpoint is not available for this proposal.');
+  }
+
+  const reverseDiff: PlanDiffOp[] = beforeSessions.map((s) => ({
+    op: 'UPDATE_SESSION',
+    draftSessionId: String(s.id),
+    patch: {
+      discipline: String(s.discipline ?? ''),
+      type: String(s.type ?? ''),
+      durationMinutes: Number(s.durationMinutes ?? 0),
+      notes: s.notes == null ? null : String(s.notes),
+    },
+  }));
+
+  const created = await createCoachControlProposalFromDiff({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    aiPlanDraftId: source.draftPlanId,
+    diffJson: reverseDiff,
+    rationaleText: `Undo checkpoint for proposal ${String(source.id).slice(0, 8)}`,
+    metadata: {
+      source: 'undo_checkpoint',
+      fromProposalId: String(source.id),
+      fromAuditId: String(applyAudit.id),
+      originalRationaleText: source.rationaleText ?? null,
+    },
+  });
+
+  await prisma.planChangeAudit.create({
+    data: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      proposalId: String(created.proposal.id),
+      eventType: 'UNDO_PROPOSAL_CREATED',
+      actorType: 'COACH',
+      draftPlanId: source.draftPlanId,
+      changeSummaryText: `Undo proposal created from applied proposal ${String(source.id).slice(0, 8)}.`,
+      diffJson: {
+        sourceProposalId: String(source.id),
+        sourceAuditId: String(applyAudit.id),
+        reverseDiffCount: reverseDiff.length,
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  return created;
+}
+
 export async function rejectPlanChangeProposal(params: {
   coachId: string;
   athleteId: string;
@@ -413,6 +617,50 @@ export async function approvePlanChangeProposal(params: {
     triggerTypes,
     metrics: hardSafety.metrics,
   });
+  const proposalJson = (proposal.proposalJson ?? null) as Record<string, unknown> | null;
+  const baselineSessions = Array.isArray(proposalJson?.baselineSessions)
+    ? (proposalJson?.baselineSessions as Array<{ id?: unknown; hash?: unknown }>)
+        .map((s) => ({ id: String(s?.id ?? ''), hash: String(s?.hash ?? '') }))
+        .filter((s) => s.id && s.hash)
+    : [];
+  if (baselineSessions.length) {
+    const current = await prisma.aiPlanDraftSession.findMany({
+      where: { draftId: proposal.draftPlanId, id: { in: baselineSessions.map((s) => s.id) } },
+      select: {
+        id: true,
+        weekIndex: true,
+        ordinal: true,
+        dayOfWeek: true,
+        discipline: true,
+        type: true,
+        durationMinutes: true,
+        notes: true,
+      },
+    });
+    const currentMap = new Map(current.map((s) => [String(s.id), s] as const));
+    const conflict = baselineSessions.find((b) => {
+      const c = currentMap.get(b.id);
+      if (!c) return true;
+      const hash = sessionSnapshotHash({
+        id: String(c.id),
+        weekIndex: Number(c.weekIndex ?? 0),
+        ordinal: Number(c.ordinal ?? 0),
+        dayOfWeek: Number(c.dayOfWeek ?? 0),
+        discipline: String(c.discipline ?? ''),
+        type: String(c.type ?? ''),
+        durationMinutes: Number(c.durationMinutes ?? 0),
+        notes: c.notes == null ? null : String(c.notes),
+      });
+      return hash !== b.hash;
+    });
+    if (conflict) {
+      throw new ApiError(
+        409,
+        'PROPOSAL_CONFLICT',
+        'Draft changed since this proposal was created. Reopen or regenerate the proposal before applying.'
+      );
+    }
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     // Ensure the draft still belongs to the same coach/athlete.
@@ -424,6 +672,12 @@ export async function approvePlanChangeProposal(params: {
     if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
       throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
     }
+
+    const undoCheckpointBeforeSessions = await collectTouchedSessionSnapshots({
+      client: tx,
+      aiPlanDraftId: draft.id,
+      diff,
+    });
 
     await applyPlanDiffToDraft({ tx, draftId: draft.id, diff });
 
@@ -438,6 +692,7 @@ export async function approvePlanChangeProposal(params: {
         changeSummaryText,
         diffJson: {
           diff,
+          undoCheckpointBeforeSessions,
           triggerTypes,
           hardSafety,
           source: 'adaptation-action-engine',
