@@ -307,6 +307,7 @@ export function renderProposalDiff(
         continue;
       }
       if (op.patch.type !== undefined) s.type = String(op.patch.type);
+      if ((op.patch as any).discipline !== undefined) s.discipline = String((op.patch as any).discipline);
       if (op.patch.durationMinutes !== undefined) s.durationMinutes = Number(op.patch.durationMinutes);
       if (op.patch.notes !== undefined) s.notes = (op.patch.notes as any) === null ? null : String(op.patch.notes);
       touchedSessions.add(key);

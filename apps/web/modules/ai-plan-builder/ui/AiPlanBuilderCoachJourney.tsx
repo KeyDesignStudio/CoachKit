@@ -597,6 +597,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
   const [agentInstruction, setAgentInstruction] = useState<string>('');
+  const [manualProposalPreview, setManualProposalPreview] = useState<AgentProposalPreview | null>(null);
   const [agentProposalPreview, setAgentProposalPreview] = useState<AgentProposalPreview | null>(null);
   const [progressOverlay, setProgressOverlay] = useState<ProgressOverlayState | null>(null);
   const progressOverlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1343,6 +1344,30 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [loadSessionDetail, sessionDetailsById]
   );
 
+  const proposeManualEdits = useCallback(
+    async (params: { draftPlanId: string; scope: 'session' | 'week' | 'plan'; sessionEdits: Array<Record<string, unknown>> }) => {
+      const data = await request<{
+        proposal?: { id?: string };
+        preview?: AgentProposalPreview['preview'];
+        applySafety?: AgentProposalPreview['applySafety'];
+        proposedCount?: number;
+      }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/manual-edit/propose`, {
+        method: 'POST',
+        data: params,
+      });
+
+      const proposalId = String(data.proposal?.id ?? '');
+      setManualProposalPreview({
+        proposalId,
+        proposedCount: Number(data.proposedCount ?? 0),
+        preview: data.preview ?? null,
+        applySafety: data.applySafety ?? null,
+      });
+      return proposalId;
+    },
+    [athleteId, request]
+  );
+
   const saveSessionEditor = useCallback(async () => {
     if (!sessionEditor || !draftPlanLatest?.id) return;
     const duration = Number(sessionEditor.durationMinutes);
@@ -1355,6 +1380,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     setError(null);
     setInfo(null);
     try {
+      const hasAdvancedDetailEdits = Boolean(sessionEditor.objective.trim()) || sessionEditor.blocks.some((b) => b.steps.trim().length > 0);
       const payload = {
         draftPlanId: String(draftPlanLatest.id),
         sessionEdits: [
@@ -1371,6 +1397,23 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           },
         ],
       };
+
+      if (!hasAdvancedDetailEdits) {
+        const proposalId = await proposeManualEdits({
+          draftPlanId: String(draftPlanLatest.id),
+          scope: 'session',
+          sessionEdits: payload.sessionEdits,
+        });
+        setInfo(`Session edit proposal ready (#${proposalId.slice(0, 8)}). Review and apply.`);
+        setEditingSessionId(null);
+        setSessionEditor(null);
+        await writeAuditEvent('COACH_SESSION_EDIT_PROPOSED', {
+          scope: 'session',
+          sessionId: sessionEditor.sessionId,
+          proposalId,
+        });
+        return;
+      }
 
       const data = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
         method: 'PATCH',
@@ -1411,7 +1454,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     } finally {
       setBusy(null);
     }
-  }, [athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, sessionEditor, writeAuditEvent]);
+  }, [athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, proposeManualEdits, request, sessionEditor, writeAuditEvent]);
 
   const applyWeekBulkEdit = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -1441,36 +1484,79 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     setError(null);
     setInfo(null);
     try {
-      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
-      const data = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
-        method: 'PATCH',
-        data: {
-          draftPlanId,
-          sessionEdits: edits,
-        },
+      const proposalId = await proposeManualEdits({
+        draftPlanId,
+        scope: 'week',
+        sessionEdits: edits,
       });
-      const afterSessions = Array.isArray(data.draftPlan?.sessions) ? data.draftPlan.sessions : [];
-      const summary = summarizeSessionChanges({
-        beforeSessions,
-        afterSessions: afterSessions.filter((s: any) => Number(s.weekIndex ?? -1) === Number(weekEditWeek.weekIndex)),
-        scopeLabel: `Week ${Number(weekEditWeek.weekIndex) + 1} bulk edit applied`,
-      });
-      setDraftPlanLatest(data.draftPlan ?? null);
-      setChangeSummary(summary);
-      setInfo(`Week ${Number(weekEditWeek.weekIndex) + 1} updates applied.`);
-      await writeAuditEvent('COACH_WEEK_BULK_EDIT_APPLIED', {
+      setInfo(`Week ${Number(weekEditWeek.weekIndex) + 1} edit proposal ready (#${proposalId.slice(0, 8)}). Review and apply.`);
+      await writeAuditEvent('COACH_WEEK_BULK_EDIT_PROPOSED', {
         scope: 'week',
         weekIndex: weekEditWeek.weekIndex,
         durationDelta: hasDurationChange ? Math.round(delta) : null,
         noteSuffix: noteSuffix || null,
-        summary,
+        proposalId,
       });
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply week edits.');
     } finally {
       setBusy(null);
     }
-  }, [athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, weekEditDurationDelta, weekEditNoteSuffix, weekEditWeek, writeAuditEvent]);
+  }, [proposeManualEdits, weekEditDurationDelta, weekEditNoteSuffix, weekEditWeek, writeAuditEvent]);
+
+  const applyManualProposal = useCallback(async () => {
+    const proposalId = String(manualProposalPreview?.proposalId ?? '');
+    if (!proposalId) return;
+    setBusy('manual-proposal-apply');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ proposal: any; draft: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(proposalId)}/approve`,
+        {
+          method: 'POST',
+          data: {},
+        }
+      );
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const afterSessions = Array.isArray(data.draft?.sessions) ? data.draft.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions,
+        scopeLabel: 'Manual edit applied',
+      });
+      setDraftPlanLatest(data.draft ?? null);
+      setChangeSummary(summary);
+      setManualProposalPreview(null);
+      setInfo('Manual edit proposal applied.');
+      await writeAuditEvent('COACH_MANUAL_EDIT_PROPOSAL_APPLIED', { proposalId, summary });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply manual edit proposal.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest?.sessions, manualProposalPreview?.proposalId, request, writeAuditEvent]);
+
+  const rejectManualProposal = useCallback(async () => {
+    const proposalId = String(manualProposalPreview?.proposalId ?? '');
+    if (!proposalId) return;
+    setBusy('manual-proposal-reject');
+    setError(null);
+    setInfo(null);
+    try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(proposalId)}/reject`, {
+        method: 'POST',
+        data: {},
+      });
+      setManualProposalPreview(null);
+      setInfo('Manual edit proposal discarded.');
+      await writeAuditEvent('COACH_MANUAL_EDIT_PROPOSAL_REJECTED', { proposalId });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to discard manual edit proposal.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, manualProposalPreview?.proposalId, request, writeAuditEvent]);
 
   const applyAgentAdjustment = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -2502,11 +2588,47 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   disabled={busy != null || !weekEditWeek}
                   onClick={() => void applyWeekBulkEdit()}
                 >
-                  Apply week edit
+                  Propose week edit
                 </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Updates all sessions in the selected week and records a change summary.</span>
+                <span className="text-xs text-[var(--fg-muted)]">Creates a week edit proposal so you can preview and apply safely.</span>
               </div>
             </div>
+
+            {manualProposalPreview ? (
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Manual edit proposal preview</div>
+                <div className="text-xs text-[var(--fg-muted)]">
+                  Proposal #{String(manualProposalPreview.proposalId).slice(0, 8)} | {manualProposalPreview.proposedCount} change
+                  {manualProposalPreview.proposedCount === 1 ? '' : 's'}
+                </div>
+                {manualProposalPreview.preview?.summary ? (
+                  <div className="mt-2 text-xs">
+                    Sessions changed: {Number(manualProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                    {Number(manualProposalPreview.preview.summary.totalMinutesDelta ?? 0)}
+                  </div>
+                ) : null}
+                {manualProposalPreview.applySafety?.wouldFailDueToLocks ? (
+                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                    {(manualProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                      <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy != null || Boolean(manualProposalPreview.applySafety?.wouldFailDueToLocks)}
+                    onClick={() => void applyManualProposal()}
+                  >
+                    Apply manual proposal
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectManualProposal()}>
+                    Discard proposal
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">CoachKit AI adjustment</div>

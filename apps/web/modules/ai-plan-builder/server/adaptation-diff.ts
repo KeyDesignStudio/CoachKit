@@ -6,6 +6,7 @@ import { buildDraftPlanJsonV1 } from '../rules/plan-json';
 
 export const draftSessionPatchSchema = z
   .object({
+    discipline: z.string().min(1).optional(),
     type: z.string().min(1).optional(),
     durationMinutes: z.number().int().min(0).max(10_000).optional(),
     notes: z.string().max(10_000).nullable().optional(),
@@ -134,7 +135,7 @@ export async function applyPlanDiffToDraft(params: {
       if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Draft session not found.');
 
       const wantsContentChange =
-        op.patch.type !== undefined || op.patch.durationMinutes !== undefined || op.patch.notes !== undefined;
+        op.patch.discipline !== undefined || op.patch.type !== undefined || op.patch.durationMinutes !== undefined || op.patch.notes !== undefined;
 
       if (existing.locked && wantsContentChange) {
         throw new ApiError(409, 'SESSION_LOCKED', 'Session is locked and cannot be edited.');
@@ -143,6 +144,7 @@ export async function applyPlanDiffToDraft(params: {
       await params.tx.aiPlanDraftSession.update({
         where: { id: existing.id },
         data: {
+          discipline: op.patch.discipline,
           type: op.patch.type,
           durationMinutes: op.patch.durationMinutes,
           notes: op.patch.notes === undefined ? undefined : op.patch.notes,
