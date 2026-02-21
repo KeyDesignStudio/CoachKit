@@ -57,6 +57,7 @@ export function assertNormalizedSessionDetailMatchesTotal(params: {
 
 export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1): string {
   const objective = stripDurationTokens(String(detail.objective ?? '').trim());
+  const purpose = String((detail as any).purpose ?? '').trim();
 
   const blockLines = (detail.structure ?? [])
     .map((block) => {
@@ -70,9 +71,26 @@ export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1):
 
   const lines: string[] = [];
   if (objective) lines.push(objective);
+  if (purpose) lines.push(purpose);
   if (blockLines.length) {
     if (lines.length) lines.push('');
     lines.push(...blockLines);
+  }
+  const explainability = (detail as any).explainability as
+    | { whyThis?: string; whyToday?: string; unlocksNext?: string; ifMissed?: string; ifCooked?: string }
+    | undefined;
+  if (explainability) {
+    const whyThis = String(explainability.whyThis ?? '').trim();
+    const whyToday = String(explainability.whyToday ?? '').trim();
+    const ifMissed = String(explainability.ifMissed ?? '').trim();
+    const ifCooked = String(explainability.ifCooked ?? '').trim();
+    if (whyThis || whyToday || ifMissed || ifCooked) {
+      if (lines.length) lines.push('');
+      if (whyThis) lines.push(`WHY THIS: ${whyThis}`);
+      if (whyToday) lines.push(`WHY TODAY: ${whyToday}`);
+      if (ifMissed) lines.push(`IF MISSED: ${ifMissed}`);
+      if (ifCooked) lines.push(`IF COOKED: ${ifCooked}`);
+    }
   }
 
   return lines.join('\n').trim();

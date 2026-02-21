@@ -71,6 +71,10 @@ export const draftPlanSetupV1Schema = z.object({
       experienceLevel: z.string().max(120).optional(),
       injuryStatus: z.string().max(500).optional(),
       constraintsNotes: z.string().max(2_000).optional(),
+      equipment: z.string().max(120).optional(),
+      environmentTags: z.array(z.string().max(80)).max(8).optional(),
+      fatigueState: z.enum(['fresh', 'normal', 'fatigued', 'cooked']).optional(),
+      availableTimeMinutes: z.number().int().min(10).max(600).optional(),
     })
     .optional(),
   programPolicy: z.enum(['COUCH_TO_5K', 'COUCH_TO_IRONMAN_26', 'HALF_TO_FULL_MARATHON']).optional(),
@@ -946,6 +950,23 @@ export async function generateSessionDetailsForDraftPlan(params: {
     }
     return 0;
   })();
+  const requestContext = setup?.requestContext && typeof setup.requestContext === 'object' ? (setup.requestContext as Record<string, unknown>) : null;
+  const guidanceText = String(setup?.coachGuidanceText ?? '').toLowerCase();
+  const environmentTags: string[] = [];
+  if (guidanceText.includes('heat') || guidanceText.includes('humid')) environmentTags.push('heat');
+  if (guidanceText.includes('hill') || guidanceText.includes('climb')) environmentTags.push('hills');
+  if (guidanceText.includes('wind')) environmentTags.push('wind');
+  const contextForDetails = {
+    availableTimeMinutes: Number(requestContext?.weeklyMinutes ?? 0) || undefined,
+    equipment: typeof requestContext?.equipment === 'string' ? String(requestContext.equipment) : undefined,
+    environmentTags,
+    fatigueState:
+      typeof requestContext?.fatigueState === 'string'
+        ? String(requestContext.fatigueState)
+        : guidanceText.includes('cooked') || guidanceText.includes('fatigue')
+          ? 'fatigued'
+          : 'normal',
+  };
 
   const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const effectiveMode = getAiPlanBuilderEffectiveMode('generateSessionDetail');
@@ -966,6 +987,10 @@ export async function generateSessionDetailsForDraftPlan(params: {
         maxIntensityDaysPerWeek: setup?.maxIntensityDaysPerWeek,
         longSessionDay: setup?.longSessionDay ?? null,
         weeklyMinutesTarget,
+        equipment: typeof requestContext?.equipment === 'string' ? requestContext.equipment : undefined,
+        environmentTags: environmentTags.length ? environmentTags : undefined,
+        fatigueState: contextForDetails.fatigueState as 'fresh' | 'normal' | 'fatigued' | 'cooked' | undefined,
+        availableTimeMinutes: Number(requestContext?.availableTimeMinutes ?? 0) || undefined,
       },
       session: {
         weekIndex: s.weekIndex,
@@ -989,6 +1014,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
             discipline: s.discipline as any,
             type: s.type,
             durationMinutes: s.durationMinutes,
+            context: contextForDetails,
           });
 
       const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
@@ -996,10 +1022,11 @@ export async function generateSessionDetailsForDraftPlan(params: {
       const detail = validatedCandidate.success
         ? validatedCandidate.data
         : normalizeSessionDetailV1DurationsToTotal({
-            detail: buildDeterministicSessionDetailV1({
+          detail: buildDeterministicSessionDetailV1({
               discipline: s.discipline as any,
               type: s.type,
               durationMinutes: s.durationMinutes,
+              context: contextForDetails,
             }),
             totalMinutes: s.durationMinutes,
           });
@@ -1019,6 +1046,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
         discipline: s.discipline as any,
         type: s.type,
         durationMinutes: s.durationMinutes,
+        context: contextForDetails,
       });
 
       const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
@@ -1030,6 +1058,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
               discipline: s.discipline as any,
               type: s.type,
               durationMinutes: s.durationMinutes,
+              context: contextForDetails,
             }),
             totalMinutes: s.durationMinutes,
           });

@@ -28,13 +28,35 @@ export const sessionDetailTargetsSchema = z
   })
   .strict();
 
+export const sessionDetailExplainabilitySchema = z
+  .object({
+    whyThis: z.string().min(1).max(400),
+    whyToday: z.string().min(1).max(400),
+    unlocksNext: z.string().min(1).max(400),
+    ifMissed: z.string().min(1).max(400),
+    ifCooked: z.string().min(1).max(400),
+  })
+  .strict();
+
+export const sessionDetailVariantSchema = z
+  .object({
+    label: z.enum(['short-on-time', 'standard', 'longer-window', 'trainer', 'road', 'heat-adjusted', 'hills-adjusted', 'fatigue-adjusted']),
+    whenToUse: z.string().min(1).max(260),
+    durationMinutes: z.number().int().min(5).max(10_000),
+    adjustments: z.array(z.string().min(1).max(220)).min(1).max(5),
+  })
+  .strict();
+
 export const sessionDetailV1Schema = z
   .object({
     objective: z.string().min(1).max(240),
+    purpose: z.string().min(1).max(240).optional(),
     structure: z.array(sessionDetailBlockSchema).min(1).max(20),
     targets: sessionDetailTargetsSchema,
     cues: z.array(z.string().min(1).max(160)).max(3).optional(),
     safetyNotes: z.string().min(1).max(800).optional(),
+    explainability: sessionDetailExplainabilitySchema.optional(),
+    variants: z.array(sessionDetailVariantSchema).max(8).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -401,6 +423,12 @@ export function buildDeterministicSessionDetailV1(params: {
   discipline: string;
   type: string;
   durationMinutes: number;
+  context?: {
+    availableTimeMinutes?: number;
+    equipment?: string | null;
+    environmentTags?: string[] | null;
+    fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked' | string | null;
+  };
 }): SessionDetailV1 {
   const discipline = String(params.discipline || '').trim().toLowerCase();
   const type = String(params.type || '').trim().toLowerCase();
@@ -450,8 +478,88 @@ export function buildDeterministicSessionDetailV1(params: {
     });
   }
 
+  const keyStimulusText = (() => {
+    if (type === 'threshold') return 'raise sustainable race-adjacent output';
+    if (type === 'tempo') return 'build durable sub-threshold speed';
+    if (type === 'technique') return 'improve movement economy and technical quality';
+    if (type === 'recovery') return 'promote adaptation while reducing fatigue';
+    return 'build aerobic durability with controlled stress';
+  })();
+
+  const fatigueState = String(params.context?.fatigueState ?? '').toLowerCase();
+  const equipment = String(params.context?.equipment ?? '').toLowerCase();
+  const environment = (params.context?.environmentTags ?? []).map((v) => String(v).toLowerCase());
+  const availableTime = Number(params.context?.availableTimeMinutes ?? 0);
+
+  const standardDuration = Math.max(20, durationMinutes);
+  const shortDuration = Math.max(20, Math.min(standardDuration - 10, 45));
+  const longerDuration = Math.max(standardDuration + 15, Math.min(standardDuration + 25, 120));
+
+  const variants: SessionDetailV1['variants'] = [
+    {
+      label: 'short-on-time',
+      whenToUse: 'Use when schedule is compressed but you still want the key stimulus.',
+      durationMinutes: shortDuration,
+      adjustments: ['Keep warmup and cooldown', 'Trim main set volume first', 'Maintain quality not quantity'],
+    },
+    {
+      label: 'standard',
+      whenToUse: 'Default execution for today.',
+      durationMinutes: standardDuration,
+      adjustments: ['Execute as written', 'Keep effort controlled', 'Stop early if pain escalates'],
+    },
+    {
+      label: 'longer-window',
+      whenToUse: 'Use when you have extra time and feel fresh.',
+      durationMinutes: longerDuration,
+      adjustments: ['Add easy aerobic volume after core set', 'Do not add extra high-intensity reps'],
+    },
+  ];
+
+  if (equipment.includes('trainer')) {
+    variants.push({
+      label: 'trainer',
+      whenToUse: 'Indoor setup or controlled pacing conditions.',
+      durationMinutes: standardDuration,
+      adjustments: ['Use cadence targets', 'Prioritize consistent power/effort', 'Increase cooling and hydration'],
+    });
+  } else if (equipment.includes('road')) {
+    variants.push({
+      label: 'road',
+      whenToUse: 'Outdoor route with safe conditions.',
+      durationMinutes: standardDuration,
+      adjustments: ['Choose terrain that matches session intent', 'Keep surges controlled', 'Fuel and hydrate early'],
+    });
+  }
+
+  if (environment.includes('heat')) {
+    variants.push({
+      label: 'heat-adjusted',
+      whenToUse: 'Hot or humid conditions.',
+      durationMinutes: Math.max(20, standardDuration - 10),
+      adjustments: ['Reduce intensity by one zone/RPE point', 'Extend recoveries', 'Prioritize hydration and cooling'],
+    });
+  }
+  if (environment.includes('hills')) {
+    variants.push({
+      label: 'hills-adjusted',
+      whenToUse: 'Hilly terrain affecting effort stability.',
+      durationMinutes: standardDuration,
+      adjustments: ['Use effort targets over pace', 'Keep uphill work sub-threshold unless prescribed', 'Descend easy to reset'],
+    });
+  }
+  if (fatigueState === 'fatigued' || fatigueState === 'cooked') {
+    variants.push({
+      label: 'fatigue-adjusted',
+      whenToUse: 'Elevated fatigue, poor sleep, or heavy legs.',
+      durationMinutes: Math.max(20, standardDuration - 15),
+      adjustments: ['Convert hard reps to aerobic', 'Cut total reps by 20-40%', 'Finish feeling better than start'],
+    });
+  }
+
   return {
     objective: `${displayType} ${displayDiscipline.toLowerCase()} session`.trim(),
+    purpose: `Primary purpose: ${keyStimulusText}.`,
     structure,
     targets: {
       primaryMetric: 'RPE',
@@ -459,5 +567,13 @@ export function buildDeterministicSessionDetailV1(params: {
     },
     cues: ['Smooth form', 'Breathe steady', 'Stop if sharp pain'],
     safetyNotes: 'Avoid maximal efforts if you feel pain, dizziness, or unusual fatigue.',
+    explainability: {
+      whyThis: `This session is designed to ${keyStimulusText}.`,
+      whyToday: 'It sits here to deliver quality stress while preserving the next key session.',
+      unlocksNext: 'Completing this well supports progression into the next quality workout and long-session durability.',
+      ifMissed: 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
+      ifCooked: 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',
+    },
+    variants: variants.filter((v, idx, arr) => arr.findIndex((x) => x.label === v.label) === idx),
   };
 }

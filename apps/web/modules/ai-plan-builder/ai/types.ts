@@ -146,6 +146,10 @@ export type GenerateSessionDetailInput = {
     maxIntensityDaysPerWeek: number;
     longSessionDay: number | null;
     weeklyMinutesTarget: number;
+    equipment?: string;
+    environmentTags?: string[];
+    fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked';
+    availableTimeMinutes?: number;
   };
 
   /** The deterministic skeleton session fields. */

@@ -5,6 +5,9 @@ export type DraftConstraintViolation = {
     | 'OFF_DAY_SESSION'
     | 'MAX_DOUBLES_EXCEEDED'
     | 'MAX_INTENSITY_DAYS_EXCEEDED'
+    | 'CONSECUTIVE_INTENSITY_DAYS'
+    | 'LONG_SESSION_FOLLOWED_BY_INTENSITY'
+    | 'KEY_SESSION_COUNT_OUT_OF_BOUNDS'
     | 'WEEKLY_MINUTES_OUT_OF_BOUNDS'
     | 'BEGINNER_RUN_CAP_EXCEEDED'
     | 'BEGINNER_BRICK_TOO_EARLY';
@@ -45,6 +48,25 @@ function hasTravelConstraintSignal(setup: DraftPlanSetupV1): boolean {
   return /\btravel\b|\btravell(?:ing)?\b|\bbusiness trip\b|\baway\b/.test(guidance);
 }
 
+function isKeySession(session: DraftWeekV1['sessions'][number]): boolean {
+  const notes = String(session.notes ?? '').toLowerCase();
+  if (session.type === 'tempo' || session.type === 'threshold') return true;
+  if (notes.includes('key session')) return true;
+  if (notes.includes('long run') || notes.includes('long ride') || notes.includes('brick')) return true;
+  return false;
+}
+
+function keySessionBand(setup: DraftPlanSetupV1): { min: number; max: number } {
+  if (isBeginner(setup)) return { min: 2, max: 2 };
+  if (setup.riskTolerance === 'high') return { min: 3, max: 4 };
+  return { min: 2, max: 3 };
+}
+
+function daySortKey(day: number, weekStart: 'monday' | 'sunday'): number {
+  const d = ((Number(day) % 7) + 7) % 7;
+  return weekStart === 'sunday' ? d : (d + 6) % 7;
+}
+
 function minuteBandRatios(params: {
   setup: DraftPlanSetupV1;
   weekIndex: number;
@@ -73,6 +95,7 @@ export function validateDraftPlanAgainstSetup(params: {
   const maxDoubles = Math.max(0, Math.min(3, Number(setup.maxDoublesPerWeek ?? 0)));
   const maxIntensity = Math.max(1, Math.min(3, Number(setup.maxIntensityDaysPerWeek ?? 1)));
   const beginner = isBeginner(setup);
+  const weekStart = setup.weekStart === 'sunday' ? 'sunday' : 'monday';
   const violations: DraftConstraintViolation[] = [];
 
   for (const week of draft.weeks ?? []) {
@@ -135,6 +158,50 @@ export function validateDraftPlanAgainstSetup(params: {
       violations.push({
         code: 'MAX_INTENSITY_DAYS_EXCEEDED',
         message: `Week ${week.weekIndex + 1}: intensity days ${intensityDays.size}, max allowed ${maxIntensity}.`,
+        weekIndex: week.weekIndex,
+      });
+    }
+
+    const sessionRows = sessions
+      .map((session) => ({ session, sort: daySortKey(Number(session.dayOfWeek ?? 0), weekStart) }))
+      .sort((a, b) => a.sort - b.sort || Number(a.session.ordinal ?? 0) - Number(b.session.ordinal ?? 0));
+
+    let lastIntensitySort: number | null = null;
+    for (const row of sessionRows) {
+      const isIntensity = row.session.type === 'tempo' || row.session.type === 'threshold';
+      if (!isIntensity) continue;
+      if (lastIntensitySort != null && row.sort - lastIntensitySort <= 1) {
+        violations.push({
+          code: 'CONSECUTIVE_INTENSITY_DAYS',
+          message: `Week ${week.weekIndex + 1}: intensity appears on adjacent days; reduce stacking stress.`,
+          weekIndex: week.weekIndex,
+          sessionId: `${week.weekIndex}:${row.session.ordinal}`,
+        });
+        break;
+      }
+      lastIntensitySort = row.sort;
+    }
+
+    const keyBand = keySessionBand(setup);
+    const keyCount = sessions.filter((s) => isKeySession(s)).length;
+    if (keyCount < keyBand.min || keyCount > keyBand.max) {
+      violations.push({
+        code: 'KEY_SESSION_COUNT_OUT_OF_BOUNDS',
+        message: `Week ${week.weekIndex + 1}: key sessions ${keyCount}, expected ${keyBand.min}-${keyBand.max}.`,
+        weekIndex: week.weekIndex,
+      });
+    }
+
+    const longDays = sessions
+      .filter((s) => /\blong run\b|\blong ride\b|\bbrick\b/i.test(String(s.notes ?? '')))
+      .map((s) => daySortKey(Number(s.dayOfWeek ?? 0), weekStart));
+    const intensitySortDays = sessions
+      .filter((s) => s.type === 'tempo' || s.type === 'threshold')
+      .map((s) => daySortKey(Number(s.dayOfWeek ?? 0), weekStart));
+    if (longDays.some((d) => intensitySortDays.includes(d + 1))) {
+      violations.push({
+        code: 'LONG_SESSION_FOLLOWED_BY_INTENSITY',
+        message: `Week ${week.weekIndex + 1}: long-session day is immediately followed by intensity.`,
         weekIndex: week.weekIndex,
       });
     }
