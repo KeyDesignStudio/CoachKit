@@ -28,6 +28,29 @@ type ThreadMessagesResponse = {
   }>;
 };
 
+function renderMessageBodyWithLinks(body: string, isAthlete: boolean) {
+  const parts = String(body ?? '').split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <>
+      {parts.map((part, idx) => {
+        const isUrl = /^https?:\/\/[^\s]+$/.test(part);
+        if (!isUrl) return <span key={`${idx}:${part}`}>{part}</span>;
+        return (
+          <a
+            key={`${idx}:${part}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn('underline underline-offset-2 break-all', isAthlete ? 'text-white' : 'text-blue-700 dark:text-blue-300')}
+          >
+            {part}
+          </a>
+        );
+      })}
+    </>
+  );
+}
+
 export default function AthleteNotificationsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -207,7 +230,7 @@ export default function AthleteNotificationsPage() {
                     isAthlete ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
                   )}
                 >
-                  {m.body}
+                  {renderMessageBodyWithLinks(m.body, isAthlete)}
                   <div className={cn("mt-1 text-[10px] tabular-nums opacity-70", isAthlete ? "text-indigo-100" : "text-slate-500 dark:text-slate-400")}>
                     {new Date(m.createdAt).toLocaleString()}
                   </div>
