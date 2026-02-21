@@ -165,6 +165,15 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
       discipline: String(input?.session?.discipline ?? ''),
       type: String(input?.session?.type ?? ''),
       durationMinutes: Number(input?.session?.durationMinutes ?? 0),
+      context: {
+        availableTimeMinutes: Number(input?.constraints?.availableTimeMinutes ?? 0) || undefined,
+        equipment: typeof input?.constraints?.equipment === 'string' ? input.constraints.equipment : undefined,
+        environmentTags: Array.isArray(input?.constraints?.environmentTags) ? input.constraints.environmentTags : undefined,
+        fatigueState: typeof input?.constraints?.fatigueState === 'string' ? input.constraints.fatigueState : undefined,
+        weekIndex: Number(input?.session?.weekIndex ?? 0),
+        dayOfWeek: Number(input?.session?.dayOfWeek ?? 0),
+        sessionOrdinal: Number(input?.session?.ordinal ?? 0),
+      },
     });
 
     const briefParsed = athleteBriefSchema.safeParse(input?.athleteBrief ?? null);

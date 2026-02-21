@@ -1,4 +1,5 @@
 import type { DraftPlanV1, DraftPlanSetupV1, DraftWeekV1 } from './draft-generator';
+import { resolvePlanningPolicyProfile, type PlanningPolicyProfileId } from './policy-registry';
 
 export type DraftConstraintViolation = {
   code:
@@ -14,6 +15,21 @@ export type DraftConstraintViolation = {
   message: string;
   weekIndex: number;
   sessionId?: string;
+  details?: Record<string, number | string | null | undefined>;
+};
+
+export type DraftQualityIssueSeverity = 'hard' | 'soft';
+
+export type DraftQualityIssue = DraftConstraintViolation & {
+  severity: DraftQualityIssueSeverity;
+};
+
+export type DraftQualityGateResult = {
+  profileId: PlanningPolicyProfileId;
+  profileVersion: 'v1';
+  hardViolations: DraftQualityIssue[];
+  softWarnings: DraftQualityIssue[];
+  score: number;
 };
 
 function weeklyMinutesTarget(setup: DraftPlanSetupV1, weekIndex: number): number {
@@ -72,18 +88,19 @@ function minuteBandRatios(params: {
   weekIndex: number;
   beginner: boolean;
 }): { minRatio: number; maxRatio: number } {
+  const profile = resolvePlanningPolicyProfile(params.setup);
   const injuryOrPain = hasInjuryOrPainSignal(params.setup);
   const travel = hasTravelConstraintSignal(params.setup);
 
   if (injuryOrPain || travel) {
-    return { minRatio: 0.4, maxRatio: 1.2 };
+    return { minRatio: profile.weekMinuteBands.constrainedMinRatio, maxRatio: profile.weekMinuteBands.constrainedMaxRatio };
   }
 
   if (params.beginner && params.weekIndex < 4) {
-    return { minRatio: 0.45, maxRatio: 1.2 };
+    return { minRatio: profile.weekMinuteBands.beginnerEarlyMinRatio, maxRatio: profile.weekMinuteBands.beginnerEarlyMaxRatio };
   }
 
-  return { minRatio: 0.5, maxRatio: 1.15 };
+  return { minRatio: profile.weekMinuteBands.baseMinRatio, maxRatio: profile.weekMinuteBands.baseMaxRatio };
 }
 
 export function validateDraftPlanAgainstSetup(params: {
@@ -216,10 +233,56 @@ export function validateDraftPlanAgainstSetup(params: {
           code: 'WEEKLY_MINUTES_OUT_OF_BOUNDS',
           message: `Week ${week.weekIndex + 1}: planned ${totalWeekMinutes} min outside expected band ${minBound}-${maxBound} min (target ${expected}).`,
           weekIndex: week.weekIndex,
+          details: {
+            plannedMinutes: totalWeekMinutes,
+            targetMinutes: expected,
+            minBound,
+            maxBound,
+          },
         });
       }
     }
   }
 
   return violations;
+}
+
+export function evaluateDraftQualityGate(params: {
+  setup: DraftPlanSetupV1;
+  draft: DraftPlanV1;
+}): DraftQualityGateResult {
+  const profile = resolvePlanningPolicyProfile(params.setup);
+  const violations = validateDraftPlanAgainstSetup(params);
+  const hardViolations: DraftQualityIssue[] = [];
+  const softWarnings: DraftQualityIssue[] = [];
+
+  for (const violation of violations) {
+    if (violation.code === 'WEEKLY_MINUTES_OUT_OF_BOUNDS') {
+      const planned = Number(violation.details?.plannedMinutes ?? NaN);
+      const target = Number(violation.details?.targetMinutes ?? NaN);
+      if (Number.isFinite(planned) && Number.isFinite(target) && target > 0) {
+        const ratio = planned / target;
+        if (ratio < profile.weekMinuteBands.severeMinRatio || ratio > profile.weekMinuteBands.severeMaxRatio) {
+          hardViolations.push({ ...violation, severity: 'hard' });
+        } else {
+          softWarnings.push({ ...violation, severity: 'soft' });
+        }
+        continue;
+      }
+      softWarnings.push({ ...violation, severity: 'soft' });
+      continue;
+    }
+    hardViolations.push({ ...violation, severity: 'hard' });
+  }
+
+  const scoreRaw = 100 - hardViolations.length * 18 - softWarnings.length * 4;
+  const score = Math.max(0, Math.min(100, scoreRaw));
+
+  return {
+    profileId: profile.id,
+    profileVersion: profile.version,
+    hardViolations,
+    softWarnings,
+    score,
+  };
 }

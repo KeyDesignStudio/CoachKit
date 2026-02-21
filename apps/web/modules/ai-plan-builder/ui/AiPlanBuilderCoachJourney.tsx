@@ -64,6 +64,17 @@ type SetupState = {
   maxIntensityDaysPerWeek: number;
   maxDoublesPerWeek: number;
   coachGuidanceText: string;
+  policyProfileId: 'coachkit-conservative-v1' | 'coachkit-safe-v1' | 'coachkit-performance-v1';
+};
+
+type SessionEditorState = {
+  sessionId: string;
+  discipline: string;
+  type: string;
+  durationMinutes: string;
+  notes: string;
+  objective: string;
+  blocks: Array<{ blockIndex: number; label: string; steps: string }>;
 };
 
 type IntakeLifecycle = {
@@ -328,6 +339,7 @@ function buildSetupFromProfile(profile: AthleteProfileSummary | null): SetupStat
     maxIntensityDaysPerWeek: 1,
     maxDoublesPerWeek: 0,
     coachGuidanceText: '',
+    policyProfileId: 'coachkit-safe-v1',
   };
 }
 
@@ -377,6 +389,27 @@ function formatDayKeyDate(dayKey: string): string {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
+function buildSessionEditorState(session: any, detailJson: unknown): SessionEditorState {
+  const parsed = sessionDetailV1Schema.safeParse(detailJson ?? null);
+  const blocks = parsed.success
+    ? parsed.data.structure.map((b, idx) => ({
+        blockIndex: idx,
+        label: String(b.blockType ?? 'block').toUpperCase(),
+        steps: String(b.steps ?? ''),
+      }))
+    : [];
+
+  return {
+    sessionId: String(session?.id ?? ''),
+    discipline: String(session?.discipline ?? ''),
+    type: String(session?.type ?? ''),
+    durationMinutes: String(Number(session?.durationMinutes ?? 0) || ''),
+    notes: String(session?.notes ?? ''),
+    objective: parsed.success ? String(parsed.data.objective ?? '') : '',
+    blocks,
+  };
+}
+
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
   const hasAutoSyncedRequestRef = useRef(false);
@@ -398,6 +431,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [sessionDetailsById, setSessionDetailsById] = useState<Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>>({});
   const [detailGenerationScope, setDetailGenerationScope] = useState<'selected-week' | 'entire-plan'>('selected-week');
   const [detailGenerationWeekIndex, setDetailGenerationWeekIndex] = useState<number | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [sessionEditor, setSessionEditor] = useState<SessionEditorState | null>(null);
+  const [agentScope, setAgentScope] = useState<'session' | 'week' | 'plan'>('week');
+  const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
+  const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
+  const [agentInstruction, setAgentInstruction] = useState<string>('');
   const [generateProgress, setGenerateProgress] = useState<number | null>(null);
   const [generateEtaSeconds, setGenerateEtaSeconds] = useState<number | null>(null);
   const generateProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -526,6 +565,15 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     () => weekCards.find((w) => w.weekIndex === detailGenerationWeekIndex) ?? weekCards[0] ?? null,
     [detailGenerationWeekIndex, weekCards]
   );
+  const agentWeek = useMemo(() => weekCards.find((w) => w.weekIndex === agentWeekIndex) ?? weekCards[0] ?? null, [agentWeekIndex, weekCards]);
+  const agentSessionOptions = useMemo(
+    () =>
+      (agentWeek?.sessions ?? []).map((s: any) => ({
+        value: String(s.id),
+        label: `${DAY_NAMES_SUN0[Number(s?.dayOfWeek ?? 0)] ?? 'Day'} ${String(s?.discipline ?? '').toUpperCase()} - ${String(s?.type ?? '').toLowerCase()}`,
+      })),
+    [agentWeek?.sessions]
+  );
 
   const setupStartDayKey =
     typeof draftPlanLatest?.setupJson?.startDate === 'string' && isDayKey(draftPlanLatest.setupJson.startDate)
@@ -609,6 +657,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const source = (draftPlanLatest as any)?.setupJson?.requestContextApplied;
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
   }, [draftPlanLatest]);
+  const qualityGateSummary = useMemo(() => {
+    const source = (draftPlanLatest as any)?.setupJson?.qualityGate;
+    return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
+  }, [draftPlanLatest]);
 
   const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
   const hasWeeklyDraft = hasDraft && weekCards.length > 0;
@@ -665,10 +717,51 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
         setSetup((prev) => {
           const seeded = buildSetupFromProfile(profile);
+          const fromDraft = draft?.setupJson && typeof draft.setupJson === 'object' ? (draft.setupJson as Record<string, any>) : null;
+          const draftWeeklyMinutes = Number(fromDraft?.weeklyAvailabilityMinutes);
+          const draftMaxIntensity = Number(fromDraft?.maxIntensityDaysPerWeek);
+          const draftMaxDoubles = Number(fromDraft?.maxDoublesPerWeek);
+          const draftWeeklyDaysRaw = Array.isArray(fromDraft?.weeklyAvailabilityDays) ? fromDraft.weeklyAvailabilityDays : null;
+          const draftWeeklyDays =
+            draftWeeklyDaysRaw?.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v) && v >= 0 && v <= 6) ?? null;
           return {
             ...seeded,
-            startDate: prev.startDate,
-            completionDate: prev.completionDate,
+            startDate: typeof fromDraft?.startDate === 'string' ? fromDraft.startDate : prev.startDate,
+            completionDate:
+              typeof fromDraft?.completionDate === 'string'
+                ? fromDraft.completionDate
+                : typeof fromDraft?.eventDate === 'string'
+                  ? fromDraft.eventDate
+                  : prev.completionDate,
+            weeksToEventOverride: Number.isFinite(Number(fromDraft?.weeksToEventOverride)) ? Number(fromDraft?.weeksToEventOverride) : seeded.weeksToEventOverride,
+            weeklyAvailabilityDays: draftWeeklyDays ?? seeded.weeklyAvailabilityDays,
+            weeklyAvailabilityMinutes: Number.isFinite(draftWeeklyMinutes)
+              ? draftWeeklyMinutes
+              : seeded.weeklyAvailabilityMinutes,
+            disciplineEmphasis:
+              fromDraft?.disciplineEmphasis === 'balanced' ||
+              fromDraft?.disciplineEmphasis === 'swim' ||
+              fromDraft?.disciplineEmphasis === 'bike' ||
+              fromDraft?.disciplineEmphasis === 'run'
+                ? fromDraft.disciplineEmphasis
+                : seeded.disciplineEmphasis,
+            riskTolerance:
+              fromDraft?.riskTolerance === 'low' || fromDraft?.riskTolerance === 'med' || fromDraft?.riskTolerance === 'high'
+                ? fromDraft.riskTolerance
+                : seeded.riskTolerance,
+            maxIntensityDaysPerWeek: Number.isFinite(draftMaxIntensity)
+              ? draftMaxIntensity
+              : seeded.maxIntensityDaysPerWeek,
+            maxDoublesPerWeek: Number.isFinite(draftMaxDoubles)
+              ? draftMaxDoubles
+              : seeded.maxDoublesPerWeek,
+            coachGuidanceText: typeof fromDraft?.coachGuidanceText === 'string' ? fromDraft.coachGuidanceText : seeded.coachGuidanceText,
+            policyProfileId:
+              fromDraft?.policyProfileId === 'coachkit-conservative-v1' ||
+              fromDraft?.policyProfileId === 'coachkit-safe-v1' ||
+              fromDraft?.policyProfileId === 'coachkit-performance-v1'
+                ? fromDraft.policyProfileId
+                : seeded.policyProfileId,
           };
         });
 
@@ -703,6 +796,24 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const firstWeek = weekCards[0]?.weekIndex ?? null;
     setDetailGenerationWeekIndex((prev) => (prev == null || !weekCards.some((w) => w.weekIndex === prev) ? firstWeek : prev));
   }, [weekCards]);
+
+  useEffect(() => {
+    if (!weekCards.length) {
+      setAgentWeekIndex(null);
+      setAgentSessionId(null);
+      return;
+    }
+    const firstWeek = weekCards[0]?.weekIndex ?? null;
+    setAgentWeekIndex((prev) => (prev == null || !weekCards.some((w) => w.weekIndex === prev) ? firstWeek : prev));
+  }, [weekCards]);
+
+  useEffect(() => {
+    if (!agentSessionOptions.length) {
+      setAgentSessionId(null);
+      return;
+    }
+    setAgentSessionId((prev) => (prev && agentSessionOptions.some((s) => s.value === prev) ? prev : agentSessionOptions[0]!.value));
+  }, [agentSessionOptions]);
 
   useEffect(() => {
     return () => {
@@ -845,6 +956,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         weeksToEventOverride: setup.weeksToEventOverride ?? undefined,
         weeklyAvailabilityDays: stableDayList(setup.weeklyAvailabilityDays),
         weeklyAvailabilityMinutes: Number(setup.weeklyAvailabilityMinutes),
+        policyProfileId: setup.policyProfileId,
         disciplineEmphasis: (trainingRequest.primaryDisciplineFocus || setup.disciplineEmphasis) as SetupState['disciplineEmphasis'],
         requestContext: {
           goalDetails: trainingRequest.goalDetails || undefined,
@@ -900,7 +1012,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const loadSessionDetail = useCallback(
     async (sessionId: string) => {
       const draftPlanId = String(draftPlanLatest?.id ?? '');
-      if (!draftPlanId) return;
+      if (!draftPlanId) return null;
 
       setSessionDetailsById((prev) => ({ ...prev, [sessionId]: { detailJson: prev[sessionId]?.detailJson ?? null, loading: true, error: null } }));
       try {
@@ -908,9 +1020,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/session-detail?draftPlanId=${encodeURIComponent(draftPlanId)}&sessionId=${encodeURIComponent(sessionId)}`
         );
         setSessionDetailsById((prev) => ({ ...prev, [sessionId]: { detailJson: data.detail ?? null, loading: false, error: null } }));
+        return data.detail ?? null;
       } catch (e) {
         const message = e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to load session detail.';
         setSessionDetailsById((prev) => ({ ...prev, [sessionId]: { detailJson: prev[sessionId]?.detailJson ?? null, loading: false, error: message } }));
+        return null;
       }
     },
     [athleteId, draftPlanLatest?.id, request]
@@ -939,6 +1053,118 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     if (!sessionsForScope.length) return;
     await loadAllDetailsForWeek(sessionsForScope);
   }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek]);
+
+  const openSessionEditor = useCallback(
+    async (session: any) => {
+      const sessionId = String(session?.id ?? '');
+      if (!sessionId) return;
+
+      let hydratedDetail = sessionDetailsById[sessionId]?.detailJson ?? session?.detailJson ?? null;
+      if (!hydratedDetail) {
+        hydratedDetail = await loadSessionDetail(sessionId);
+      }
+      setEditingSessionId(sessionId);
+      setSessionEditor(buildSessionEditorState(session, hydratedDetail));
+    },
+    [loadSessionDetail, sessionDetailsById]
+  );
+
+  const saveSessionEditor = useCallback(async () => {
+    if (!sessionEditor || !draftPlanLatest?.id) return;
+    const duration = Number(sessionEditor.durationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      setError('Session duration must be a positive number.');
+      return;
+    }
+
+    setBusy('save-session-edit');
+    setError(null);
+    setInfo(null);
+    try {
+      const payload = {
+        draftPlanId: String(draftPlanLatest.id),
+        sessionEdits: [
+          {
+            sessionId: sessionEditor.sessionId,
+            discipline: sessionEditor.discipline.trim() || undefined,
+            type: sessionEditor.type.trim() || undefined,
+            durationMinutes: Math.round(duration),
+            notes: sessionEditor.notes.trim() || null,
+            objective: sessionEditor.objective.trim() || null,
+            blockEdits: sessionEditor.blocks
+              .map((b) => ({ blockIndex: b.blockIndex, steps: b.steps.trim() }))
+              .filter((b) => b.steps.length > 0),
+          },
+        ],
+      };
+
+      const data = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
+        method: 'PATCH',
+        data: payload,
+      });
+      setDraftPlanLatest(data.draftPlan ?? null);
+      const updatedSession = Array.isArray(data.draftPlan?.sessions)
+        ? data.draftPlan.sessions.find((s: any) => String(s.id) === sessionEditor.sessionId)
+        : null;
+      if (updatedSession?.detailJson) {
+        setSessionDetailsById((prev) => ({
+          ...prev,
+          [sessionEditor.sessionId]: {
+            detailJson: updatedSession.detailJson,
+            loading: false,
+            error: null,
+          },
+        }));
+      }
+      setInfo('Session updated.');
+      setEditingSessionId(null);
+      setSessionEditor(null);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to save session edits.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest?.id, request, sessionEditor]);
+
+  const applyAgentAdjustment = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    const instruction = agentInstruction.trim();
+    if (!draftPlanId) return;
+    if (instruction.length < 3) {
+      setError('Enter an adjustment instruction for CoachKit AI.');
+      return;
+    }
+
+    const body: Record<string, unknown> = {
+      draftPlanId,
+      scope: agentScope,
+      instruction,
+    };
+    if (agentScope === 'week') body.weekIndex = agentWeek?.weekIndex ?? null;
+    if (agentScope === 'session') body.sessionId = agentSessionId;
+
+    setBusy('agent-adjust');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ draftPlan: any; appliedCount: number }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/agent-adjust`,
+        {
+          method: 'POST',
+          data: body,
+        }
+      );
+      setDraftPlanLatest(data.draftPlan ?? null);
+      setSessionDetailsById({});
+      setEditingSessionId(null);
+      setSessionEditor(null);
+      setInfo(`CoachKit AI applied ${Number(data.appliedCount ?? 0)} adjustment${Number(data.appliedCount ?? 0) === 1 ? '' : 's'}.`);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply AI adjustment.');
+    } finally {
+      setBusy(null);
+    }
+  }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, request]);
 
   const shareSkeletonWithAthlete = useCallback(async () => {
     if (!sessionsByWeek.length) return;
@@ -1418,6 +1644,22 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               </Select>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium">Planning policy profile</label>
+              <Select
+                value={setup.policyProfileId}
+                onChange={(e) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    policyProfileId: e.target.value as SetupState['policyProfileId'],
+                  }))
+                }
+              >
+                <option value="coachkit-conservative-v1">Conservative v1</option>
+                <option value="coachkit-safe-v1">Safe Balanced v1</option>
+                <option value="coachkit-performance-v1">Performance v1</option>
+              </Select>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium">Max doubles/week</label>
               <Input
                 value={setup.maxDoublesPerWeek}
@@ -1442,6 +1684,16 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               )}
             </ul>
           </div>
+          {qualityGateSummary ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <div className="font-medium">
+                Quality gate score: {String(qualityGateSummary.score ?? 'N/A')} ({String(qualityGateSummary.policyProfileId ?? 'profile')})
+              </div>
+              <div>
+                Hard violations: {String(qualityGateSummary.hardViolationCount ?? 0)} | Soft warnings: {String(qualityGateSummary.softWarningCount ?? 0)}
+              </div>
+            </div>
+          ) : null}
           </div>
         </Block>
       </div>
@@ -1502,6 +1754,64 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">CoachKit AI adjustment</div>
+              <div className="grid gap-2 md:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Scope</label>
+                  <Select value={agentScope} onChange={(e) => setAgentScope(e.target.value as 'session' | 'week' | 'plan')}>
+                    <option value="session">Single session</option>
+                    <option value="week">Selected week</option>
+                    <option value="plan">Entire plan</option>
+                  </Select>
+                </div>
+                {agentScope !== 'plan' ? (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
+                    <Select value={String(agentWeek?.weekIndex ?? '')} onChange={(e) => setAgentWeekIndex(Number(e.target.value))}>
+                      {weekOptions.map((w) => (
+                        <option key={w.value} value={String(w.value)}>
+                          {w.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+                {agentScope === 'session' ? (
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Session</label>
+                    <Select value={String(agentSessionId ?? '')} onChange={(e) => setAgentSessionId(e.target.value)}>
+                      <option value="">Select session</option>
+                      {agentSessionOptions.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-2">
+                <Textarea
+                  value={agentInstruction}
+                  onChange={(e) => setAgentInstruction(e.target.value)}
+                  rows={2}
+                  placeholder="Examples: Reduce intensity by 1 level and cut 10 min. | Main set: 4 x 6 min @ tempo with 2 min easy. | Make this week recovery focused."
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy != null || !agentInstruction.trim() || (agentScope === 'session' && !agentSessionId)}
+                  onClick={() => void applyAgentAdjustment()}
+                >
+                  Apply AI adjustment
+                </Button>
+                <span className="text-xs text-[var(--fg-muted)]">Applies immediately to session/week/plan based on your instruction.</span>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Week Carousel</div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -1546,8 +1856,109 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                             <div className="text-xs font-medium">{formatSessionHeadline(session)}</div>
                             <div className="text-[11px] text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
                             {session.notes ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{String(session.notes)}</div> : null}
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void openSessionEditor(session)}>
+                                {editingSessionId === sessionId ? 'Editing...' : 'Edit session'}
+                              </Button>
+                            </div>
                             {sessionDetailsById[sessionId]?.loading ? <div className="mt-2 text-[11px] text-[var(--fg-muted)]">Generating details...</div> : null}
                             {sessionDetailsById[sessionId]?.error ? <div className="mt-1 text-[11px] text-red-700">{sessionDetailsById[sessionId]?.error}</div> : null}
+                            {editingSessionId === sessionId && sessionEditor ? (
+                              <div className="mt-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Discipline</label>
+                                    <Select
+                                      value={sessionEditor.discipline}
+                                      onChange={(e) => setSessionEditor((prev) => (prev ? { ...prev, discipline: e.target.value } : prev))}
+                                    >
+                                      <option value="swim">Swim</option>
+                                      <option value="bike">Bike</option>
+                                      <option value="run">Run</option>
+                                      <option value="strength">Strength</option>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Type</label>
+                                    <Select
+                                      value={sessionEditor.type}
+                                      onChange={(e) => setSessionEditor((prev) => (prev ? { ...prev, type: e.target.value } : prev))}
+                                    >
+                                      <option value="endurance">Endurance</option>
+                                      <option value="tempo">Tempo</option>
+                                      <option value="threshold">Threshold</option>
+                                      <option value="technique">Technique</option>
+                                      <option value="recovery">Recovery</option>
+                                      <option value="strength">Strength</option>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Duration (min)</label>
+                                    <Input
+                                      value={sessionEditor.durationMinutes}
+                                      onChange={(e) => setSessionEditor((prev) => (prev ? { ...prev, durationMinutes: e.target.value } : prev))}
+                                      inputMode="numeric"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-2">
+                                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Objective</label>
+                                  <Input
+                                    value={sessionEditor.objective}
+                                    onChange={(e) => setSessionEditor((prev) => (prev ? { ...prev, objective: e.target.value } : prev))}
+                                  />
+                                </div>
+                                <div className="mt-2">
+                                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Session notes</label>
+                                  <Textarea
+                                    value={sessionEditor.notes}
+                                    onChange={(e) => setSessionEditor((prev) => (prev ? { ...prev, notes: e.target.value } : prev))}
+                                    rows={2}
+                                  />
+                                </div>
+                                {sessionEditor.blocks.length ? (
+                                  <div className="mt-2 space-y-2">
+                                    {sessionEditor.blocks.map((block) => (
+                                      <div key={`${block.blockIndex}:${block.label}`}>
+                                        <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">
+                                          {block.label} steps
+                                        </label>
+                                        <Textarea
+                                          value={block.steps}
+                                          onChange={(e) =>
+                                            setSessionEditor((prev) =>
+                                              prev
+                                                ? {
+                                                    ...prev,
+                                                    blocks: prev.blocks.map((b) => (b.blockIndex === block.blockIndex ? { ...b, steps: e.target.value } : b)),
+                                                  }
+                                                : prev
+                                            )
+                                          }
+                                          rows={2}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                <div className="mt-2 flex gap-2">
+                                  <Button size="sm" onClick={() => void saveSessionEditor()} disabled={busy != null}>
+                                    Save session changes
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      setEditingSessionId(null);
+                                      setSessionEditor(null);
+                                    }}
+                                    disabled={busy != null}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                             {detailText ? (
                               <pre className="mt-2 max-h-48 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px] whitespace-pre-wrap">
                                 {detailText}

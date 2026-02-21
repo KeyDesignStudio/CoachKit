@@ -1,3 +1,5 @@
+import { applyPlanningPolicyProfileToSetup } from './policy-registry';
+
 export type RiskTolerance = 'low' | 'med' | 'high';
 export type DisciplineEmphasis = 'balanced' | 'swim' | 'bike' | 'run';
 export type ProgramPolicy = 'COUCH_TO_5K' | 'COUCH_TO_IRONMAN_26' | 'HALF_TO_FULL_MARATHON';
@@ -56,6 +58,8 @@ export type DraftPlanSetupV1 = {
     fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked';
     availableTimeMinutes?: number;
   };
+  policyProfileId?: 'coachkit-conservative-v1' | 'coachkit-safe-v1' | 'coachkit-performance-v1';
+  policyProfileVersion?: 'v1';
 };
 
 export type DraftWeekV1 = {
@@ -659,7 +663,8 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     maxIntensityDaysPerWeek,
     maxDoublesPerWeek,
   };
-  const effectiveSetup = applyProgramPolicy(setup);
+  const setupWithPolicy = applyPlanningPolicyProfileToSetup(setup);
+  const effectiveSetup = applyProgramPolicy(setupWithPolicy);
 
   const totalMinutesBase = availabilityTotalMinutes(effectiveSetup.weeklyAvailabilityMinutes);
   const requestedTargetSessions = sessionsPerWeek(effectiveSetup, days.length);
