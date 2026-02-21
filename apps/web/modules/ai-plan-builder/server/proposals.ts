@@ -10,6 +10,7 @@ import { planDiffSchema, type PlanDiffOp } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
 import { publishAiDraftPlan } from './publish';
 import { evaluateProposalHardSafety, summarizeProposalAction } from './adaptation-action-engine';
+import { assessTriggerQuality, buildReasonChain } from './adaptation-explainability';
 
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import type { AiAdaptationTriggerType } from '../ai/types';
@@ -128,6 +129,17 @@ export async function generatePlanChangeProposal(params: {
     triggerTypes,
     metrics: hardSafety.metrics,
   });
+  const triggerAssessment = assessTriggerQuality(
+    triggers.map((t) => ({
+      id: String(t.id),
+      triggerType: String(t.triggerType),
+      evidenceJson: t.evidenceJson,
+    }))
+  );
+  const reasonChain = buildReasonChain({
+    ranked: triggerAssessment.ranked,
+    actionSummary: changeSummaryText,
+  });
   const proposalStatus: 'PROPOSED' | 'DRAFT' = respectsLocks && hardSafety.ok ? 'PROPOSED' : 'DRAFT';
 
   const proposal = await prisma.planChangeProposal.create({
@@ -142,6 +154,8 @@ export async function generatePlanChangeProposal(params: {
         triggerIds: triggers.map((t) => t.id),
         hardSafety,
         changeSummaryText,
+        triggerAssessment,
+        reasonChain,
       } as Prisma.InputJsonValue,
       diffJson: ops as unknown as Prisma.InputJsonValue,
       rationaleText,

@@ -102,6 +102,13 @@ type QueuedRecommendation = {
   triggerIds?: string[] | null;
   createdAt?: string | null;
   status?: string | null;
+  changeSummaryText?: string | null;
+  reasonChain?: string[] | null;
+  triggerAssessment?: {
+    averageConfidence?: number;
+    highImpactCount?: number;
+    ranked?: Array<{ triggerType: string; confidence: number; impact: string; reason: string }>;
+  } | null;
 };
 
 type AdaptationTimelineItem = {
@@ -575,6 +582,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [weekEditNoteSuffix, setWeekEditNoteSuffix] = useState<string>('');
   const [queuedRecommendations, setQueuedRecommendations] = useState<QueuedRecommendation[]>([]);
   const [recommendationRefreshAt, setRecommendationRefreshAt] = useState<string | null>(null);
+  const [recommendationSuppression, setRecommendationSuppression] = useState<{ reason: string; averageConfidence: number; highImpactCount: number } | null>(null);
+  const [latestTriggerAssessment, setLatestTriggerAssessment] = useState<{
+    ranked: Array<{ triggerType: string; confidence: number; impact: string; reason: string }>;
+    averageConfidence: number;
+    highImpactCount: number;
+  } | null>(null);
   const [lastEvaluatedAt, setLastEvaluatedAt] = useState<string | null>(null);
   const [latestSignalAt, setLatestSignalAt] = useState<string | null>(null);
   const [hasNewDataSinceLastEval, setHasNewDataSinceLastEval] = useState<boolean>(false);
@@ -997,6 +1010,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           latestSignalAt?: string | null;
           hasNewDataSinceLastEval?: boolean;
           signalTimeline?: AdaptationTimelineItem[];
+          suppressedRecommendation?: { reason: string; averageConfidence: number; highImpactCount: number } | null;
+          triggerAssessment?: {
+            ranked: Array<{ triggerType: string; confidence: number; impact: string; reason: string }>;
+            averageConfidence: number;
+            highImpactCount: number;
+          } | null;
         }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/recommendations/refresh`, {
           method: 'POST',
           data: { aiPlanDraftId: draftPlanId },
@@ -1008,6 +1027,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         setLatestSignalAt(typeof data.latestSignalAt === 'string' ? data.latestSignalAt : null);
         setHasNewDataSinceLastEval(Boolean(data.hasNewDataSinceLastEval));
         setAdaptationSignalTimeline(Array.isArray(data.signalTimeline) ? data.signalTimeline : []);
+        setRecommendationSuppression(data.suppressedRecommendation ?? null);
+        setLatestTriggerAssessment(data.triggerAssessment ?? null);
         if (data.createdProposal?.id && !opts?.silent) {
           setInfo('New adaptation recommendation queued for coach review.');
         }
@@ -2270,6 +2291,25 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
                   {hasNewDataSinceLastEval ? 'New athlete data has arrived since the last adaptation evaluation.' : 'No new athlete data since the last adaptation evaluation.'}
                 </div>
+                {latestTriggerAssessment?.ranked?.length ? (
+                  <div className="mt-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px]">
+                    <div className="font-medium text-[var(--text)]">
+                      Trigger quality: {Math.round(Number(latestTriggerAssessment.averageConfidence ?? 0) * 100)}% avg confidence
+                    </div>
+                    <ul className="mt-1 list-disc pl-4 text-[var(--fg-muted)]">
+                      {latestTriggerAssessment.ranked.slice(0, 3).map((row, idx) => (
+                        <li key={`${idx}:${row.triggerType}`}>
+                          {row.triggerType} ({Math.round(Number(row.confidence ?? 0) * 100)}%, {row.impact}): {row.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {recommendationSuppression ? (
+                  <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-[11px] text-amber-900">
+                    Recommendation suppressed: {recommendationSuppression.reason}
+                  </div>
+                ) : null}
                 <div className="grid gap-2 text-xs md:grid-cols-5">
                   <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
                     Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}%
@@ -2301,10 +2341,18 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                       <div key={String(proposal.id)} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
                         <div className="text-xs font-medium">Recommendation #{String(proposal.id).slice(0, 8)}</div>
                         <div className="mt-1 text-xs">{String(proposal.rationaleText ?? 'CoachKit detected a safe adaptation opportunity based on recent athlete response.')}</div>
+                        {proposal.changeSummaryText ? <div className="mt-1 text-xs text-[var(--fg-muted)]">{String(proposal.changeSummaryText)}</div> : null}
                         <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
                           Triggers: {Array.isArray(proposal.triggerIds) && proposal.triggerIds.length ? proposal.triggerIds.length : 0} | Created:{' '}
                           {proposal.createdAt ? new Date(proposal.createdAt).toLocaleString() : 'N/A'}
                         </div>
+                        {Array.isArray(proposal.reasonChain) && proposal.reasonChain.length ? (
+                          <ul className="mt-2 list-disc pl-4 text-[11px] text-[var(--fg-muted)]">
+                            {proposal.reasonChain.slice(0, 4).map((line, idx) => (
+                              <li key={`${String(proposal.id)}:${idx}:${line}`}>{line}</li>
+                            ))}
+                          </ul>
+                        ) : null}
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(proposal.id))}>
                             Apply recommendation
