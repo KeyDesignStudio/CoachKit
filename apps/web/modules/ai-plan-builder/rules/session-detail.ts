@@ -442,12 +442,113 @@ function inferTargetMetric(params: { discipline: string; type: string }): Sessio
   return 'RPE';
 }
 
+function buildMainIntervalPrescription(params: {
+  discipline: string;
+  type: string;
+  mainMinutes: number;
+  variationSeed: number;
+}): Array<{ reps?: number; on: string; off?: string; intent: string }> {
+  const discipline = String(params.discipline ?? '').toLowerCase();
+  const type = String(params.type ?? '').toLowerCase();
+  const main = Math.max(10, Math.round(params.mainMinutes || 0));
+  const pick = <T,>(items: T[]): T => items[Math.abs(params.variationSeed) % items.length]!;
+
+  if (discipline === 'swim' && type === 'technique') {
+    const reps = Math.max(6, Math.min(16, Math.floor(main / 4)));
+    return [
+      pick([
+        { reps, on: '50m drill + swim by 25m', off: '20s easy', intent: 'Improve feel for water and stroke timing.' },
+        { reps: Math.max(4, Math.floor(reps / 2)), on: '100m pull buoy', off: '30s easy', intent: 'Build posture and catch quality under light aerobic load.' },
+      ]),
+    ];
+  }
+
+  if (discipline === 'bike' && type === 'endurance') {
+    const reps = Math.max(2, Math.min(5, Math.round(main / 15)));
+    const on = Math.max(8, Math.round(main / reps) - 2);
+    return [{ reps, on: `${on} min Z2 steady`, off: '2 min easy spin', intent: 'Build aerobic durability with smooth cadence control.' }];
+  }
+
+  if (discipline === 'bike' && (type === 'tempo' || type === 'threshold')) {
+    const work = type === 'threshold' ? 6 : 8;
+    const reps = Math.max(3, Math.min(6, Math.floor(main / (work + 3))));
+    const label = type === 'threshold' ? 'Z4 / RPE 7' : 'Z3 / RPE 6';
+    return [{ reps, on: `${work} min @ ${label}`, off: '3 min easy spin', intent: 'Develop repeatable race-relevant power.' }];
+  }
+
+  if (discipline === 'run' && type === 'endurance') {
+    return pick([
+      [{ on: `${Math.max(20, main - 5)} min conversational running`, intent: 'Build durable aerobic run economy without excess stress.' }],
+      [{ reps: Math.max(3, Math.round(main / 10)), on: '8 min steady', off: '2 min easy jog', intent: 'Accumulate controlled aerobic volume with form focus.' }],
+    ]);
+  }
+
+  if (discipline === 'run' && (type === 'tempo' || type === 'threshold')) {
+    const work = type === 'threshold' ? 5 : 7;
+    const reps = Math.max(3, Math.min(7, Math.floor(main / (work + 3))));
+    const pace = type === 'threshold' ? '10k effort / RPE 7' : 'HM effort / RPE 6';
+    return [{ reps, on: `${work} min @ ${pace}`, off: '2-3 min easy jog', intent: 'Raise sustainable speed while preserving run durability.' }];
+  }
+
+  if (discipline === 'strength' || type === 'strength') {
+    const rounds = Math.max(2, Math.min(5, Math.round(main / 10)));
+    return [{ reps: rounds, on: 'Strength circuit (squat/hinge/core)', off: '60-90s between exercises', intent: 'Improve resilience and movement quality.' }];
+  }
+
+  if (type === 'recovery') {
+    return [{ on: `${Math.max(15, main - 5)} min very easy aerobic`, intent: 'Facilitate recovery and maintain movement quality.' }];
+  }
+
+  return [{ on: `${Math.max(20, main - 5)} min steady aerobic`, intent: 'Build consistent foundational fitness.' }];
+}
+
+function renderRecipeIntervalLine(interval: {
+  reps?: number;
+  on: string;
+  off?: string;
+  intent: string;
+}): string {
+  const repsText = typeof interval.reps === 'number' ? `${interval.reps} x ` : '';
+  const restText = interval.off ? `, ${interval.off}` : '';
+  return `${repsText}${interval.on}${restText}. ${interval.intent}`;
+}
+
+function mapRecipeToSessionStructure(params: {
+  recipe: SessionRecipeV2;
+  fallbackIntensity: { zone: 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5'; rpe: number; notes: string };
+}): SessionDetailV1['structure'] {
+  return params.recipe.blocks.map((block) => {
+    const metric = block.target?.metric;
+    const zone =
+      metric === 'ZONE'
+        ? (block.target?.value.match(/Z[1-5]/)?.[0] as 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5' | undefined)
+        : params.fallbackIntensity.zone;
+    const rpeMatch = block.target?.value.match(/RPE\s*(\d(?:\.\d)?)/i);
+    const rpe = rpeMatch ? Number(rpeMatch[1]) : params.fallbackIntensity.rpe;
+    const intervalLines = Array.isArray(block.intervals) ? block.intervals.map(renderRecipeIntervalLine) : [];
+    const noteLines = Array.isArray(block.notes) ? block.notes : [];
+    const steps = [...intervalLines, ...noteLines].join(' ');
+
+    return {
+      blockType: block.key,
+      ...(typeof block.durationMinutes === 'number' ? { durationMinutes: block.durationMinutes } : {}),
+      intensity: {
+        zone: zone ?? params.fallbackIntensity.zone,
+        rpe,
+        notes: block.target?.notes || params.fallbackIntensity.notes,
+      },
+      steps: steps || 'Execute with controlled form and smooth pacing.',
+    };
+  });
+}
+
 function buildSessionRecipeV2(params: {
   discipline: string;
   type: string;
   purpose: string;
   structure: SessionDetailV1['structure'];
   explainability: NonNullable<SessionDetailV1['explainability']>;
+  variationSeed: number;
 }): SessionRecipeV2 {
   const metric = inferTargetMetric({ discipline: params.discipline, type: params.type });
   const defaultValue =
@@ -483,19 +584,18 @@ function buildSessionRecipeV2(params: {
     };
 
     if (b.blockType === 'main' || b.blockType === 'drill' || b.blockType === 'strength') {
+      const intervals = buildMainIntervalPrescription({
+        discipline: params.discipline,
+        type: params.type,
+        mainMinutes: Number(b.durationMinutes ?? 0),
+        variationSeed: params.variationSeed,
+      });
       entry.target = {
         metric,
         value: defaultValue,
         notes: b.intensity?.notes || undefined,
       };
-      if (/\bx\b/i.test(b.steps)) {
-        entry.intervals = [
-          {
-            on: 'Structured work set',
-            intent: 'Deliver the primary adaptation with controlled execution.',
-          },
-        ];
-      }
+      entry.intervals = intervals;
     }
 
     return entry;
@@ -539,8 +639,17 @@ export function buildDeterministicSessionDetailV1(params: {
   };
 }): SessionDetailV1 {
   const discipline = String(params.discipline || '').trim().toLowerCase();
-  const type = String(params.type || '').trim().toLowerCase();
-  const durationMinutes = clampInt(params.durationMinutes, 0, 10_000);
+  const requestedType = String(params.type || '').trim().toLowerCase();
+  const fatigueState = String(params.context?.fatigueState ?? '').toLowerCase();
+  const type =
+    fatigueState === 'cooked' && (requestedType === 'threshold' || requestedType === 'tempo')
+      ? 'recovery'
+      : fatigueState === 'fatigued' && requestedType === 'threshold'
+        ? 'tempo'
+        : requestedType;
+  const requestedDuration = clampInt(params.durationMinutes, 0, 10_000);
+  const availableTime = Number(params.context?.availableTimeMinutes ?? 0);
+  const durationMinutes = Number.isFinite(availableTime) && availableTime > 0 ? Math.max(20, Math.min(requestedDuration, Math.round(availableTime))) : requestedDuration;
 
   const displayDiscipline = discipline ? titleCaseWord(discipline) : 'Workout';
   const displayType = type ? titleCaseWord(type) : 'Session';
@@ -566,10 +675,8 @@ export function buildDeterministicSessionDetailV1(params: {
   };
   const intensity = intensityByType[type] ?? intensityByType.endurance;
 
-  const fatigueState = String(params.context?.fatigueState ?? '').toLowerCase();
   const equipment = String(params.context?.equipment ?? '').toLowerCase();
   const environment = (params.context?.environmentTags ?? []).map((v) => String(v).toLowerCase());
-  const availableTime = Number(params.context?.availableTimeMinutes ?? 0);
   const variationSeed = Math.abs(
     (Number(params.context?.weekIndex ?? 0) + 1) * 31 +
       (Number(params.context?.dayOfWeek ?? 0) + 1) * 17 +
@@ -794,12 +901,17 @@ export function buildDeterministicSessionDetailV1(params: {
     purpose,
     structure,
     explainability,
+    variationSeed,
+  });
+  const recipeDrivenStructure = mapRecipeToSessionStructure({
+    recipe: recipeV2,
+    fallbackIntensity: intensity,
   });
 
   return {
     objective: `${displayType} ${displayDiscipline.toLowerCase()} session`.trim(),
     purpose,
-    structure,
+    structure: recipeDrivenStructure,
     targets: {
       primaryMetric: 'RPE',
       notes:
