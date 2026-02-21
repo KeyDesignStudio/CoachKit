@@ -1615,6 +1615,57 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, request, writeAuditEvent]
   );
 
+  const applySafeQueuedRecommendations = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!draftPlanId) return;
+    setBusy('apply-safe-recommendations');
+    setError(null);
+    setInfo(null);
+    try {
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const data = await request<{
+        approvedCount?: number;
+        failedCount?: number;
+        draft?: any | null;
+        appliedSummaries?: Array<{ proposalId: string; summary: string }>;
+      }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/recommendations/apply-safe`, {
+        method: 'POST',
+        data: { aiPlanDraftId: draftPlanId, maxToApply: 10 },
+      });
+      const afterDraft = data.draft ?? draftPlanLatest ?? null;
+      const afterSessions = Array.isArray(afterDraft?.sessions) ? afterDraft.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions,
+        scopeLabel: 'Safe recommendations applied',
+      });
+      const appliedSummaries = Array.isArray(data.appliedSummaries)
+        ? data.appliedSummaries.map((s) => `${String(s.proposalId).slice(0, 8)}: ${String(s.summary || '')}`).slice(0, 4)
+        : [];
+      setDraftPlanLatest(afterDraft);
+      setChangeSummary({
+        title: summary.title,
+        lines: [...summary.lines, ...appliedSummaries],
+        createdAt: new Date().toISOString(),
+      });
+      setInfo(
+        `Applied ${Number(data.approvedCount ?? 0)} safe recommendation${Number(data.approvedCount ?? 0) === 1 ? '' : 's'}${
+          Number(data.failedCount ?? 0) ? ` (${Number(data.failedCount)} skipped)` : ''
+        }.`
+      );
+      await refreshQueuedRecommendations({ silent: true });
+      await writeAuditEvent('AI_ADAPTATION_QUEUE_APPLY_SAFE_BATCH', {
+        approvedCount: Number(data.approvedCount ?? 0),
+        failedCount: Number(data.failedCount ?? 0),
+        appliedSummaries: data.appliedSummaries ?? [],
+      });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply safe recommendations.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest, refreshQueuedRecommendations, request, writeAuditEvent]);
+
   const shareSkeletonWithAthlete = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!sessionsByWeek.length || !draftPlanId) return;
@@ -2202,6 +2253,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                     ) : null}
                     <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshQueuedRecommendations()}>
                       Refresh recommendations
+                    </Button>
+                    <Button size="sm" variant="secondary" disabled={busy != null || queuedRecommendations.length === 0} onClick={() => void applySafeQueuedRecommendations()}>
+                      Apply safe recommendations
                     </Button>
                   </div>
                 </div>
