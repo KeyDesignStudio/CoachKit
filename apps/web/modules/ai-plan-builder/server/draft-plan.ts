@@ -30,6 +30,7 @@ import type { SessionDetailBlockType, SessionDetailV1 } from '../rules/session-d
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 import { buildEffectivePlanInputContext } from './effective-input';
+import { refreshPolicyRuntimeOverridesFromDb } from './policy-tuning';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -572,6 +573,7 @@ export async function generateAiDraftPlanV1(params: {
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+  await refreshPolicyRuntimeOverridesFromDb();
 
   const parsedSetup = draftPlanSetupV1Schema.parse(params.setup);
   const setup = applyRequestContextToSetup({

@@ -718,6 +718,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         setSetup((prev) => {
           const seeded = buildSetupFromProfile(profile);
           const fromDraft = draft?.setupJson && typeof draft.setupJson === 'object' ? (draft.setupJson as Record<string, any>) : null;
+          const draftWeeklyMinutes = Number(fromDraft?.weeklyAvailabilityMinutes);
+          const draftMaxIntensity = Number(fromDraft?.maxIntensityDaysPerWeek);
+          const draftMaxDoubles = Number(fromDraft?.maxDoublesPerWeek);
           return {
             ...seeded,
             startDate: typeof fromDraft?.startDate === 'string' ? fromDraft.startDate : prev.startDate,
@@ -731,8 +734,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             weeklyAvailabilityDays: Array.isArray(fromDraft?.weeklyAvailabilityDays)
               ? fromDraft.weeklyAvailabilityDays.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v) && v >= 0 && v <= 6)
               : seeded.weeklyAvailabilityDays,
-            weeklyAvailabilityMinutes: Number.isFinite(Number(fromDraft?.weeklyAvailabilityMinutes))
-              ? Number(fromDraft.weeklyAvailabilityMinutes)
+            weeklyAvailabilityMinutes: Number.isFinite(draftWeeklyMinutes)
+              ? draftWeeklyMinutes
               : seeded.weeklyAvailabilityMinutes,
             disciplineEmphasis:
               fromDraft?.disciplineEmphasis === 'balanced' ||
@@ -745,11 +748,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               fromDraft?.riskTolerance === 'low' || fromDraft?.riskTolerance === 'med' || fromDraft?.riskTolerance === 'high'
                 ? fromDraft.riskTolerance
                 : seeded.riskTolerance,
-            maxIntensityDaysPerWeek: Number.isFinite(Number(fromDraft?.maxIntensityDaysPerWeek))
-              ? Number(fromDraft.maxIntensityDaysPerWeek)
+            maxIntensityDaysPerWeek: Number.isFinite(draftMaxIntensity)
+              ? draftMaxIntensity
               : seeded.maxIntensityDaysPerWeek,
-            maxDoublesPerWeek: Number.isFinite(Number(fromDraft?.maxDoublesPerWeek))
-              ? Number(fromDraft.maxDoublesPerWeek)
+            maxDoublesPerWeek: Number.isFinite(draftMaxDoubles)
+              ? draftMaxDoubles
               : seeded.maxDoublesPerWeek,
             coachGuidanceText: typeof fromDraft?.coachGuidanceText === 'string' ? fromDraft.coachGuidanceText : seeded.coachGuidanceText,
             policyProfileId:

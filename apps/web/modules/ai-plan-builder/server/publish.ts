@@ -11,6 +11,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeStableSha256 } from '../rules/stable-hash';
 import { summarizePlanChanges } from '../rules/publish-summary';
 import { evaluateDraftQualityGate } from '../rules/constraint-validator';
+import { refreshPolicyRuntimeOverridesFromDb } from './policy-tuning';
 
 export const publishDraftPlanSchema = z.object({
   aiPlanDraftId: z.string().min(1),
@@ -24,6 +25,7 @@ export async function publishAiDraftPlan(params: {
 }) {
   requireAiPlanBuilderV1Enabled();
   await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+  await refreshPolicyRuntimeOverridesFromDb();
 
   const now = params.now ?? new Date();
 

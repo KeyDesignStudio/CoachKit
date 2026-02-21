@@ -89,11 +89,28 @@ const PROFILES: Record<PlanningPolicyProfileId, PlanningPolicyProfile> = {
   },
 };
 
-type PlanningPolicyProfileOverride = Partial<Omit<PlanningPolicyProfile, 'id' | 'version'>> & {
+export type PlanningPolicyProfileOverride = Omit<Partial<PlanningPolicyProfile>, 'id' | 'version' | 'weekMinuteBands'> & {
   weekMinuteBands?: Partial<PlanningPolicyProfile['weekMinuteBands']>;
 };
+export type PlanningPolicyProfileOverrideMap = Partial<Record<PlanningPolicyProfileId, PlanningPolicyProfileOverride>>;
 
 let cachedProfiles: Record<PlanningPolicyProfileId, PlanningPolicyProfile> | null = null;
+let runtimeOverrides: PlanningPolicyProfileOverrideMap | null = null;
+
+function invalidateProfileCache() {
+  cachedProfiles = null;
+}
+
+export function setPlanningPolicyRuntimeOverrides(
+  overrides: PlanningPolicyProfileOverrideMap | null
+) {
+  runtimeOverrides = overrides;
+  invalidateProfileCache();
+}
+
+export function getPlanningPolicyRuntimeOverrides() {
+  return runtimeOverrides;
+}
 
 function getProfiles(): Record<PlanningPolicyProfileId, PlanningPolicyProfile> {
   if (cachedProfiles) return cachedProfiles;
@@ -103,13 +120,8 @@ function getProfiles(): Record<PlanningPolicyProfileId, PlanningPolicyProfile> {
     'coachkit-performance-v1': { ...PROFILES['coachkit-performance-v1'], weekMinuteBands: { ...PROFILES['coachkit-performance-v1'].weekMinuteBands } },
   };
 
-  const raw = process.env.COACHKIT_APB_POLICY_OVERRIDES_JSON;
-  if (!raw) {
-    cachedProfiles = next;
-    return next;
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<Record<PlanningPolicyProfileId, PlanningPolicyProfileOverride>>;
+  const applyOverrides = (parsed: Partial<Record<PlanningPolicyProfileId, PlanningPolicyProfileOverride>> | null | undefined) => {
+    if (!parsed) return;
     const ids: PlanningPolicyProfileId[] = ['coachkit-conservative-v1', 'coachkit-safe-v1', 'coachkit-performance-v1'];
     for (const id of ids) {
       const override = parsed?.[id];
@@ -125,9 +137,18 @@ function getProfiles(): Record<PlanningPolicyProfileId, PlanningPolicyProfile> {
         },
       };
     }
-  } catch {
-    // Ignore malformed env override and keep defaults.
+  };
+
+  const raw = process.env.COACHKIT_APB_POLICY_OVERRIDES_JSON;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Partial<Record<PlanningPolicyProfileId, PlanningPolicyProfileOverride>>;
+      applyOverrides(parsed);
+    } catch {
+      // Ignore malformed env override and keep defaults.
+    }
   }
+  applyOverrides(runtimeOverrides ?? null);
 
   cachedProfiles = next;
   return next;
