@@ -1863,6 +1863,45 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, request, writeAuditEvent]
   );
 
+  const reopenTimelineProposal = useCallback(
+    async (proposalId: string) => {
+      const id = String(proposalId ?? '').trim();
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!id || !draftPlanId) return;
+      setBusy('reopen-proposal');
+      setError(null);
+      setInfo(null);
+      try {
+        const data = await request<{
+          proposal?: { id?: string };
+          preview?: AgentProposalPreview['preview'];
+          applySafety?: AgentProposalPreview['applySafety'];
+        }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(id)}/reopen`, {
+          method: 'POST',
+          data: { aiPlanDraftId: draftPlanId },
+        });
+        const reopenedId = String(data.proposal?.id ?? '');
+        setManualProposalPreview({
+          proposalId: reopenedId,
+          proposedCount: Number(data.preview?.summary?.sessionsChangedCount ?? 0),
+          preview: data.preview ?? null,
+          applySafety: data.applySafety ?? null,
+        });
+        setInfo(`Proposal re-opened as #${reopenedId.slice(0, 8)}. Review and apply.`);
+        await writeAuditEvent('COACH_TIMELINE_PROPOSAL_REOPENED', {
+          sourceProposalId: id,
+          reopenedProposalId: reopenedId,
+        });
+        await refreshCoachChangeTimeline({ silent: true });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to re-open proposal.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, refreshCoachChangeTimeline, request, writeAuditEvent]
+  );
+
   const applySafeQueuedRecommendations = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!draftPlanId) return;
@@ -2830,6 +2869,15 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                           </Button>
                           <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(entry.proposalId))}>
                             Discard
+                          </Button>
+                        </div>
+                      ) : null}
+                      {entry.source === 'proposal' &&
+                      entry.proposalId &&
+                      (entry.status === 'APPLIED' || entry.status === 'REJECTED' || entry.status === 'EXPIRED') ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void reopenTimelineProposal(String(entry.proposalId))}>
+                            Re-open as new proposal
                           </Button>
                         </div>
                       ) : null}

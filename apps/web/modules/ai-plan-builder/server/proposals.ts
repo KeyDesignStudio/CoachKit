@@ -249,6 +249,69 @@ export async function getPlanChangeProposal(params: {
   });
 }
 
+export async function reopenPlanChangeProposalAsNew(params: {
+  coachId: string;
+  athleteId: string;
+  proposalId: string;
+  aiPlanDraftId: string;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const source = await prisma.planChangeProposal.findFirst({
+    where: { id: params.proposalId, athleteId: params.athleteId, coachId: params.coachId },
+    select: {
+      id: true,
+      draftPlanId: true,
+      diffJson: true,
+      rationaleText: true,
+      triggerIds: true,
+      status: true,
+    },
+  });
+  if (!source) throw new ApiError(404, 'NOT_FOUND', 'Proposal not found.');
+  if (!source.draftPlanId || String(source.draftPlanId) !== String(params.aiPlanDraftId)) {
+    throw new ApiError(400, 'INVALID_DRAFT_PLAN', 'aiPlanDraftId does not match proposal draftPlanId.');
+  }
+
+  const parsed = planDiffSchema.safeParse(source.diffJson ?? null);
+  if (!parsed.success) {
+    throw new ApiError(400, 'INVALID_DIFF', 'Source proposal diffJson is invalid.');
+  }
+
+  const created = await createCoachControlProposalFromDiff({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    aiPlanDraftId: params.aiPlanDraftId,
+    diffJson: parsed.data,
+    rationaleText: `${String(source.rationaleText ?? 'Proposal')} (re-opened from ${String(source.id).slice(0, 8)})`,
+    metadata: {
+      source: 'proposal_reopen',
+      reopenedFromProposalId: String(source.id),
+      reopenedFromStatus: String(source.status),
+      triggerIds: source.triggerIds ?? [],
+    },
+  });
+
+  await prisma.planChangeAudit.create({
+    data: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      proposalId: String(created.proposal.id),
+      eventType: 'REOPEN_PROPOSAL',
+      actorType: 'COACH',
+      draftPlanId: params.aiPlanDraftId,
+      changeSummaryText: `Re-opened proposal ${String(source.id).slice(0, 8)} as ${String(created.proposal.id).slice(0, 8)}.`,
+      diffJson: {
+        sourceProposalId: String(source.id),
+        newProposalId: String(created.proposal.id),
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  return created;
+}
+
 export async function rejectPlanChangeProposal(params: {
   coachId: string;
   athleteId: string;
