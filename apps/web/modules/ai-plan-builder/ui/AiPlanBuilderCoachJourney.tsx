@@ -39,8 +39,16 @@ type TrainingRequestForm = {
   goalTimeline: string;
   weeklyMinutes: string;
   availabilityDays: string[];
+  nonNegotiableDays: string[];
+  preferredKeyDays: string[];
+  dailyTimeWindows: Partial<Record<(typeof DAY_SHORTS)[number], 'any' | 'am' | 'midday' | 'pm' | 'evening'>>;
   experienceLevel: string;
   injuryStatus: string;
+  disciplineInjuryNotes: string;
+  equipment: '' | 'mixed' | 'trainer' | 'road' | 'treadmill' | 'pool' | 'gym';
+  environmentTags: string[];
+  fatigueState: '' | 'fresh' | 'normal' | 'fatigued' | 'cooked';
+  availableTimeMinutes: string;
   constraintsNotes: string;
 };
 
@@ -85,6 +93,30 @@ const DAY_NAME_TO_SHORT: Record<string, string> = {
 const DAY_SHORTS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const DAY_SHORTS_MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const GOAL_TIMELINE_OPTIONS = ['No date in mind', 'In 6-8 weeks', 'In 2-3 months', 'In 3-6 months', 'In 6-12 months'];
+const EQUIPMENT_OPTIONS = [
+  { value: '', label: 'Select equipment context' },
+  { value: 'mixed', label: 'Mixed' },
+  { value: 'trainer', label: 'Bike trainer' },
+  { value: 'road', label: 'Road/outdoor bike' },
+  { value: 'treadmill', label: 'Treadmill' },
+  { value: 'pool', label: 'Pool access' },
+  { value: 'gym', label: 'Gym access' },
+] as const;
+const ENVIRONMENT_OPTIONS = ['heat', 'hills', 'altitude', 'wind', 'indoor', 'outdoor'] as const;
+const FATIGUE_OPTIONS = [
+  { value: '', label: 'Select readiness' },
+  { value: 'fresh', label: 'Fresh' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'fatigued', label: 'Fatigued' },
+  { value: 'cooked', label: 'Cooked' },
+] as const;
+const TIME_WINDOW_OPTIONS = [
+  { value: 'any', label: 'Any time' },
+  { value: 'am', label: 'AM' },
+  { value: 'midday', label: 'Midday' },
+  { value: 'pm', label: 'PM' },
+  { value: 'evening', label: 'Evening' },
+] as const;
 
 function formatApiErrorMessage(e: ApiClientError): string {
   if (e.status === 429 && e.code === 'LLM_RATE_LIMITED') return 'AI is temporarily busy. Please retry.';
@@ -114,19 +146,53 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
     goalTimeline: '',
     weeklyMinutes: profile?.weeklyMinutesTarget != null ? String(profile.weeklyMinutesTarget) : '',
     availabilityDays: dayShortsFromProfileDays(profile?.availableDays ?? null),
+    nonNegotiableDays: [],
+    preferredKeyDays: [],
+    dailyTimeWindows: {},
     experienceLevel: String(profile?.experienceLevel ?? ''),
     injuryStatus: String(profile?.injuryStatus ?? ''),
+    disciplineInjuryNotes: '',
+    equipment: '',
+    environmentTags: [],
+    fatigueState: '',
+    availableTimeMinutes: '',
     constraintsNotes: String(profile?.constraintsNotes ?? ''),
   };
 }
 
+function normalizeDayShortList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((d) => String(d ?? '').trim())
+        .filter((d) => DAY_SHORTS.includes(d as any) || Object.keys(DAY_NAME_TO_SHORT).includes(d))
+        .map((d) => (DAY_SHORTS.includes(d as any) ? d : DAY_NAME_TO_SHORT[d]))
+    )
+  );
+}
+
 function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
   const map = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const availability = Array.isArray(map.availability_days) ? map.availability_days : [];
-  const availabilityDays = availability
-    .map((d) => String(d ?? '').trim())
-    .filter((d) => DAY_SHORTS.includes(d as any) || Object.keys(DAY_NAME_TO_SHORT).includes(d))
-    .map((d) => (DAY_SHORTS.includes(d as any) ? d : DAY_NAME_TO_SHORT[d]));
+  const availabilityDays = normalizeDayShortList(map.availability_days);
+  const nonNegotiableDays = normalizeDayShortList(map.non_negotiable_days);
+  const preferredKeyDays = normalizeDayShortList(map.preferred_key_days);
+  const environmentTags = Array.isArray(map.environment_tags)
+    ? Array.from(new Set(map.environment_tags.map((v) => String(v ?? '').toLowerCase().trim()).filter((v) => ENVIRONMENT_OPTIONS.includes(v as any))))
+    : [];
+  const equipmentValue = String(map.equipment ?? '').toLowerCase();
+  const fatigueValue = String(map.fatigue_state ?? '').toLowerCase();
+  const dailyTimeWindows = (() => {
+    const out: Partial<Record<(typeof DAY_SHORTS)[number], 'any' | 'am' | 'midday' | 'pm' | 'evening'>> = {};
+    const source = map.daily_time_windows && typeof map.daily_time_windows === 'object' ? (map.daily_time_windows as Record<string, unknown>) : {};
+    for (const day of DAY_SHORTS) {
+      const rawValue = String(source[day] ?? '').toLowerCase();
+      if (rawValue === 'any' || rawValue === 'am' || rawValue === 'midday' || rawValue === 'pm' || rawValue === 'evening') {
+        out[day] = rawValue;
+      }
+    }
+    return out;
+  })();
 
   return {
     goalDetails: String(map.goal_details ?? ''),
@@ -139,9 +205,23 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
     goalTimeline: String(map.goal_timeline ?? ''),
     weeklyMinutes: map.weekly_minutes != null ? String(map.weekly_minutes) : '',
-    availabilityDays: Array.from(new Set(availabilityDays)),
+    availabilityDays,
+    nonNegotiableDays,
+    preferredKeyDays,
+    dailyTimeWindows,
     experienceLevel: String(map.experience_level ?? ''),
     injuryStatus: String(map.injury_status ?? ''),
+    disciplineInjuryNotes: String(map.discipline_injury_notes ?? ''),
+    equipment:
+      equipmentValue === 'mixed' || equipmentValue === 'trainer' || equipmentValue === 'road' || equipmentValue === 'treadmill' || equipmentValue === 'pool' || equipmentValue === 'gym'
+        ? (equipmentValue as TrainingRequestForm['equipment'])
+        : '',
+    environmentTags,
+    fatigueState:
+      fatigueValue === 'fresh' || fatigueValue === 'normal' || fatigueValue === 'fatigued' || fatigueValue === 'cooked'
+        ? (fatigueValue as TrainingRequestForm['fatigueState'])
+        : '',
+    availableTimeMinutes: map.available_time_minutes != null ? String(map.available_time_minutes) : '',
     constraintsNotes: String(map.constraints_notes ?? ''),
   };
 }
@@ -156,8 +236,16 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     goal_timeline: form.goalTimeline || null,
     weekly_minutes: form.weeklyMinutes ? Number(form.weeklyMinutes) : null,
     availability_days: form.availabilityDays,
+    non_negotiable_days: form.nonNegotiableDays,
+    preferred_key_days: form.preferredKeyDays,
+    daily_time_windows: form.dailyTimeWindows,
     experience_level: form.experienceLevel.trim() || null,
     injury_status: form.injuryStatus.trim() || null,
+    discipline_injury_notes: form.disciplineInjuryNotes.trim() || null,
+    equipment: form.equipment || null,
+    environment_tags: form.environmentTags,
+    fatigue_state: form.fatigueState || null,
+    available_time_minutes: form.availableTimeMinutes ? Number(form.availableTimeMinutes) : null,
     constraints_notes: form.constraintsNotes.trim() || null,
   };
 }
@@ -329,7 +417,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
     const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
-    const weeklyAvailabilityDays = dayIndicesFromShorts(trainingRequest.availabilityDays);
+    const weeklyAvailabilityDaysRaw = dayIndicesFromShorts(trainingRequest.availabilityDays);
+    const nonNegotiableDayIdx = new Set(dayIndicesFromShorts(trainingRequest.nonNegotiableDays));
+    const weeklyAvailabilityDays = weeklyAvailabilityDaysRaw.filter((d) => !nonNegotiableDayIdx.has(d));
+    const preferredKeyDays = trainingRequest.preferredKeyDays.filter((d) => !trainingRequest.nonNegotiableDays.includes(d));
+    const dailyWindowsText = DAY_SHORTS_MON_FIRST.map((day) => {
+      const v = trainingRequest.dailyTimeWindows[day as (typeof DAY_SHORTS)[number]];
+      if (!v || v === 'any') return null;
+      return `${day}:${v.toUpperCase()}`;
+    })
+      .filter(Boolean)
+      .join(', ');
 
     const coachGuidanceText = [
       trainingRequest.goalDetails.trim(),
@@ -337,6 +435,14 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       trainingRequest.experienceLevel.trim() ? `Experience: ${trainingRequest.experienceLevel.trim()}` : '',
       trainingRequest.constraintsNotes.trim() ? `Constraints: ${trainingRequest.constraintsNotes.trim()}` : '',
       trainingRequest.injuryStatus.trim() ? `Injury/Pain: ${trainingRequest.injuryStatus.trim()}` : '',
+      trainingRequest.disciplineInjuryNotes.trim() ? `Discipline injury notes: ${trainingRequest.disciplineInjuryNotes.trim()}` : '',
+      trainingRequest.equipment ? `Equipment: ${trainingRequest.equipment}` : '',
+      trainingRequest.environmentTags.length ? `Environment: ${trainingRequest.environmentTags.join(', ')}` : '',
+      trainingRequest.fatigueState ? `Readiness: ${trainingRequest.fatigueState}` : '',
+      trainingRequest.availableTimeMinutes ? `Typical session time: ${trainingRequest.availableTimeMinutes} min` : '',
+      trainingRequest.nonNegotiableDays.length ? `Non-negotiable off days: ${trainingRequest.nonNegotiableDays.join(', ')}` : '',
+      preferredKeyDays.length ? `Preferred key days: ${preferredKeyDays.join(', ')}` : '',
+      dailyWindowsText ? `Daily windows: ${dailyWindowsText}` : '',
     ]
       .filter(Boolean)
       .join('\n');
@@ -749,8 +855,16 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           goalTimeline: trainingRequest.goalTimeline || undefined,
           weeklyMinutes: trainingRequest.weeklyMinutes ? Number(trainingRequest.weeklyMinutes) : undefined,
           availabilityDays: trainingRequest.availabilityDays,
+          nonNegotiableDays: trainingRequest.nonNegotiableDays,
+          preferredKeyDays: trainingRequest.preferredKeyDays,
+          dailyTimeWindows: trainingRequest.dailyTimeWindows,
           experienceLevel: trainingRequest.experienceLevel || undefined,
           injuryStatus: trainingRequest.injuryStatus || undefined,
+          disciplineInjuryNotes: trainingRequest.disciplineInjuryNotes || undefined,
+          equipment: trainingRequest.equipment || undefined,
+          environmentTags: trainingRequest.environmentTags.length ? trainingRequest.environmentTags : undefined,
+          fatigueState: trainingRequest.fatigueState || undefined,
+          availableTimeMinutes: trainingRequest.availableTimeMinutes ? Number(trainingRequest.availableTimeMinutes) : undefined,
           constraintsNotes: trainingRequest.constraintsNotes || undefined,
         },
       };
@@ -1044,12 +1158,180 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
+              <label className="mb-1 block text-xs font-medium">Non-negotiable off days</label>
+              <div className="flex flex-wrap gap-2">
+                {DAY_SHORTS_MON_FIRST.map((day) => {
+                  const selected = trainingRequest.nonNegotiableDays.includes(day);
+                  return (
+                    <button
+                      key={`off:${day}`}
+                      type="button"
+                      disabled={!hasOpenRequest}
+                      onClick={() =>
+                        setTrainingRequest((prev) => ({
+                          ...prev,
+                          nonNegotiableDays: selected ? prev.nonNegotiableDays.filter((d) => d !== day) : [...prev.nonNegotiableDays, day],
+                          availabilityDays: selected ? prev.availabilityDays : prev.availabilityDays.filter((d) => d !== day),
+                          preferredKeyDays: selected ? prev.preferredKeyDays : prev.preferredKeyDays.filter((d) => d !== day),
+                        }))
+                      }
+                      className={`rounded-md border px-3 py-1.5 text-sm ${
+                        selected ? 'border-rose-500 bg-rose-500 text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Preferred key-session days</label>
+              <div className="flex flex-wrap gap-2">
+                {DAY_SHORTS_MON_FIRST.map((day) => {
+                  const selected = trainingRequest.preferredKeyDays.includes(day);
+                  const disabled = !hasOpenRequest || trainingRequest.nonNegotiableDays.includes(day);
+                  return (
+                    <button
+                      key={`key:${day}`}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() =>
+                        setTrainingRequest((prev) => ({
+                          ...prev,
+                          preferredKeyDays: selected ? prev.preferredKeyDays.filter((d) => d !== day) : [...prev.preferredKeyDays, day],
+                        }))
+                      }
+                      className={`rounded-md border px-3 py-1.5 text-sm ${
+                        selected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
+                      } ${disabled && !selected ? 'opacity-50' : ''}`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium">Daily time windows (optional)</label>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {DAY_SHORTS_MON_FIRST.map((day) => (
+                <div key={`window:${day}`}>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">{day}</label>
+                  <Select
+                    value={trainingRequest.dailyTimeWindows[day as (typeof DAY_SHORTS)[number]] ?? 'any'}
+                    onChange={(e) =>
+                      setTrainingRequest((prev) => ({
+                        ...prev,
+                        dailyTimeWindows: {
+                          ...prev.dailyTimeWindows,
+                          [day]: e.target.value as 'any' | 'am' | 'midday' | 'pm' | 'evening',
+                        },
+                      }))
+                    }
+                    disabled={!hasOpenRequest}
+                  >
+                    {TIME_WINDOW_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
               <label className="mb-1 block text-xs font-medium">Experience level</label>
               <Input value={trainingRequest.experienceLevel} onChange={(e) => setTrainingRequest((p) => ({ ...p, experienceLevel: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Current injury/pain status</label>
               <Input value={trainingRequest.injuryStatus} onChange={(e) => setTrainingRequest((p) => ({ ...p, injuryStatus: e.target.value }))} disabled={!hasOpenRequest} />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium">Discipline-specific injury limits</label>
+              <Input
+                value={trainingRequest.disciplineInjuryNotes}
+                onChange={(e) => setTrainingRequest((p) => ({ ...p, disciplineInjuryNotes: e.target.value }))}
+                disabled={!hasOpenRequest}
+                placeholder="e.g. No downhill run reps while shin settles"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Typical single-session time available (minutes)</label>
+              <Input
+                value={trainingRequest.availableTimeMinutes}
+                onChange={(e) => setTrainingRequest((p) => ({ ...p, availableTimeMinutes: e.target.value }))}
+                inputMode="numeric"
+                disabled={!hasOpenRequest}
+                placeholder="e.g. 60"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium">Equipment context</label>
+              <Select
+                value={trainingRequest.equipment}
+                onChange={(e) => setTrainingRequest((p) => ({ ...p, equipment: e.target.value as TrainingRequestForm['equipment'] }))}
+                disabled={!hasOpenRequest}
+              >
+                {EQUIPMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Current readiness / fatigue</label>
+              <Select
+                value={trainingRequest.fatigueState}
+                onChange={(e) => setTrainingRequest((p) => ({ ...p, fatigueState: e.target.value as TrainingRequestForm['fatigueState'] }))}
+                disabled={!hasOpenRequest}
+              >
+                {FATIGUE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium">Environment factors</label>
+            <div className="flex flex-wrap gap-2">
+              {ENVIRONMENT_OPTIONS.map((tag) => {
+                const selected = trainingRequest.environmentTags.includes(tag);
+                return (
+                  <button
+                    key={`env:${tag}`}
+                    type="button"
+                    disabled={!hasOpenRequest}
+                    onClick={() =>
+                      setTrainingRequest((prev) => ({
+                        ...prev,
+                        environmentTags: selected ? prev.environmentTags.filter((v) => v !== tag) : [...prev.environmentTags, tag],
+                      }))
+                    }
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      selected ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

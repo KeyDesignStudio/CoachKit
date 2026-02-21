@@ -38,13 +38,18 @@ export type DraftPlanSetupV1 = {
   requestContext?: {
     goalDetails?: string;
     goalFocus?: string;
+    primaryDisciplineFocus?: 'balanced' | 'swim' | 'bike' | 'run';
     eventName?: string;
     eventDate?: string;
     goalTimeline?: string;
     weeklyMinutes?: number;
     availabilityDays?: string[];
+    nonNegotiableDays?: string[];
+    preferredKeyDays?: string[];
+    dailyTimeWindows?: Record<string, 'any' | 'am' | 'midday' | 'pm' | 'evening'>;
     experienceLevel?: string;
     injuryStatus?: string;
+    disciplineInjuryNotes?: string;
     constraintsNotes?: string;
     equipment?: string;
     environmentTags?: string[];

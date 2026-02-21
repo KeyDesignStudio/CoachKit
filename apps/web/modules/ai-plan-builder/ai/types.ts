@@ -146,6 +146,9 @@ export type GenerateSessionDetailInput = {
     maxIntensityDaysPerWeek: number;
     longSessionDay: number | null;
     weeklyMinutesTarget: number;
+    nonNegotiableDays?: string[];
+    preferredKeyDays?: string[];
+    dailyTimeWindows?: Record<string, 'any' | 'am' | 'midday' | 'pm' | 'evening'>;
     equipment?: string;
     environmentTags?: string[];
     fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked';
