@@ -11,10 +11,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
+import { addDaysToDayKey, isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
 import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
 
-import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart } from '../lib/week-start';
+import { DAY_NAMES_SUN0, dayOffsetFromWeekStart, daySortKey, normalizeWeekStart } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
 
 type AthleteProfileSummary = {
@@ -274,22 +274,19 @@ function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
   return `Week ${weekIndex + 1} (${startLabel} - ${endLabel})`;
 }
 
+function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
+  if (!isDayKey(dayKey)) return dayKey;
+  const date = parseDayKeyToUtcDate(dayKey);
+  const jsDay = date.getUTCDay();
+  const startJsDay = weekStart === 'sunday' ? 0 : 1;
+  const diff = (jsDay - startJsDay + 7) % 7;
+  return addDaysToDayKey(dayKey, -diff);
+}
+
 function formatDayKeyDate(dayKey: string): string {
   if (!isDayKey(dayKey)) return '';
   const d = parseDayKeyToUtcDate(dayKey);
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
-}
-
-function formatSessionHeadline(session: any): string {
-  const dayKey = String(session?.dayKey ?? '');
-  const discipline = String(session?.discipline ?? '').toUpperCase();
-  const type = String(session?.type ?? '').toLowerCase();
-  if (isDayKey(dayKey)) {
-    const d = parseDayKeyToUtcDate(dayKey);
-    const dayShort = DAY_SHORTS[d.getUTCDay()] ?? 'Day';
-    return `${dayShort} (${formatDayKeyDate(dayKey)}) ${discipline} - ${type}`;
-  }
-  return `${DAY_NAMES_SUN0[Number(session?.dayOfWeek ?? 0)] ?? 'Day'} ${discipline} - ${type}`;
 }
 
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
@@ -311,6 +308,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
   const [weekCarouselStart, setWeekCarouselStart] = useState<number>(0);
   const [sessionDetailsById, setSessionDetailsById] = useState<Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>>({});
+  const [detailGenerationScope, setDetailGenerationScope] = useState<'selected-week' | 'entire-plan'>('selected-week');
+  const [detailGenerationWeekIndex, setDetailGenerationWeekIndex] = useState<number | null>(null);
   const [generateProgress, setGenerateProgress] = useState<number | null>(null);
   const [generateEtaSeconds, setGenerateEtaSeconds] = useState<number | null>(null);
   const generateProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -416,6 +415,46 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [sessionsByWeek]
   );
   const visibleWeekCards = useMemo(() => weekCards.slice(weekCarouselStart, weekCarouselStart + 4), [weekCards, weekCarouselStart]);
+  const weekOptions = useMemo(() => weekCards.map((w) => ({ value: w.weekIndex, label: w.label })), [weekCards]);
+  const detailGenerationWeek = useMemo(
+    () => weekCards.find((w) => w.weekIndex === detailGenerationWeekIndex) ?? weekCards[0] ?? null,
+    [detailGenerationWeekIndex, weekCards]
+  );
+
+  const setupStartDayKey =
+    typeof draftPlanLatest?.setupJson?.startDate === 'string' && isDayKey(draftPlanLatest.setupJson.startDate)
+      ? String(draftPlanLatest.setupJson.startDate)
+      : isDayKey(setup.startDate)
+        ? setup.startDate
+        : null;
+  const weekZeroStart = useMemo(
+    () => (setupStartDayKey ? startOfWeekDayKeyWithWeekStart(setupStartDayKey, effectiveWeekStart) : null),
+    [effectiveWeekStart, setupStartDayKey]
+  );
+
+  const formatSessionHeadline = useCallback(
+    (session: any): string => {
+      const directDayKey = String(session?.dayKey ?? '');
+      const computedDayKey =
+        weekZeroStart && Number.isFinite(Number(session?.weekIndex)) && Number.isFinite(Number(session?.dayOfWeek))
+          ? addDaysToDayKey(
+              weekZeroStart,
+              Number(session.weekIndex ?? 0) * 7 + dayOffsetFromWeekStart(Number(session.dayOfWeek ?? 0), effectiveWeekStart)
+            )
+          : '';
+      const dayKey = isDayKey(directDayKey) ? directDayKey : computedDayKey;
+      const discipline = String(session?.discipline ?? '').toUpperCase();
+      const type = String(session?.type ?? '').toLowerCase();
+      const fallbackDay = DAY_NAMES_SUN0[Number(session?.dayOfWeek ?? 0)] ?? 'Day';
+      if (isDayKey(dayKey)) {
+        const d = parseDayKeyToUtcDate(dayKey);
+        const dayShort = DAY_SHORTS[d.getUTCDay()] ?? fallbackDay;
+        return `${dayShort} (${formatDayKeyDate(dayKey)}) ${discipline} - ${type}`;
+      }
+      return `${fallbackDay} ${discipline} - ${type}`;
+    },
+    [effectiveWeekStart, weekZeroStart]
+  );
 
   const setupSync = useMemo(() => {
     const issues: string[] = [];
@@ -549,6 +588,15 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       setWeekCarouselStart(Math.max(0, weekCards.length - 4));
     }
   }, [weekCards, weekCarouselStart]);
+
+  useEffect(() => {
+    if (!weekCards.length) {
+      setDetailGenerationWeekIndex(null);
+      return;
+    }
+    const firstWeek = weekCards[0]?.weekIndex ?? null;
+    setDetailGenerationWeekIndex((prev) => (prev == null || !weekCards.some((w) => w.weekIndex === prev) ? firstWeek : prev));
+  }, [weekCards]);
 
   useEffect(() => {
     return () => {
@@ -770,6 +818,53 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       setBusy(null);
     }
   }, [loadSessionDetail]);
+
+  const loadDetailsForScope = useCallback(async () => {
+    const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+    const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : detailGenerationWeek?.sessions ?? [];
+    if (!sessionsForScope.length) return;
+    await loadAllDetailsForWeek(sessionsForScope);
+  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek]);
+
+  const shareSkeletonWithAthlete = useCallback(async () => {
+    if (!sessionsByWeek.length) return;
+    setBusy('share-skeleton');
+    setError(null);
+    setInfo(null);
+    try {
+      const weekLines = sessionsByWeek.map(([weekIndex, sessions]) => {
+        const label = getWeekLabel(weekIndex, sessions);
+        const summary = sessions
+          .map((session) => {
+            const day = DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day';
+            const discipline = String(session.discipline ?? '').toUpperCase();
+            const type = String(session.type ?? '');
+            const minutes = Number(session.durationMinutes ?? 0);
+            return `${day}: ${discipline} ${type} (${minutes} min)`;
+          })
+          .join('; ');
+        return `${label} — ${summary}`;
+      });
+
+      const body = [
+        `Draft training block summary for review (${weekLines.length} weeks).`,
+        '',
+        ...weekLines,
+        '',
+        'Reply with any requested changes before final publish.',
+      ].join('\n');
+
+      await request('/api/messages/send', {
+        method: 'POST',
+        data: { body, recipients: { athleteIds: [athleteId] } },
+      });
+      setInfo('Skeleton summary shared with athlete via Messages.');
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to share skeleton with athlete.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, request, sessionsByWeek]);
 
   const publishPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -1053,24 +1148,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Coach blueprint priorities</label>
-              <Textarea value={setup.coachGuidanceText} onChange={(e) => setSetup((prev) => ({ ...prev, coachGuidanceText: e.target.value }))} rows={6} />
-            </div>
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
-              <ul className="list-disc pl-4">
-                {requestContextApplied && Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
-                  (requestContextApplied.effects as unknown[]).map((effect, idx) => (
-                    <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
-                  ))
-                ) : (
-                  <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
-                )}
-              </ul>
-            </div>
+          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+            <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
+            <ul className="list-disc pl-4">
+              {requestContextApplied && Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
+                (requestContextApplied.effects as unknown[]).map((effect, idx) => (
+                  <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
+                ))
+              ) : (
+                <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
+              )}
+            </ul>
           </div>
           </div>
         </Block>
@@ -1082,7 +1170,53 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              Review 4 weeks at a time. Use Previous/Next to move through the block.
+              Share skeleton with athlete for review, then generate detailed sessions by selected week or entire plan.
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Skeleton sharing</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
+                  Share skeleton with athlete
+                </Button>
+                <span className="text-xs text-[var(--fg-muted)]">Sends week-level draft summary to Messages for athlete feedback.</span>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Detail generation</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-[220px] flex-1">
+                  <Select value={detailGenerationScope} onChange={(e) => setDetailGenerationScope(e.target.value as 'selected-week' | 'entire-plan')}>
+                    <option value="selected-week">Selected week only</option>
+                    <option value="entire-plan">Entire plan</option>
+                  </Select>
+                </div>
+                {detailGenerationScope === 'selected-week' ? (
+                  <div className="min-w-[260px] flex-1">
+                    <Select value={String(detailGenerationWeek?.weekIndex ?? '')} onChange={(e) => setDetailGenerationWeekIndex(Number(e.target.value))}>
+                      {weekOptions.map((w) => (
+                        <option key={w.value} value={String(w.value)}>
+                          {w.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    busy != null ||
+                    (detailGenerationScope === 'selected-week'
+                      ? !detailGenerationWeek || detailGenerationWeek.sessions.length === 0
+                      : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)
+                  }
+                  onClick={() => void loadDetailsForScope()}
+                >
+                  {detailGenerationScope === 'entire-plan' ? 'Generate details for entire plan' : 'Generate details for selected week'}
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
@@ -1119,9 +1253,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                     <div className="text-xs text-[var(--fg-muted)]">{week.sessions.length} sessions · {week.totalMinutes} min</div>
                   </div>
                   <div className="space-y-2 px-3 py-3">
-                    <Button size="sm" variant="secondary" disabled={busy != null || week.sessions.length === 0} onClick={() => void loadAllDetailsForWeek(week.sessions)}>
-                      Generate all details
-                    </Button>
                     <div className="space-y-2">
                       {week.sessions.map((session) => {
                         const sessionId = String(session.id);
@@ -1133,9 +1264,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                             <div className="text-xs font-medium">{formatSessionHeadline(session)}</div>
                             <div className="text-[11px] text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
                             {session.notes ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{String(session.notes)}</div> : null}
-                            <Button size="sm" variant="secondary" className="mt-2" disabled={busy != null || sessionDetailsById[sessionId]?.loading} onClick={() => void loadSessionDetail(sessionId)}>
-                              {sessionDetailsById[sessionId]?.loading ? 'Generating...' : 'Generate details'}
-                            </Button>
+                            {sessionDetailsById[sessionId]?.loading ? <div className="mt-2 text-[11px] text-[var(--fg-muted)]">Generating details...</div> : null}
                             {sessionDetailsById[sessionId]?.error ? <div className="mt-1 text-[11px] text-red-700">{sessionDetailsById[sessionId]?.error}</div> : null}
                             {detailText ? (
                               <pre className="mt-2 max-h-48 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px] whitespace-pre-wrap">
