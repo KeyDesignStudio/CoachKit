@@ -27,6 +27,12 @@ export type HardSafetyReview = {
   };
 };
 
+export type RewriteSafetyResult = {
+  diff: PlanDiffOp[];
+  droppedOps: number;
+  rewrites: string[];
+};
+
 function isDayKey(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -56,6 +62,131 @@ function isIntensityType(value: string) {
 
 function clampDuration(value: number) {
   return Math.max(20, Math.min(240, Math.round(value)));
+}
+
+function clampPctDelta(pctDelta: number) {
+  if (!Number.isFinite(pctDelta)) return 0;
+  return Math.max(-0.2, Math.min(0.12, pctDelta));
+}
+
+export function rewriteProposalDiffForSafeApply(params: {
+  setup: SetupSnapshot;
+  sessions: DraftSessionSnapshot[];
+  diff: PlanDiffOp[];
+  triggerTypes: AiAdaptationTriggerType[];
+}): RewriteSafetyResult {
+  const bySessionId = new Map(params.sessions.map((s) => [String(s.id), s] as const));
+  const currentWeekIndex = inferCurrentWeekIndex(params.setup);
+  const protectiveMode = params.triggerTypes.some((t) => t === 'SORENESS' || t === 'TOO_HARD' || t === 'MISSED_KEY');
+
+  const next: PlanDiffOp[] = [];
+  const rewrites: string[] = [];
+  let droppedOps = 0;
+
+  for (const op of params.diff) {
+    if (op.op === 'REMOVE_SESSION') {
+      droppedOps += 1;
+      rewrites.push('Dropped REMOVE_SESSION op (auto-apply does not remove sessions).');
+      continue;
+    }
+
+    if (op.op === 'ADJUST_WEEK_VOLUME') {
+      if (op.weekIndex < currentWeekIndex) {
+        droppedOps += 1;
+        rewrites.push(`Dropped past-week volume adjustment for week ${op.weekIndex + 1}.`);
+        continue;
+      }
+      const clamped = clampPctDelta(op.pctDelta);
+      if (clamped !== op.pctDelta) {
+        rewrites.push(`Clamped week ${op.weekIndex + 1} volume delta from ${Math.round(op.pctDelta * 100)}% to ${Math.round(clamped * 100)}%.`);
+      }
+      next.push({ ...op, pctDelta: clamped });
+      continue;
+    }
+
+    if (op.op === 'ADD_NOTE') {
+      if (op.target === 'week') {
+        if (op.weekIndex < currentWeekIndex) {
+          droppedOps += 1;
+          rewrites.push(`Dropped past-week note for week ${op.weekIndex + 1}.`);
+          continue;
+        }
+        next.push(op);
+        continue;
+      }
+
+      const session = bySessionId.get(String(op.draftSessionId ?? ''));
+      if (!session) {
+        droppedOps += 1;
+        rewrites.push('Dropped note for unknown session.');
+        continue;
+      }
+      if (session.weekIndex < currentWeekIndex) {
+        droppedOps += 1;
+        rewrites.push(`Dropped past-session note for session ${session.id}.`);
+        continue;
+      }
+      next.push(op);
+      continue;
+    }
+
+    if (op.op === 'SWAP_SESSION_TYPE') {
+      const session = bySessionId.get(String(op.draftSessionId));
+      if (!session) {
+        droppedOps += 1;
+        rewrites.push('Dropped swap for unknown session.');
+        continue;
+      }
+      if (session.weekIndex < currentWeekIndex) {
+        droppedOps += 1;
+        rewrites.push(`Dropped swap for past-session ${session.id}.`);
+        continue;
+      }
+      if (protectiveMode && !isIntensityType(session.type) && isIntensityType(op.newType)) {
+        next.push({ ...op, newType: 'endurance' });
+        rewrites.push(`Rewrote intensity escalation to endurance for session ${session.id}.`);
+        continue;
+      }
+      next.push(op);
+      continue;
+    }
+
+    if (op.op === 'UPDATE_SESSION') {
+      const session = bySessionId.get(String(op.draftSessionId));
+      if (!session) {
+        droppedOps += 1;
+        rewrites.push('Dropped update for unknown session.');
+        continue;
+      }
+      if (session.weekIndex < currentWeekIndex) {
+        droppedOps += 1;
+        rewrites.push(`Dropped update for past-session ${session.id}.`);
+        continue;
+      }
+
+      const patch = { ...op.patch };
+      if (patch.type && protectiveMode && !isIntensityType(session.type) && isIntensityType(String(patch.type))) {
+        patch.type = 'endurance';
+        rewrites.push(`Rewrote patch intensity escalation to endurance for session ${session.id}.`);
+      }
+      if (typeof patch.durationMinutes === 'number' && Number.isFinite(patch.durationMinutes)) {
+        const current = Math.max(20, Number(session.durationMinutes || 20));
+        const minAllowed = Math.max(20, Math.round(current * 0.75));
+        const maxAllowed = Math.min(240, Math.round(current * 1.25));
+        const clamped = Math.max(minAllowed, Math.min(maxAllowed, clampDuration(patch.durationMinutes)));
+        if (clamped !== patch.durationMinutes) {
+          rewrites.push(`Clamped session ${session.id} duration patch from ${patch.durationMinutes} to ${clamped} min.`);
+        }
+        patch.durationMinutes = clamped;
+      }
+      next.push({ ...op, patch });
+      continue;
+    }
+
+    next.push(op);
+  }
+
+  return { diff: next, droppedOps, rewrites };
 }
 
 export function evaluateProposalHardSafety(params: {
