@@ -165,7 +165,7 @@ function renderProposalWeeksList(preview: AgentProposalPreview['preview']) {
       {weeks.slice(0, 4).map((week) => (
         <div key={`preview-week:${week.weekIndex}`} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs">
           <div className="font-medium">
-            Week {Number(week.weekIndex) + 1} · {Number(week.beforeTotalMinutes)} -> {Number(week.afterTotalMinutes)} min
+            Week {Number(week.weekIndex) + 1} · {Number(week.beforeTotalMinutes)} {'->'} {Number(week.afterTotalMinutes)} min
           </div>
           {Array.isArray(week.items) && week.items.length ? (
             <ul className="mt-1 list-disc pl-4 text-[11px] text-[var(--fg-muted)]">
