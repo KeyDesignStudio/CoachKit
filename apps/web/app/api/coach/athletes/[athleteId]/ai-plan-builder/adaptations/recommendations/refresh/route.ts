@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { guardAiPlanBuilderRequest } from '@/modules/ai-plan-builder/server/guard';
 import { evaluateAdaptationTriggers } from '@/modules/ai-plan-builder/server/adaptations';
 import { generatePlanChangeProposal, listPlanChangeProposals } from '@/modules/ai-plan-builder/server/proposals';
+import { assessTriggerQuality, buildReasonChain } from '@/modules/ai-plan-builder/server/adaptation-explainability';
 
 const refreshRecommendationsSchema = z.object({
   aiPlanDraftId: z.string().min(1),
@@ -63,13 +64,21 @@ export async function POST(request: Request, context: { params: { athleteId: str
     const lastEvaluatedAt = evaluated?.now ? new Date(evaluated.now) : null;
 
     const latestWindowEndIso = evaluated.triggers?.[0]?.windowEnd ? new Date(evaluated.triggers[0].windowEnd).toISOString() : null;
+    const latestWindowTriggers = latestWindowEndIso
+      ? (evaluated.triggers ?? []).filter((t: any) => new Date(t.windowEnd).toISOString() === latestWindowEndIso)
+      : [];
     const latestTriggerIds = latestWindowEndIso
       ? normalizeIds(
-          (evaluated.triggers ?? [])
-            .filter((t: any) => new Date(t.windowEnd).toISOString() === latestWindowEndIso)
-            .map((t: any) => String(t.id))
+          latestWindowTriggers.map((t: any) => String(t.id))
         )
       : [];
+    const triggerAssessment = assessTriggerQuality(
+      latestWindowTriggers.map((t: any) => ({
+        id: String(t.id),
+        triggerType: String(t.triggerType),
+        evidenceJson: t.evidenceJson,
+      }))
+    );
 
     const existing = await listPlanChangeProposals({
       coachId: user.id,
@@ -84,7 +93,8 @@ export async function POST(request: Request, context: { params: { athleteId: str
       : false;
 
     let createdProposal: any | null = null;
-    if (latestTriggerIds.length && !hasEquivalentQueued) {
+    let suppressedRecommendation: { reason: string; averageConfidence: number; highImpactCount: number } | null = null;
+    if (latestTriggerIds.length && !hasEquivalentQueued && triggerAssessment.shouldQueue) {
       const generated = await generatePlanChangeProposal({
         coachId: user.id,
         athleteId: context.params.athleteId,
@@ -92,6 +102,12 @@ export async function POST(request: Request, context: { params: { athleteId: str
         triggerIds: latestTriggerIds,
       });
       createdProposal = generated.proposal;
+    } else if (latestTriggerIds.length && !hasEquivalentQueued && !triggerAssessment.shouldQueue) {
+      suppressedRecommendation = {
+        reason: String(triggerAssessment.suppressionReason ?? 'Noisy low-confidence trigger set'),
+        averageConfidence: Number(triggerAssessment.averageConfidence),
+        highImpactCount: Number(triggerAssessment.highImpactCount),
+      };
     }
 
     const refreshed = await listPlanChangeProposals({
@@ -162,10 +178,35 @@ export async function POST(request: Request, context: { params: { athleteId: str
       .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
       .slice(0, 16);
 
+    const queuedRecommendations = refreshed
+      .filter((p: any) => String(p.status) === 'PROPOSED')
+      .slice(0, 10)
+      .map((p: any) => {
+        const proposalJson = (p?.proposalJson ?? {}) as any;
+        const triggerRanked = Array.isArray(proposalJson?.triggerAssessment?.ranked)
+          ? proposalJson.triggerAssessment.ranked
+          : [];
+        const actionSummary = String(proposalJson?.changeSummaryText ?? p?.rationaleText ?? 'Apply safe adaptation changes.');
+        const reasonChain = Array.isArray(proposalJson?.reasonChain) && proposalJson.reasonChain.length
+          ? proposalJson.reasonChain
+          : buildReasonChain({
+              ranked: triggerRanked,
+              actionSummary,
+            });
+        return {
+          ...p,
+          triggerAssessment: proposalJson?.triggerAssessment ?? null,
+          changeSummaryText: proposalJson?.changeSummaryText ?? null,
+          reasonChain,
+        };
+      });
+
     return success({
       createdProposal,
       latestTriggerIds,
-      queuedRecommendations: refreshed.filter((p: any) => String(p.status) === 'PROPOSED').slice(0, 10),
+      suppressedRecommendation,
+      triggerAssessment,
+      queuedRecommendations,
       lastEvaluatedAt: lastEvaluatedAt ? lastEvaluatedAt.toISOString() : null,
       latestSignalAt: latestSignalAt ? latestSignalAt.toISOString() : null,
       hasNewDataSinceLastEval,
