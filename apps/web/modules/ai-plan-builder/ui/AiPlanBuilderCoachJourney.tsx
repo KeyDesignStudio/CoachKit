@@ -721,6 +721,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           const draftWeeklyMinutes = Number(fromDraft?.weeklyAvailabilityMinutes);
           const draftMaxIntensity = Number(fromDraft?.maxIntensityDaysPerWeek);
           const draftMaxDoubles = Number(fromDraft?.maxDoublesPerWeek);
+          const draftWeeklyDaysRaw = Array.isArray(fromDraft?.weeklyAvailabilityDays) ? fromDraft.weeklyAvailabilityDays : null;
+          const draftWeeklyDays =
+            draftWeeklyDaysRaw?.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v) && v >= 0 && v <= 6) ?? null;
           return {
             ...seeded,
             startDate: typeof fromDraft?.startDate === 'string' ? fromDraft.startDate : prev.startDate,
@@ -731,9 +734,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   ? fromDraft.eventDate
                   : prev.completionDate,
             weeksToEventOverride: Number.isFinite(Number(fromDraft?.weeksToEventOverride)) ? Number(fromDraft?.weeksToEventOverride) : seeded.weeksToEventOverride,
-            weeklyAvailabilityDays: Array.isArray(fromDraft?.weeklyAvailabilityDays)
-              ? fromDraft.weeklyAvailabilityDays.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v) && v >= 0 && v <= 6)
-              : seeded.weeklyAvailabilityDays,
+            weeklyAvailabilityDays: draftWeeklyDays ?? seeded.weeklyAvailabilityDays,
             weeklyAvailabilityMinutes: Number.isFinite(draftWeeklyMinutes)
               ? draftWeeklyMinutes
               : seeded.weeklyAvailabilityMinutes,
