@@ -89,6 +89,13 @@ type ChangeSummaryState = {
   createdAt: string;
 };
 
+type AdaptationSuggestion = {
+  id: string;
+  label: string;
+  guidance: string;
+  why: string;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -426,6 +433,65 @@ function buildSessionEditorState(session: any, detailJson: unknown): SessionEdit
   };
 }
 
+function buildAdaptationSuggestionsFromMemory(adaptationMemory: any | null): AdaptationSuggestion[] {
+  if (!adaptationMemory || typeof adaptationMemory !== 'object') return [];
+  const completionRate = Number(adaptationMemory.completionRate ?? 0);
+  const skipRate = Number(adaptationMemory.skipRate ?? 0);
+  const sorenessRate = Number(adaptationMemory.sorenessRate ?? 0);
+  const painRate = Number(adaptationMemory.painRate ?? 0);
+  const avgRpe = Number(adaptationMemory.avgRpe ?? 0);
+
+  const suggestions: AdaptationSuggestion[] = [];
+
+  if (painRate >= 0.15 || sorenessRate >= 0.3) {
+    suggestions.push({
+      id: 'protect-recovery',
+      label: 'Protect recovery',
+      guidance:
+        'Reduce weekly duration by about 10%, keep max one intensity session, and convert remaining key work to aerobic control.',
+      why: 'Pain/soreness trend indicates overload risk.',
+    });
+  }
+  if (completionRate < 0.7 || skipRate > 0.25) {
+    suggestions.push({
+      id: 'reset-consistency',
+      label: 'Reset consistency',
+      guidance:
+        'Reduce session duration by 10-15% and simplify key sessions to endurance/recovery until adherence stabilizes.',
+      why: 'Low completion and high skips indicate the plan is currently too hard to sustain.',
+    });
+  }
+  if (avgRpe >= 7.5) {
+    suggestions.push({
+      id: 'deload-fatigue',
+      label: 'Deload fatigue',
+      guidance:
+        'Insert a deload week pattern: lower load by 15%, keep technique quality, and avoid stacking hard days.',
+      why: 'Average exertion is too high for productive progression.',
+    });
+  }
+  if (completionRate >= 0.9 && skipRate <= 0.1 && painRate < 0.1 && avgRpe > 0 && avgRpe <= 6.5) {
+    suggestions.push({
+      id: 'progress-safely',
+      label: 'Progress safely',
+      guidance:
+        'Add a small progression (+5-8% duration) while keeping intensity density unchanged and preserving recovery spacing.',
+      why: 'Compliance is strong and exertion is manageable.',
+    });
+  }
+  if (!suggestions.length) {
+    suggestions.push({
+      id: 'hold-steady',
+      label: 'Hold steady',
+      guidance:
+        'Keep next week load similar, preserve one key session focus, and prioritize consistency over progression.',
+      why: 'Signals are mixed and do not support aggressive change yet.',
+    });
+  }
+
+  return suggestions;
+}
+
 function summarizeSessionChanges(params: {
   beforeSessions: any[];
   afterSessions: any[];
@@ -613,6 +679,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [sessionsByWeek]
   );
   const visibleWeekCards = useMemo(() => weekCards.slice(weekCarouselStart, weekCarouselStart + 4), [weekCards, weekCarouselStart]);
+  const adaptationMemory = useMemo(() => {
+    const value = (draftPlanLatest as any)?.planSourceSelectionJson?.adaptationMemory;
+    return value && typeof value === 'object' ? value : null;
+  }, [draftPlanLatest]);
+  const adaptationSuggestions = useMemo(() => buildAdaptationSuggestionsFromMemory(adaptationMemory), [adaptationMemory]);
+  const upcomingWeekTargets = useMemo(() => weekCards.slice(0, 2).map((w) => w.weekIndex), [weekCards]);
   const weekOptions = useMemo(() => weekCards.map((w) => ({ value: w.weekIndex, label: w.label })), [weekCards]);
   const detailGenerationWeek = useMemo(
     () => weekCards.find((w) => w.weekIndex === detailGenerationWeekIndex) ?? weekCards[0] ?? null,
@@ -1351,6 +1423,70 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, writeAuditEvent]);
 
+  const applyAdaptationSuggestion = useCallback(
+    async (suggestion: AdaptationSuggestion, weekCount: 1 | 2) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!draftPlanId) return;
+      const targetWeeks = upcomingWeekTargets.slice(0, weekCount);
+      if (!targetWeeks.length) {
+        setError('No upcoming weeks available to apply adaptation.');
+        return;
+      }
+
+      setBusy('apply-adaptation');
+      setError(null);
+      setInfo(null);
+      try {
+        const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+        let nextDraft = draftPlanLatest;
+        let totalApplied = 0;
+
+        for (const weekIndex of targetWeeks) {
+          const res = await request<{ draftPlan: any; appliedCount: number }>(
+            `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/agent-adjust`,
+            {
+              method: 'POST',
+              data: {
+                draftPlanId,
+                scope: 'week',
+                weekIndex,
+                instruction: suggestion.guidance,
+              },
+            }
+          );
+          nextDraft = res.draftPlan ?? nextDraft;
+          totalApplied += Number(res.appliedCount ?? 0);
+        }
+
+        setDraftPlanLatest(nextDraft ?? null);
+        setSessionDetailsById({});
+        setEditingSessionId(null);
+        setSessionEditor(null);
+
+        const afterSessions = Array.isArray(nextDraft?.sessions) ? nextDraft.sessions : [];
+        const summary = summarizeSessionChanges({
+          beforeSessions,
+          afterSessions: afterSessions.filter((s: any) => targetWeeks.includes(Number(s.weekIndex ?? -1))),
+          scopeLabel: `${suggestion.label} applied to next ${weekCount} week${weekCount === 1 ? '' : 's'}`,
+        });
+        setChangeSummary(summary);
+        setInfo(`${suggestion.label} applied to ${weekCount} week${weekCount === 1 ? '' : 's'} (${totalApplied} session edits).`);
+        await writeAuditEvent('AI_ADAPTATION_SUGGESTION_APPLIED', {
+          suggestionId: suggestion.id,
+          suggestionLabel: suggestion.label,
+          weekCount,
+          targetWeeks,
+          summary,
+        });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply adaptation suggestion.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [athleteId, draftPlanLatest, request, upcomingWeekTargets, writeAuditEvent]
+  );
+
   const shareSkeletonWithAthlete = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!sessionsByWeek.length || !draftPlanId) return;
@@ -1925,6 +2061,53 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 </Button>
               </div>
             </div>
+
+            {adaptationMemory ? (
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Adaptation loop (next weeks)</div>
+                <div className="grid gap-2 text-xs md:grid-cols-5">
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}%
+                  </div>
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    Skips {(Number(adaptationMemory.skipRate ?? 0) * 100).toFixed(0)}%
+                  </div>
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    Soreness {(Number(adaptationMemory.sorenessRate ?? 0) * 100).toFixed(0)}%
+                  </div>
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    Pain {(Number(adaptationMemory.painRate ?? 0) * 100).toFixed(0)}%
+                  </div>
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    Avg RPE {adaptationMemory.avgRpe != null ? Number(adaptationMemory.avgRpe).toFixed(1) : 'N/A'}
+                  </div>
+                </div>
+                {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes.length ? (
+                  <ul className="mt-2 list-disc pl-4 text-xs text-[var(--fg-muted)]">
+                    {adaptationMemory.notes.slice(0, 3).map((n: unknown, idx: number) => (
+                      <li key={`${idx}:${String(n)}`}>{String(n)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-3 space-y-2">
+                  {adaptationSuggestions.slice(0, 2).map((s) => (
+                    <div key={s.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                      <div className="text-xs font-medium">{s.label}</div>
+                      <div className="mt-1 text-xs">{s.guidance}</div>
+                      <div className="mt-1 text-[11px] text-[var(--fg-muted)]">Why: {s.why}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 1} onClick={() => void applyAdaptationSuggestion(s, 1)}>
+                          Apply to next week
+                        </Button>
+                        <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 2} onClick={() => void applyAdaptationSuggestion(s, 2)}>
+                          Apply to next 2 weeks
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach bulk week edit</div>
