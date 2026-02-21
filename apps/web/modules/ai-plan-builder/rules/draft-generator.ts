@@ -648,6 +648,34 @@ function reduceAdjacentIntensity(params: { sessions: DraftWeekV1['sessions']; we
   return next;
 }
 
+function reduceLongThenIntensity(params: { sessions: DraftWeekV1['sessions']; weekStart: 'monday' | 'sunday' }): DraftWeekV1['sessions'] {
+  const next = params.sessions.map((s) => ({ ...s }));
+  const longDays = new Set(
+    next
+      .filter((s) => /\blong run\b|\blong ride\b|\bbrick\b/i.test(String(s.notes ?? '')))
+      .map((s) => daySortKey(Number(s.dayOfWeek ?? 0), params.weekStart))
+  );
+  if (!longDays.size) return next;
+
+  for (let idx = 0; idx < next.length; idx += 1) {
+    const session = next[idx];
+    const isIntensity = session.type === 'tempo' || session.type === 'threshold';
+    if (!isIntensity) continue;
+    const sortDay = daySortKey(Number(session.dayOfWeek ?? 0), params.weekStart);
+    if (longDays.has(sortDay - 1)) {
+      next[idx] = {
+        ...session,
+        type: 'endurance',
+        notes: String(session.notes ?? '').trim()
+          ? `${String(session.notes)} · Adjusted after long session`
+          : 'Adjusted after long session',
+      };
+    }
+  }
+
+  return next;
+}
+
 export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): DraftPlanV1 {
   const days = stableDayList(setupRaw.weeklyAvailabilityDays);
   const weeksToEvent = clampInt(setupRaw.weeksToEvent, 1, 52);
@@ -793,13 +821,16 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       const discipline: DraftDiscipline = longIsBike ? 'bike' : 'run';
       const day = hasCapacity(longDay) ? longDay : takeDay(days);
       if (day != null) {
+        const beginnerProfile = isBeginnerProfile(effectiveSetup);
+        const longMin = beginnerProfile || weekTotalMinutes < 240 ? 35 : 60;
+        const longMax = beginnerProfile ? 120 : 180;
         pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
         discipline,
         type: 'endurance',
-        durationMinutes: clampInt(avgMinutes * 2.2, 60, 180),
+        durationMinutes: clampInt(avgMinutes * 1.8, longMin, longMax),
         notes: discipline === 'bike' ? 'Long ride' : 'Long run',
         locked: false,
         } }));
@@ -807,7 +838,14 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     }
 
     // Brick every 2 weeks for med/high.
-    if ((effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') && weekIndex % 2 === 1) {
+    const allowBricks =
+      (effectiveSetup.riskTolerance === 'med' || effectiveSetup.riskTolerance === 'high') &&
+      !injuryFlag &&
+      !weekHasTravel &&
+      effectiveSetup.maxDoublesPerWeek > 0 &&
+      weekTotalMinutes >= 300 &&
+      days.length >= 5;
+    if (allowBricks && weekIndex % 2 === 1) {
       const day = hasCapacity(longDay) ? longDay : takeDay(days.filter((d) => d !== longDay));
       if (day != null) {
         pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
@@ -871,10 +909,14 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       .map((s, idx) => ({ ...s, ordinal: idx }));
 
     const deStacked = reduceAdjacentIntensity({ sessions: sorted, weekStart });
-    const keyed = enforceWeeklyKeySessionBudget({ setup: effectiveSetup, sessions: deStacked });
+    const deLongStacked = reduceLongThenIntensity({ sessions: deStacked, weekStart });
+    const keyed = enforceWeeklyKeySessionBudget({ setup: effectiveSetup, sessions: deLongStacked });
     const humanized = humanizeWeekDurations({ sessions: keyed, longDay });
+    const postGuard = humanized.map((session) => applySessionGuardrails({ setup: effectiveSetup, weekIndex, session }));
+    const postLongSafety = reduceLongThenIntensity({ sessions: postGuard, weekStart });
+    const postIntensitySafety = reduceAdjacentIntensity({ sessions: postLongSafety, weekStart }).map((s, idx) => ({ ...s, ordinal: idx }));
 
-    weeks.push({ weekIndex, locked: false, sessions: humanized });
+    weeks.push({ weekIndex, locked: false, sessions: postIntensitySafety });
   }
 
   return { version: 'v1', setup: effectiveSetup, weeks };

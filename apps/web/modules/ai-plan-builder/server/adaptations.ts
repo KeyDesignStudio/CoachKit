@@ -30,6 +30,171 @@ function isKeySession(session: { type: string; durationMinutes: number; notes: s
   return intensity || long;
 }
 
+type FeedbackSignalRow = {
+  id: string;
+  createdAt: Date;
+  completedStatus: string;
+  feel: string | null;
+  sorenessFlag: boolean;
+  sorenessNotes: string | null;
+  rpe: number | null;
+  sleepQuality: number | null;
+  sessionId: string;
+  session: {
+    id: string;
+    weekIndex: number;
+    dayOfWeek: number;
+    type: string;
+    durationMinutes: number;
+    notes: string | null;
+  };
+};
+
+type CompletedSignalRow = {
+  id: string;
+  startTime: Date;
+  rpe: number | null;
+  painFlag: boolean;
+};
+
+export function deriveAdaptationTriggersFromSignals(params: {
+  now: Date;
+  windowDays: number;
+  feedback: FeedbackSignalRow[];
+  completedActivities: CompletedSignalRow[];
+}): Array<{
+  triggerType: 'SORENESS' | 'TOO_HARD' | 'MISSED_KEY' | 'HIGH_COMPLIANCE';
+  windowStart: Date;
+  windowEnd: Date;
+  evidence: Prisma.InputJsonValue;
+}> {
+  const now = floorToMinute(params.now);
+  const windowDays = Math.max(1, Math.min(60, Number(params.windowDays || 10)));
+  const feedback = [...params.feedback].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || String(a.id).localeCompare(String(b.id)));
+  const completedActivities = [...params.completedActivities].sort(
+    (a, b) => a.startTime.getTime() - b.startTime.getTime() || String(a.id).localeCompare(String(b.id))
+  );
+
+  const last7Start = daysAgo(now, 7);
+  const last10Start = daysAgo(now, 10);
+  const windowStart = floorToMinute(daysAgo(now, windowDays));
+
+  const feedbackLast7 = feedback.filter((f) => f.createdAt >= last7Start && f.createdAt <= now);
+  const feedbackLast10 = feedback.filter((f) => f.createdAt >= last10Start && f.createdAt <= now);
+  const feedbackInWindow = feedback.filter((f) => f.createdAt >= windowStart && f.createdAt <= now);
+
+  const completedLast7 = completedActivities.filter((a) => a.startTime >= last7Start && a.startTime <= now);
+  const completedLast10 = completedActivities.filter((a) => a.startTime >= last10Start && a.startTime <= now);
+  const completedInWindow = completedActivities.filter((a) => a.startTime >= windowStart && a.startTime <= now);
+
+  const sorenessRows = feedbackLast7.filter((f) => Boolean(f.sorenessFlag));
+  const painRows = completedLast7.filter((a) => Boolean(a.painFlag));
+
+  const tooHardRows = feedbackLast10.filter((f) => String(f.feel ?? '').toUpperCase() === 'TOO_HARD');
+  const highRpeFeedback = feedbackLast10.filter((f) => Number(f.rpe ?? 0) >= 8);
+  const highRpeCompleted = completedLast10.filter((a) => Number(a.rpe ?? 0) >= 8);
+  const poorSleepRows = feedbackLast10.filter((f) => typeof f.sleepQuality === 'number' && f.sleepQuality <= 2);
+
+  const keyRowsLast7 = feedbackLast7.filter((f) => isKeySession(f.session));
+  const missedKeyRows = keyRowsLast7.filter((f) => String(f.completedStatus) === 'SKIPPED');
+  const keySessionCount = keyRowsLast7.length;
+  const missedKeyRate = keySessionCount > 0 ? missedKeyRows.length / keySessionCount : 0;
+
+  const doneStatuses = new Set(['DONE', 'PARTIAL']);
+  const doneFeedback = feedbackInWindow.filter((f) => doneStatuses.has(String(f.completedStatus))).length;
+  const totalFeedback = feedbackInWindow.length;
+  const compliance = totalFeedback ? doneFeedback / totalFeedback : 0;
+  const windowRpeValues = [
+    ...feedbackInWindow.map((f) => (typeof f.rpe === 'number' ? f.rpe : null)).filter((v): v is number => v != null),
+    ...completedInWindow.map((a) => (typeof a.rpe === 'number' ? a.rpe : null)).filter((v): v is number => v != null),
+  ];
+  const avgWindowRpe = windowRpeValues.length ? windowRpeValues.reduce((sum, v) => sum + v, 0) / windowRpeValues.length : null;
+
+  const triggers: Array<{
+    triggerType: 'SORENESS' | 'TOO_HARD' | 'MISSED_KEY' | 'HIGH_COMPLIANCE';
+    windowStart: Date;
+    windowEnd: Date;
+    evidence: Prisma.InputJsonValue;
+  }> = [];
+
+  const sorenessOrPain = sorenessRows.length > 0 || painRows.length > 0;
+  if (sorenessOrPain) {
+    triggers.push({
+      triggerType: 'SORENESS',
+      windowStart: floorToMinute(last7Start),
+      windowEnd: now,
+      evidence: {
+        rule: 'SORENESS if soreness flag or pain flag appears in last 7 days',
+        sorenessCount: sorenessRows.length,
+        painCount: painRows.length,
+        items: sorenessRows.map((f) => ({
+          feedbackId: f.id,
+          createdAt: f.createdAt.toISOString(),
+          sorenessNotes: f.sorenessNotes,
+          session: { id: f.sessionId, weekIndex: f.session.weekIndex, dayOfWeek: f.session.dayOfWeek, type: f.session.type },
+        })),
+      },
+    });
+  }
+
+  const tooHardByFeel = tooHardRows.length >= 2;
+  const tooHardByRpe = highRpeFeedback.length + highRpeCompleted.length >= 3;
+  const tooHardByCompounded = tooHardRows.length >= 1 && (highRpeFeedback.length + highRpeCompleted.length >= 2 || poorSleepRows.length >= 2);
+  if (tooHardByFeel || tooHardByRpe || tooHardByCompounded) {
+    triggers.push({
+      triggerType: 'TOO_HARD',
+      windowStart: floorToMinute(last10Start),
+      windowEnd: now,
+      evidence: {
+        rule: 'TOO_HARD if repeated TOO_HARD feel, or elevated high-RPE cluster, or compounded high strain signals.',
+        tooHardFeelCount: tooHardRows.length,
+        highRpeFeedbackCount: highRpeFeedback.length,
+        highRpeCompletedCount: highRpeCompleted.length,
+        poorSleepCount: poorSleepRows.length,
+        items: tooHardRows.map((f) => ({ feedbackId: f.id, createdAt: f.createdAt.toISOString(), sessionId: f.sessionId })),
+      },
+    });
+  }
+
+  if (missedKeyRows.length >= 2 || (keySessionCount >= 3 && missedKeyRate >= 0.5)) {
+    triggers.push({
+      triggerType: 'MISSED_KEY',
+      windowStart: floorToMinute(last7Start),
+      windowEnd: now,
+      evidence: {
+        rule: 'MISSED_KEY if >=2 key sessions skipped, or >=50% of key sessions skipped (min 3 key opportunities) in last 7 days.',
+        missedKeyCount: missedKeyRows.length,
+        keySessionCount,
+        missedKeyRate,
+        items: missedKeyRows.map((f) => ({
+          feedbackId: f.id,
+          createdAt: f.createdAt.toISOString(),
+          session: { id: f.sessionId, type: f.session.type, durationMinutes: f.session.durationMinutes, notes: f.session.notes },
+        })),
+      },
+    });
+  }
+
+  const hasTooHardSignal = tooHardByFeel || tooHardByRpe || tooHardByCompounded;
+  if (!sorenessOrPain && !hasTooHardSignal && totalFeedback >= 4 && compliance >= 0.85 && (avgWindowRpe == null || avgWindowRpe <= 6.5)) {
+    triggers.push({
+      triggerType: 'HIGH_COMPLIANCE',
+      windowStart,
+      windowEnd: now,
+      evidence: {
+        rule: 'HIGH_COMPLIANCE if DONE/PARTIAL >=85% on at least 4 feedback entries, no soreness/pain, no strain signals.',
+        windowDays,
+        totalFeedbackCount: totalFeedback,
+        doneCount: doneFeedback,
+        compliance,
+        avgRpe: avgWindowRpe,
+      },
+    });
+  }
+
+  return triggers;
+}
+
 export async function evaluateAdaptationTriggers(params: {
   coachId: string;
   athleteId: string;
@@ -65,94 +230,54 @@ export async function evaluateAdaptationTriggers(params: {
     include: {
       session: {
         select: { id: true, weekIndex: true, dayOfWeek: true, type: true, durationMinutes: true, notes: true },
+        rpe: true,
+        sleepQuality: true,
       },
     },
   });
 
-  const last7Start = daysAgo(now, 7);
-  const last10Start = daysAgo(now, 10);
-
-  const inLast7 = feedback.filter((f) => f.createdAt >= last7Start);
-  const inLast10 = feedback.filter((f) => f.createdAt >= last10Start);
-  const inWindow = feedback.filter((f) => f.createdAt >= daysAgo(now, windowDays));
-
-  const triggers: Array<{ triggerType: 'SORENESS' | 'TOO_HARD' | 'MISSED_KEY' | 'HIGH_COMPLIANCE'; windowStart: Date; windowEnd: Date; evidence: Prisma.InputJsonValue }> = [];
-
-  // SORENESS
-  const sore = inLast7.filter((f) => f.sorenessFlag);
-  if (sore.length) {
-    triggers.push({
-      triggerType: 'SORENESS',
-      windowStart: floorToMinute(last7Start),
-      windowEnd: now,
-      evidence: {
-        rule: 'SORENESS if any sorenessFlag=true in last 7 days',
-        sorenessCount: sore.length,
-        items: sore.map((f) => ({
-          feedbackId: f.id,
-          createdAt: f.createdAt.toISOString(),
-          sorenessNotes: f.sorenessNotes,
-          session: { id: f.sessionId, weekIndex: f.session.weekIndex, dayOfWeek: f.session.dayOfWeek, type: f.session.type },
-        })),
+  const completedActivities = await prisma.completedActivity.findMany({
+    where: {
+      athleteId: params.athleteId,
+      startTime: { gte: startForQuery, lte: now },
+    },
+    orderBy: [{ startTime: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      startTime: true,
+      rpe: true,
+      painFlag: true,
+    },
+  });
+  const triggers = deriveAdaptationTriggersFromSignals({
+    now,
+    windowDays,
+    feedback: feedback.map((f) => ({
+      id: f.id,
+      createdAt: f.createdAt,
+      completedStatus: String(f.completedStatus),
+      feel: f.feel,
+      sorenessFlag: Boolean(f.sorenessFlag),
+      sorenessNotes: f.sorenessNotes,
+      rpe: f.rpe,
+      sleepQuality: f.sleepQuality,
+      sessionId: f.sessionId,
+      session: {
+        id: f.session.id,
+        weekIndex: f.session.weekIndex,
+        dayOfWeek: f.session.dayOfWeek,
+        type: f.session.type,
+        durationMinutes: f.session.durationMinutes,
+        notes: f.session.notes,
       },
-    });
-  }
-
-  // TOO_HARD
-  const tooHard = inLast10.filter((f) => f.feel === 'TOO_HARD');
-  if (tooHard.length >= 2) {
-    triggers.push({
-      triggerType: 'TOO_HARD',
-      windowStart: floorToMinute(last10Start),
-      windowEnd: now,
-      evidence: {
-        rule: 'TOO_HARD if feel=TOO_HARD on >=2 sessions in last 10 days',
-        tooHardCount: tooHard.length,
-        items: tooHard.map((f) => ({ feedbackId: f.id, createdAt: f.createdAt.toISOString(), sessionId: f.sessionId })),
-      },
-    });
-  }
-
-  // MISSED_KEY
-  const missedKey = inLast7.filter((f) => f.completedStatus === 'SKIPPED' && isKeySession(f.session));
-  if (missedKey.length >= 2) {
-    triggers.push({
-      triggerType: 'MISSED_KEY',
-      windowStart: floorToMinute(last7Start),
-      windowEnd: now,
-      evidence: {
-        rule: 'MISSED_KEY if >=2 key sessions marked SKIPPED in last 7 days',
-        missedKeyCount: missedKey.length,
-        items: missedKey.map((f) => ({
-          feedbackId: f.id,
-          createdAt: f.createdAt.toISOString(),
-          session: { id: f.sessionId, type: f.session.type, durationMinutes: f.session.durationMinutes, notes: f.session.notes },
-        })),
-      },
-    });
-  }
-
-  // HIGH_COMPLIANCE
-  const hasSoreness = sore.length > 0;
-  const hasTooHard = tooHard.length >= 2;
-  const total = inWindow.length;
-  const done = inWindow.filter((f) => f.completedStatus === 'DONE').length;
-  const compliance = total ? done / total : 0;
-
-  if (!hasSoreness && !hasTooHard && total > 0 && compliance >= 0.8) {
-    triggers.push({
-      triggerType: 'HIGH_COMPLIANCE',
-      windowStart: floorToMinute(daysAgo(now, windowDays)),
-      windowEnd: now,
-      evidence: {
-        rule: 'HIGH_COMPLIANCE if DONE >=80% of feedback entries and no TOO_HARD and no SORENESS',
-        windowDays,
-        totalFeedbackCount: total,
-        doneCount: done,
-        compliance,
-      },
-    });
-  }
+    })),
+    completedActivities: completedActivities.map((a) => ({
+      id: a.id,
+      startTime: a.startTime,
+      rpe: a.rpe,
+      painFlag: Boolean(a.painFlag),
+    })),
+  });
 
   // Dedupe by draftId + type + windowStart/end.
   const created: any[] = [];
