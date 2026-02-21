@@ -1198,27 +1198,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     setError(null);
     setInfo(null);
     try {
-      const weekLines = sessionsByWeek.map(([weekIndex, sessions]) => {
-        const label = getWeekLabel(weekIndex, sessions);
-        const summary = sessions
-          .map((session) => {
-            const day = DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day';
-            const discipline = String(session.discipline ?? '').toUpperCase();
-            const type = String(session.type ?? '');
-            const minutes = Number(session.durationMinutes ?? 0);
-            return `${day}: ${discipline} ${type} (${minutes} min)`;
-          })
-          .join('; ');
-        return `${label} — ${summary}`;
-      });
-
       const pdfUrl = `${window.location.origin}/api/ai-plan-builder/draft-plan/${encodeURIComponent(draftPlanId)}/skeleton-pdf`;
       const body = [
-        `Draft weekly plan ready for review (${weekLines.length} weeks).`,
+        `Draft weekly plan ready for review (${sessionsByWeek.length} weeks).`,
         '',
-        `PDF: ${pdfUrl}`,
-        '',
-        ...weekLines,
+        `Open PDF: ${pdfUrl}`,
         '',
         'Please review and reply with any requested changes before final publish.',
       ].join('\n');
@@ -1227,7 +1211,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         method: 'POST',
         data: { body, recipients: { athleteIds: [athleteId] } },
       });
-      setInfo('Weekly draft PDF link sent to athlete in Messages.');
+      setInfo('Weekly draft PDF sent via Messages. Open Coach or Athlete Messages to review.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to share skeleton with athlete.');
     } finally {

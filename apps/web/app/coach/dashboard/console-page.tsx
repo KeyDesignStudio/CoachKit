@@ -844,27 +844,20 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
 
-        <div className="mt-6">
-          <StravaVitalsSummaryCard
-            comparison={data?.stravaVitals ?? null}
-            loading={loading && !data}
-            title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
-            showLoadPanel={showLoadPanel}
-            onToggleLoadPanel={setShowLoadPanel}
-          />
-        </div>
-
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
-        {/* Review Inbox + Notifications split (desktop/tablet); centered on page */}
-        <div className="mt-10 mx-auto w-full px-4 md:px-0 md:max-w-[50%] md:min-w-[340px]">
-          {/* Review inbox */}
-          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            {/* Preserve vertical rhythm from the prior layout (title used to sit above the card). */}
-            <div className="mb-2" aria-hidden="true">
-              <div className="h-4" />
-            </div>
+        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div>
+            <StravaVitalsSummaryCard
+              comparison={data?.stravaVitals ?? null}
+              loading={loading && !data}
+              title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
+              showLoadPanel={showLoadPanel}
+              onToggleLoadPanel={setShowLoadPanel}
+            />
+          </div>
 
+          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             <Block title="Review inbox" padding={false} showHeaderDivider={false}>
               <div
                 className={cn(
