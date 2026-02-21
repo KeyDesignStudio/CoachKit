@@ -117,6 +117,16 @@ type AdaptationTimelineItem = {
   summary: string;
 };
 
+type CoachChangeTimelineEntry = {
+  id: string;
+  at: string;
+  source: 'proposal' | 'audit';
+  eventType: string;
+  status?: string | null;
+  summary: string;
+  proposalId?: string | null;
+};
+
 type AgentProposalPreview = {
   proposalId: string;
   proposedCount: number;
@@ -617,6 +627,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [latestSignalAt, setLatestSignalAt] = useState<string | null>(null);
   const [hasNewDataSinceLastEval, setHasNewDataSinceLastEval] = useState<boolean>(false);
   const [adaptationSignalTimeline, setAdaptationSignalTimeline] = useState<AdaptationTimelineItem[]>([]);
+  const [coachChangeTimeline, setCoachChangeTimeline] = useState<CoachChangeTimelineEntry[]>([]);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -1069,6 +1080,62 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   useEffect(() => {
     void refreshQueuedRecommendations({ silent: true });
   }, [refreshQueuedRecommendations]);
+
+  const refreshCoachChangeTimeline = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!draftPlanId) {
+        setCoachChangeTimeline([]);
+        return;
+      }
+      try {
+        const [proposalRes, auditRes] = await Promise.all([
+          request<{ proposals?: Array<any> }>(
+            `/api/coach/athletes/${athleteId}/ai-plan-builder/proposals?aiPlanDraftId=${encodeURIComponent(draftPlanId)}&limit=20`,
+            { method: 'GET' }
+          ),
+          request<{ audits?: Array<any> }>(
+            `/api/coach/athletes/${athleteId}/ai-plan-builder/audit?aiPlanDraftId=${encodeURIComponent(draftPlanId)}&limit=25`,
+            { method: 'GET' }
+          ),
+        ]);
+        const proposalEntries: CoachChangeTimelineEntry[] = (Array.isArray(proposalRes.proposals) ? proposalRes.proposals : []).map((p: any) => ({
+          id: `proposal:${String(p.id)}`,
+          at: String(p.createdAt ?? new Date().toISOString()),
+          source: 'proposal',
+          eventType: 'PROPOSAL_CREATED',
+          status: String(p.status ?? ''),
+          summary: String(p.rationaleText ?? 'Plan change proposal created.'),
+          proposalId: String(p.id),
+        }));
+        const auditEntries: CoachChangeTimelineEntry[] = (Array.isArray(auditRes.audits) ? auditRes.audits : []).map((a: any) => ({
+          id: `audit:${String(a.id)}`,
+          at: String(a.createdAt ?? new Date().toISOString()),
+          source: 'audit',
+          eventType: String(a.eventType ?? 'AUDIT_EVENT'),
+          summary: String(a.changeSummaryText ?? a.eventType ?? 'Plan change audit event'),
+          proposalId: a.proposalId ? String(a.proposalId) : null,
+        }));
+        const merged = [...proposalEntries, ...auditEntries]
+          .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
+          .slice(0, 24);
+        setCoachChangeTimeline(merged);
+      } catch {
+        if (!opts?.silent) {
+          setInfo('Unable to refresh change timeline right now.');
+        }
+      }
+    },
+    [athleteId, draftPlanLatest?.id, request]
+  );
+
+  useEffect(() => {
+    void refreshCoachChangeTimeline({ silent: true });
+  }, [refreshCoachChangeTimeline]);
+
+  useEffect(() => {
+    void refreshCoachChangeTimeline({ silent: true });
+  }, [changeSummary?.createdAt, recommendationRefreshAt, manualProposalPreview?.proposalId, agentProposalPreview?.proposalId, refreshCoachChangeTimeline]);
 
   useEffect(() => {
     return () => {
@@ -2738,6 +2805,41 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 </ul>
               </div>
             ) : null}
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach change timeline</div>
+                <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshCoachChangeTimeline()}>
+                  Refresh timeline
+                </Button>
+              </div>
+              {coachChangeTimeline.length ? (
+                <div className="space-y-2">
+                  {coachChangeTimeline.slice(0, 10).map((entry) => (
+                    <div key={entry.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs">
+                      <div className="font-medium">
+                        {entry.source === 'proposal' ? 'Proposal' : 'Audit'} · {entry.eventType}
+                        {entry.status ? ` · ${entry.status}` : ''}
+                      </div>
+                      <div className="mt-1 text-[var(--fg-muted)]">{entry.summary}</div>
+                      <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{new Date(entry.at).toLocaleString()}</div>
+                      {entry.source === 'proposal' && entry.status === 'PROPOSED' && entry.proposalId ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(entry.proposalId))}>
+                            Apply
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(entry.proposalId))}>
+                            Discard
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-[var(--fg-muted)]">No change timeline entries yet.</div>
+              )}
+            </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Week Carousel</div>
