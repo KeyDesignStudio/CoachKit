@@ -9,7 +9,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { planDiffSchema, type PlanDiffOp } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
 import { publishAiDraftPlan } from './publish';
-import { evaluateProposalHardSafety, summarizeProposalAction } from './adaptation-action-engine';
+import { evaluateProposalHardSafety, rewriteProposalDiffForSafeApply, summarizeProposalAction } from './adaptation-action-engine';
 import { assessTriggerQuality, buildReasonChain } from './adaptation-explainability';
 
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
@@ -155,7 +155,18 @@ export async function generatePlanChangeProposal(params: {
     },
   });
 
-  const ops: PlanDiffOp[] = suggestion.diff;
+  const rewriteSafety = rewriteProposalDiffForSafeApply({
+    setup: (draft.setupJson as any) ?? {},
+    sessions: draft.sessions.map((s) => ({
+      id: String(s.id),
+      weekIndex: Number(s.weekIndex ?? 0),
+      type: String(s.type ?? ''),
+      durationMinutes: Number(s.durationMinutes ?? 0),
+    })),
+    diff: suggestion.diff,
+    triggerTypes,
+  });
+  const ops: PlanDiffOp[] = rewriteSafety.diff;
   const rationaleText = suggestion.rationaleText;
   const respectsLocks = suggestion.respectsLocks;
   const hardSafety = evaluateProposalHardSafety({
@@ -197,6 +208,7 @@ export async function generatePlanChangeProposal(params: {
         rationaleText,
         triggerIds: triggers.map((t) => t.id),
         hardSafety,
+        rewriteSafety,
         changeSummaryText,
         triggerAssessment,
         reasonChain,
