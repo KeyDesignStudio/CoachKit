@@ -34,7 +34,12 @@ export async function POST(
   try {
     guardAiPlanBuilderRequest();
     const { user } = await requireCoach();
-    const body = (await request.json()) as { eventType?: string; proposalId?: string; diffJson?: unknown };
+    const body = (await request.json()) as {
+      eventType?: string;
+      proposalId?: string;
+      changeSummaryText?: string;
+      diffJson?: unknown;
+    };
 
     const eventType = String(body?.eventType ?? '').trim();
     if (!eventType) {
@@ -46,6 +51,7 @@ export async function POST(
       athleteId: context.params.athleteId,
       eventType,
       proposalId: body?.proposalId,
+      changeSummaryText: body?.changeSummaryText,
       diffJson: body?.diffJson,
     });
 
