@@ -83,6 +83,12 @@ type ProgressOverlayState = {
   etaSeconds: number | null;
 };
 
+type ChangeSummaryState = {
+  title: string;
+  lines: string[];
+  createdAt: string;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -420,6 +426,40 @@ function buildSessionEditorState(session: any, detailJson: unknown): SessionEdit
   };
 }
 
+function summarizeSessionChanges(params: {
+  beforeSessions: any[];
+  afterSessions: any[];
+  scopeLabel: string;
+}): ChangeSummaryState {
+  const beforeById = new Map(params.beforeSessions.map((s) => [String(s?.id ?? ''), s]));
+  const lines: string[] = [];
+
+  for (const after of params.afterSessions) {
+    const id = String(after?.id ?? '');
+    const before = beforeById.get(id);
+    if (!before) continue;
+
+    const sessionLabel = `${DAY_NAMES_SUN0[Number(after?.dayOfWeek ?? 0)] ?? 'Day'} ${String(after?.discipline ?? '').toUpperCase()}`;
+    const deltas: string[] = [];
+    if (String(before?.discipline ?? '') !== String(after?.discipline ?? '')) deltas.push(`${String(before?.discipline ?? '').toUpperCase()}→${String(after?.discipline ?? '').toUpperCase()}`);
+    if (String(before?.type ?? '') !== String(after?.type ?? '')) deltas.push(`${String(before?.type ?? '').toLowerCase()}→${String(after?.type ?? '').toLowerCase()}`);
+    if (Number(before?.durationMinutes ?? 0) !== Number(after?.durationMinutes ?? 0)) {
+      deltas.push(`${Number(before?.durationMinutes ?? 0)}→${Number(after?.durationMinutes ?? 0)} min`);
+    }
+    if (String(before?.notes ?? '') !== String(after?.notes ?? '')) deltas.push('notes updated');
+    if (deltas.length) lines.push(`${sessionLabel}: ${deltas.join(', ')}`);
+    if (lines.length >= 10) break;
+  }
+
+  if (!lines.length) lines.push('No visible session-level deltas detected.');
+
+  return {
+    title: params.scopeLabel,
+    lines,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
   const hasAutoSyncedRequestRef = useRef(false);
@@ -449,6 +489,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [agentInstruction, setAgentInstruction] = useState<string>('');
   const [progressOverlay, setProgressOverlay] = useState<ProgressOverlayState | null>(null);
   const progressOverlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [changeSummary, setChangeSummary] = useState<ChangeSummaryState | null>(null);
+  const [weekEditWeekIndex, setWeekEditWeekIndex] = useState<number | null>(null);
+  const [weekEditDurationDelta, setWeekEditDurationDelta] = useState<string>('');
+  const [weekEditNoteSuffix, setWeekEditNoteSuffix] = useState<string>('');
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -575,6 +619,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [detailGenerationWeekIndex, weekCards]
   );
   const agentWeek = useMemo(() => weekCards.find((w) => w.weekIndex === agentWeekIndex) ?? weekCards[0] ?? null, [agentWeekIndex, weekCards]);
+  const weekEditWeek = useMemo(() => weekCards.find((w) => w.weekIndex === weekEditWeekIndex) ?? weekCards[0] ?? null, [weekCards, weekEditWeekIndex]);
   const agentSessionOptions = useMemo(
     () =>
       (agentWeek?.sessions ?? []).map((s: any) => ({
@@ -823,6 +868,25 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
     setAgentSessionId((prev) => (prev && agentSessionOptions.some((s) => s.value === prev) ? prev : agentSessionOptions[0]!.value));
   }, [agentSessionOptions]);
+
+  useEffect(() => {
+    if (!weekCards.length) return;
+    setWeekEditWeekIndex((prev) => (prev != null && weekCards.some((w) => w.weekIndex === prev) ? prev : weekCards[0]!.weekIndex));
+  }, [weekCards]);
+
+  const writeAuditEvent = useCallback(
+    async (eventType: string, diffJson: unknown) => {
+      try {
+        await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/audit`, {
+          method: 'POST',
+          data: { eventType, diffJson },
+        });
+      } catch {
+        // Non-blocking for coach flow.
+      }
+    },
+    [athleteId, request]
+  );
 
   useEffect(() => {
     return () => {
@@ -1131,6 +1195,13 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         method: 'PATCH',
         data: payload,
       });
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const afterSessions = Array.isArray(data.draftPlan?.sessions) ? data.draftPlan.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions: afterSessions.filter((s: any) => String(s.id) === sessionEditor.sessionId),
+        scopeLabel: 'Session edit applied',
+      });
       setDraftPlanLatest(data.draftPlan ?? null);
       const updatedSession = Array.isArray(data.draftPlan?.sessions)
         ? data.draftPlan.sessions.find((s: any) => String(s.id) === sessionEditor.sessionId)
@@ -1145,7 +1216,13 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           },
         }));
       }
+      setChangeSummary(summary);
       setInfo('Session updated.');
+      await writeAuditEvent('COACH_SESSION_EDIT_APPLIED', {
+        scope: 'session',
+        sessionId: sessionEditor.sessionId,
+        summary,
+      });
       setEditingSessionId(null);
       setSessionEditor(null);
     } catch (e) {
@@ -1153,7 +1230,66 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     } finally {
       setBusy(null);
     }
-  }, [athleteId, draftPlanLatest?.id, request, sessionEditor]);
+  }, [athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, sessionEditor, writeAuditEvent]);
+
+  const applyWeekBulkEdit = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!draftPlanId || !weekEditWeek) return;
+
+    const delta = Number(weekEditDurationDelta);
+    const hasDurationChange = Number.isFinite(delta) && delta !== 0;
+    const noteSuffix = weekEditNoteSuffix.trim();
+    if (!hasDurationChange && !noteSuffix) {
+      setError('Enter a duration delta and/or a note to apply week edits.');
+      return;
+    }
+
+    const edits = (weekEditWeek.sessions ?? []).map((s: any) => {
+      const nextDuration = hasDurationChange ? Math.max(20, Number(s.durationMinutes ?? 0) + Math.round(delta)) : undefined;
+      const nextNotes = noteSuffix
+        ? [String(s.notes ?? '').trim(), noteSuffix].filter(Boolean).join(' | ')
+        : undefined;
+      return {
+        sessionId: String(s.id),
+        ...(hasDurationChange ? { durationMinutes: nextDuration } : {}),
+        ...(noteSuffix ? { notes: nextNotes } : {}),
+      };
+    });
+
+    setBusy('week-bulk-edit');
+    setError(null);
+    setInfo(null);
+    try {
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const data = await request<{ draftPlan: any }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan`, {
+        method: 'PATCH',
+        data: {
+          draftPlanId,
+          sessionEdits: edits,
+        },
+      });
+      const afterSessions = Array.isArray(data.draftPlan?.sessions) ? data.draftPlan.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions: afterSessions.filter((s: any) => Number(s.weekIndex ?? -1) === Number(weekEditWeek.weekIndex)),
+        scopeLabel: `Week ${Number(weekEditWeek.weekIndex) + 1} bulk edit applied`,
+      });
+      setDraftPlanLatest(data.draftPlan ?? null);
+      setChangeSummary(summary);
+      setInfo(`Week ${Number(weekEditWeek.weekIndex) + 1} updates applied.`);
+      await writeAuditEvent('COACH_WEEK_BULK_EDIT_APPLIED', {
+        scope: 'week',
+        weekIndex: weekEditWeek.weekIndex,
+        durationDelta: hasDurationChange ? Math.round(delta) : null,
+        noteSuffix: noteSuffix || null,
+        summary,
+      });
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply week edits.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, weekEditDurationDelta, weekEditNoteSuffix, weekEditWeek, writeAuditEvent]);
 
   const applyAgentAdjustment = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -1183,17 +1319,37 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           data: body,
         }
       );
+      const beforeSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+      const afterSessions = Array.isArray(data.draftPlan?.sessions) ? data.draftPlan.sessions : [];
+      const summary = summarizeSessionChanges({
+        beforeSessions,
+        afterSessions:
+          agentScope === 'session'
+            ? afterSessions.filter((s: any) => String(s.id) === String(agentSessionId ?? ''))
+            : agentScope === 'week'
+              ? afterSessions.filter((s: any) => Number(s.weekIndex ?? -1) === Number(agentWeek?.weekIndex ?? -1))
+              : afterSessions,
+        scopeLabel: `AI adjustment applied (${agentScope})`,
+      });
       setDraftPlanLatest(data.draftPlan ?? null);
       setSessionDetailsById({});
       setEditingSessionId(null);
       setSessionEditor(null);
+      setChangeSummary(summary);
       setInfo(`CoachKit AI applied ${Number(data.appliedCount ?? 0)} adjustment${Number(data.appliedCount ?? 0) === 1 ? '' : 's'}.`);
+      await writeAuditEvent('AI_AGENT_ADJUSTMENT_APPLIED', {
+        scope: agentScope,
+        weekIndex: agentScope === 'week' ? agentWeek?.weekIndex ?? null : null,
+        sessionId: agentScope === 'session' ? agentSessionId ?? null : null,
+        instruction,
+        summary,
+      });
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply AI adjustment.');
     } finally {
       setBusy(null);
     }
-  }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, request]);
+  }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, draftPlanLatest?.sessions, request, writeAuditEvent]);
 
   const shareSkeletonWithAthlete = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -1771,6 +1927,41 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach bulk week edit</div>
+              <div className="grid gap-2 md:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
+                  <Select value={String(weekEditWeek?.weekIndex ?? '')} onChange={(e) => setWeekEditWeekIndex(Number(e.target.value))}>
+                    {weekOptions.map((w) => (
+                      <option key={w.value} value={String(w.value)}>
+                        {w.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Duration delta (min)</label>
+                  <Input value={weekEditDurationDelta} onChange={(e) => setWeekEditDurationDelta(e.target.value)} placeholder="-10 or 10" inputMode="numeric" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Append note to week sessions (optional)</label>
+                  <Input value={weekEditNoteSuffix} onChange={(e) => setWeekEditNoteSuffix(e.target.value)} placeholder="Travel week: keep it controlled." />
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy != null || !weekEditWeek}
+                  onClick={() => void applyWeekBulkEdit()}
+                >
+                  Apply week edit
+                </Button>
+                <span className="text-xs text-[var(--fg-muted)]">Updates all sessions in the selected week and records a change summary.</span>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">CoachKit AI adjustment</div>
               <div className="grid gap-2 md:grid-cols-4">
                 <div>
@@ -1827,6 +2018,18 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <span className="text-xs text-[var(--fg-muted)]">Applies immediately to session/week/plan based on your instruction.</span>
               </div>
             </div>
+
+            {changeSummary ? (
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
+                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">What changed</div>
+                <div className="text-xs font-medium">{changeSummary.title}</div>
+                <ul className="mt-1 list-disc pl-4 text-xs">
+                  {changeSummary.lines.map((line, idx) => (
+                    <li key={`${changeSummary.createdAt}:${idx}:${line}`}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Week Carousel</div>
