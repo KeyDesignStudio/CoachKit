@@ -127,6 +127,13 @@ type CoachChangeTimelineEntry = {
   proposalId?: string | null;
 };
 
+type ProposalDiffPreview = {
+  proposalId: string;
+  preview: AgentProposalPreview['preview'];
+  applySafety: AgentProposalPreview['applySafety'];
+  loadedAt: string;
+};
+
 type AgentProposalPreview = {
   proposalId: string;
   proposedCount: number;
@@ -149,6 +156,30 @@ type AgentProposalPreview = {
     reasons?: Array<{ code: string; message: string }>;
   } | null;
 };
+
+function renderProposalWeeksList(preview: AgentProposalPreview['preview']) {
+  const weeks = Array.isArray(preview?.weeks) ? preview.weeks : [];
+  if (!weeks.length) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      {weeks.slice(0, 4).map((week) => (
+        <div key={`preview-week:${week.weekIndex}`} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs">
+          <div className="font-medium">
+            Week {Number(week.weekIndex) + 1} · {Number(week.beforeTotalMinutes)} -> {Number(week.afterTotalMinutes)} min
+          </div>
+          {Array.isArray(week.items) && week.items.length ? (
+            <ul className="mt-1 list-disc pl-4 text-[11px] text-[var(--fg-muted)]">
+              {week.items.slice(0, 4).map((item, idx) => (
+                <li key={`preview-week-item:${week.weekIndex}:${idx}:${item.text}`}>{item.text}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ))}
+      {weeks.length > 4 ? <div className="text-[11px] text-[var(--fg-muted)]">Showing first 4 impacted weeks.</div> : null}
+    </div>
+  );
+}
 
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
@@ -603,7 +634,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [detailGenerationWeekIndex, setDetailGenerationWeekIndex] = useState<number | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [sessionEditor, setSessionEditor] = useState<SessionEditorState | null>(null);
-  const [agentScope, setAgentScope] = useState<'session' | 'week' | 'plan'>('week');
+  const [agentScope, setAgentScope] = useState<'set' | 'session' | 'week' | 'plan'>('week');
   const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
   const [agentInstruction, setAgentInstruction] = useState<string>('');
@@ -628,6 +659,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [hasNewDataSinceLastEval, setHasNewDataSinceLastEval] = useState<boolean>(false);
   const [adaptationSignalTimeline, setAdaptationSignalTimeline] = useState<AdaptationTimelineItem[]>([]);
   const [coachChangeTimeline, setCoachChangeTimeline] = useState<CoachChangeTimelineEntry[]>([]);
+  const [timelineDiffPreview, setTimelineDiffPreview] = useState<ProposalDiffPreview | null>(null);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -1016,11 +1048,35 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [weekCards]);
 
   const writeAuditEvent = useCallback(
-    async (eventType: string, diffJson: unknown) => {
+    async (
+      eventType: string,
+      payload?: { proposalId?: string | null; changeSummaryText?: string | null; summary?: unknown; diffJson?: unknown } | unknown
+    ) => {
       try {
+        const normalized =
+          payload && typeof payload === 'object'
+            ? (payload as { proposalId?: string | null; changeSummaryText?: string | null; summary?: unknown; diffJson?: unknown })
+            : null;
+        const proposalId =
+          normalized && typeof normalized.proposalId === 'string' && normalized.proposalId.trim() ? normalized.proposalId.trim() : undefined;
+        const derivedSummary =
+          typeof normalized?.changeSummaryText === 'string' && normalized.changeSummaryText.trim()
+            ? normalized.changeSummaryText.trim()
+            : typeof normalized?.summary === 'string' && normalized.summary.trim()
+              ? normalized.summary.trim()
+              : normalized?.summary && typeof normalized.summary === 'object'
+                ? [String((normalized.summary as any).title ?? '').trim(), ...(((normalized.summary as any).lines ?? []) as string[]).slice(0, 2)]
+                    .filter(Boolean)
+                    .join(' | ')
+                : null;
         await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/audit`, {
           method: 'POST',
-          data: { eventType, diffJson },
+          data: {
+            eventType,
+            proposalId,
+            changeSummaryText: derivedSummary ?? undefined,
+            diffJson: normalized?.diffJson ?? payload,
+          },
         });
       } catch {
         // Non-blocking for coach flow.
@@ -1124,6 +1180,33 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         if (!opts?.silent) {
           setInfo('Unable to refresh change timeline right now.');
         }
+      }
+    },
+    [athleteId, draftPlanLatest?.id, request]
+  );
+
+  const loadTimelineProposalPreview = useCallback(
+    async (proposalId: string) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!proposalId || !draftPlanId) return;
+      setBusy('timeline-proposal-preview');
+      setError(null);
+      setInfo(null);
+      try {
+        const data = await request<{
+          preview?: AgentProposalPreview['preview'];
+          applySafety?: AgentProposalPreview['applySafety'];
+        }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/proposals/${encodeURIComponent(proposalId)}/preview?aiPlanDraftId=${encodeURIComponent(draftPlanId)}`);
+        setTimelineDiffPreview({
+          proposalId,
+          preview: data.preview ?? null,
+          applySafety: data.applySafety ?? null,
+          loadedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Unable to load proposal diff preview.');
+      } finally {
+        setBusy(null);
       }
     },
     [athleteId, draftPlanLatest?.id, request]
@@ -1640,7 +1723,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       instruction,
     };
     if (agentScope === 'week') body.weekIndex = agentWeek?.weekIndex ?? null;
-    if (agentScope === 'session') body.sessionId = agentSessionId;
+    if (agentScope === 'session' || agentScope === 'set') body.sessionId = agentSessionId;
 
     setBusy('agent-adjust-propose');
     setError(null);
@@ -1669,7 +1752,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       await writeAuditEvent('AI_AGENT_ADJUSTMENT_PROPOSED', {
         scope: agentScope,
         weekIndex: agentScope === 'week' ? agentWeek?.weekIndex ?? null : null,
-        sessionId: agentScope === 'session' ? agentSessionId ?? null : null,
+        sessionId: agentScope === 'session' || agentScope === 'set' ? agentSessionId ?? null : null,
         instruction,
         proposalId,
       });
@@ -2713,6 +2796,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                     {Number(manualProposalPreview.preview.summary.totalMinutesDelta ?? 0)}
                   </div>
                 ) : null}
+                {renderProposalWeeksList(manualProposalPreview.preview)}
                 {manualProposalPreview.applySafety?.wouldFailDueToLocks ? (
                   <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
                     {(manualProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
@@ -2741,7 +2825,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               <div className="grid gap-2 md:grid-cols-4">
                 <div>
                   <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Scope</label>
-                  <Select value={agentScope} onChange={(e) => setAgentScope(e.target.value as 'session' | 'week' | 'plan')}>
+                  <Select value={agentScope} onChange={(e) => setAgentScope(e.target.value as 'set' | 'session' | 'week' | 'plan')}>
+                    <option value="set">Single set block</option>
                     <option value="session">Single session</option>
                     <option value="week">Selected week</option>
                     <option value="plan">Entire plan</option>
@@ -2759,7 +2844,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                     </Select>
                   </div>
                 ) : null}
-                {agentScope === 'session' ? (
+                {agentScope === 'session' || agentScope === 'set' ? (
                   <div className="md:col-span-2">
                     <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Session</label>
                     <Select value={String(agentSessionId ?? '')} onChange={(e) => setAgentSessionId(e.target.value)}>
@@ -2785,7 +2870,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={busy != null || !agentInstruction.trim() || (agentScope === 'session' && !agentSessionId)}
+                  disabled={busy != null || !agentInstruction.trim() || ((agentScope === 'session' || agentScope === 'set') && !agentSessionId)}
                   onClick={() => void applyAgentAdjustment()}
                 >
                   Propose AI adjustment
@@ -2810,6 +2895,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                       : Number(agentProposalPreview.preview.summary.intensitySessionsDelta)}
                   </div>
                 ) : null}
+                {renderProposalWeeksList(agentProposalPreview.preview)}
                 {agentProposalPreview.applySafety?.wouldFailDueToLocks ? (
                   <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
                     {(agentProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
@@ -2852,6 +2938,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   Refresh timeline
                 </Button>
               </div>
+              {(() => {
+                const proposalEntries = coachChangeTimeline.filter((entry) => entry.source === 'proposal');
+                const proposed = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'PROPOSED').length;
+                const applied = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'APPLIED').length;
+                const rejected = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'REJECTED').length;
+                return (
+                  <div className="mb-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs text-[var(--fg-muted)]">
+                    Apply log: {proposed} pending · {applied} applied · {rejected} rejected
+                  </div>
+                );
+              })()}
               {coachChangeTimeline.length ? (
                 <div className="space-y-2">
                   {coachChangeTimeline.slice(0, 10).map((entry) => (
@@ -2862,6 +2959,13 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                       </div>
                       <div className="mt-1 text-[var(--fg-muted)]">{entry.summary}</div>
                       <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{new Date(entry.at).toLocaleString()}</div>
+                      {entry.proposalId ? (
+                        <div className="mt-2">
+                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void loadTimelineProposalPreview(String(entry.proposalId))}>
+                            View diff
+                          </Button>
+                        </div>
+                      ) : null}
                       {entry.source === 'proposal' && entry.status === 'PROPOSED' && entry.proposalId ? (
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(entry.proposalId))}>
@@ -2887,6 +2991,36 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               ) : (
                 <div className="text-xs text-[var(--fg-muted)]">No change timeline entries yet.</div>
               )}
+              {timelineDiffPreview ? (
+                <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Timeline diff preview</div>
+                  <div className="text-xs text-[var(--fg-muted)]">
+                    Proposal #{timelineDiffPreview.proposalId.slice(0, 8)} · loaded {new Date(timelineDiffPreview.loadedAt).toLocaleString()}
+                  </div>
+                  {timelineDiffPreview.preview?.summary ? (
+                    <div className="mt-2 text-xs">
+                      Sessions changed: {Number(timelineDiffPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                      {Number(timelineDiffPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
+                      {timelineDiffPreview.preview.summary.intensitySessionsDelta == null
+                        ? 'N/A'
+                        : Number(timelineDiffPreview.preview.summary.intensitySessionsDelta)}
+                    </div>
+                  ) : null}
+                  {renderProposalWeeksList(timelineDiffPreview.preview)}
+                  {timelineDiffPreview.applySafety?.wouldFailDueToLocks ? (
+                    <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                      {(timelineDiffPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                        <li key={`timeline-preview-lock:${idx}:${r.code}:${r.message}`}>{r.message}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <div className="mt-2">
+                    <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => setTimelineDiffPreview(null)}>
+                      Close preview
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">

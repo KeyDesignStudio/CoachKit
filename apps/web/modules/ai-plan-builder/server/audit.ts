@@ -9,6 +9,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 export const createAuditSchema = z.object({
   eventType: z.string().trim().min(1),
   proposalId: z.string().min(1).optional(),
+  changeSummaryText: z.string().trim().min(1).max(4_000).optional(),
   diffJson: z.unknown().optional(),
 });
 
@@ -17,6 +18,7 @@ export async function createPlanChangeAudit(params: {
   athleteId: string;
   eventType: string;
   proposalId?: string;
+  changeSummaryText?: string;
   diffJson?: unknown;
 }) {
   requireAiPlanBuilderV1Enabled();
@@ -28,6 +30,7 @@ export async function createPlanChangeAudit(params: {
       coachId: params.coachId,
       eventType: params.eventType,
       proposalId: params.proposalId ?? null,
+      changeSummaryText: params.changeSummaryText ?? null,
       diffJson: (params.diffJson ?? null) as Prisma.InputJsonValue,
     },
   });
