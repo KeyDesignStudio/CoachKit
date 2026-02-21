@@ -11,10 +11,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
+import { addDaysToDayKey, isDayKey, parseDayKeyToUtcDate } from '@/lib/day-key';
 import { renderWorkoutDetailFromSessionDetailV1 } from '@/lib/workoutDetailRenderer';
 
-import { DAY_NAMES_SUN0, daySortKey, normalizeWeekStart } from '../lib/week-start';
+import { DAY_NAMES_SUN0, dayOffsetFromWeekStart, daySortKey, normalizeWeekStart } from '../lib/week-start';
 import { sessionDetailV1Schema } from '../rules/session-detail';
 
 type AthleteProfileSummary = {
@@ -266,6 +266,24 @@ function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
   return `Week ${weekIndex + 1} (${startLabel} - ${endLabel})`;
 }
 
+function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
+  if (!isDayKey(dayKey)) return dayKey;
+  const date = parseDayKeyToUtcDate(dayKey);
+  const jsDay = date.getUTCDay();
+  const startJsDay = weekStart === 'sunday' ? 0 : 1;
+  const diff = (jsDay - startJsDay + 7) % 7;
+  return addDaysToDayKey(dayKey, -diff);
+}
+
+function formatDayKeyDdMmYyyy(dayKey: string): string {
+  if (!isDayKey(dayKey)) return '';
+  const d = parseDayKeyToUtcDate(dayKey);
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = String(d.getUTCFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
   const { request } = useApi();
   const hasAutoSyncedRequestRef = useRef(false);
@@ -383,6 +401,31 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const totalMinutes = selectedWeekSessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0);
     return { sessions: selectedWeekSessions.length, totalMinutes };
   }, [selectedWeekSessions]);
+
+  const selectedWeekSessionPresentation = useMemo(() => {
+    const setupStartDayKey =
+      typeof draftPlanLatest?.setupJson?.startDate === 'string' && isDayKey(draftPlanLatest.setupJson.startDate)
+        ? String(draftPlanLatest.setupJson.startDate)
+        : isDayKey(setup.startDate)
+          ? setup.startDate
+          : null;
+    const weekZeroStart = setupStartDayKey ? startOfWeekDayKeyWithWeekStart(setupStartDayKey, effectiveWeekStart) : null;
+
+    return selectedWeekSessions.map((session) => {
+      const sessionDayKeyRaw = typeof session?.dayKey === 'string' && isDayKey(session.dayKey) ? String(session.dayKey) : null;
+      const computedDayKey =
+        !sessionDayKeyRaw && weekZeroStart
+          ? addDaysToDayKey(
+              weekZeroStart,
+              Number(session.weekIndex ?? 0) * 7 + dayOffsetFromWeekStart(Number(session.dayOfWeek ?? 0), effectiveWeekStart)
+            )
+          : null;
+      const resolvedDayKey = sessionDayKeyRaw ?? computedDayKey;
+      const dayName = DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day';
+      const dayLabel = resolvedDayKey ? `${dayName} (${formatDayKeyDdMmYyyy(resolvedDayKey)})` : dayName;
+      return { session, dayLabel };
+    });
+  }, [draftPlanLatest?.setupJson?.startDate, effectiveWeekStart, selectedWeekSessions, setup.startDate]);
 
   const setupSync = useMemo(() => {
     const issues: string[] = [];
@@ -1019,12 +1062,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium">Coach blueprint priorities</label>
-            <Textarea value={setup.coachGuidanceText} onChange={(e) => setSetup((prev) => ({ ...prev, coachGuidanceText: e.target.value }))} rows={3} />
-          </div>
-
-            {requestContextApplied ? (
+          {requestContextApplied ? (
               <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
                 <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
                 <ul className="list-disc pl-4">
@@ -1109,7 +1147,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 Sessions in selected week
               </div>
               <div className="divide-y divide-[var(--border-subtle)]">
-                {selectedWeekSessions.map((session) => {
+                {selectedWeekSessionPresentation.map(({ session, dayLabel }) => {
                   const sessionId = String(session.id);
                   const lazyDetail = sessionDetailsById[sessionId]?.detailJson;
                   const parsed = sessionDetailV1Schema.safeParse(lazyDetail ?? session?.detailJson ?? null);
@@ -1119,7 +1157,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                     <div key={sessionId} className="space-y-2 px-3 py-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="font-medium">
-                          {DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day'} · {String(session.discipline ?? '').toUpperCase()} · {String(session.type ?? '')}
+                          {dayLabel} · {String(session.discipline ?? '').toUpperCase()} · {String(session.type ?? '')}
                         </div>
                         <div className="text-xs text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
                       </div>
