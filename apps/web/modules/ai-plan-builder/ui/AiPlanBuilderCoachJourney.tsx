@@ -285,6 +285,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
   const [sessionDetailsById, setSessionDetailsById] = useState<Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>>({});
+  const [detailGenerationScope, setDetailGenerationScope] = useState<'selected-week' | 'entire-plan'>('selected-week');
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -679,22 +680,72 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, request]
   );
 
-  const loadAllDetailsForSelectedWeek = useCallback(async () => {
-    if (!selectedWeekSessions.length) return;
-    setBusy('load-week-details');
+  const loadDetailsForScope = useCallback(async () => {
+    const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+    const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : selectedWeekSessions;
+    if (!sessionsForScope.length) return;
+
+    setBusy('load-scope-details');
     setError(null);
     setInfo(null);
     try {
-      for (const session of selectedWeekSessions) {
+      for (const session of sessionsForScope) {
         await loadSessionDetail(String(session.id));
       }
-      setInfo('Session details generated for this week.');
+      setInfo(
+        detailGenerationScope === 'entire-plan'
+          ? 'Detailed sessions generated for the full plan.'
+          : 'Detailed sessions generated for the selected week.'
+      );
     } catch (e) {
-      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate week details.');
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate detailed sessions.');
     } finally {
       setBusy(null);
     }
-  }, [loadSessionDetail, selectedWeekSessions]);
+  }, [detailGenerationScope, draftPlanLatest?.sessions, loadSessionDetail, selectedWeekSessions]);
+
+  const shareSkeletonWithAthlete = useCallback(async () => {
+    if (!sessionsByWeek.length) return;
+    setBusy('share-skeleton');
+    setError(null);
+    setInfo(null);
+    try {
+      const weekLines = sessionsByWeek.map(([weekIndex, sessions]) => {
+        const label = getWeekLabel(weekIndex, sessions);
+        const summary = sessions
+          .map((session) => {
+            const day = DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day';
+            const discipline = String(session.discipline ?? '').toUpperCase();
+            const type = String(session.type ?? '');
+            const minutes = Number(session.durationMinutes ?? 0);
+            return `${day}: ${discipline} ${type} (${minutes} min)`;
+          })
+          .join('; ');
+        return `${label} — ${summary}`;
+      });
+
+      const body = [
+        `Draft training block summary for review (${weekLines.length} weeks).`,
+        '',
+        ...weekLines,
+        '',
+        'Reply with any requested changes before final publish.',
+      ].join('\n');
+
+      await request('/api/messages/send', {
+        method: 'POST',
+        data: {
+          body,
+          recipients: { athleteIds: [athleteId] },
+        },
+      });
+      setInfo('Skeleton summary shared with athlete via Messages.');
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to share skeleton with athlete.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, request, sessionsByWeek]);
 
   const publishPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -997,7 +1048,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              Select one week, review its sessions, then generate detailed session prescriptions.
+              Share skeleton with athlete for review, then generate detailed sessions by week or for the full plan before publish.
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Skeleton sharing</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
+                  Share skeleton with athlete
+                </Button>
+                <span className="text-xs text-[var(--fg-muted)]">Sends a week-level summary to Messages for athlete feedback before final detail/publish.</span>
+              </div>
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
@@ -1016,8 +1077,25 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <Button size="sm" variant="secondary" disabled={busy != null || nextWeekIndex == null} onClick={() => nextWeekIndex != null && setSelectedWeekIndex(nextWeekIndex)}>
                   Next
                 </Button>
-                <Button size="sm" variant="secondary" disabled={busy != null || selectedWeekSessions.length === 0} onClick={() => void loadAllDetailsForSelectedWeek()}>
-                  Generate all details for this week
+              </div>
+            </div>
+
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Detail generation</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-[240px] flex-1">
+                  <Select value={detailGenerationScope} onChange={(e) => setDetailGenerationScope(e.target.value as 'selected-week' | 'entire-plan')}>
+                    <option value="selected-week">Selected week only</option>
+                    <option value="entire-plan">Entire plan</option>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy != null || (detailGenerationScope === 'selected-week' ? selectedWeekSessions.length === 0 : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)}
+                  onClick={() => void loadDetailsForScope()}
+                >
+                  {detailGenerationScope === 'entire-plan' ? 'Generate details for entire plan' : 'Generate details for selected week'}
                 </Button>
               </div>
             </div>
@@ -1046,9 +1124,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                         <div className="text-xs text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
                       </div>
                       {session.notes ? <div className="text-xs text-[var(--fg-muted)]">{String(session.notes)}</div> : null}
-                      <Button size="sm" variant="secondary" disabled={busy != null || sessionDetailsById[sessionId]?.loading} onClick={() => void loadSessionDetail(sessionId)}>
-                        {sessionDetailsById[sessionId]?.loading ? 'Generating...' : 'Generate detailed session'}
-                      </Button>
+                      {sessionDetailsById[sessionId]?.loading ? <div className="text-xs text-[var(--fg-muted)]">Generating detailed session...</div> : null}
                       {sessionDetailsById[sessionId]?.error ? <div className="text-xs text-red-700">{sessionDetailsById[sessionId]?.error}</div> : null}
                       {detailText ? (
                         <pre className="overflow-x-auto rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs whitespace-pre-wrap">
