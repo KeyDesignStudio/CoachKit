@@ -46,6 +46,10 @@ export type DraftPlanSetupV1 = {
     experienceLevel?: string;
     injuryStatus?: string;
     constraintsNotes?: string;
+    equipment?: string;
+    environmentTags?: string[];
+    fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked';
+    availableTimeMinutes?: number;
   };
 };
 
@@ -554,6 +558,87 @@ function humanizeWeekDurations(params: {
   return rounded.map(({ __step, __isLongDay, ...s }: any) => s);
 }
 
+function isKeySession(session: DraftWeekV1['sessions'][number]): boolean {
+  const notes = String(session.notes ?? '').toLowerCase();
+  if (session.type === 'tempo' || session.type === 'threshold') return true;
+  if (notes.includes('key session')) return true;
+  if (notes.includes('long run') || notes.includes('long ride') || notes.includes('brick')) return true;
+  return false;
+}
+
+function keySessionBand(setup: DraftPlanSetupV1): { min: number; max: number } {
+  const beginner = isBeginnerProfile(setup);
+  if (beginner) return { min: 2, max: 2 };
+  if (setup.riskTolerance === 'high') return { min: 3, max: 4 };
+  return { min: 2, max: 3 };
+}
+
+function enforceWeeklyKeySessionBudget(params: {
+  setup: DraftPlanSetupV1;
+  sessions: DraftWeekV1['sessions'];
+}): DraftWeekV1['sessions'] {
+  const next = params.sessions.map((s) => ({ ...s }));
+  const band = keySessionBand(params.setup);
+  const keyIndices = () => next.map((s, idx) => ({ idx, s })).filter((row) => isKeySession(row.s)).map((row) => row.idx);
+
+  // Too many keys: first downgrade intensity-only keys, then remove "key" notes.
+  let keys = keyIndices();
+  if (keys.length > band.max) {
+    const downgradeCandidates = keys
+      .filter((idx) => next[idx].type === 'tempo' || next[idx].type === 'threshold')
+      .sort((a, b) => Number(next[a].durationMinutes ?? 0) - Number(next[b].durationMinutes ?? 0));
+    for (const idx of downgradeCandidates) {
+      if (keyIndices().length <= band.max) break;
+      next[idx] = { ...next[idx], type: 'endurance', notes: 'Steady support session' };
+    }
+    keys = keyIndices();
+    if (keys.length > band.max) {
+      const noteOnlyCandidates = keys
+        .filter((idx) => String(next[idx].notes ?? '').toLowerCase().includes('key session'))
+        .sort((a, b) => Number(next[a].durationMinutes ?? 0) - Number(next[b].durationMinutes ?? 0));
+      for (const idx of noteOnlyCandidates) {
+        if (keyIndices().length <= band.max) break;
+        next[idx] = { ...next[idx], notes: null };
+      }
+    }
+  }
+
+  // Too few keys: promote longest non-key sessions.
+  keys = keyIndices();
+  if (keys.length < band.min) {
+    const promote = next
+      .map((s, idx) => ({ idx, s }))
+      .filter((row) => !isKeySession(row.s) && row.s.type !== 'recovery')
+      .sort((a, b) => Number(b.s.durationMinutes ?? 0) - Number(a.s.durationMinutes ?? 0));
+    for (const row of promote) {
+      if (keyIndices().length >= band.min) break;
+      next[row.idx] = { ...next[row.idx], notes: String(next[row.idx].notes ?? '').trim() ? `${String(next[row.idx].notes)} · Key session` : 'Key session' };
+    }
+  }
+
+  return next;
+}
+
+function reduceAdjacentIntensity(params: { sessions: DraftWeekV1['sessions']; weekStart: 'monday' | 'sunday' }): DraftWeekV1['sessions'] {
+  const next = params.sessions.map((s) => ({ ...s }));
+  const sorted = next
+    .map((s, idx) => ({ idx, s }))
+    .sort((a, b) => daySortKey(a.s.dayOfWeek, params.weekStart) - daySortKey(b.s.dayOfWeek, params.weekStart) || a.s.ordinal - b.s.ordinal);
+
+  let lastIntensitySortKey: number | null = null;
+  for (const row of sorted) {
+    const isIntensity = row.s.type === 'tempo' || row.s.type === 'threshold';
+    if (!isIntensity) continue;
+    const currentKey = daySortKey(row.s.dayOfWeek, params.weekStart);
+    if (lastIntensitySortKey != null && currentKey - lastIntensitySortKey <= 1) {
+      next[row.idx] = { ...next[row.idx], type: 'endurance', notes: 'Adjusted to avoid stacked stress' };
+      continue;
+    }
+    lastIntensitySortKey = currentKey;
+  }
+  return next;
+}
+
 export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): DraftPlanV1 {
   const days = stableDayList(setupRaw.weeklyAvailabilityDays);
   const weeksToEvent = clampInt(setupRaw.weeksToEvent, 1, 52);
@@ -734,7 +819,8 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     while (sessions.length < targetSessions) {
       const day = takeDay(days);
       if (day == null) break;
-      const isIntensity = intensityDays.includes(day);
+      const isSecondOnSameDay = (dayCounts.get(day) ?? 0) > 0;
+      const isIntensity = !isSecondOnSameDay && intensityDays.includes(day);
 
       const discipline: DraftDiscipline = disciplineQueue
         ? disciplineQueue[sessions.length % disciplineQueue.length]
@@ -774,7 +860,9 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       .sort((a, b) => daySortKey(a.dayOfWeek, weekStart) - daySortKey(b.dayOfWeek, weekStart) || a.ordinal - b.ordinal)
       .map((s, idx) => ({ ...s, ordinal: idx }));
 
-    const humanized = humanizeWeekDurations({ sessions: sorted, longDay });
+    const deStacked = reduceAdjacentIntensity({ sessions: sorted, weekStart });
+    const keyed = enforceWeeklyKeySessionBudget({ setup: effectiveSetup, sessions: deStacked });
+    const humanized = humanizeWeekDurations({ sessions: keyed, longDay });
 
     weeks.push({ weekIndex, locked: false, sessions: humanized });
   }
