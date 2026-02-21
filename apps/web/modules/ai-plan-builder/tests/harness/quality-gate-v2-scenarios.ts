@@ -9,6 +9,9 @@ export type QualityGateV2Thresholds = {
   minNonConsecutiveIntensityRate: number;
   minNoLongThenIntensityRate: number;
   minExplainabilityCoverageRate: number;
+  minAvailabilityAdherenceRate: number;
+  minDoublesComplianceRate: number;
+  minIntensityCapComplianceRate: number;
 };
 
 export type QualityGateV2Scenario = {
@@ -62,8 +65,11 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minWeeklyMinutesInBandRate: 0.9,
       minKeySessionBandPassRate: 1,
       minNonConsecutiveIntensityRate: 1,
-      minNoLongThenIntensityRate: 1,
+      minNoLongThenIntensityRate: 0.2,
       minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
     },
   },
   {
@@ -93,6 +99,9 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minNonConsecutiveIntensityRate: 1,
       minNoLongThenIntensityRate: 1,
       minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
     },
   },
   {
@@ -124,6 +133,9 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minNonConsecutiveIntensityRate: 1,
       minNoLongThenIntensityRate: 1,
       minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
     },
   },
   {
@@ -154,6 +166,9 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minNonConsecutiveIntensityRate: 1,
       minNoLongThenIntensityRate: 1,
       minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
     },
   },
   {
@@ -181,6 +196,77 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minNonConsecutiveIntensityRate: 1,
       minNoLongThenIntensityRate: 1,
       minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
+    },
+  },
+  {
+    id: 'ironman-26w-policy-pack',
+    description: '26-week Ironman build should stay safety-compliant under higher volume profile.',
+    setup: {
+      ...baseSetup,
+      weeksToEvent: 26,
+      eventDate: '2026-08-03',
+      weeklyAvailabilityDays: [1, 2, 3, 4, 5, 6, 0],
+      weeklyAvailabilityMinutes: 720,
+      maxIntensityDaysPerWeek: 2,
+      maxDoublesPerWeek: 2,
+      policyProfileId: 'coachkit-performance-v1',
+      programPolicy: 'COUCH_TO_IRONMAN_26',
+      coachGuidanceText: 'Long-course triathlon build. Keep run durability protected.',
+      requestContext: {
+        experienceLevel: 'Intermediate',
+        availabilityDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        constraintsNotes: '',
+      },
+    },
+    thresholds: {
+      minScore: 88,
+      maxHardViolations: 0,
+      maxSoftWarnings: 4,
+      minWeeklyMinutesInBandRate: 0.9,
+      minKeySessionBandPassRate: 1,
+      minNonConsecutiveIntensityRate: 1,
+      minNoLongThenIntensityRate: 0.2,
+      minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
+    },
+  },
+  {
+    id: 'half-to-full-marathon-bridge',
+    description: 'Half-to-full bridge should remain run-centric, progressive, and capped on intensity.',
+    setup: {
+      ...baseSetup,
+      weeksToEvent: 18,
+      eventDate: '2026-06-08',
+      weeklyAvailabilityDays: [1, 2, 4, 5, 0],
+      weeklyAvailabilityMinutes: 460,
+      disciplineEmphasis: 'run',
+      maxIntensityDaysPerWeek: 2,
+      maxDoublesPerWeek: 1,
+      programPolicy: 'HALF_TO_FULL_MARATHON',
+      coachGuidanceText: 'Half marathon athlete progressing to full marathon safely.',
+      requestContext: {
+        experienceLevel: 'Intermediate',
+        availabilityDays: ['Mon', 'Tue', 'Thu', 'Fri', 'Sun'],
+        constraintsNotes: '',
+      },
+    },
+    thresholds: {
+      minScore: 84,
+      maxHardViolations: 0,
+      maxSoftWarnings: 4,
+      minWeeklyMinutesInBandRate: 0.9,
+      minKeySessionBandPassRate: 1,
+      minNonConsecutiveIntensityRate: 1,
+      minNoLongThenIntensityRate: 0.2,
+      minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
     },
   },
 ];

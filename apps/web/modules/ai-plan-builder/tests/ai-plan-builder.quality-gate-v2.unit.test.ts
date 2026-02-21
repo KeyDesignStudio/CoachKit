@@ -22,6 +22,15 @@ describe('ai-plan-builder quality gate v2', () => {
       expect(result.explainabilityCoverageRate, `${scenario.id} explainability coverage`).toBeGreaterThanOrEqual(
         t.minExplainabilityCoverageRate
       );
+      expect(result.availabilityAdherenceRate, `${scenario.id} availability adherence rate`).toBeGreaterThanOrEqual(
+        t.minAvailabilityAdherenceRate
+      );
+      expect(result.doublesComplianceRate, `${scenario.id} doubles compliance rate`).toBeGreaterThanOrEqual(
+        t.minDoublesComplianceRate
+      );
+      expect(result.intensityCapComplianceRate, `${scenario.id} intensity cap compliance rate`).toBeGreaterThanOrEqual(
+        t.minIntensityCapComplianceRate
+      );
     }
   });
 
