@@ -180,7 +180,11 @@ export function CoachCalendarGrid({
                         key={row.athlete.userId}
                         data-testid="coach-calendar-athlete-row"
                         onContextMenu={(e) => onContextMenu(e, 'day', { date: day.dateKey, athleteId: row.athlete.userId })}
-                        onTouchStart={(e) => startLongPress(e, 'day', { date: day.dateKey, athleteId: row.athlete.userId })}
+                        onTouchStart={(e) => {
+                          const target = e.target as HTMLElement | null;
+                          if (target?.closest?.('[data-coach-session-touch-target="true"]')) return;
+                          startLongPress(e, 'day', { date: day.dateKey, athleteId: row.athlete.userId });
+                        }}
                         onTouchEnd={cancelLongPress}
                         onTouchCancel={cancelLongPress}
                         onTouchMove={cancelLongPress}
@@ -206,10 +210,23 @@ export function CoachCalendarGrid({
                           {row.dayItems.map((item) => (
                             <div
                               key={item.id}
-                              onTouchStart={(e) => startLongPress(e, 'session', item)}
-                              onTouchEnd={cancelLongPress}
-                              onTouchCancel={cancelLongPress}
-                              onTouchMove={cancelLongPress}
+                              data-coach-session-touch-target="true"
+                              onTouchStart={(e) => {
+                                e.stopPropagation();
+                                startLongPress(e, 'session', item);
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                cancelLongPress();
+                              }}
+                              onTouchCancel={(e) => {
+                                e.stopPropagation();
+                                cancelLongPress();
+                              }}
+                              onTouchMove={(e) => {
+                                e.stopPropagation();
+                                cancelLongPress();
+                              }}
                               style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                             >
                               <AthleteWeekSessionRow
