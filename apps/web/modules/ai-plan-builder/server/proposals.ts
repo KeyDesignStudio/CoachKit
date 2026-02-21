@@ -9,6 +9,7 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { planDiffSchema, type PlanDiffOp } from './adaptation-diff';
 import { applyPlanDiffToDraft } from './adaptation-diff';
 import { publishAiDraftPlan } from './publish';
+import { evaluateProposalHardSafety, summarizeProposalAction } from './adaptation-action-engine';
 
 import { getAiPlanBuilderAIForCoachRequest } from './ai';
 import type { AiAdaptationTriggerType } from '../ai/types';
@@ -112,22 +113,44 @@ export async function generatePlanChangeProposal(params: {
   const ops: PlanDiffOp[] = suggestion.diff;
   const rationaleText = suggestion.rationaleText;
   const respectsLocks = suggestion.respectsLocks;
+  const hardSafety = evaluateProposalHardSafety({
+    setup: (draft.setupJson as any) ?? {},
+    sessions: draft.sessions.map((s) => ({
+      id: String(s.id),
+      weekIndex: Number(s.weekIndex ?? 0),
+      type: String(s.type ?? ''),
+      durationMinutes: Number(s.durationMinutes ?? 0),
+    })),
+    diff: ops,
+    triggerTypes,
+  });
+  const changeSummaryText = summarizeProposalAction({
+    triggerTypes,
+    metrics: hardSafety.metrics,
+  });
+  const proposalStatus: 'PROPOSED' | 'DRAFT' = respectsLocks && hardSafety.ok ? 'PROPOSED' : 'DRAFT';
 
   const proposal = await prisma.planChangeProposal.create({
     data: {
       athleteId: params.athleteId,
       coachId: params.coachId,
-      status: 'PROPOSED',
+      status: proposalStatus,
       draftPlanId: draft.id,
-      proposalJson: { diffJson: ops, rationaleText, triggerIds: triggers.map((t) => t.id) } as Prisma.InputJsonValue,
+      proposalJson: {
+        diffJson: ops,
+        rationaleText,
+        triggerIds: triggers.map((t) => t.id),
+        hardSafety,
+        changeSummaryText,
+      } as Prisma.InputJsonValue,
       diffJson: ops as unknown as Prisma.InputJsonValue,
       rationaleText,
       triggerIds: triggers.map((t) => t.id),
-      respectsLocks,
+      respectsLocks: respectsLocks && hardSafety.ok,
     },
   });
 
-  return { proposal, diff: ops, triggerIds: triggers.map((t) => t.id) };
+  return { proposal, diff: ops, triggerIds: triggers.map((t) => t.id), hardSafety, changeSummaryText };
 }
 
 export async function listPlanChangeProposals(params: {
@@ -218,6 +241,44 @@ export async function approvePlanChangeProposal(params: {
   }
 
   const diff = parsed.data;
+  const [draftForSafety, triggerRows] = await Promise.all([
+    prisma.aiPlanDraft.findUnique({
+      where: { id: proposal.draftPlanId },
+      select: {
+        id: true,
+        setupJson: true,
+        sessions: {
+          select: { id: true, weekIndex: true, type: true, durationMinutes: true },
+        },
+      },
+    }),
+    proposal.triggerIds?.length
+      ? prisma.adaptationTrigger.findMany({
+          where: { id: { in: proposal.triggerIds }, athleteId: params.athleteId, coachId: params.coachId },
+          select: { triggerType: true },
+        })
+      : Promise.resolve([] as Array<{ triggerType: string }>),
+  ]);
+  if (!draftForSafety) throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+  const triggerTypes = Array.from(new Set(triggerRows.map((r) => String(r.triggerType)))).sort() as AiAdaptationTriggerType[];
+  const hardSafety = evaluateProposalHardSafety({
+    setup: (draftForSafety.setupJson as any) ?? {},
+    sessions: draftForSafety.sessions.map((s) => ({
+      id: String(s.id),
+      weekIndex: Number(s.weekIndex ?? 0),
+      type: String(s.type ?? ''),
+      durationMinutes: Number(s.durationMinutes ?? 0),
+    })),
+    diff,
+    triggerTypes,
+  });
+  if (!hardSafety.ok) {
+    throw new ApiError(409, 'HARD_SAFETY_BLOCKED', hardSafety.reasons.slice(0, 3).join(' | '));
+  }
+  const changeSummaryText = summarizeProposalAction({
+    triggerTypes,
+    metrics: hardSafety.metrics,
+  });
 
   const result = await prisma.$transaction(async (tx) => {
     // Ensure the draft still belongs to the same coach/athlete.
@@ -240,8 +301,13 @@ export async function approvePlanChangeProposal(params: {
         eventType: 'APPLY_PROPOSAL',
         actorType: 'COACH',
         draftPlanId: draft.id,
-        changeSummaryText: 'Applied plan change proposal to AiPlanDraft.',
-        diffJson: diff as unknown as Prisma.InputJsonValue,
+        changeSummaryText,
+        diffJson: {
+          diff,
+          triggerTypes,
+          hardSafety,
+          source: 'adaptation-action-engine',
+        } as Prisma.InputJsonValue,
       },
     });
 
@@ -376,6 +442,48 @@ export async function batchApproveSafeProposals(params: {
       results.push({ proposalId: String(proposal.id), ok: false, code: safety.code, message: safety.message });
       continue;
     }
+    const [draftForSafety, triggerRows] = await Promise.all([
+      prisma.aiPlanDraft.findUnique({
+        where: { id: params.aiPlanDraftId },
+        select: {
+          setupJson: true,
+          sessions: {
+            select: { id: true, weekIndex: true, type: true, durationMinutes: true },
+          },
+        },
+      }),
+      proposal.triggerIds?.length
+        ? prisma.adaptationTrigger.findMany({
+            where: { id: { in: proposal.triggerIds }, athleteId: params.athleteId, coachId: params.coachId },
+            select: { triggerType: true },
+          })
+        : Promise.resolve([] as Array<{ triggerType: string }>),
+    ]);
+    if (!draftForSafety) {
+      results.push({ proposalId: String(proposal.id), ok: false, code: 'NOT_FOUND', message: 'Draft plan not found.' });
+      continue;
+    }
+    const triggerTypes = Array.from(new Set(triggerRows.map((r) => String(r.triggerType)))).sort() as AiAdaptationTriggerType[];
+    const hardSafety = evaluateProposalHardSafety({
+      setup: (draftForSafety.setupJson as any) ?? {},
+      sessions: draftForSafety.sessions.map((s) => ({
+        id: String(s.id),
+        weekIndex: Number(s.weekIndex ?? 0),
+        type: String(s.type ?? ''),
+        durationMinutes: Number(s.durationMinutes ?? 0),
+      })),
+      diff,
+      triggerTypes,
+    });
+    if (!hardSafety.ok) {
+      results.push({
+        proposalId: String(proposal.id),
+        ok: false,
+        code: 'HARD_SAFETY_BLOCKED',
+        message: hardSafety.reasons.slice(0, 3).join(' | '),
+      });
+      continue;
+    }
 
     try {
       const approved = await approvePlanChangeProposal({
@@ -398,6 +506,59 @@ export async function batchApproveSafeProposals(params: {
   const failedCount = results.length - approvedCount;
 
   return { results, approvedCount, failedCount, draft: lastDraft };
+}
+
+export async function applySafeQueuedRecommendations(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  maxHours?: number;
+  maxToApply?: number;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const queued = await prisma.planChangeProposal.findMany({
+    where: {
+      athleteId: params.athleteId,
+      coachId: params.coachId,
+      draftPlanId: params.aiPlanDraftId,
+      status: 'PROPOSED',
+      respectsLocks: true,
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: Math.max(1, Math.min(25, params.maxToApply ?? 10)),
+  });
+  const proposalIds = queued.map((p) => String(p.id));
+  const batch = await batchApproveSafeProposals({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    aiPlanDraftId: params.aiPlanDraftId,
+    proposalIds,
+    maxHours: params.maxHours,
+  });
+  const appliedIds = batch.results.filter((r) => r.ok).map((r) => String(r.proposalId));
+  const audits = appliedIds.length
+    ? await prisma.planChangeAudit.findMany({
+        where: { athleteId: params.athleteId, coachId: params.coachId, proposalId: { in: appliedIds }, eventType: 'APPLY_PROPOSAL' },
+        orderBy: [{ createdAt: 'desc' }],
+        select: { proposalId: true, changeSummaryText: true },
+      })
+    : [];
+  const byProposal = new Map<string, string>();
+  for (const row of audits) {
+    const id = String(row.proposalId ?? '');
+    if (!id || byProposal.has(id)) continue;
+    byProposal.set(id, String(row.changeSummaryText ?? ''));
+  }
+  const appliedSummaries = appliedIds.map((id) => ({
+    proposalId: id,
+    summary: byProposal.get(id) || 'Applied adaptation change.',
+  }));
+  return {
+    ...batch,
+    appliedSummaries,
+  };
 }
 
 export async function batchApproveSafeProposalsWithMode(params: {
