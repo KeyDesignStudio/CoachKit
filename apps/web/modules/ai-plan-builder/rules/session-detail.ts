@@ -428,6 +428,9 @@ export function buildDeterministicSessionDetailV1(params: {
     equipment?: string | null;
     environmentTags?: string[] | null;
     fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked' | string | null;
+    weekIndex?: number | null;
+    dayOfWeek?: number | null;
+    sessionOrdinal?: number | null;
   };
 }): SessionDetailV1 {
   const discipline = String(params.discipline || '').trim().toLowerCase();
@@ -439,24 +442,152 @@ export function buildDeterministicSessionDetailV1(params: {
 
   const { warmup, main, cooldown } = splitDuration(durationMinutes);
 
-  const structure: SessionDetailV1['structure'] = [];
+  const keyStimulusText = (() => {
+    if (type === 'threshold') return 'raise sustainable race-adjacent output';
+    if (type === 'tempo') return 'build durable sub-threshold speed';
+    if (type === 'technique') return 'improve movement economy and technical quality';
+    if (type === 'recovery') return 'promote adaptation while reducing fatigue';
+    if (type === 'strength') return 'build resilient movement patterns and force control';
+    return 'build aerobic durability with controlled stress';
+  })();
 
+  const intensityByType: Record<string, { zone: 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5'; rpe: number; notes: string }> = {
+    recovery: { zone: 'Z1', rpe: 2, notes: 'Very easy / absorb load' },
+    technique: { zone: 'Z2', rpe: 4, notes: 'Technical quality' },
+    endurance: { zone: 'Z2', rpe: 4, notes: 'Steady aerobic' },
+    tempo: { zone: 'Z3', rpe: 6, notes: 'Controlled hard' },
+    threshold: { zone: 'Z4', rpe: 7, notes: 'Sustainably hard' },
+    strength: { zone: 'Z2', rpe: 5, notes: 'Controlled strength work' },
+  };
+  const intensity = intensityByType[type] ?? intensityByType.endurance;
+
+  const fatigueState = String(params.context?.fatigueState ?? '').toLowerCase();
+  const equipment = String(params.context?.equipment ?? '').toLowerCase();
+  const environment = (params.context?.environmentTags ?? []).map((v) => String(v).toLowerCase());
+  const availableTime = Number(params.context?.availableTimeMinutes ?? 0);
+  const variationSeed = Math.abs(
+    (Number(params.context?.weekIndex ?? 0) + 1) * 31 +
+      (Number(params.context?.dayOfWeek ?? 0) + 1) * 17 +
+      (Number(params.context?.sessionOrdinal ?? 0) + 1) * 11 +
+      durationMinutes
+  );
+  const pick = <T,>(items: T[]): T => {
+    if (!items.length) return '' as T;
+    return items[variationSeed % items.length]!;
+  };
+
+  const warmupSteps = (() => {
+    if (discipline === 'swim') return pick(['200m easy + 4 x 50m drill/swim by 25m', '300m relaxed swim with every 4th length backstroke', '8 min easy swim + 6 x 25m form drill']);
+    if (discipline === 'bike') return pick(['8-12 min easy spin, include 3 x 30s high cadence', '10 min progressive spin (Z1->Z2)', '5 min easy + 3 x 1 min spin-up / 1 min easy']);
+    if (discipline === 'run') return pick(['8-10 min easy jog + mobility + 4 strides', '10 min easy run + drills (A-skips/high knees)', '12 min easy jog with cadence focus']);
+    if (discipline === 'strength') return pick(['5-8 min mobility flow + activation bands', '10 min dynamic warm-up: hips, ankles, t-spine', '5 min easy cardio + movement prep']);
+    return `Easy ${displayDiscipline.toLowerCase()} + dynamic warm-up.`;
+  })();
+
+  const mainSteps = (() => {
+    const mainWork = Math.max(10, main);
+    if (discipline === 'swim' && type === 'technique') {
+      const reps = Math.max(4, Math.min(12, Math.floor(mainWork / 5)));
+      return pick([
+        `${reps} x 50m as 25m drill + 25m swim, 20s rest. Keep stroke length and relaxed exhale.`,
+        `4 x ${Math.max(100, Math.round((reps * 50) / 4 / 25) * 25)}m pull buoy, 30s rest, focus on body position.`,
+        `3 rounds: 200m steady + 4 x 25m build. Rest 30s between rounds.`,
+      ]);
+    }
+    if (discipline === 'bike' && type === 'endurance') {
+      const intervals = Math.max(2, Math.min(5, Math.round(mainWork / 15)));
+      const on = Math.max(8, Math.round(mainWork / intervals) - 2);
+      return pick([
+        `${intervals} x ${on} min steady Z2, 2 min easy between. Hold smooth cadence.`,
+        `${Math.max(20, mainWork - 10)} min continuous aerobic with cadence changes every 5 min.`,
+        `${Math.max(3, intervals)} x ${Math.max(6, on - 2)} min seated aerobic climbing effort, 2 min easy spin.`,
+      ]);
+    }
+    if (discipline === 'bike' && (type === 'tempo' || type === 'threshold')) {
+      const work = type === 'threshold' ? 8 : 10;
+      const reps = Math.max(2, Math.min(5, Math.floor(mainWork / (work + 4))));
+      const rest = type === 'threshold' ? 4 : 3;
+      const label = type === 'threshold' ? 'Z4 / RPE 7' : 'Z3 / RPE 6';
+      return pick([
+        `${reps} x ${work} min @ ${label}, ${rest} min easy between. Keep power/effort even.`,
+        `${Math.max(2, reps - 1)} x ${work + 2} min controlled hard, ${rest} min easy.`,
+        `Pyramid: 6-8-10-${Math.max(8, work)} min at ${label}, 3 min easy between steps.`,
+      ]);
+    }
+    if (discipline === 'run' && type === 'endurance') {
+      return pick([
+        `${Math.max(25, mainWork - 5)} min conversational run. Last 5 min can progress slightly if legs are fresh.`,
+        `${Math.max(20, mainWork - 10)} min easy run + 6 x 20s strides (walk back).`,
+        `${Math.max(3, Math.round(mainWork / 12))} x 8 min steady / 2 min easy jog.`,
+      ]);
+    }
+    if (discipline === 'run' && (type === 'tempo' || type === 'threshold')) {
+      const on = type === 'threshold' ? 6 : 8;
+      const reps = Math.max(3, Math.min(7, Math.floor(mainWork / (on + 3))));
+      const intensityText = type === 'threshold' ? '10k effort (RPE 7)' : 'half-marathon effort (RPE 6)';
+      return pick([
+        `${reps} x ${on} min @ ${intensityText}, 2-3 min easy jog between.`,
+        `${Math.max(12, mainWork - 12)} min sustained tempo after building for 8 min.`,
+        `Ladder: 4-6-8-6-4 min @ ${intensityText}, equal jog recoveries.`,
+      ]);
+    }
+    if (discipline === 'strength' || type === 'strength') {
+      const rounds = Math.max(2, Math.min(5, Math.round(mainWork / 10)));
+      return pick([
+        `${rounds} rounds: split squat 8/leg, single-leg RDL 8/leg, plank 45s, calf raise 12/leg.`,
+        `${rounds} rounds: goblet squat 10, step-up 8/leg, dead bug 10/side, side plank 30s/side.`,
+        `${rounds} rounds: hinge pattern + pull + anti-rotation core. Keep load controlled; stop with 2 reps in reserve.`,
+      ]);
+    }
+    if (type === 'recovery') {
+      return pick([
+        `${Math.max(15, mainWork - 5)} min very easy aerobic work. Keep breathing nasal/relaxed.`,
+        `Cadence and form reset: ${Math.max(3, Math.round(mainWork / 8))} x 4 min smooth + 2 min easy.`,
+        `${Math.max(20, mainWork - 10)} min easy movement with no hard surges.`,
+      ]);
+    }
+    return `${displayType} work at steady effort. Keep form smooth.`;
+  })();
+
+  const cooldownSteps = (() => {
+    if (discipline === 'swim') return pick(['Easy 100-200m choice stroke + 2 min mobility', '5-8 min easy swim, long strokes', '4 min easy swim + shoulder mobility']);
+    if (discipline === 'bike') return pick(['Easy spin, cadence down each minute; finish with hip flexor stretch', '5-10 min very easy spin + light mobility', 'Spin easy and keep breathing controlled to baseline']);
+    if (discipline === 'run') return pick(['Easy jog/walk to finish + calf/hamstring mobility', '5-10 min easy jog, then leg swings and calf work', 'Walk 3 min then light posterior-chain stretch']);
+    if (discipline === 'strength') return pick(['Gentle mobility and breathing reset', 'Light stretch: calves, hip flexors, glutes', 'Easy cooldown circuit + controlled breathing']);
+    return `Easy ${displayDiscipline.toLowerCase()} to finish, then light stretching.`;
+  })();
+
+  const structure: SessionDetailV1['structure'] = [];
   if (warmup > 0) {
     structure.push({
       blockType: 'warmup',
       durationMinutes: warmup,
       intensity: { zone: 'Z1', rpe: 2, notes: 'Easy' },
-      steps: `Easy ${displayDiscipline.toLowerCase()} + dynamic warm-up.`,
+      steps: warmupSteps,
     });
   }
 
-  if (main > 0) {
+  if (discipline === 'swim' && type === 'technique' && main >= 20) {
+    const drillMinutes = clampInt(Math.round(main * 0.3), 8, Math.max(8, main - 10));
+    structure.push({
+      blockType: 'drill',
+      durationMinutes: drillMinutes,
+      intensity: { zone: 'Z2', rpe: 4, notes: 'Form first' },
+      steps: 'Dedicated drill set: catch-up, fingertip drag, and 6-1-6 balance drill. Keep precision high.',
+    });
+    structure.push({
+      blockType: 'main',
+      durationMinutes: Math.max(10, main - drillMinutes),
+      intensity,
+      steps: mainSteps,
+    });
+  } else {
     const primaryBlockType: SessionDetailBlockType = discipline === 'strength' ? 'strength' : 'main';
     structure.push({
       blockType: primaryBlockType,
       durationMinutes: main,
-      intensity: { zone: 'Z2', rpe: 4, notes: 'Steady' },
-      steps: `${displayType} work at steady effort. Keep form smooth.`,
+      intensity,
+      steps: mainSteps,
     });
   }
 
@@ -465,31 +596,17 @@ export function buildDeterministicSessionDetailV1(params: {
       blockType: 'cooldown',
       durationMinutes: cooldown,
       intensity: { zone: 'Z1', rpe: 2, notes: 'Easy' },
-      steps: `Easy ${displayDiscipline.toLowerCase()} to finish, then light stretching.`,
+      steps: cooldownSteps,
     });
   }
 
   if (structure.length === 0) {
-    const primaryBlockType: SessionDetailBlockType = discipline === 'strength' ? 'strength' : 'main';
     structure.push({
-      blockType: primaryBlockType,
-      intensity: { zone: 'Z2', rpe: 4, notes: 'Steady' },
-      steps: `${displayType} work at steady effort. Keep form smooth.`,
+      blockType: discipline === 'strength' ? 'strength' : 'main',
+      intensity,
+      steps: mainSteps,
     });
   }
-
-  const keyStimulusText = (() => {
-    if (type === 'threshold') return 'raise sustainable race-adjacent output';
-    if (type === 'tempo') return 'build durable sub-threshold speed';
-    if (type === 'technique') return 'improve movement economy and technical quality';
-    if (type === 'recovery') return 'promote adaptation while reducing fatigue';
-    return 'build aerobic durability with controlled stress';
-  })();
-
-  const fatigueState = String(params.context?.fatigueState ?? '').toLowerCase();
-  const equipment = String(params.context?.equipment ?? '').toLowerCase();
-  const environment = (params.context?.environmentTags ?? []).map((v) => String(v).toLowerCase());
-  const availableTime = Number(params.context?.availableTimeMinutes ?? 0);
 
   const standardDuration = Math.max(20, durationMinutes);
   const shortDuration = Math.max(20, Math.min(standardDuration - 10, 45));
@@ -563,13 +680,16 @@ export function buildDeterministicSessionDetailV1(params: {
     structure,
     targets: {
       primaryMetric: 'RPE',
-      notes: 'Stay controlled; adjust down if fatigued.',
+      notes:
+        type === 'threshold' || type === 'tempo'
+          ? 'Hold effort at prescribed RPE/zone with repeatable pacing; stop if form or control drops.'
+          : 'Stay controlled; keep quality high and adjust down if fatigue, pain, or heat rises.',
     },
-    cues: ['Smooth form', 'Breathe steady', 'Stop if sharp pain'],
+    cues: ['Smooth form under fatigue', 'Fuel/hydrate early for sessions > 60 min', 'Stop if sharp pain'],
     safetyNotes: 'Avoid maximal efforts if you feel pain, dizziness, or unusual fatigue.',
     explainability: {
       whyThis: `This session is designed to ${keyStimulusText}.`,
-      whyToday: 'It sits here to deliver quality stress while preserving the next key session.',
+      whyToday: "It is placed to build adaptation now while protecting tomorrow's training quality and recovery budget.",
       unlocksNext: 'Completing this well supports progression into the next quality workout and long-session durability.',
       ifMissed: 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
       ifCooked: 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',

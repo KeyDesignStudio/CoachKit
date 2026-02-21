@@ -26,6 +26,7 @@ import {
   reflowSessionDetailV1ToNewTotal,
   sessionDetailV1Schema,
 } from '../rules/session-detail';
+import type { SessionDetailBlockType, SessionDetailV1 } from '../rules/session-detail';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 import { buildEffectivePlanInputContext } from './effective-input';
@@ -1063,7 +1064,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
             discipline: s.discipline as any,
             type: s.type,
             durationMinutes: s.durationMinutes,
-            context: contextForDetails,
+            context: {
+              ...contextForDetails,
+              weekIndex: Number(s.weekIndex ?? 0),
+              dayOfWeek: Number(s.dayOfWeek ?? 0),
+              sessionOrdinal: Number(s.ordinal ?? 0),
+            },
           });
 
       const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
@@ -1075,7 +1081,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
               discipline: s.discipline as any,
               type: s.type,
               durationMinutes: s.durationMinutes,
-              context: contextForDetails,
+              context: {
+                ...contextForDetails,
+                weekIndex: Number(s.weekIndex ?? 0),
+                dayOfWeek: Number(s.dayOfWeek ?? 0),
+                sessionOrdinal: Number(s.ordinal ?? 0),
+              },
             }),
             totalMinutes: s.durationMinutes,
           });
@@ -1095,7 +1106,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
         discipline: s.discipline as any,
         type: s.type,
         durationMinutes: s.durationMinutes,
-        context: contextForDetails,
+        context: {
+          ...contextForDetails,
+          weekIndex: Number(s.weekIndex ?? 0),
+          dayOfWeek: Number(s.dayOfWeek ?? 0),
+          sessionOrdinal: Number(s.ordinal ?? 0),
+        },
       });
 
       const candidateDetail = normalizeSessionDetailV1DurationsToTotal({ detail: baseDetail, totalMinutes: s.durationMinutes });
@@ -1107,7 +1123,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
               discipline: s.discipline as any,
               type: s.type,
               durationMinutes: s.durationMinutes,
-              context: contextForDetails,
+              context: {
+                ...contextForDetails,
+                weekIndex: Number(s.weekIndex ?? 0),
+                dayOfWeek: Number(s.dayOfWeek ?? 0),
+                sessionOrdinal: Number(s.ordinal ?? 0),
+              },
             }),
             totalMinutes: s.durationMinutes,
           });
@@ -1350,6 +1371,8 @@ export async function updateAiDraftPlan(params: {
             draftId: true,
             locked: true,
             weekIndex: true,
+            dayOfWeek: true,
+            ordinal: true,
             discipline: true,
             type: true,
             durationMinutes: true,
@@ -1396,6 +1419,11 @@ export async function updateAiDraftPlan(params: {
         let nextDetailInputHash: string | null | undefined = undefined;
 
         if (shouldEditDetail) {
+          const detailContext = {
+            weekIndex: Number(existing.weekIndex ?? 0),
+            dayOfWeek: Number(existing.dayOfWeek ?? 0),
+            sessionOrdinal: Number(existing.ordinal ?? 0),
+          };
           // If discipline/type changes, rebuild a fresh deterministic template so text stays coherent.
           const baseDetail = (() => {
             if (disciplineChanged || typeChanged) {
@@ -1403,6 +1431,7 @@ export async function updateAiDraftPlan(params: {
                 discipline: nextDiscipline as any,
                 type: nextType,
                 durationMinutes: nextDurationMinutes,
+                context: detailContext,
               });
             }
 
@@ -1412,6 +1441,7 @@ export async function updateAiDraftPlan(params: {
               discipline: nextDiscipline as any,
               type: nextType,
               durationMinutes: nextDurationMinutes,
+              context: detailContext,
             });
           })();
 
@@ -1447,6 +1477,7 @@ export async function updateAiDraftPlan(params: {
                 discipline: nextDiscipline as any,
                 type: nextType,
                 durationMinutes: nextDurationMinutes,
+                context: detailContext,
               }),
               totalMinutes: nextDurationMinutes,
             });
@@ -1546,4 +1577,209 @@ export async function updateAiDraftPlan(params: {
       sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
     },
   });
+}
+
+const DAY_SHORT_TO_INDEX: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+function parseDurationDeltaMinutes(instruction: string): number | null {
+  const lower = instruction.toLowerCase();
+  const m = lower.match(/(\d+)\s*(?:min|mins|minutes)\b/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (/\b(reduce|cut|decrease|shorter|less)\b/.test(lower)) return -n;
+  if (/\b(increase|add|longer|more)\b/.test(lower)) return n;
+  return null;
+}
+
+function findBlockIndex(detail: SessionDetailV1, blockType: SessionDetailBlockType): number {
+  return detail.structure.findIndex((b: SessionDetailV1['structure'][number]) => b.blockType === blockType);
+}
+
+function buildAgentSessionEdit(params: {
+  instruction: string;
+  session: {
+    id: string;
+    discipline: string;
+    type: string;
+    durationMinutes: number;
+    notes: string | null;
+    detailJson: Prisma.JsonValue | null;
+  };
+}) {
+  const instruction = String(params.instruction ?? '').trim();
+  if (!instruction) return null;
+  const lower = instruction.toLowerCase();
+  const next: {
+    sessionId: string;
+    discipline?: string;
+    type?: string;
+    durationMinutes?: number;
+    notes?: string | null;
+    objective?: string | null;
+    blockEdits?: Array<{ blockIndex: number; steps: string }>;
+  } = { sessionId: params.session.id };
+
+  if (/\bswim\b/.test(lower)) next.discipline = 'swim';
+  else if (/\bbike\b|\bcycle\b|\bcycling\b/.test(lower)) next.discipline = 'bike';
+  else if (/\brun\b|\brunning\b/.test(lower)) next.discipline = 'run';
+  else if (/\bstrength\b/.test(lower)) next.discipline = 'strength';
+
+  if (/\brecovery\b/.test(lower)) next.type = 'recovery';
+  else if (/\btechnique\b|\bskills?\b/.test(lower)) next.type = 'technique';
+  else if (/\bthreshold\b/.test(lower)) next.type = 'threshold';
+  else if (/\btempo\b/.test(lower)) next.type = 'tempo';
+  else if (/\bendurance\b|\baerobic\b/.test(lower)) next.type = 'endurance';
+  else if (/\bstrength\b/.test(lower)) next.type = 'strength';
+
+  if (/\b(easier|reduce intensity|dial back|lower intensity)\b/.test(lower)) {
+    if (params.session.type === 'threshold') next.type = 'tempo';
+    else if (params.session.type === 'tempo') next.type = 'endurance';
+    else if (params.session.type === 'endurance') next.type = 'recovery';
+  } else if (/\b(harder|increase intensity|push)\b/.test(lower)) {
+    if (params.session.type === 'recovery') next.type = 'endurance';
+    else if (params.session.type === 'endurance') next.type = 'tempo';
+    else if (params.session.type === 'tempo') next.type = 'threshold';
+  }
+
+  const delta = parseDurationDeltaMinutes(instruction);
+  if (delta != null) {
+    next.durationMinutes = Math.max(20, Math.min(240, Number(params.session.durationMinutes ?? 0) + delta));
+  } else if (/\bshorter\b/.test(lower)) {
+    next.durationMinutes = Math.max(20, Math.round(Number(params.session.durationMinutes ?? 0) * 0.85));
+  } else if (/\blonger\b/.test(lower)) {
+    next.durationMinutes = Math.min(240, Math.round(Number(params.session.durationMinutes ?? 0) * 1.15));
+  }
+
+  const objectiveMatch = instruction.match(/(?:objective|purpose)\s*:\s*(.+)$/i);
+  if (objectiveMatch?.[1]) next.objective = objectiveMatch[1].trim().slice(0, 240);
+
+  const notesMatch = instruction.match(/(?:note|notes)\s*:\s*(.+)$/i);
+  if (notesMatch?.[1]) {
+    const merged = [String(params.session.notes ?? '').trim(), notesMatch[1].trim()].filter(Boolean).join(' | ');
+    next.notes = merged.slice(0, 10_000);
+  } else if (/\btravel\b/.test(lower)) {
+    const merged = [String(params.session.notes ?? '').trim(), 'Travel-adjusted session.'].filter(Boolean).join(' | ');
+    next.notes = merged.slice(0, 10_000);
+  }
+
+  const detailParsed = sessionDetailV1Schema.safeParse(params.session.detailJson ?? null);
+  if (detailParsed.success) {
+    const blockEdits: Array<{ blockIndex: number; steps: string }> = [];
+    const detail = detailParsed.data;
+    const lineParts = instruction.split(/\n|;/).map((s) => s.trim()).filter(Boolean);
+    for (const line of lineParts) {
+      const warm = line.match(/^warmup\s*:\s*(.+)$/i);
+      if (warm?.[1]) {
+        const idx = findBlockIndex(detail, 'warmup');
+        if (idx >= 0) blockEdits.push({ blockIndex: idx, steps: warm[1].trim().slice(0, 1_000) });
+      }
+      const main = line.match(/^(?:main|main set|set)\s*:\s*(.+)$/i);
+      if (main?.[1]) {
+        const idx = (() => {
+          const m = findBlockIndex(detail, 'main');
+          if (m >= 0) return m;
+          return findBlockIndex(detail, 'strength');
+        })();
+        if (idx >= 0) blockEdits.push({ blockIndex: idx, steps: main[1].trim().slice(0, 1_000) });
+      }
+      const cool = line.match(/^cooldown\s*:\s*(.+)$/i);
+      if (cool?.[1]) {
+        const idx = findBlockIndex(detail, 'cooldown');
+        if (idx >= 0) blockEdits.push({ blockIndex: idx, steps: cool[1].trim().slice(0, 1_000) });
+      }
+    }
+    if (blockEdits.length) next.blockEdits = blockEdits;
+  }
+
+  const changed =
+    next.discipline !== undefined ||
+    next.type !== undefined ||
+    next.durationMinutes !== undefined ||
+    next.notes !== undefined ||
+    next.objective !== undefined ||
+    (Array.isArray(next.blockEdits) && next.blockEdits.length > 0);
+  return changed ? next : null;
+}
+
+export async function applyAiAgentAdjustmentsToDraftPlan(params: {
+  coachId: string;
+  athleteId: string;
+  draftPlanId: string;
+  scope: 'session' | 'week' | 'plan';
+  instruction: string;
+  weekIndex?: number;
+  sessionId?: string;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const draft = await prisma.aiPlanDraft.findUnique({
+    where: { id: params.draftPlanId },
+    select: {
+      id: true,
+      athleteId: true,
+      coachId: true,
+      sessions: {
+        orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+        select: {
+          id: true,
+          weekIndex: true,
+          dayOfWeek: true,
+          discipline: true,
+          type: true,
+          durationMinutes: true,
+          notes: true,
+          detailJson: true,
+        },
+      },
+    },
+  });
+
+  if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
+    throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+  }
+
+  const sessions = draft.sessions;
+  const scopedSessions = (() => {
+    if (params.scope === 'session') return sessions.filter((s) => s.id === params.sessionId);
+    if (params.scope === 'week') return sessions.filter((s) => s.weekIndex === Number(params.weekIndex ?? -1));
+    return sessions;
+  })();
+
+  if (!scopedSessions.length) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'No sessions found for selected AI adjustment scope.');
+  }
+
+  const sessionEdits = scopedSessions
+    .map((session) =>
+      buildAgentSessionEdit({
+        instruction: params.instruction,
+        session: {
+          id: session.id,
+          discipline: String(session.discipline),
+          type: String(session.type),
+          durationMinutes: Number(session.durationMinutes ?? 0),
+          notes: session.notes,
+          detailJson: session.detailJson,
+        },
+      })
+    )
+    .filter((edit): edit is NonNullable<typeof edit> => Boolean(edit));
+
+  if (!sessionEdits.length) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Instruction did not produce any editable changes.');
+  }
+
+  const draftPlan = await updateAiDraftPlan({
+    coachId: params.coachId,
+    athleteId: params.athleteId,
+    draftPlanId: params.draftPlanId,
+    sessionEdits,
+  });
+
+  return {
+    draftPlan,
+    appliedCount: sessionEdits.length,
+  };
 }
