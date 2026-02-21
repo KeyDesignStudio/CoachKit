@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sessionRecipeV2Schema, type SessionRecipeV2 } from './session-recipe';
+type SessionRecipeTargetMetric = 'RPE' | 'ZONE' | 'PACE' | 'POWER' | 'HEART_RATE';
 
 export const sessionDetailBlockTypeSchema = z.enum(['warmup', 'main', 'cooldown', 'drill', 'strength']);
 export type SessionDetailBlockType = z.infer<typeof sessionDetailBlockTypeSchema>;
@@ -57,6 +59,7 @@ export const sessionDetailV1Schema = z
     safetyNotes: z.string().min(1).max(800).optional(),
     explainability: sessionDetailExplainabilitySchema.optional(),
     variants: z.array(sessionDetailVariantSchema).max(8).optional(),
+    recipeV2: sessionRecipeV2Schema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -419,6 +422,108 @@ function titleCaseWord(word: string): string {
   return s[0].toUpperCase() + s.slice(1);
 }
 
+function inferPrimaryGoal(params: { discipline: string; type: string }): SessionRecipeV2['primaryGoal'] {
+  const type = String(params.type ?? '').toLowerCase();
+  if (type === 'threshold') return 'threshold-development';
+  if (type === 'tempo') return 'tempo-control';
+  if (type === 'technique') return 'technique-quality';
+  if (type === 'recovery') return 'recovery-absorption';
+  if (type === 'strength') return 'strength-resilience';
+  if (type === 'endurance') return 'aerobic-durability';
+  if (String(params.discipline ?? '').toLowerCase() === 'brick') return 'race-specificity';
+  return 'aerobic-durability';
+}
+
+function inferTargetMetric(params: { discipline: string; type: string }): SessionRecipeTargetMetric {
+  const discipline = String(params.discipline ?? '').toLowerCase();
+  const type = String(params.type ?? '').toLowerCase();
+  if (discipline === 'bike' && (type === 'tempo' || type === 'threshold' || type === 'endurance')) return 'POWER';
+  if (discipline === 'run' && (type === 'tempo' || type === 'threshold')) return 'PACE';
+  return 'RPE';
+}
+
+function buildSessionRecipeV2(params: {
+  discipline: string;
+  type: string;
+  purpose: string;
+  structure: SessionDetailV1['structure'];
+  explainability: NonNullable<SessionDetailV1['explainability']>;
+}): SessionRecipeV2 {
+  const metric = inferTargetMetric({ discipline: params.discipline, type: params.type });
+  const defaultValue =
+    metric === 'POWER'
+      ? params.type === 'threshold'
+        ? 'Z4 / RPE 7'
+        : params.type === 'tempo'
+          ? 'Z3 / RPE 6'
+          : 'Z2 / RPE 4'
+      : metric === 'PACE'
+        ? params.type === 'threshold'
+          ? '10k effort / RPE 7'
+          : 'HM effort / RPE 6'
+        : params.type === 'recovery'
+          ? 'RPE 2-3'
+          : params.type === 'technique'
+            ? 'RPE 3-4'
+            : 'RPE 4-6';
+
+  const blocks: SessionRecipeV2['blocks'] = params.structure.map((b) => {
+    const entry: SessionRecipeV2['blocks'][number] = {
+      key: b.blockType,
+      ...(typeof b.durationMinutes === 'number' ? { durationMinutes: b.durationMinutes } : {}),
+      ...(b.steps
+        ? {
+            notes: b.steps
+              .split(/\.\s+/)
+              .map((x) => x.trim())
+              .filter(Boolean)
+              .slice(0, 3),
+          }
+        : {}),
+    };
+
+    if (b.blockType === 'main' || b.blockType === 'drill' || b.blockType === 'strength') {
+      entry.target = {
+        metric,
+        value: defaultValue,
+        notes: b.intensity?.notes || undefined,
+      };
+      if (/\bx\b/i.test(b.steps)) {
+        entry.intervals = [
+          {
+            on: 'Structured work set',
+            intent: 'Deliver the primary adaptation with controlled execution.',
+          },
+        ];
+      }
+    }
+
+    return entry;
+  });
+
+  return sessionRecipeV2Schema.parse({
+    version: 'v2',
+    primaryGoal: inferPrimaryGoal({ discipline: params.discipline, type: params.type }),
+    executionSummary: params.purpose,
+    blocks,
+    adjustments: {
+      ifMissed: [
+        params.explainability.ifMissed,
+        'Do not stack missed intensity into the next day.',
+      ],
+      ifCooked: [
+        params.explainability.ifCooked,
+        'Reduce intensity first, then reduce volume if still flat.',
+      ],
+    },
+    qualityChecks: [
+      'Warm-up and cooldown included before and after key work.',
+      'Main set stays aligned to today’s primary purpose.',
+      'Execution should finish controlled, not all-out.',
+    ],
+  });
+}
+
 export function buildDeterministicSessionDetailV1(params: {
   discipline: string;
   type: string;
@@ -674,9 +779,26 @@ export function buildDeterministicSessionDetailV1(params: {
     });
   }
 
+  const explainability: NonNullable<SessionDetailV1['explainability']> = {
+    whyThis: `This session is designed to ${keyStimulusText}.`,
+    whyToday: "It is placed to build adaptation now while protecting tomorrow's training quality and recovery budget.",
+    unlocksNext: 'Completing this well supports progression into the next quality workout and long-session durability.',
+    ifMissed: 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
+    ifCooked: 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',
+  };
+
+  const purpose = `Primary purpose: ${keyStimulusText}.`;
+  const recipeV2 = buildSessionRecipeV2({
+    discipline,
+    type,
+    purpose,
+    structure,
+    explainability,
+  });
+
   return {
     objective: `${displayType} ${displayDiscipline.toLowerCase()} session`.trim(),
-    purpose: `Primary purpose: ${keyStimulusText}.`,
+    purpose,
     structure,
     targets: {
       primaryMetric: 'RPE',
@@ -687,13 +809,8 @@ export function buildDeterministicSessionDetailV1(params: {
     },
     cues: ['Smooth form under fatigue', 'Fuel/hydrate early for sessions > 60 min', 'Stop if sharp pain'],
     safetyNotes: 'Avoid maximal efforts if you feel pain, dizziness, or unusual fatigue.',
-    explainability: {
-      whyThis: `This session is designed to ${keyStimulusText}.`,
-      whyToday: "It is placed to build adaptation now while protecting tomorrow's training quality and recovery budget.",
-      unlocksNext: 'Completing this well supports progression into the next quality workout and long-session durability.',
-      ifMissed: 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
-      ifCooked: 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',
-    },
+    explainability,
     variants: variants.filter((v, idx, arr) => arr.findIndex((x) => x.label === v.label) === idx),
+    recipeV2,
   };
 }
