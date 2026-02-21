@@ -40,5 +40,32 @@ describe('ai-plan-builder session recipe v2', () => {
     if (!parsed.success) return;
     expect(parsed.data.primaryGoal).toBe('threshold-development');
   });
-});
 
+  it('downgrades threshold to recovery when fatigue state is cooked', () => {
+    const detail = buildDeterministicSessionDetailV1({
+      discipline: 'run',
+      type: 'threshold',
+      durationMinutes: 50,
+      context: { fatigueState: 'cooked' },
+    });
+    const recipe = (detail as any).recipeV2;
+    const parsed = sessionRecipeV2Schema.safeParse(recipe);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.primaryGoal).toBe('recovery-absorption');
+  });
+
+  it('caps generated detail duration to available time when smaller than planned', () => {
+    const detail = buildDeterministicSessionDetailV1({
+      discipline: 'bike',
+      type: 'endurance',
+      durationMinutes: 90,
+      context: { availableTimeMinutes: 45 },
+    });
+    const parsed = sessionDetailV1Schema.safeParse(detail);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const total = parsed.data.structure.reduce((sum, block) => sum + (block.durationMinutes ?? 0), 0);
+    expect(total).toBeLessThanOrEqual(45);
+  });
+});
