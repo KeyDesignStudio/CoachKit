@@ -310,6 +310,11 @@ export default function CoachDashboardConsolePage() {
     () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
     [user?.name, user?.timezone]
   );
+  const styledWelcome = useMemo(() => {
+    const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
+    if (!match) return { name: '', rest: welcomeMessage };
+    return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
+  }, [welcomeMessage]);
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
   const [customFrom, setCustomFrom] = useState('');
@@ -591,9 +596,14 @@ export default function CoachDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
-          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
-            <p className="justify-self-center text-center text-xl font-normal italic opacity-80 md:text-2xl">{welcomeMessage}</p>
+            <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
+            <p className="flex items-baseline gap-1 text-sm font-normal text-[var(--fg-muted)] md:text-base">
+              <span className="italic">G&apos;day</span>
+              {styledWelcome.name ? <span className="font-semibold text-[var(--text)]">{styledWelcome.name}.</span> : null}
+              <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
+            </p>
           </div>
         </div>
 

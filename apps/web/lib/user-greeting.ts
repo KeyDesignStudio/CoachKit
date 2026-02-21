@@ -69,15 +69,31 @@ function templatePoolForTimeOfDay(partOfDay: TimeOfDay): string[] {
   return EVENING_TEMPLATES;
 }
 
-function randomIndex(max: number): number {
-  if (max <= 1) return 0;
-  return Math.floor(Math.random() * max);
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function stableTemplateIndex(params: { max: number; firstName: string; timeZone?: string | null; partOfDay: TimeOfDay }): number {
+  if (params.max <= 1) return 0;
+  const dayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: params.timeZone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const seed = `${params.firstName.toLowerCase()}|${params.partOfDay}|${dayKey}`;
+  return hashString(seed) % params.max;
 }
 
 export function getWarmWelcomeMessage(params: { name?: string | null; timeZone?: string | null }): string {
   const firstName = getFirstName(params.name);
   const partOfDay = getTimeOfDay(params.timeZone);
   const templates = templatePoolForTimeOfDay(partOfDay);
-  const template = templates[randomIndex(templates.length)] ?? templates[0];
+  const template = templates[stableTemplateIndex({ max: templates.length, firstName, timeZone: params.timeZone, partOfDay })] ?? templates[0];
   return template.replaceAll('{firstName}', firstName);
 }
