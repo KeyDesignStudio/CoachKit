@@ -104,6 +104,12 @@ type QueuedRecommendation = {
   status?: string | null;
 };
 
+type AdaptationTimelineItem = {
+  kind: 'feedback' | 'completed';
+  at: string;
+  summary: string;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -569,6 +575,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [weekEditNoteSuffix, setWeekEditNoteSuffix] = useState<string>('');
   const [queuedRecommendations, setQueuedRecommendations] = useState<QueuedRecommendation[]>([]);
   const [recommendationRefreshAt, setRecommendationRefreshAt] = useState<string | null>(null);
+  const [lastEvaluatedAt, setLastEvaluatedAt] = useState<string | null>(null);
+  const [latestSignalAt, setLatestSignalAt] = useState<string | null>(null);
+  const [hasNewDataSinceLastEval, setHasNewDataSinceLastEval] = useState<boolean>(false);
+  const [adaptationSignalTimeline, setAdaptationSignalTimeline] = useState<AdaptationTimelineItem[]>([]);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -983,6 +993,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           createdProposal?: any | null;
           queuedRecommendations?: QueuedRecommendation[];
           latestTriggerIds?: string[];
+          lastEvaluatedAt?: string | null;
+          latestSignalAt?: string | null;
+          hasNewDataSinceLastEval?: boolean;
+          signalTimeline?: AdaptationTimelineItem[];
         }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/adaptations/recommendations/refresh`, {
           method: 'POST',
           data: { aiPlanDraftId: draftPlanId },
@@ -990,6 +1004,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         const queued = Array.isArray(data.queuedRecommendations) ? data.queuedRecommendations : [];
         setQueuedRecommendations(queued);
         setRecommendationRefreshAt(new Date().toISOString());
+        setLastEvaluatedAt(typeof data.lastEvaluatedAt === 'string' ? data.lastEvaluatedAt : null);
+        setLatestSignalAt(typeof data.latestSignalAt === 'string' ? data.latestSignalAt : null);
+        setHasNewDataSinceLastEval(Boolean(data.hasNewDataSinceLastEval));
+        setAdaptationSignalTimeline(Array.isArray(data.signalTimeline) ? data.signalTimeline : []);
         if (data.createdProposal?.id && !opts?.silent) {
           setInfo('New adaptation recommendation queued for coach review.');
         }
@@ -2177,15 +2195,26 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Adaptation loop (next weeks)</div>
                   <div className="flex items-center gap-2">
-                    {queuedRecommendations.length ? (
+                    {queuedRecommendations.length && hasNewDataSinceLastEval ? (
                       <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900">
-                        {queuedRecommendations.length} queued recommendation{queuedRecommendations.length === 1 ? '' : 's'}
+                        New recommendation{queuedRecommendations.length === 1 ? '' : 's'} ({queuedRecommendations.length})
                       </span>
                     ) : null}
                     <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshQueuedRecommendations()}>
                       Refresh recommendations
                     </Button>
                   </div>
+                </div>
+                <div className="mt-2 grid gap-2 text-[11px] text-[var(--fg-muted)] md:grid-cols-2">
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
+                    Last evaluated: {lastEvaluatedAt ? new Date(lastEvaluatedAt).toLocaleString() : 'Not yet evaluated'}
+                  </div>
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
+                    Latest athlete signal: {latestSignalAt ? new Date(latestSignalAt).toLocaleString() : 'No recent signal'}
+                  </div>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                  {hasNewDataSinceLastEval ? 'New athlete data has arrived since the last adaptation evaluation.' : 'No new athlete data since the last adaptation evaluation.'}
                 </div>
                 <div className="grid gap-2 text-xs md:grid-cols-5">
                   <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
@@ -2235,6 +2264,18 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   </div>
                 ) : recommendationRefreshAt ? (
                   <div className="mt-2 text-xs text-[var(--fg-muted)]">No queued recommendations right now.</div>
+                ) : null}
+                {adaptationSignalTimeline.length ? (
+                  <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                    <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Recent signals</div>
+                    <ul className="space-y-1 text-[11px] text-[var(--fg-muted)]">
+                      {adaptationSignalTimeline.slice(0, 8).map((item, idx) => (
+                        <li key={`${item.at}:${idx}:${item.summary}`}>
+                          {new Date(item.at).toLocaleDateString()} - {item.summary}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 <div className="mt-3 space-y-2">
                   {adaptationSuggestions.slice(0, 2).map((s) => (
