@@ -77,6 +77,12 @@ type SessionEditorState = {
   blocks: Array<{ blockIndex: number; label: string; steps: string }>;
 };
 
+type ProgressOverlayState = {
+  title: string;
+  progress: number;
+  etaSeconds: number | null;
+};
+
 type IntakeLifecycle = {
   latestSubmittedIntake: any | null;
   openDraftIntake: any | null;
@@ -437,9 +443,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
   const [agentInstruction, setAgentInstruction] = useState<string>('');
-  const [generateProgress, setGenerateProgress] = useState<number | null>(null);
-  const [generateEtaSeconds, setGenerateEtaSeconds] = useState<number | null>(null);
-  const generateProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [progressOverlay, setProgressOverlay] = useState<ProgressOverlayState | null>(null);
+  const progressOverlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -817,11 +822,45 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
   useEffect(() => {
     return () => {
-      if (generateProgressTimerRef.current) {
-        clearInterval(generateProgressTimerRef.current);
-        generateProgressTimerRef.current = null;
+      if (progressOverlayTimerRef.current) {
+        clearInterval(progressOverlayTimerRef.current);
+        progressOverlayTimerRef.current = null;
       }
     };
+  }, []);
+
+  const startProgressOverlay = useCallback((params: { title: string; expectedSeconds: number }) => {
+    const expectedSeconds = Math.max(4, params.expectedSeconds);
+    const startedAt = Date.now();
+
+    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds });
+    if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
+    progressOverlayTimerRef.current = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+      const ratio = Math.min(0.92, elapsedSec / expectedSeconds);
+      const remaining = expectedSeconds - elapsedSec;
+      setProgressOverlay((prev) =>
+        prev
+          ? {
+              ...prev,
+              progress: Math.max(6, Math.round(ratio * 100)),
+              etaSeconds: remaining <= 0 ? 1 : remaining,
+            }
+          : prev
+      );
+    }, 400);
+  }, []);
+
+  const stopProgressOverlay = useCallback((success: boolean) => {
+    if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
+    progressOverlayTimerRef.current = null;
+    if (!success) {
+      setProgressOverlay(null);
+      return;
+    }
+
+    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0 } : prev));
+    setTimeout(() => setProgressOverlay(null), 350);
   }, []);
 
   useEffect(() => {
@@ -904,40 +943,14 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [applyRequestToSetup, athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   const generateWeeklyStructure = useCallback(async () => {
-    const startProgress = () => {
-      const expectedSeconds = Math.max(10, Math.min(40, Math.round(effectiveWeeksToCompletion * 0.7)));
-      const startedAt = Date.now();
-      setGenerateProgress(6);
-      setGenerateEtaSeconds(expectedSeconds);
-      if (generateProgressTimerRef.current) clearInterval(generateProgressTimerRef.current);
-      generateProgressTimerRef.current = setInterval(() => {
-        const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-        const ratio = Math.min(0.92, elapsedSec / expectedSeconds);
-        setGenerateProgress(Math.max(6, Math.round(ratio * 100)));
-        setGenerateEtaSeconds(Math.max(0, expectedSeconds - elapsedSec));
-      }, 400);
-    };
-    const stopProgress = (success: boolean) => {
-      if (generateProgressTimerRef.current) clearInterval(generateProgressTimerRef.current);
-      generateProgressTimerRef.current = null;
-      if (success) {
-        setGenerateProgress(100);
-        setGenerateEtaSeconds(0);
-        setTimeout(() => {
-          setGenerateProgress(null);
-          setGenerateEtaSeconds(null);
-        }, 350);
-      } else {
-        setGenerateProgress(null);
-        setGenerateEtaSeconds(null);
-      }
-    };
-
     setBusy('generate-plan');
     setError(null);
     setConstraintErrors([]);
     setInfo(null);
-    startProgress();
+    startProgressOverlay({
+      title: 'Generating weekly structure...',
+      expectedSeconds: Math.max(10, Math.min(40, Math.round(effectiveWeeksToCompletion * 0.7))),
+    });
 
     try {
       if (!isDayKey(setup.startDate)) throw new ApiClientError(400, 'VALIDATION_ERROR', 'Block start date is required.');
@@ -992,7 +1005,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       if (data.draftPlan?.id) await fetchPublishStatus(String(data.draftPlan.id));
       else setPublishStatus(null);
       setInfo('Weekly structure generated. Continue to week-by-week review.');
-      stopProgress(true);
+      stopProgressOverlay(true);
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'PLAN_CONSTRAINT_VIOLATION') {
         const violations = Array.isArray(e.diagnostics?.violations) ? (e.diagnostics?.violations as Array<{ message?: unknown }>) : [];
@@ -1003,11 +1016,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         setConstraintErrors(messages);
       }
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate weekly structure.');
-      stopProgress(false);
+      stopProgressOverlay(false);
     } finally {
       setBusy(null);
     }
-  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup, trainingRequest]);
+  }, [athleteId, effectiveWeeksToCompletion, fetchPublishStatus, request, setup, startProgressOverlay, stopProgressOverlay, trainingRequest]);
 
   const loadSessionDetail = useCallback(
     async (sessionId: string) => {
@@ -1030,7 +1043,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, request]
   );
 
-  const loadAllDetailsForWeek = useCallback(async (sessions: any[]) => {
+  const loadAllDetailsForWeek = useCallback(async (sessions: any[], successMessage: string) => {
     if (!sessions.length) return;
     setBusy('load-week-details');
     setError(null);
@@ -1039,9 +1052,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       for (const session of sessions) {
         await loadSessionDetail(String(session.id));
       }
-      setInfo('Session details generated for this week.');
+      setInfo(successMessage);
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate week details.');
+      throw e;
     } finally {
       setBusy(null);
     }
@@ -1051,8 +1065,19 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
     const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : detailGenerationWeek?.sessions ?? [];
     if (!sessionsForScope.length) return;
-    await loadAllDetailsForWeek(sessionsForScope);
-  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek]);
+    const isEntirePlan = detailGenerationScope === 'entire-plan';
+    startProgressOverlay({
+      title: isEntirePlan ? 'Generating details for entire plan...' : 'Generating details for selected week...',
+      expectedSeconds: Math.max(8, Math.min(120, Math.round(sessionsForScope.length * 2.2))),
+    });
+    try {
+      await loadAllDetailsForWeek(sessionsForScope, isEntirePlan ? 'Session details generated for the entire plan.' : 'Session details generated for this week.');
+      stopProgressOverlay(true);
+    } catch {
+      stopProgressOverlay(false);
+      throw new Error('Failed to generate session details.');
+    }
+  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek, startProgressOverlay, stopProgressOverlay]);
 
   const openSessionEditor = useCallback(
     async (session: any) => {
@@ -1167,7 +1192,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [agentInstruction, agentScope, agentSessionId, agentWeek?.weekIndex, athleteId, draftPlanLatest?.id, request]);
 
   const shareSkeletonWithAthlete = useCallback(async () => {
-    if (!sessionsByWeek.length) return;
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!sessionsByWeek.length || !draftPlanId) return;
     setBusy('share-skeleton');
     setError(null);
     setInfo(null);
@@ -1186,25 +1212,28 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         return `${label} — ${summary}`;
       });
 
+      const pdfUrl = `${window.location.origin}/api/ai-plan-builder/draft-plan/${encodeURIComponent(draftPlanId)}/skeleton-pdf`;
       const body = [
-        `Draft training block summary for review (${weekLines.length} weeks).`,
+        `Draft weekly plan ready for review (${weekLines.length} weeks).`,
+        '',
+        `PDF: ${pdfUrl}`,
         '',
         ...weekLines,
         '',
-        'Reply with any requested changes before final publish.',
+        'Please review and reply with any requested changes before final publish.',
       ].join('\n');
 
       await request('/api/messages/send', {
         method: 'POST',
         data: { body, recipients: { athleteIds: [athleteId] } },
       });
-      setInfo('Skeleton summary shared with athlete via Messages.');
+      setInfo('Weekly draft PDF link sent to athlete in Messages.');
     } catch (e) {
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to share skeleton with athlete.');
     } finally {
       setBusy(null);
     }
-  }, [athleteId, request, sessionsByWeek]);
+  }, [athleteId, draftPlanLatest?.id, request, sessionsByWeek]);
 
   const publishPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -1259,20 +1288,20 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         </div>
       </div>
 
-      {generateProgress != null ? (
+      {progressOverlay ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/15">
           <div className="w-[min(560px,90vw)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-lg">
-            <div className="text-sm font-medium">Generating weekly structure...</div>
+            <div className="text-sm font-medium">{progressOverlay.title}</div>
             <div className="mt-1 text-xs text-[var(--fg-muted)]">
-              {generateEtaSeconds != null ? `Estimated remaining: ${Math.max(0, generateEtaSeconds)}s` : 'Estimating...'}
+              {progressOverlay.etaSeconds != null ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s` : 'Estimating...'}
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
               <div
                 className="h-full rounded-full bg-[var(--primary)] transition-all duration-300"
-                style={{ width: `${Math.max(4, Math.min(100, generateProgress))}%` }}
+                style={{ width: `${Math.max(4, Math.min(100, progressOverlay.progress))}%` }}
               />
             </div>
-            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{Math.max(1, Math.min(100, Math.round(generateProgress)))}%</div>
+            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{Math.max(1, Math.min(100, Math.round(progressOverlay.progress)))}%</div>
           </div>
         </div>
       ) : null}
@@ -1708,12 +1737,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Skeleton sharing</div>
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Share weekly draft with athlete</div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
-                  Share skeleton with athlete
+                  Send weekly draft PDF
                 </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Sends week-level draft summary to Messages for athlete feedback.</span>
+                <span className="text-xs text-[var(--fg-muted)]">Creates a weekly draft PDF link and sends it in Messages for athlete feedback.</span>
               </div>
             </div>
 
