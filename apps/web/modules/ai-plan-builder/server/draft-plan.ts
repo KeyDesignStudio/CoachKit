@@ -62,6 +62,7 @@ export const draftPlanSetupV1Schema = z.object({
     .object({
       goalDetails: z.string().max(500).optional(),
       goalFocus: z.string().max(500).optional(),
+      primaryDisciplineFocus: z.enum(['balanced', 'swim', 'bike', 'run']).optional(),
       eventName: z.string().max(500).optional(),
       eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       goalTimeline: z.string().max(120).optional(),
@@ -193,6 +194,16 @@ function applyRequestContextToSetup(params: { setup: any }) {
   const experienceText = String(requestContext.experienceLevel ?? '').toLowerCase();
   const constraintsText = String(requestContext.constraintsNotes ?? '').toLowerCase();
 
+  if (
+    requestContext.primaryDisciplineFocus === 'balanced' ||
+    requestContext.primaryDisciplineFocus === 'swim' ||
+    requestContext.primaryDisciplineFocus === 'bike' ||
+    requestContext.primaryDisciplineFocus === 'run'
+  ) {
+    setup.disciplineEmphasis = requestContext.primaryDisciplineFocus;
+    effects.push(`Primary discipline focus set to ${requestContext.primaryDisciplineFocus}.`);
+  }
+
   if (goalText.includes('triathlon') || goalText.includes('ironman')) {
     setup.disciplineEmphasis = 'balanced';
     effects.push('Goal indicates multi-discipline event: emphasis set to Balanced.');
@@ -241,6 +252,7 @@ function applyRequestContextToSetup(params: { setup: any }) {
   setup.requestContextApplied = {
     goalDetails: requestContext.goalDetails ?? null,
     goalFocus: requestContext.goalFocus ?? null,
+    primaryDisciplineFocus: requestContext.primaryDisciplineFocus ?? null,
     eventName: requestContext.eventName ?? null,
     eventDate: requestContext.eventDate ?? null,
     goalTimeline: requestContext.goalTimeline ?? null,
