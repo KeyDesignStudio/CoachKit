@@ -230,8 +230,6 @@ export async function evaluateAdaptationTriggers(params: {
     include: {
       session: {
         select: { id: true, weekIndex: true, dayOfWeek: true, type: true, durationMinutes: true, notes: true },
-        rpe: true,
-        sleepQuality: true,
       },
     },
   });
