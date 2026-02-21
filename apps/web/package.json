@@ -17,6 +17,7 @@
     "test:ai-plan-builder:fast": "node scripts/test-ai-plan-builder.mjs --mode=fast",
     "test:ai-plan-builder:full": "node scripts/test-ai-plan-builder.mjs --mode=full",
     "test:ai-plan-builder:parallel": "node scripts/test-ai-plan-builder.mjs --pwShards=4 --pwRepeatOn=2",
+    "test:ai-plan-builder:gates": "vitest run modules/ai-plan-builder/tests/ai-plan-builder.phasec-evaluation-harness.unit.test.ts modules/ai-plan-builder/tests/ai-plan-builder.quality-gate-v2.unit.test.ts",
     "postinstall": "npx prisma generate --schema prisma/schema.prisma && node scripts/ensure-prisma-client-proxy.mjs",
     "prisma:generate": "npx prisma generate --schema prisma/schema.prisma && node scripts/ensure-prisma-client-proxy.mjs",
     "prisma:migrate:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
