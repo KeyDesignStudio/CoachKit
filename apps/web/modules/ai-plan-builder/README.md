@@ -139,6 +139,13 @@ Never commit keys and never expose them to client-side env vars.
 
 The harness prints a one-line repro command at startup and on failure.
 Run the command from `apps/web` with `APB_VERBOSE=1` to include full subprocess output.
+
+### Quality gates (G2)
+
+- Local/standard: `npm run test:ai-plan-builder:gates`
+- CI strict scorecard: `npm run test:ai-plan-builder:gates:ci`
+
+The CI command enforces aggregate scorecard floors across the expanded golden scenario pack (safety, load progression, intensity spacing, and explainability coverage).
 Notes:
 
 - The harness sets `DISABLE_AUTH=true` for deterministic local/CI runs.
