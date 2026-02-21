@@ -33,6 +33,7 @@ type AthleteProfileSummary = {
 type TrainingRequestForm = {
   goalDetails: string;
   goalFocus: string;
+  primaryDisciplineFocus: '' | 'balanced' | 'swim' | 'bike' | 'run';
   eventName: string;
   eventDate: string;
   goalTimeline: string;
@@ -82,6 +83,7 @@ const DAY_NAME_TO_SHORT: Record<string, string> = {
   Saturday: 'Sat',
 };
 const DAY_SHORTS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const DAY_SHORTS_MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const GOAL_TIMELINE_OPTIONS = ['No date in mind', 'In 6-8 weeks', 'In 2-3 months', 'In 3-6 months', 'In 6-12 months'];
 
 function formatApiErrorMessage(e: ApiClientError): string {
@@ -106,6 +108,7 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
   return {
     goalDetails: String(profile?.primaryGoal ?? ''),
     goalFocus: String(profile?.focus ?? ''),
+    primaryDisciplineFocus: deriveDisciplineEmphasis(profile?.disciplines ?? null),
     eventName: String(profile?.eventName ?? ''),
     eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
     goalTimeline: '',
@@ -128,6 +131,10 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
   return {
     goalDetails: String(map.goal_details ?? ''),
     goalFocus: String(map.goal_focus ?? ''),
+    primaryDisciplineFocus:
+      map.primary_discipline_focus === 'balanced' || map.primary_discipline_focus === 'swim' || map.primary_discipline_focus === 'bike' || map.primary_discipline_focus === 'run'
+        ? (map.primary_discipline_focus as TrainingRequestForm['primaryDisciplineFocus'])
+        : '',
     eventName: String(map.event_name ?? ''),
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
     goalTimeline: String(map.goal_timeline ?? ''),
@@ -143,6 +150,7 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
   return {
     goal_details: form.goalDetails.trim() || null,
     goal_focus: form.goalFocus.trim() || null,
+    primary_discipline_focus: form.primaryDisciplineFocus || null,
     event_name: form.eventName.trim() || null,
     event_date: form.eventDate || null,
     goal_timeline: form.goalTimeline || null,
@@ -275,13 +283,10 @@ function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 's
   return addDaysToDayKey(dayKey, -diff);
 }
 
-function formatDayKeyDdMmYyyy(dayKey: string): string {
+function formatDayKeyDate(dayKey: string): string {
   if (!isDayKey(dayKey)) return '';
   const d = parseDayKeyToUtcDate(dayKey);
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = String(d.getUTCFullYear());
-  return `${dd}/${mm}/${yyyy}`;
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
@@ -301,9 +306,13 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [trainingRequest, setTrainingRequest] = useState<TrainingRequestForm>(() => buildTrainingRequestFromProfile(null));
   const [setup, setSetup] = useState<SetupState>(() => buildSetupFromProfile(null));
 
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
+  const [weekCarouselStart, setWeekCarouselStart] = useState<number>(0);
   const [sessionDetailsById, setSessionDetailsById] = useState<Record<string, { detailJson: any | null; loading: boolean; error?: string | null }>>({});
   const [detailGenerationScope, setDetailGenerationScope] = useState<'selected-week' | 'entire-plan'>('selected-week');
+  const [detailGenerationWeekIndex, setDetailGenerationWeekIndex] = useState<number | null>(null);
+  const [generateProgress, setGenerateProgress] = useState<number | null>(null);
+  const [generateEtaSeconds, setGenerateEtaSeconds] = useState<number | null>(null);
+  const generateProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -338,6 +347,13 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       weeksToEventOverride,
       weeklyAvailabilityMinutes: Number.isFinite(weeklyAvailabilityMinutes) && weeklyAvailabilityMinutes > 0 ? weeklyAvailabilityMinutes : null,
       weeklyAvailabilityDays,
+      disciplineEmphasis:
+        trainingRequest.primaryDisciplineFocus === 'balanced' ||
+        trainingRequest.primaryDisciplineFocus === 'swim' ||
+        trainingRequest.primaryDisciplineFocus === 'bike' ||
+        trainingRequest.primaryDisciplineFocus === 'run'
+          ? trainingRequest.primaryDisciplineFocus
+          : null,
       coachGuidanceText: coachGuidanceText || null,
     };
   }, [trainingRequest]);
@@ -351,6 +367,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         if (requestDefaults.weeksToEventOverride) next.weeksToEventOverride = requestDefaults.weeksToEventOverride;
         if (requestDefaults.weeklyAvailabilityMinutes) next.weeklyAvailabilityMinutes = requestDefaults.weeklyAvailabilityMinutes;
         if (requestDefaults.weeklyAvailabilityDays.length) next.weeklyAvailabilityDays = stableDayList(requestDefaults.weeklyAvailabilityDays);
+        if (requestDefaults.disciplineEmphasis) next.disciplineEmphasis = requestDefaults.disciplineEmphasis;
         if (requestDefaults.coachGuidanceText) next.coachGuidanceText = requestDefaults.coachGuidanceText;
         return next;
       });
@@ -387,45 +404,57 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     return Array.from(byWeek.entries()).sort(([a], [b]) => a - b);
   }, [draftPlanLatest?.sessions, effectiveWeekStart]);
 
-  const weekOptions = useMemo(
-    () => sessionsByWeek.map(([weekIndex, weekSessions]) => ({ weekIndex, label: getWeekLabel(weekIndex, weekSessions) })),
+  const weekCards = useMemo(
+    () =>
+      sessionsByWeek.map(([weekIndex, weekSessions]) => ({
+        weekIndex,
+        label: getWeekLabel(weekIndex, weekSessions),
+        totalMinutes: weekSessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0),
+        sessions: weekSessions,
+      })),
     [sessionsByWeek]
   );
-
-  const selectedWeekSessions = useMemo(
-    () => sessionsByWeek.find(([weekIndex]) => weekIndex === selectedWeekIndex)?.[1] ?? [],
-    [selectedWeekIndex, sessionsByWeek]
+  const visibleWeekCards = useMemo(() => weekCards.slice(weekCarouselStart, weekCarouselStart + 4), [weekCards, weekCarouselStart]);
+  const weekOptions = useMemo(() => weekCards.map((w) => ({ value: w.weekIndex, label: w.label })), [weekCards]);
+  const detailGenerationWeek = useMemo(
+    () => weekCards.find((w) => w.weekIndex === detailGenerationWeekIndex) ?? weekCards[0] ?? null,
+    [detailGenerationWeekIndex, weekCards]
   );
 
-  const selectedWeekSummary = useMemo(() => {
-    const totalMinutes = selectedWeekSessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0);
-    return { sessions: selectedWeekSessions.length, totalMinutes };
-  }, [selectedWeekSessions]);
+  const setupStartDayKey =
+    typeof draftPlanLatest?.setupJson?.startDate === 'string' && isDayKey(draftPlanLatest.setupJson.startDate)
+      ? String(draftPlanLatest.setupJson.startDate)
+      : isDayKey(setup.startDate)
+        ? setup.startDate
+        : null;
+  const weekZeroStart = useMemo(
+    () => (setupStartDayKey ? startOfWeekDayKeyWithWeekStart(setupStartDayKey, effectiveWeekStart) : null),
+    [effectiveWeekStart, setupStartDayKey]
+  );
 
-  const selectedWeekSessionPresentation = useMemo(() => {
-    const setupStartDayKey =
-      typeof draftPlanLatest?.setupJson?.startDate === 'string' && isDayKey(draftPlanLatest.setupJson.startDate)
-        ? String(draftPlanLatest.setupJson.startDate)
-        : isDayKey(setup.startDate)
-          ? setup.startDate
-          : null;
-    const weekZeroStart = setupStartDayKey ? startOfWeekDayKeyWithWeekStart(setupStartDayKey, effectiveWeekStart) : null;
-
-    return selectedWeekSessions.map((session) => {
-      const sessionDayKeyRaw = typeof session?.dayKey === 'string' && isDayKey(session.dayKey) ? String(session.dayKey) : null;
+  const formatSessionHeadline = useCallback(
+    (session: any): string => {
+      const directDayKey = String(session?.dayKey ?? '');
       const computedDayKey =
-        !sessionDayKeyRaw && weekZeroStart
+        weekZeroStart && Number.isFinite(Number(session?.weekIndex)) && Number.isFinite(Number(session?.dayOfWeek))
           ? addDaysToDayKey(
               weekZeroStart,
               Number(session.weekIndex ?? 0) * 7 + dayOffsetFromWeekStart(Number(session.dayOfWeek ?? 0), effectiveWeekStart)
             )
-          : null;
-      const resolvedDayKey = sessionDayKeyRaw ?? computedDayKey;
-      const dayName = DAY_NAMES_SUN0[Number(session.dayOfWeek ?? 0)] ?? 'Day';
-      const dayLabel = resolvedDayKey ? `${dayName} (${formatDayKeyDdMmYyyy(resolvedDayKey)})` : dayName;
-      return { session, dayLabel };
-    });
-  }, [draftPlanLatest?.setupJson?.startDate, effectiveWeekStart, selectedWeekSessions, setup.startDate]);
+          : '';
+      const dayKey = isDayKey(directDayKey) ? directDayKey : computedDayKey;
+      const discipline = String(session?.discipline ?? '').toUpperCase();
+      const type = String(session?.type ?? '').toLowerCase();
+      const fallbackDay = DAY_NAMES_SUN0[Number(session?.dayOfWeek ?? 0)] ?? 'Day';
+      if (isDayKey(dayKey)) {
+        const d = parseDayKeyToUtcDate(dayKey);
+        const dayShort = DAY_SHORTS[d.getUTCDay()] ?? fallbackDay;
+        return `${dayShort} (${formatDayKeyDate(dayKey)}) ${discipline} - ${type}`;
+      }
+      return `${fallbackDay} ${discipline} - ${type}`;
+    },
+    [effectiveWeekStart, weekZeroStart]
+  );
 
   const setupSync = useMemo(() => {
     const issues: string[] = [];
@@ -475,12 +504,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
   }, [draftPlanLatest]);
 
-  const selectedWeekPosition = weekOptions.findIndex((w) => w.weekIndex === selectedWeekIndex);
-  const prevWeekIndex = selectedWeekPosition > 0 ? weekOptions[selectedWeekPosition - 1]?.weekIndex : null;
-  const nextWeekIndex =
-    selectedWeekPosition >= 0 && selectedWeekPosition < weekOptions.length - 1 ? weekOptions[selectedWeekPosition + 1]?.weekIndex : null;
   const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
-  const hasWeeklyDraft = hasDraft && weekOptions.length > 0;
+  const hasWeeklyDraft = hasDraft && weekCards.length > 0;
 
   const fetchAthleteProfile = useCallback(async () => {
     const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
@@ -555,13 +580,32 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [fetchAthleteProfile, fetchDraftPlanLatest, fetchIntakeLifecycle, fetchPublishStatus]);
 
   useEffect(() => {
-    if (!sessionsByWeek.length) {
-      setSelectedWeekIndex(0);
+    if (!weekCards.length) {
+      setWeekCarouselStart(0);
       return;
     }
-    const exists = sessionsByWeek.some(([weekIndex]) => weekIndex === selectedWeekIndex);
-    if (!exists) setSelectedWeekIndex(sessionsByWeek[0]?.[0] ?? 0);
-  }, [selectedWeekIndex, sessionsByWeek]);
+    if (weekCarouselStart >= weekCards.length) {
+      setWeekCarouselStart(Math.max(0, weekCards.length - 4));
+    }
+  }, [weekCards, weekCarouselStart]);
+
+  useEffect(() => {
+    if (!weekCards.length) {
+      setDetailGenerationWeekIndex(null);
+      return;
+    }
+    const firstWeek = weekCards[0]?.weekIndex ?? null;
+    setDetailGenerationWeekIndex((prev) => (prev == null || !weekCards.some((w) => w.weekIndex === prev) ? firstWeek : prev));
+  }, [weekCards]);
+
+  useEffect(() => {
+    return () => {
+      if (generateProgressTimerRef.current) {
+        clearInterval(generateProgressTimerRef.current);
+        generateProgressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (hasAutoSyncedRequestRef.current) return;
@@ -643,10 +687,40 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [applyRequestToSetup, athleteId, fetchIntakeLifecycle, intakeLifecycle?.openDraftIntake?.id, request, trainingRequest]);
 
   const generateWeeklyStructure = useCallback(async () => {
+    const startProgress = () => {
+      const expectedSeconds = Math.max(10, Math.min(40, Math.round(effectiveWeeksToCompletion * 0.7)));
+      const startedAt = Date.now();
+      setGenerateProgress(6);
+      setGenerateEtaSeconds(expectedSeconds);
+      if (generateProgressTimerRef.current) clearInterval(generateProgressTimerRef.current);
+      generateProgressTimerRef.current = setInterval(() => {
+        const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+        const ratio = Math.min(0.92, elapsedSec / expectedSeconds);
+        setGenerateProgress(Math.max(6, Math.round(ratio * 100)));
+        setGenerateEtaSeconds(Math.max(0, expectedSeconds - elapsedSec));
+      }, 400);
+    };
+    const stopProgress = (success: boolean) => {
+      if (generateProgressTimerRef.current) clearInterval(generateProgressTimerRef.current);
+      generateProgressTimerRef.current = null;
+      if (success) {
+        setGenerateProgress(100);
+        setGenerateEtaSeconds(0);
+        setTimeout(() => {
+          setGenerateProgress(null);
+          setGenerateEtaSeconds(null);
+        }, 350);
+      } else {
+        setGenerateProgress(null);
+        setGenerateEtaSeconds(null);
+      }
+    };
+
     setBusy('generate-plan');
     setError(null);
     setConstraintErrors([]);
     setInfo(null);
+    startProgress();
 
     try {
       if (!isDayKey(setup.startDate)) throw new ApiClientError(400, 'VALIDATION_ERROR', 'Block start date is required.');
@@ -665,9 +739,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         weeksToEventOverride: setup.weeksToEventOverride ?? undefined,
         weeklyAvailabilityDays: stableDayList(setup.weeklyAvailabilityDays),
         weeklyAvailabilityMinutes: Number(setup.weeklyAvailabilityMinutes),
+        disciplineEmphasis: (trainingRequest.primaryDisciplineFocus || setup.disciplineEmphasis) as SetupState['disciplineEmphasis'],
         requestContext: {
           goalDetails: trainingRequest.goalDetails || undefined,
           goalFocus: trainingRequest.goalFocus || undefined,
+          primaryDisciplineFocus: trainingRequest.primaryDisciplineFocus || undefined,
           eventName: trainingRequest.eventName || undefined,
           eventDate: trainingRequest.eventDate || undefined,
           goalTimeline: trainingRequest.goalTimeline || undefined,
@@ -686,9 +762,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
       setDraftPlanLatest(data.draftPlan ?? null);
       setSessionDetailsById({});
+      setWeekCarouselStart(0);
       if (data.draftPlan?.id) await fetchPublishStatus(String(data.draftPlan.id));
       else setPublishStatus(null);
       setInfo('Weekly structure generated. Continue to week-by-week review.');
+      stopProgress(true);
     } catch (e) {
       if (e instanceof ApiClientError && e.code === 'PLAN_CONSTRAINT_VIOLATION') {
         const violations = Array.isArray(e.diagnostics?.violations) ? (e.diagnostics?.violations as Array<{ message?: unknown }>) : [];
@@ -699,6 +777,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         setConstraintErrors(messages);
       }
       setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate weekly structure.');
+      stopProgress(false);
     } finally {
       setBusy(null);
     }
@@ -723,29 +802,29 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, request]
   );
 
-  const loadDetailsForScope = useCallback(async () => {
-    const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
-    const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : selectedWeekSessions;
-    if (!sessionsForScope.length) return;
-
-    setBusy('load-scope-details');
+  const loadAllDetailsForWeek = useCallback(async (sessions: any[]) => {
+    if (!sessions.length) return;
+    setBusy('load-week-details');
     setError(null);
     setInfo(null);
     try {
-      for (const session of sessionsForScope) {
+      for (const session of sessions) {
         await loadSessionDetail(String(session.id));
       }
-      setInfo(
-        detailGenerationScope === 'entire-plan'
-          ? 'Detailed sessions generated for the full plan.'
-          : 'Detailed sessions generated for the selected week.'
-      );
+      setInfo('Session details generated for this week.');
     } catch (e) {
-      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate detailed sessions.');
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to generate week details.');
     } finally {
       setBusy(null);
     }
-  }, [detailGenerationScope, draftPlanLatest?.sessions, loadSessionDetail, selectedWeekSessions]);
+  }, [loadSessionDetail]);
+
+  const loadDetailsForScope = useCallback(async () => {
+    const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+    const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : detailGenerationWeek?.sessions ?? [];
+    if (!sessionsForScope.length) return;
+    await loadAllDetailsForWeek(sessionsForScope);
+  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek]);
 
   const shareSkeletonWithAthlete = useCallback(async () => {
     if (!sessionsByWeek.length) return;
@@ -777,10 +856,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
       await request('/api/messages/send', {
         method: 'POST',
-        data: {
-          body,
-          recipients: { athleteIds: [athleteId] },
-        },
+        data: { body, recipients: { athleteIds: [athleteId] } },
       });
       setInfo('Skeleton summary shared with athlete via Messages.');
     } catch (e) {
@@ -843,6 +919,24 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         </div>
       </div>
 
+      {generateProgress != null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/15">
+          <div className="w-[min(560px,90vw)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-lg">
+            <div className="text-sm font-medium">Generating weekly structure...</div>
+            <div className="mt-1 text-xs text-[var(--fg-muted)]">
+              {generateEtaSeconds != null ? `Estimated remaining: ${Math.max(0, generateEtaSeconds)}s` : 'Estimating...'}
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
+              <div
+                className="h-full rounded-full bg-[var(--primary)] transition-all duration-300"
+                style={{ width: `${Math.max(4, Math.min(100, generateProgress))}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{Math.max(1, Math.min(100, Math.round(generateProgress)))}%</div>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
       {constraintErrors.length ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -880,6 +974,25 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               <Input value={trainingRequest.goalFocus} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalFocus: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium">Primary discipline focus</label>
+              <Select
+                value={trainingRequest.primaryDisciplineFocus}
+                onChange={(e) =>
+                  setTrainingRequest((p) => ({
+                    ...p,
+                    primaryDisciplineFocus: (e.target.value || '') as TrainingRequestForm['primaryDisciplineFocus'],
+                  }))
+                }
+                disabled={!hasOpenRequest}
+              >
+                <option value="">Select focus</option>
+                <option value="balanced">Balanced</option>
+                <option value="run">Run</option>
+                <option value="bike">Bike</option>
+                <option value="swim">Swim</option>
+              </Select>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium">Event name</label>
               <Input value={trainingRequest.eventName} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventName: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
@@ -905,7 +1018,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div>
             <label className="mb-1 block text-xs font-medium">Available days</label>
             <div className="flex flex-wrap gap-2">
-              {DAY_SHORTS.map((day) => {
+              {DAY_SHORTS_MON_FIRST.map((day) => {
                 const selected = trainingRequest.availabilityDays.includes(day);
                 return (
                   <button
@@ -983,13 +1096,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium">Week starts on</label>
-              <Select value={setup.weekStart} onChange={(e) => setSetup((prev) => ({ ...prev, weekStart: e.target.value as SetupState['weekStart'] }))}>
-                <option value="monday">Monday</option>
-                <option value="sunday">Sunday</option>
-              </Select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium">Block length (weeks)</label>
               <Input
                 value={setup.weeksToEventOverride ?? ''}
@@ -1022,32 +1128,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium">Primary discipline focus</label>
-              <Select value={setup.disciplineEmphasis} onChange={(e) => setSetup((prev) => ({ ...prev, disciplineEmphasis: e.target.value as SetupState['disciplineEmphasis'] }))}>
-                <option value="balanced">Balanced</option>
-                <option value="run">Run</option>
-                <option value="bike">Bike</option>
-                <option value="swim">Swim</option>
-              </Select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-medium">Risk tolerance</label>
               <Select value={setup.riskTolerance} onChange={(e) => setSetup((prev) => ({ ...prev, riskTolerance: e.target.value as SetupState['riskTolerance'] }))}>
                 <option value="low">Conservative</option>
                 <option value="med">Moderate</option>
                 <option value="high">Aggressive</option>
               </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Max intensity days/week</label>
-              <Input
-                value={setup.maxIntensityDaysPerWeek}
-                onChange={(e) => {
-                  const parsed = Number(e.target.value);
-                  setSetup((prev) => ({ ...prev, maxIntensityDaysPerWeek: Number.isFinite(parsed) ? Math.max(1, Math.min(3, parsed)) : 1 }));
-                }}
-                inputMode="numeric"
-              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Max doubles/week</label>
@@ -1062,20 +1148,18 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
           </div>
 
-          {requestContextApplied ? (
-              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-                <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
-                <ul className="list-disc pl-4">
-                  {Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
-                    (requestContextApplied.effects as unknown[]).map((effect, idx) => (
-                      <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
-                    ))
-                  ) : (
-                    <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
-                  )}
-                </ul>
-              </div>
-            ) : null}
+          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
+            <div className="mb-1 font-medium text-[var(--text)]">Applied request inputs</div>
+            <ul className="list-disc pl-4">
+              {requestContextApplied && Array.isArray(requestContextApplied.effects) && requestContextApplied.effects.length ? (
+                (requestContextApplied.effects as unknown[]).map((effect, idx) => (
+                  <li key={`${idx}:${String(effect)}`}>{String(effect)}</li>
+                ))
+              ) : (
+                <li>No explicit effects recorded yet. Generate weekly structure after updating the request.</li>
+              )}
+            </ul>
+          </div>
           </div>
         </Block>
       </div>
@@ -1086,7 +1170,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         ) : (
           <div className="space-y-3">
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              Share skeleton with athlete for review, then generate detailed sessions by week or for the full plan before publish.
+              Share skeleton with athlete for review, then generate detailed sessions by selected week or entire plan.
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
@@ -1095,42 +1179,39 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
                   Share skeleton with athlete
                 </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Sends a week-level summary to Messages for athlete feedback before final detail/publish.</span>
-              </div>
-            </div>
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Select Week</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="secondary" disabled={busy != null || prevWeekIndex == null} onClick={() => prevWeekIndex != null && setSelectedWeekIndex(prevWeekIndex)}>
-                  Previous
-                </Button>
-                <div className="min-w-[260px] flex-1">
-                  <Select value={String(selectedWeekIndex)} onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}>
-                    {weekOptions.map((week) => (
-                      <option key={week.weekIndex} value={String(week.weekIndex)}>{week.label}</option>
-                    ))}
-                  </Select>
-                </div>
-                <Button size="sm" variant="secondary" disabled={busy != null || nextWeekIndex == null} onClick={() => nextWeekIndex != null && setSelectedWeekIndex(nextWeekIndex)}>
-                  Next
-                </Button>
+                <span className="text-xs text-[var(--fg-muted)]">Sends week-level draft summary to Messages for athlete feedback.</span>
               </div>
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Detail generation</div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="min-w-[240px] flex-1">
+                <div className="min-w-[220px] flex-1">
                   <Select value={detailGenerationScope} onChange={(e) => setDetailGenerationScope(e.target.value as 'selected-week' | 'entire-plan')}>
                     <option value="selected-week">Selected week only</option>
                     <option value="entire-plan">Entire plan</option>
                   </Select>
                 </div>
+                {detailGenerationScope === 'selected-week' ? (
+                  <div className="min-w-[260px] flex-1">
+                    <Select value={String(detailGenerationWeek?.weekIndex ?? '')} onChange={(e) => setDetailGenerationWeekIndex(Number(e.target.value))}>
+                      {weekOptions.map((w) => (
+                        <option key={w.value} value={String(w.value)}>
+                          {w.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={busy != null || (detailGenerationScope === 'selected-week' ? selectedWeekSessions.length === 0 : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)}
+                  disabled={
+                    busy != null ||
+                    (detailGenerationScope === 'selected-week'
+                      ? !detailGenerationWeek || detailGenerationWeek.sessions.length === 0
+                      : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)
+                  }
                   onClick={() => void loadDetailsForScope()}
                 >
                   {detailGenerationScope === 'entire-plan' ? 'Generate details for entire plan' : 'Generate details for selected week'}
@@ -1138,41 +1219,65 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               </div>
             </div>
 
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-              Week summary: {selectedWeekSummary.sessions} sessions, {selectedWeekSummary.totalMinutes} minutes planned.
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Week Carousel</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy != null || weekCarouselStart <= 0}
+                  onClick={() => setWeekCarouselStart((p) => Math.max(0, p - 4))}
+                >
+                  Previous
+                </Button>
+                <div className="min-w-[220px] flex-1 text-xs text-[var(--fg-muted)]">
+                  Showing weeks {weekCards.length ? weekCarouselStart + 1 : 0}-
+                  {Math.min(weekCarouselStart + 4, weekCards.length)} of {weekCards.length}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy != null || weekCarouselStart + 4 >= weekCards.length}
+                  onClick={() => setWeekCarouselStart((p) => Math.min(Math.max(0, weekCards.length - 1), p + 4))}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
 
-            <div className="rounded-md border border-[var(--border-subtle)]">
-              <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">
-                Sessions in selected week
-              </div>
-              <div className="divide-y divide-[var(--border-subtle)]">
-                {selectedWeekSessionPresentation.map(({ session, dayLabel }) => {
-                  const sessionId = String(session.id);
-                  const lazyDetail = sessionDetailsById[sessionId]?.detailJson;
-                  const parsed = sessionDetailV1Schema.safeParse(lazyDetail ?? session?.detailJson ?? null);
-                  const detailText = parsed.success ? renderWorkoutDetailFromSessionDetailV1(parsed.data) : null;
-
-                  return (
-                    <div key={sessionId} className="space-y-2 px-3 py-3 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-medium">
-                          {dayLabel} · {String(session.discipline ?? '').toUpperCase()} · {String(session.type ?? '')}
-                        </div>
-                        <div className="text-xs text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
-                      </div>
-                      {session.notes ? <div className="text-xs text-[var(--fg-muted)]">{String(session.notes)}</div> : null}
-                      {sessionDetailsById[sessionId]?.loading ? <div className="text-xs text-[var(--fg-muted)]">Generating detailed session...</div> : null}
-                      {sessionDetailsById[sessionId]?.error ? <div className="text-xs text-red-700">{sessionDetailsById[sessionId]?.error}</div> : null}
-                      {detailText ? (
-                        <pre className="overflow-x-auto rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs whitespace-pre-wrap">
-                          {detailText}
-                        </pre>
-                      ) : null}
+            <div className="grid gap-3 xl:grid-cols-4 md:grid-cols-2">
+              {visibleWeekCards.map((week) => (
+                <div key={week.weekIndex} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)]">
+                  <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2">
+                    <div className="text-xs font-medium">{week.label}</div>
+                    <div className="text-xs text-[var(--fg-muted)]">{week.sessions.length} sessions · {week.totalMinutes} min</div>
+                  </div>
+                  <div className="space-y-2 px-3 py-3">
+                    <div className="space-y-2">
+                      {week.sessions.map((session) => {
+                        const sessionId = String(session.id);
+                        const lazyDetail = sessionDetailsById[sessionId]?.detailJson;
+                        const parsed = sessionDetailV1Schema.safeParse(lazyDetail ?? session?.detailJson ?? null);
+                        const detailText = parsed.success ? renderWorkoutDetailFromSessionDetailV1(parsed.data) : null;
+                        return (
+                          <div key={sessionId} className="rounded-md border border-[var(--border-subtle)] px-2 py-2">
+                            <div className="text-xs font-medium">{formatSessionHeadline(session)}</div>
+                            <div className="text-[11px] text-[var(--fg-muted)]">{Number(session.durationMinutes ?? 0)} min</div>
+                            {session.notes ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{String(session.notes)}</div> : null}
+                            {sessionDetailsById[sessionId]?.loading ? <div className="mt-2 text-[11px] text-[var(--fg-muted)]">Generating details...</div> : null}
+                            {sessionDetailsById[sessionId]?.error ? <div className="mt-1 text-[11px] text-red-700">{sessionDetailsById[sessionId]?.error}</div> : null}
+                            {detailText ? (
+                              <pre className="mt-2 max-h-48 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px] whitespace-pre-wrap">
+                                {detailText}
+                              </pre>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
