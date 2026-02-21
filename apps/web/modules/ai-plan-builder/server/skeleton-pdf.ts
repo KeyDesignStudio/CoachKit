@@ -25,6 +25,23 @@ function toDdMmYyyy(date: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function toLongDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+function mondayStartForDate(date: Date): Date {
+  const jsDay = date.getUTCDay();
+  const diff = (jsDay - 1 + 7) % 7;
+  const monday = new Date(date);
+  monday.setUTCDate(date.getUTCDate() - diff);
+  return monday;
+}
+
 function sessionDateForWeek(params: {
   startDate: string;
   weekStart: 'monday' | 'sunday';
@@ -69,20 +86,14 @@ function buildSkeletonLines(params: {
       .slice()
       .sort((a, b) => daySortKey(a.dayOfWeek, params.weekStart) - daySortKey(b.dayOfWeek, params.weekStart));
 
-    const dates = rows
-      .map((r) =>
-        sessionDateForWeek({
-          startDate: params.startDate,
-          weekStart: params.weekStart,
-          weekIndex,
-          dayOfWeek: Number(r.dayOfWeek ?? 0),
-        })
-      )
-      .filter((d): d is Date => Boolean(d));
-
-    const weekStartLabel = dates.length ? toDdMmYyyy(dates[0]!) : '';
-    const weekEndLabel = dates.length ? toDdMmYyyy(dates[dates.length - 1]!) : '';
-    lines.push(`Week ${weekIndex + 1}${weekStartLabel && weekEndLabel ? ` (${weekStartLabel} - ${weekEndLabel})` : ''}`);
+    const mondayBase = sessionDateForWeek({
+      startDate: params.startDate,
+      weekStart: params.weekStart,
+      weekIndex,
+      dayOfWeek: 1,
+    });
+    const monday = mondayBase ? mondayStartForDate(mondayBase) : null;
+    lines.push(`Week ${weekIndex + 1}${monday ? ` (commencing ${toLongDate(monday)})` : ''}`);
 
     for (const row of rows) {
       const when = sessionDateForWeek({
@@ -198,4 +209,3 @@ export function buildSkeletonPdfBuffer(params: {
   const lines = buildSkeletonLines(params);
   return createPdfFromLines(`CoachKit Draft Plan (${params.athleteName})`, lines);
 }
-

@@ -373,11 +373,15 @@ function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
     .sort();
   if (!dayKeys.length) return `Week ${weekIndex + 1}`;
 
-  const start = parseDayKeyToUtcDate(dayKeys[0]);
-  const end = parseDayKeyToUtcDate(dayKeys[dayKeys.length - 1]);
-  const startLabel = `${String(start.getUTCDate()).padStart(2, '0')}/${String(start.getUTCMonth() + 1).padStart(2, '0')}/${String(start.getUTCFullYear()).slice(-2)}`;
-  const endLabel = `${String(end.getUTCDate()).padStart(2, '0')}/${String(end.getUTCMonth() + 1).padStart(2, '0')}/${String(end.getUTCFullYear()).slice(-2)}`;
-  return `Week ${weekIndex + 1} (${startLabel} - ${endLabel})`;
+  const mondayKey = startOfWeekDayKeyWithWeekStart(dayKeys[0], 'monday');
+  const mondayDate = parseDayKeyToUtcDate(mondayKey);
+  const mondayLabel = new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(mondayDate);
+  return `Week ${weekIndex + 1} (commencing ${mondayLabel})`;
 }
 
 function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
