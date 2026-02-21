@@ -1723,7 +1723,7 @@ export async function applyAiAgentAdjustmentsToDraftPlan(params: {
   coachId: string;
   athleteId: string;
   draftPlanId: string;
-  scope: 'session' | 'week' | 'plan';
+  scope: 'set' | 'session' | 'week' | 'plan';
   instruction: string;
   weekIndex?: number;
   sessionId?: string;
@@ -1760,7 +1760,7 @@ export async function applyAiAgentAdjustmentsToDraftPlan(params: {
 
   const sessions = draft.sessions;
   const scopedSessions = (() => {
-    if (params.scope === 'session') return sessions.filter((s) => s.id === params.sessionId);
+    if (params.scope === 'session' || params.scope === 'set') return sessions.filter((s) => s.id === params.sessionId);
     if (params.scope === 'week') return sessions.filter((s) => s.weekIndex === Number(params.weekIndex ?? -1));
     return sessions;
   })();
