@@ -24,6 +24,7 @@ type AthleteMonthDayCellProps = {
   items: MonthSession[];
   isCurrentMonth: boolean;
   isToday: boolean;
+  isGoalDay?: boolean;
   athleteTimezone?: string;
   onDayClick: (dateStr: string) => void;
   onItemClick: (itemId: string) => void;
@@ -41,6 +42,7 @@ export function AthleteMonthDayCell({
   items,
   isCurrentMonth,
   isToday,
+  isGoalDay = false,
   athleteTimezone = 'Australia/Brisbane',
   onDayClick,
   onItemClick,
@@ -71,7 +73,11 @@ export function AthleteMonthDayCell({
         'transition-shadow',
         'hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
         !isCurrentMonth ? 'opacity-70' : '',
-        isToday ? 'border-2 border-[var(--today-border)]' : 'border-[var(--border-subtle)]'
+        isGoalDay
+          ? 'border-2 border-orange-400 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.25)]'
+          : isToday
+            ? 'border-2 border-[var(--today-border)]'
+            : 'border-[var(--border-subtle)]'
       )}
       onClick={() => onDayClick(dateStr)}
       role="button"
@@ -147,6 +153,9 @@ export function AthleteMonthDayCell({
           <div className="flex items-center gap-2">
             {isToday ? (
               <span className="text-[10px] rounded px-2 py-0.5 bg-blue-500/10 text-blue-700 border border-[var(--today-border)]">Today</span>
+            ) : null}
+            {isGoalDay ? (
+              <span className="text-[10px] rounded px-2 py-0.5 bg-orange-500/15 text-orange-700 border border-orange-300">Goal</span>
             ) : null}
             {onAddClick ? (
               <button

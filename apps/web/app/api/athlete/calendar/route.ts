@@ -10,7 +10,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
-import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey, getTodayDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 import {
   getEffectiveStartUtcForCalendarItem,
@@ -18,6 +18,7 @@ import {
   getUtcRangeForLocalDayKeyRange,
   isStoredStartInUtcRange,
 } from '@/lib/calendar-local-day';
+import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +33,7 @@ const ATHLETE_CALENDAR_CACHE_TTL_MS = 30_000;
 type AthleteCalendarResponse = {
   items: any[];
   dayWeather?: Record<string, any>;
+  goalCountdown?: GoalCountdown | null;
 };
 
 const athleteCalendarCache = new Map<
@@ -186,7 +188,7 @@ export async function GET(request: NextRequest) {
       const [athleteProfile, items] = await Promise.all([
         prisma.athleteProfile.findUnique({
           where: { userId: user.id },
-          select: { coachId: true, defaultLat: true, defaultLon: true },
+          select: { coachId: true, defaultLat: true, defaultLon: true, eventName: true, eventDate: true, timelineWeeks: true },
         }),
         prisma.calendarItem.findMany({
           where: {
@@ -325,7 +327,14 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return { items: formattedItems, dayWeather };
+      const goalCountdown = getGoalCountdown({
+        eventName: athleteProfile.eventName,
+        eventDate: athleteProfile.eventDate,
+        timelineWeeks: athleteProfile.timelineWeeks,
+        todayDayKey: getTodayDayKey(athleteTimezone),
+      });
+
+      return { items: formattedItems, dayWeather, goalCountdown };
     })();
 
     if (!bypassCache) {

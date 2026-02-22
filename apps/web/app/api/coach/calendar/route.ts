@@ -11,7 +11,7 @@ import { assertValidDateRange, parseDateOnly } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
-import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
+import { addDaysToDayKey, getLocalDayKey, getTodayDayKey } from '@/lib/day-key';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 import {
   getEffectiveStartUtcForCalendarItem,
@@ -19,6 +19,7 @@ import {
   getUtcRangeForLocalDayKeyRange,
   isStoredStartInUtcRange,
 } from '@/lib/calendar-local-day';
+import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,10 @@ const COACH_CALENDAR_CACHE_TTL_MS = 30_000;
 
 type CoachAthleteAccess = {
   userId: string;
+  athleteName: string | null;
+  eventName: string | null;
+  eventDate: Date | null;
+  timelineWeeks: number | null;
   defaultLat: number | null;
   defaultLon: number | null;
   timezone: string;
@@ -57,6 +62,7 @@ type CoachCalendarResponse = {
   items: any[];
   athleteTimezone: string;
   dayWeather?: Record<string, any>;
+  goalCountdownByAthlete?: Record<string, GoalCountdown>;
 };
 
 type CoachCalendarComputed = {
@@ -241,10 +247,14 @@ async function getCoachAthleteAccess(params: {
       },
       select: {
         userId: true,
+        eventName: true,
+        eventDate: true,
+        timelineWeeks: true,
         defaultLat: true,
         defaultLon: true,
         user: {
           select: {
+            name: true,
             timezone: true,
           },
         },
@@ -253,6 +263,10 @@ async function getCoachAthleteAccess(params: {
     .then((rows) =>
       rows.map((athlete) => ({
         userId: athlete.userId,
+        athleteName: athlete.user.name,
+        eventName: athlete.eventName,
+        eventDate: athlete.eventDate,
+        timelineWeeks: athlete.timelineWeeks,
         defaultLat: athlete.defaultLat,
         defaultLon: athlete.defaultLon,
         timezone: athlete.user.timezone ?? 'Australia/Brisbane',
@@ -378,6 +392,17 @@ export async function GET(request: NextRequest) {
       const athleteById = new Map(athletes.map((athlete) => [athlete.userId, athlete] as const));
       const timezoneByAthleteId = new Map(
         athletes.map((athlete) => [athlete.userId, athlete.timezone ?? 'Australia/Brisbane'] as const)
+      );
+      const goalCountdownByAthlete = Object.fromEntries(
+        athletes.map((athlete) => [
+          athlete.userId,
+          getGoalCountdown({
+            eventName: athlete.eventName,
+            eventDate: athlete.eventDate,
+            timelineWeeks: athlete.timelineWeeks,
+            todayDayKey: getTodayDayKey(athlete.timezone),
+          }),
+        ])
       );
       const utcRangeByAthleteId = new Map(
         athleteIds.map((athleteId) => [
@@ -543,7 +568,7 @@ export async function GET(request: NextRequest) {
       }
 
       return {
-        payload: { items: formattedItems, athleteTimezone: primaryAthleteTimezone, dayWeather },
+        payload: { items: formattedItems, athleteTimezone: primaryAthleteTimezone, dayWeather, goalCountdownByAthlete },
         meta: {
           itemCount: formattedItems.length,
           athleteCount: athleteIds.length,
