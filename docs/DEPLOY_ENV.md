@@ -2,6 +2,9 @@
 
 This doc is about **runtime connectivity** (can the deployed app reach Postgres?) rather than schema migrations.
 For migrations, see [docs/DEPLOY_MIGRATIONS.md](docs/DEPLOY_MIGRATIONS.md).
+For AI Plan Builder release/rollback operations, see:
+- [docs/APB_RELEASE_H3.md](docs/APB_RELEASE_H3.md)
+- [docs/APB_ROLLBACK_GUARDRAILS.md](docs/APB_ROLLBACK_GUARDRAILS.md)
 
 ## Required Vercel environment variables
 
