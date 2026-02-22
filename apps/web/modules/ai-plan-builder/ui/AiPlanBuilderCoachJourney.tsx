@@ -878,8 +878,43 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
   }, [draftPlanLatest]);
 
+  const draftSetupSync = useMemo(() => {
+    if (!hasDraft) return { inSync: false, issues: [] as string[] };
+    const source = draftPlanLatest?.setupJson && typeof draftPlanLatest.setupJson === 'object' ? (draftPlanLatest.setupJson as Record<string, unknown>) : null;
+    if (!source) return { inSync: false, issues: ['draft setup missing'] };
+
+    const issues: string[] = [];
+    const draftStartDate = String(source.startDate ?? '');
+    const draftCompletionDate = String(source.completionDate ?? source.eventDate ?? '');
+    const draftWeeklyMinutes = Number(source.weeklyAvailabilityMinutes ?? NaN);
+    const draftRiskTolerance = String(source.riskTolerance ?? '');
+    const draftPolicyProfileId = String(source.policyProfileId ?? '');
+    const draftMaxIntensity = Number(source.maxIntensityDaysPerWeek ?? NaN);
+    const draftMaxDoubles = Number(source.maxDoublesPerWeek ?? NaN);
+    const draftDiscipline = String(source.disciplineEmphasis ?? '');
+
+    if (isDayKey(setup.startDate) && draftStartDate !== setup.startDate) issues.push('start date');
+    if (isDayKey(setup.completionDate) && draftCompletionDate !== setup.completionDate) issues.push('completion date');
+    if (Number.isFinite(draftWeeklyMinutes) && Number(setup.weeklyAvailabilityMinutes) !== draftWeeklyMinutes) issues.push('weekly minutes');
+    if (draftRiskTolerance && draftRiskTolerance !== setup.riskTolerance) issues.push('risk tolerance');
+    if (draftPolicyProfileId && draftPolicyProfileId !== setup.policyProfileId) issues.push('policy profile');
+    if (Number.isFinite(draftMaxIntensity) && draftMaxIntensity !== setup.maxIntensityDaysPerWeek) issues.push('max intensity');
+    if (Number.isFinite(draftMaxDoubles) && draftMaxDoubles !== setup.maxDoublesPerWeek) issues.push('max doubles');
+    if (draftDiscipline && draftDiscipline !== setup.disciplineEmphasis) issues.push('discipline focus');
+
+    const draftDaysRaw = Array.isArray(source.weeklyAvailabilityDays) ? source.weeklyAvailabilityDays : [];
+    const draftDays = draftDaysRaw
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6)
+      .sort((a, b) => a - b);
+    const setupDays = [...setup.weeklyAvailabilityDays].sort((a, b) => a - b);
+    if (draftDays.length && !arraysEqual(draftDays, setupDays)) issues.push('available days');
+
+    return { inSync: issues.length === 0, issues };
+  }, [draftPlanLatest, hasDraft, setup]);
+
   const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
-  const hasWeeklyDraft = hasDraft && weekCards.length > 0;
+  const hasWeeklyDraft = hasDraft && weekCards.length > 0 && requestStatus === 'submitted' && isBlueprintReady && draftSetupSync.inSync;
 
   const fetchAthleteProfile = useCallback(async () => {
     const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
@@ -2137,7 +2172,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         </div>
         <div className={`rounded-md border px-3 py-2 text-xs ${hasWeeklyDraft ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
           <div className="font-medium">Step 3 Weekly Draft</div>
-          <div>{hasWeeklyDraft ? 'Generated' : 'Pending generation'}</div>
+          <div>
+            {hasWeeklyDraft ? 'Generated' : hasDraft ? 'Out of date - regenerate required' : 'Pending generation'}
+          </div>
         </div>
         <div className={`rounded-md border px-3 py-2 text-xs ${isPublished ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
           <div className="font-medium">Step 4 Publish</div>
@@ -2600,6 +2637,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="text-sm text-[var(--fg-muted)]">No draft generated yet. Complete Step 2 and generate weekly structure.</div>
         ) : (
           <div className="space-y-3">
+            {!hasWeeklyDraft ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Current draft is out of date for this request/blueprint
+                {draftSetupSync.issues.length ? ` (${draftSetupSync.issues.join(', ')})` : ''}. Regenerate weekly structure.
+              </div>
+            ) : null}
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
               Share skeleton with athlete for review, then generate detailed sessions by selected week or entire plan.
             </div>
