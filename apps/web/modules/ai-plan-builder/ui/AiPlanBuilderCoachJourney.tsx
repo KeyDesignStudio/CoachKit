@@ -656,6 +656,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [adaptationSignalTimeline, setAdaptationSignalTimeline] = useState<AdaptationTimelineItem[]>([]);
   const [coachChangeTimeline, setCoachChangeTimeline] = useState<CoachChangeTimelineEntry[]>([]);
   const [timelineDiffPreview, setTimelineDiffPreview] = useState<ProposalDiffPreview | null>(null);
+  const [draftReviewTab, setDraftReviewTab] = useState<'share' | 'detail'>('share');
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -2243,7 +2244,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [athleteId, draftPlanLatest?.id, request]);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[1680px] space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Build This Athlete&apos;s Next Training Block</h1>
@@ -2397,7 +2398,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium">Non-negotiable off days</label>
               <div className="flex flex-wrap gap-2">
@@ -2444,7 +2445,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                         }))
                       }
                       className={`rounded-md border px-3 py-1.5 text-sm ${
-                        selected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
+                        selected ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
                       } ${disabled && !selected ? 'opacity-50' : ''}`}
                     >
                       {day}
@@ -2457,11 +2458,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
           <div>
             <label className="mb-1 block text-xs font-medium">Daily time windows (optional)</label>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
               {DAY_SHORTS_MON_FIRST.map((day) => (
                 <div key={`window:${day}`}>
-                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">{day}</label>
+                  <label className="mb-0.5 block text-[11px] font-medium text-[var(--fg-muted)]">{day}</label>
                   <Select
+                    className="px-2 py-1.5 pr-7 text-xs"
                     value={trainingRequest.dailyTimeWindows[day as (typeof DAY_SHORTS)[number]] ?? 'any'}
                     onChange={(e) =>
                       setTrainingRequest((prev) => ({
@@ -2550,7 +2552,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium">Environment factors</label>
+            <label className="mb-1 block text-xs font-medium">Training/Event environment factors</label>
             <div className="flex flex-wrap gap-2">
               {ENVIRONMENT_OPTIONS.map((tag) => {
                 const selected = trainingRequest.environmentTags.includes(tag);
@@ -2602,7 +2604,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           </div>
         </Block>
 
-        <Block title="2) Block Blueprint" rightAction={<Button onClick={() => void generateWeeklyStructure()} disabled={busy != null}>Generate weekly structure</Button>}>
+        <Block title="2) Block Blueprint">
           <div className="space-y-3 text-sm">
           {setupSync.inSync ? (
             <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">Blueprint is aligned with the request. Next: Generate weekly structure.</div>
@@ -2673,6 +2675,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <option value="coachkit-safe-v1">Safe Balanced v1</option>
                 <option value="coachkit-performance-v1">Performance v1</option>
               </Select>
+              <div className="mt-1 text-[11px] text-[var(--fg-muted)]">Current production policy packs are versioned as v1.</div>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Max intensity days/week</label>
@@ -2714,13 +2717,16 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           {qualityGateSummary ? (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
               <div className="font-medium">
-                Quality gate score: {String(qualityGateSummary.score ?? 'N/A')} ({String(qualityGateSummary.policyProfileId ?? 'profile')})
+                System safety check: {String(qualityGateSummary.score ?? 'N/A')} ({String(qualityGateSummary.policyProfileId ?? 'profile')})
               </div>
               <div>
-                Hard violations: {String(qualityGateSummary.hardViolationCount ?? 0)} | Soft warnings: {String(qualityGateSummary.softWarningCount ?? 0)}
+                For coach QA: hard violations {String(qualityGateSummary.hardViolationCount ?? 0)} | soft warnings {String(qualityGateSummary.softWarningCount ?? 0)}
               </div>
             </div>
           ) : null}
+          <div className="flex justify-end">
+            <Button onClick={() => void generateWeeklyStructure()} disabled={busy != null}>Generate weekly structure</Button>
+          </div>
           </div>
         </Block>
       </div>
@@ -2742,51 +2748,72 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Share weekly draft with athlete</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
-                  Send weekly draft PDF
-                </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Creates a weekly draft PDF link and sends it in Messages for athlete feedback.</span>
-              </div>
-            </div>
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Detail generation</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="min-w-[220px] flex-1">
-                  <Select value={detailGenerationScope} onChange={(e) => setDetailGenerationScope(e.target.value as 'selected-week' | 'entire-plan')}>
-                    <option value="selected-week">Selected week only</option>
-                    <option value="entire-plan">Entire plan</option>
-                  </Select>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Draft review</div>
+                <div className="inline-flex rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-0.5">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 text-xs ${draftReviewTab === 'share' ? 'bg-[var(--bg-card)] font-medium' : 'text-[var(--fg-muted)]'}`}
+                    onClick={() => setDraftReviewTab('share')}
+                  >
+                    Share weekly draft
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 text-xs ${draftReviewTab === 'detail' ? 'bg-[var(--bg-card)] font-medium' : 'text-[var(--fg-muted)]'}`}
+                    onClick={() => setDraftReviewTab('detail')}
+                  >
+                    Detail generation
+                  </button>
                 </div>
-                {detailGenerationScope === 'selected-week' ? (
-                  <div className="min-w-[260px] flex-1">
-                    <Select value={String(detailGenerationWeek?.weekIndex ?? '')} onChange={(e) => setDetailGenerationWeekIndex(Number(e.target.value))}>
-                      {weekOptions.map((w) => (
-                        <option key={w.value} value={String(w.value)}>
-                          {w.label}
-                        </option>
-                      ))}
+              </div>
+
+              {draftReviewTab === 'share' ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="secondary" disabled={busy != null || !sessionsByWeek.length} onClick={() => void shareSkeletonWithAthlete()}>
+                    Send weekly draft PDF
+                  </Button>
+                  <span className="text-xs text-[var(--fg-muted)]">Sends a week-level draft PDF to Messages for athlete feedback.</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-[180px] flex-1">
+                    <Select value={detailGenerationScope} onChange={(e) => setDetailGenerationScope(e.target.value as 'selected-week' | 'entire-plan')}>
+                      <option value="selected-week">Selected week only</option>
+                      <option value="entire-plan">Entire plan</option>
                     </Select>
                   </div>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    busy != null ||
-                    (detailGenerationScope === 'selected-week'
-                      ? !detailGenerationWeek || detailGenerationWeek.sessions.length === 0
-                      : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)
-                  }
-                  onClick={() => void loadDetailsForScope()}
-                >
-                  {detailGenerationScope === 'entire-plan' ? 'Generate details for entire plan' : 'Generate details for selected week'}
-                </Button>
-              </div>
+                  {detailGenerationScope === 'selected-week' ? (
+                    <div className="min-w-[240px] flex-1">
+                      <Select value={String(detailGenerationWeek?.weekIndex ?? '')} onChange={(e) => setDetailGenerationWeekIndex(Number(e.target.value))}>
+                        {weekOptions.map((w) => (
+                          <option key={w.value} value={String(w.value)}>
+                            {w.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      busy != null ||
+                      (detailGenerationScope === 'selected-week'
+                        ? !detailGenerationWeek || detailGenerationWeek.sessions.length === 0
+                        : !Array.isArray(draftPlanLatest?.sessions) || draftPlanLatest.sessions.length === 0)
+                    }
+                    onClick={() => void loadDetailsForScope()}
+                  >
+                    {detailGenerationScope === 'entire-plan' ? 'Generate details for entire plan' : 'Generate details for selected week'}
+                  </Button>
+                </div>
+              )}
             </div>
 
+            <div className="pt-1">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Advanced coach controls (optional)</div>
+              <div className="grid gap-3 xl:grid-cols-2">
             {adaptationMemory ? (
               <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -3202,6 +3229,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   </div>
                 </div>
               ) : null}
+            </div>
+              </div>
             </div>
 
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
