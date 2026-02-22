@@ -447,22 +447,35 @@ function deriveWeeksToCompletionFromDates(params: { startDate: string; completio
   return Math.max(1, Math.min(52, weeks));
 }
 
-function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
-  const dayKeys = weekSessions
-    .map((s) => String(s?.dayKey ?? ''))
-    .filter((dayKey) => isDayKey(dayKey))
-    .sort();
-  if (!dayKeys.length) return `Week ${weekIndex + 1}`;
+function getWeekLabel(
+  weekIndex: number,
+  weekSessions: any[],
+  params?: { planStartDayKey?: string | null; weekStart?: 'monday' | 'sunday' }
+): string {
+  let mondayKey: string | null = null;
+  if (params?.planStartDayKey && isDayKey(params.planStartDayKey)) {
+    const week0Start = startOfWeekDayKeyWithWeekStart(params.planStartDayKey, params.weekStart ?? 'monday');
+    const weekStartKey = addDaysToDayKey(week0Start, weekIndex * 7);
+    mondayKey = startOfWeekDayKeyWithWeekStart(weekStartKey, 'monday');
+  } else {
+    const dayKeys = weekSessions
+      .map((s) => String(s?.dayKey ?? ''))
+      .filter((dayKey) => isDayKey(dayKey))
+      .sort();
+    if (dayKeys.length) {
+      mondayKey = startOfWeekDayKeyWithWeekStart(dayKeys[0], 'monday');
+    }
+  }
 
-  const mondayKey = startOfWeekDayKeyWithWeekStart(dayKeys[0], 'monday');
+  if (!mondayKey) return `Week ${weekIndex + 1}`;
   const mondayDate = parseDayKeyToUtcDate(mondayKey);
-  const mondayLabel = new Intl.DateTimeFormat('en-AU', {
-    day: 'numeric',
+  const mondayLabel = new Intl.DateTimeFormat('en-US', {
     month: 'long',
+    day: 'numeric',
     year: 'numeric',
     timeZone: 'UTC',
   }).format(mondayDate);
-  return `Week ${weekIndex + 1} (commencing ${mondayLabel})`;
+  return `Week ${weekIndex + 1} - commencing ${mondayLabel}`;
 }
 
 function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
@@ -764,11 +777,14 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     () =>
       sessionsByWeek.map(([weekIndex, weekSessions]) => ({
         weekIndex,
-        label: getWeekLabel(weekIndex, weekSessions),
+        label: getWeekLabel(weekIndex, weekSessions, {
+          planStartDayKey: isDayKey(setup.startDate) ? setup.startDate : null,
+          weekStart: effectiveWeekStart,
+        }),
         totalMinutes: weekSessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0),
         sessions: weekSessions,
       })),
-    [sessionsByWeek]
+    [effectiveWeekStart, sessionsByWeek, setup.startDate]
   );
   const visibleWeekCards = useMemo(() => weekCards.slice(weekCarouselStart, weekCarouselStart + 4), [weekCards, weekCarouselStart]);
   const adaptationMemory = useMemo(() => {
