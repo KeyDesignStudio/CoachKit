@@ -22,6 +22,7 @@ import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
+import { Button } from '@/components/ui/Button';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 
@@ -79,6 +80,21 @@ type AthleteDashboardResponse = {
   }>;
   stravaVitals: StravaVitalsComparison;
   goalCountdown: GoalCountdown | null;
+};
+
+type AthleteIntakeLifecycleResponse = {
+  openDraftIntake?: { id?: string | null; createdAt?: string | null } | null;
+  latestSubmittedIntake?: { id?: string | null; createdAt?: string | null } | null;
+  reminderTracking?: {
+    requestedAt?: string | null;
+    lastReminderAt?: string | null;
+    remindersSent?: number;
+    nextReminderDueAt?: string | null;
+    isReminderDue?: boolean;
+  } | null;
+  lifecycle?: {
+    hasOpenRequest?: boolean;
+  } | null;
 };
 
 function NeedsAttentionItem({
@@ -173,6 +189,7 @@ export default function AthleteDashboardConsolePage() {
   const [showLoadPanel, setShowLoadPanel] = useState(false);
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
+  const [trainingRequestLifecycle, setTrainingRequestLifecycle] = useState<AthleteIntakeLifecycleResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -214,11 +231,32 @@ export default function AthleteDashboardConsolePage() {
     [dateRange.from, dateRange.to, discipline, request, showLoadPanel, user?.role, user?.userId]
   );
 
+  const reloadTrainingRequestLifecycle = useCallback(async () => {
+    if (!user?.userId || user.role !== 'ATHLETE') return;
+    try {
+      const lifecycle = await request<AthleteIntakeLifecycleResponse>('/api/athlete/ai-plan/intake/latest', { cache: 'no-store' });
+      setTrainingRequestLifecycle(lifecycle ?? null);
+    } catch {
+      setTrainingRequestLifecycle(null);
+    }
+  }, [request, user?.role, user?.userId]);
+
   useEffect(() => {
     if (user?.role === 'ATHLETE') {
       void reload();
+      void reloadTrainingRequestLifecycle();
     }
-  }, [reload, user?.role]);
+  }, [reload, reloadTrainingRequestLifecycle, user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== 'ATHLETE') return;
+    const timer = setInterval(() => {
+      void reloadTrainingRequestLifecycle();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [reloadTrainingRequestLifecycle, user?.role]);
+
+  const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -289,6 +327,45 @@ export default function AthleteDashboardConsolePage() {
             </p>
           </div>
         </div>
+
+        {hasOpenTrainingRequest ? (
+          <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-amber-900">Complete your Training Request</div>
+                <div className="mt-1 text-xs text-amber-900/90">
+                  {styledWelcome.name ? `${styledWelcome.name}, ` : ''}
+                  this is the primary step to unlock your next training block from your coach.
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-900/90">
+                  <span>
+                    Requested:{' '}
+                    {trainingRequestLifecycle?.reminderTracking?.requestedAt
+                      ? new Date(String(trainingRequestLifecycle.reminderTracking.requestedAt)).toLocaleString()
+                      : trainingRequestLifecycle?.openDraftIntake?.createdAt
+                        ? new Date(String(trainingRequestLifecycle.openDraftIntake.createdAt)).toLocaleString()
+                        : 'Recently'}
+                  </span>
+                  <span>
+                    Reminders: {Math.max(0, Number(trainingRequestLifecycle?.reminderTracking?.remindersSent ?? 0))}
+                  </span>
+                  <span>
+                    {trainingRequestLifecycle?.reminderTracking?.nextReminderDueAt
+                      ? `Next reminder ${
+                          trainingRequestLifecycle?.reminderTracking?.isReminderDue ? 'due now' : `due ${new Date(String(trainingRequestLifecycle.reminderTracking.nextReminderDueAt)).toLocaleString()}`
+                        }`
+                      : 'Reminder schedule active'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex-shrink-0">
+                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/intake')}>
+                  Complete Training Request
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
           <div className="mt-3">
