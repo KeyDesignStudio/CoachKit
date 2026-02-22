@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -15,10 +15,21 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { StravaVitalsCard } from '@/components/profile/StravaVitalsCard';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
+import {
+  buildTrainingRequestReminderMessage,
+  buildTrainingRequestStartMessage,
+} from '@/modules/ai-plan-builder/shared/training-request';
 
 type IntakeLifecycleSummary = {
   latestSubmittedIntake?: { draftJson?: Record<string, unknown> | null; createdAt?: string | null } | null;
   openDraftIntake?: { id?: string | null; createdAt?: string | null } | null;
+  reminderTracking?: {
+    requestedAt?: string | null;
+    lastReminderAt?: string | null;
+    remindersSent?: number;
+    nextReminderDueAt?: string | null;
+    isReminderDue?: boolean;
+  } | null;
 };
 
 function readDraftText(draft: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -112,6 +123,7 @@ export default function AthleteProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [requestActionBusy, setRequestActionBusy] = useState<'start' | 'remind' | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('Personal');
 
   const [firstName, setFirstName] = useState('');
@@ -148,6 +160,12 @@ export default function AthleteProfilePage() {
   const [constraintsNotes, setConstraintsNotes] = useState('');
   const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycleSummary | null>(null);
 
+  const refreshIntakeLifecycle = useCallback(async () => {
+    if (!athleteId) return;
+    const intakeData = await request<IntakeLifecycleSummary>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`, { cache: 'no-store' });
+    setIntakeLifecycle(intakeData ?? null);
+  }, [athleteId, request]);
+
   useEffect(() => {
     if (!athleteId) return;
     if (userLoading) return;
@@ -159,7 +177,9 @@ export default function AthleteProfilePage() {
       try {
         const [profileData, intakeData] = await Promise.all([
           request<{ athlete: AthleteProfile }>(`/api/coach/athletes/${athleteId}`, { cache: 'no-store' }),
-          request<IntakeLifecycleSummary>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`, { cache: 'no-store' }),
+          request<IntakeLifecycleSummary>(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/latest`, {
+            cache: 'no-store',
+          }),
         ]);
         const athlete = profileData.athlete;
         setIntakeLifecycle(intakeData ?? null);
@@ -326,6 +346,56 @@ export default function AthleteProfilePage() {
       setSaving(false);
     }
   };
+
+  const handleStartTrainingRequest = useCallback(async () => {
+    if (!athleteId) return;
+    setRequestActionBusy('start');
+    setError('');
+    setSuccess('');
+    try {
+      await request(`/api/coach/athletes/${athleteId}/ai-plan-builder/intake/draft`, {
+        method: 'POST',
+        data: { draftJson: {} },
+      });
+      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}/athlete/intake` : '/athlete/intake';
+      await request('/api/messages/send', {
+        method: 'POST',
+        data: {
+          body: buildTrainingRequestStartMessage(intakeUrl),
+          recipients: { athleteIds: [athleteId] },
+        },
+      });
+      await refreshIntakeLifecycle();
+      setSuccess('Training request started and athlete notified.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start training request.');
+    } finally {
+      setRequestActionBusy(null);
+    }
+  }, [athleteId, refreshIntakeLifecycle, request]);
+
+  const handleSendTrainingRequestReminder = useCallback(async () => {
+    if (!athleteId) return;
+    setRequestActionBusy('remind');
+    setError('');
+    setSuccess('');
+    try {
+      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}/athlete/intake` : '/athlete/intake';
+      await request('/api/messages/send', {
+        method: 'POST',
+        data: {
+          body: buildTrainingRequestReminderMessage(intakeUrl),
+          recipients: { athleteIds: [athleteId] },
+        },
+      });
+      await refreshIntakeLifecycle();
+      setSuccess('Reminder sent to athlete.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send reminder.');
+    } finally {
+      setRequestActionBusy(null);
+    }
+  }, [athleteId, refreshIntakeLifecycle, request]);
 
   if (userLoading) {
     return (
@@ -631,6 +701,55 @@ export default function AthleteProfilePage() {
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
               <div className="mb-2 text-sm">
                 Source: <strong>{planSummary.source}</strong>
+              </div>
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="text-sm font-semibold text-amber-900">
+                  {planSummary.openRequest ? 'Training Request pending athlete action' : 'Training Request status'}
+                </div>
+                <div className="mt-1 text-xs text-amber-900/90">
+                  {planSummary.openRequest
+                    ? 'This remains the athlete’s primary CTA until submitted.'
+                    : intakeLifecycle?.latestSubmittedIntake?.createdAt
+                      ? `Latest request submitted ${new Date(String(intakeLifecycle.latestSubmittedIntake.createdAt)).toLocaleString()}.`
+                      : 'No active request is open for this athlete.'}
+                </div>
+                {planSummary.openRequest ? (
+                  <div className="mt-2 grid gap-1 text-xs text-amber-900/90">
+                    <div>
+                      Requested:{' '}
+                      {intakeLifecycle?.reminderTracking?.requestedAt
+                        ? new Date(String(intakeLifecycle.reminderTracking.requestedAt)).toLocaleString()
+                        : intakeLifecycle?.openDraftIntake?.createdAt
+                          ? new Date(String(intakeLifecycle.openDraftIntake.createdAt)).toLocaleString()
+                          : 'Unknown'}
+                    </div>
+                    <div>
+                      Reminders sent: {Math.max(0, Number(intakeLifecycle?.reminderTracking?.remindersSent ?? 0))}
+                      {intakeLifecycle?.reminderTracking?.lastReminderAt
+                        ? ` (last ${new Date(String(intakeLifecycle.reminderTracking.lastReminderAt)).toLocaleString()})`
+                        : ''}
+                    </div>
+                    <div>
+                      Next reminder due:{' '}
+                      {intakeLifecycle?.reminderTracking?.nextReminderDueAt
+                        ? `${new Date(String(intakeLifecycle.reminderTracking.nextReminderDueAt)).toLocaleString()}${
+                            intakeLifecycle?.reminderTracking?.isReminderDue ? ' (due now)' : ''
+                          }`
+                        : 'Not scheduled'}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {!planSummary.openRequest ? (
+                    <Button type="button" onClick={() => void handleStartTrainingRequest()} disabled={requestActionBusy != null}>
+                      {requestActionBusy === 'start' ? 'Starting request...' : 'Initiate Training Request'}
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={() => void handleSendTrainingRequestReminder()} disabled={requestActionBusy != null}>
+                      {requestActionBusy === 'remind' ? 'Sending reminder...' : 'Send Reminder'}
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="mb-3 text-sm text-[var(--muted)]">
                 This tab is read-only. Training block details are managed in the AI Plan Builder Training Request step.
