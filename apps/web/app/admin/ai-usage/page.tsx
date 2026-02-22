@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 
 import { requireAiPlanBuilderAuditAdminUser, requireAiPlanBuilderAuditAdminUserPage } from '@/modules/ai-plan-builder/server/audit-admin';
 import { computeDailyRollups, getUtcDayWindowForLastNDays } from '@/modules/ai-plan-builder/admin/rollups';
-import { evaluateAlerts } from '@/modules/ai-plan-builder/admin/alerts';
+import { evaluateAlerts, getAiUsageAlertThresholds } from '@/modules/ai-plan-builder/admin/alerts';
+import { evaluateQualityGateReadiness, evaluateUatReadiness, type ReadinessStatus } from '@/modules/ai-plan-builder/admin/readiness';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,13 @@ function clampInt(v: unknown, def: number, min: number, max: number): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return def;
   return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function statusChipClass(status: ReadinessStatus): string {
+  if (status === 'PASS') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (status === 'WARN') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'FAIL') return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-slate-50 text-slate-600 border-slate-200';
 }
 
 export default async function AdminAiUsagePage(props: { searchParams?: Record<string, string | string[] | undefined> }) {
@@ -94,9 +102,29 @@ export default async function AdminAiUsagePage(props: { searchParams?: Record<st
 
   const fallbackRate = totals.calls ? totals.fallback / totals.calls : 0;
   const errorRate = totals.calls ? totals.errors / totals.calls : 0;
+  const unackedAlerts = alerts.filter((a) => !a.acknowledgedAt).length;
+  const thresholds = getAiUsageAlertThresholds();
 
   const daysCount = days;
   const costAvgPerDay = daysCount ? totals.costUsd / daysCount : totals.costUsd;
+
+  const qualityReadiness = evaluateQualityGateReadiness();
+  const uatReadiness = await evaluateUatReadiness();
+  const runtimeReadiness: { status: ReadinessStatus; reason: string } =
+    errorRate > thresholds.errorRate || fallbackRate > thresholds.fallbackRate || unackedAlerts > 0
+      ? {
+          status: errorRate > thresholds.errorRate ? 'FAIL' : 'WARN',
+          reason:
+            errorRate > thresholds.errorRate
+              ? `Error rate ${(errorRate * 100).toFixed(1)}% exceeds threshold ${(thresholds.errorRate * 100).toFixed(1)}%.`
+              : unackedAlerts > 0
+                ? `${unackedAlerts} unacknowledged usage alert(s).`
+                : `Fallback rate ${(fallbackRate * 100).toFixed(1)}% is elevated.`,
+        }
+      : {
+          status: totals.calls > 0 ? 'PASS' : 'UNKNOWN',
+          reason: totals.calls > 0 ? 'Runtime metrics are within configured thresholds.' : 'No runtime data yet in selected window.',
+        };
 
   const capabilities = Array.from(byCapability.entries())
     .map(([capability, m]) => ({
@@ -200,6 +228,54 @@ export default async function AdminAiUsagePage(props: { searchParams?: Record<st
           <Link href={{ pathname: '/admin/ai-audits' }} className="text-sm underline">
             View raw audits
           </Link>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded border">
+        <div className="border-b px-4 py-3 text-sm font-medium">Commercial Readiness Snapshot</div>
+        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
+          <div className="rounded border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Quality gates</div>
+              <span className={`rounded border px-2 py-0.5 text-xs font-medium ${statusChipClass(qualityReadiness.status)}`}>
+                {qualityReadiness.status}
+              </span>
+            </div>
+            <div className="text-sm">{qualityReadiness.scenarioCount} scenarios evaluated.</div>
+            {qualityReadiness.failingScenarios.length ? (
+              <div className="mt-1 text-xs text-rose-700">Failing: {qualityReadiness.failingScenarios.join(', ')}</div>
+            ) : (
+              <div className="mt-1 text-xs text-muted-foreground">All policy-ratcheted scenario gates passing.</div>
+            )}
+          </div>
+
+          <div className="rounded border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">UAT evidence</div>
+              <span className={`rounded border px-2 py-0.5 text-xs font-medium ${statusChipClass(uatReadiness.status)}`}>
+                {uatReadiness.status}
+              </span>
+            </div>
+            <div className="text-sm">{uatReadiness.recordCount} UAT rows captured.</div>
+            {uatReadiness.missingCases.length ? (
+              <div className="mt-1 text-xs text-rose-700">Missing: {uatReadiness.missingCases.join(', ')}</div>
+            ) : (
+              <div className="mt-1 text-xs text-muted-foreground">Required cases C1-C10 and A1-A4 are present.</div>
+            )}
+          </div>
+
+          <div className="rounded border p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Runtime health</div>
+              <span className={`rounded border px-2 py-0.5 text-xs font-medium ${statusChipClass(runtimeReadiness.status)}`}>
+                {runtimeReadiness.status}
+              </span>
+            </div>
+            <div className="text-sm">
+              Error {formatPct(errorRate)} · Fallback {formatPct(fallbackRate)} · Unacked alerts {unackedAlerts}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{runtimeReadiness.reason}</div>
+          </div>
         </div>
       </div>
 
