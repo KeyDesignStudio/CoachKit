@@ -233,6 +233,11 @@ function hasInjurySignal(setup: DraftPlanSetupV1): boolean {
   return /\binjury\b|\bpain\b|\bsplint\b|\bashilles\b|\bachilles\b|\bknee\b|\bcalf\b|\bhamstring\b/.test(guidance);
 }
 
+function hasHardNoTrainingConstraintSignal(setup: DraftPlanSetupV1): boolean {
+  const guidance = String(setup.coachGuidanceText ?? '').toLowerCase();
+  return /\bno training\b|\bno workouts?\b|\brest only\b|\bfull rest\b|\boff entirely\b/.test(guidance);
+}
+
 function parseTravelWindows(params: { text: string; fallbackYear?: number }): Array<{ start: Date; end: Date }> {
   const text = String(params.text ?? '');
   if (!text.trim()) return [];
@@ -318,6 +323,25 @@ function applySessionGuardrails(params: {
     setup: params.setup,
     session: beginnerAdjusted,
   });
+}
+
+function applyTravelDaySessionGuardrail(params: {
+  setup: DraftPlanSetupV1;
+  session: DraftWeekV1['sessions'][number];
+  isTravelDay: boolean;
+}): DraftWeekV1['sessions'][number] {
+  if (!params.isTravelDay) return params.session;
+  const s = { ...params.session };
+
+  if (s.type === 'tempo' || s.type === 'threshold') s.type = 'endurance';
+  if (/\blong run\b|\blong ride\b|\bbrick\b/i.test(String(s.notes ?? ''))) s.notes = 'Travel day maintenance';
+  if (!String(s.notes ?? '').toLowerCase().includes('travel')) {
+    s.notes = String(s.notes ?? '').trim() ? `${String(s.notes).trim()} · Travel-adjusted` : 'Travel-adjusted';
+  }
+
+  const cap = s.discipline === 'run' ? 40 : 50;
+  s.durationMinutes = clampInt(Math.min(s.durationMinutes, cap), 20, cap);
+  return s;
 }
 
 function applyBeginnerWeekMinutesGuardrail(params: {
@@ -727,7 +751,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekEndDate,
       windows: travelWindows,
     });
-    const blockedTravelDays = weekHasTravel
+    const travelAffectedDays = weekHasTravel
       ? new Set(
           days.filter((dayOfWeek) => {
             if (!weekStartDate) return false;
@@ -743,7 +767,9 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
           })
         )
       : new Set<number>();
-    const planningDays = days.filter((d) => !blockedTravelDays.has(d));
+    const hardNoTrainingDuringTravel = hasHardNoTrainingConstraintSignal(effectiveSetup);
+    const planningDays = hardNoTrainingDuringTravel ? days.filter((d) => !travelAffectedDays.has(d)) : [...days];
+    const nonTravelPlanningDays = planningDays.filter((d) => !travelAffectedDays.has(d));
     const longDay = pickLongDay(effectiveSetup, planningDays.length ? planningDays : days);
 
     const baseMinutesFromSource = Array.isArray(effectiveSetup.weeklyMinutesByWeek)
@@ -789,14 +815,15 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     }
     const targetSessions = Math.max(1, Math.min(requestedTargetSessions, maxSessionsByCapacity));
     const weekMaxIntensityDays = injuryFlag || weekHasTravel ? 1 : maxIntensityDaysPerWeek;
-    // Determine which days are "intensity" (avoid consecutive).
+    // Determine which days are "intensity" (avoid consecutive). Prefer non-travel days.
     const intensityDays: number[] = [];
-    for (const d of planningDays) {
+    for (const d of [...nonTravelPlanningDays, ...planningDays]) {
       if (intensityDays.length >= weekMaxIntensityDays) break;
       const last = intensityDays[intensityDays.length - 1];
       if (last !== undefined && Math.abs(d - last) <= 1) continue;
       // Avoid using long day as intensity.
       if (d === longDay) continue;
+      if (intensityDays.includes(d)) continue;
       intensityDays.push(d);
     }
 
@@ -825,12 +852,18 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       dayCounts.set(session.dayOfWeek, (dayCounts.get(session.dayOfWeek) ?? 0) + 1);
       return true;
     };
+    const finalizeSession = (session: DraftWeekV1['sessions'][number]) =>
+      applyTravelDaySessionGuardrail({
+        setup: effectiveSetup,
+        session: applySessionGuardrails({ setup: effectiveSetup, weekIndex, session }),
+        isTravelDay: travelAffectedDays.has(session.dayOfWeek),
+      });
 
     // Technique swim once per week if swim included (on the first available day).
     if (includesSwim(effectiveSetup)) {
-      const d = takeDay(planningDays);
+      const d = takeDay(nonTravelPlanningDays) ?? takeDay(planningDays);
       if (d != null) {
-        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(finalizeSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: d,
@@ -839,7 +872,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 0.8, 20, 60),
         notes: 'Technique focus',
         locked: false,
-        } }));
+        }));
       }
     }
 
@@ -847,12 +880,15 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     if (weeksToEvent >= 6) {
       const longIsBike = weekIndex % 2 === 0;
       const discipline: DraftDiscipline = longIsBike ? 'bike' : 'run';
-      const day = hasCapacity(longDay) ? longDay : takeDay(planningDays);
+      const day =
+        hasCapacity(longDay) && !travelAffectedDays.has(longDay)
+          ? longDay
+          : takeDay(nonTravelPlanningDays) ?? takeDay(planningDays);
       if (day != null) {
         const beginnerProfile = isBeginnerProfile(effectiveSetup);
         const longMin = beginnerProfile || weekTotalMinutes < 240 ? 35 : 60;
         const longMax = beginnerProfile ? 120 : 180;
-        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(finalizeSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -861,7 +897,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 1.8, longMin, longMax),
         notes: discipline === 'bike' ? 'Long ride' : 'Long run',
         locked: false,
-        } }));
+        }));
       }
     }
 
@@ -874,9 +910,12 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weekTotalMinutes >= 300 &&
       planningDays.length >= 5;
     if (allowBricks && weekIndex % 2 === 1) {
-      const day = hasCapacity(longDay) ? longDay : takeDay(planningDays.filter((d) => d !== longDay));
+      const day =
+        (hasCapacity(longDay) && !travelAffectedDays.has(longDay) ? longDay : null) ??
+        takeDay(nonTravelPlanningDays.filter((d) => d !== longDay)) ??
+        takeDay(planningDays.filter((d) => d !== longDay));
       if (day != null) {
-        pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
+        pushSession(finalizeSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -885,7 +924,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes * 1.3, 40, 120),
         notes: 'Brick (add short run off bike)',
         locked: false,
-        } }));
+        }));
       }
     }
 
@@ -893,7 +932,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     const preferredMain = mainDiscipline(effectiveSetup);
 
     while (sessions.length < targetSessions) {
-      const day = takeDay(planningDays);
+      const day = takeDay(nonTravelPlanningDays) ?? takeDay(planningDays);
       if (day == null) break;
       const isSecondOnSameDay = (dayCounts.get(day) ?? 0) > 0;
       const isIntensity = !isSecondOnSameDay && intensityDays.includes(day);
@@ -918,7 +957,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         return isIntensity ? (effectiveSetup.riskTolerance === 'high' ? 'threshold' : 'tempo') : 'endurance';
       })();
 
-      pushSession(applySessionGuardrails({ setup: effectiveSetup, weekIndex, session: {
+      pushSession(finalizeSession({
         weekIndex,
         ordinal: ordinal++,
         dayOfWeek: day,
@@ -927,7 +966,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
         durationMinutes: clampInt(avgMinutes, 20, 120),
         notes: isIntensity ? 'Key session' : null,
         locked: false,
-      } }));
+      }));
     }
 
     // Sort by configured week start, then ordinal for a stable UI order.
@@ -940,7 +979,13 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     const deLongStacked = reduceLongThenIntensity({ sessions: deStacked, weekStart });
     const keyed = enforceWeeklyKeySessionBudget({ setup: effectiveSetup, sessions: deLongStacked });
     const humanized = humanizeWeekDurations({ sessions: keyed, longDay: planningDays.length ? longDay : defaultLongDay });
-    const postGuard = humanized.map((session) => applySessionGuardrails({ setup: effectiveSetup, weekIndex, session }));
+    const postGuard = humanized.map((session) =>
+      applyTravelDaySessionGuardrail({
+        setup: effectiveSetup,
+        session: applySessionGuardrails({ setup: effectiveSetup, weekIndex, session }),
+        isTravelDay: travelAffectedDays.has(Number(session.dayOfWeek ?? -1)),
+      })
+    );
     const postLongSafety = reduceLongThenIntensity({ sessions: postGuard, weekStart });
     const postIntensitySafety = reduceAdjacentIntensity({ sessions: postLongSafety, weekStart }).map((s, idx) => ({ ...s, ordinal: idx }));
 
