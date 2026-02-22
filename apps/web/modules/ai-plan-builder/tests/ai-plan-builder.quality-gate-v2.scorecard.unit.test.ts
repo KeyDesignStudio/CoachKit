@@ -36,7 +36,7 @@ describe('ai-plan-builder quality gate v2 scorecard', () => {
     };
 
     // Global G2 floors. These protect against broad quality drift in CI.
-    expect(scorecard.scenarioCount).toBeGreaterThanOrEqual(7);
+    expect(scorecard.scenarioCount).toBeGreaterThanOrEqual(9);
     expect(scorecard.avgScore).toBeGreaterThanOrEqual(90);
     expect(scorecard.minScore).toBeGreaterThanOrEqual(80);
     expect(scorecard.avgWeeklyMinutesInBandRate).toBeGreaterThanOrEqual(0.9);

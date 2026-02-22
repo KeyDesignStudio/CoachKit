@@ -1,4 +1,5 @@
 import type { DraftPlanSetupV1 } from '@/modules/ai-plan-builder/rules/draft-generator';
+import type { DraftConstraintViolation } from '@/modules/ai-plan-builder/rules/constraint-validator';
 
 export type QualityGateV2Thresholds = {
   minScore: number;
@@ -19,6 +20,13 @@ export type QualityGateV2Scenario = {
   description: string;
   setup: DraftPlanSetupV1;
   thresholds: QualityGateV2Thresholds;
+  evidence?: {
+    minWeekCount?: number;
+    minTotalSessions?: number;
+    maxSessionsOnAnyDay?: number;
+    forbiddenHardViolationCodes?: DraftConstraintViolation['code'][];
+    forbiddenSoftWarningCodes?: DraftConstraintViolation['code'][];
+  };
 };
 
 const baseSetup: DraftPlanSetupV1 = {
@@ -71,6 +79,12 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
     },
+    evidence: {
+      minWeekCount: 10,
+      minTotalSessions: 30,
+      maxSessionsOnAnyDay: 1,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'BEGINNER_RUN_CAP_EXCEEDED', 'BEGINNER_BRICK_TOO_EARLY'],
+    },
   },
   {
     id: 'injury-and-travel-constrained',
@@ -102,6 +116,13 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minAvailabilityAdherenceRate: 1,
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
+    },
+    evidence: {
+      minWeekCount: 12,
+      minTotalSessions: 40,
+      maxSessionsOnAnyDay: 1,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'MAX_INTENSITY_DAYS_EXCEEDED'],
+      forbiddenSoftWarningCodes: ['WEEKLY_MINUTES_OUT_OF_BOUNDS'],
     },
   },
   {
@@ -137,6 +158,13 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
     },
+    evidence: {
+      minWeekCount: 14,
+      minTotalSessions: 50,
+      maxSessionsOnAnyDay: 1,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION'],
+      forbiddenSoftWarningCodes: ['WEEKLY_MINUTES_OUT_OF_BOUNDS'],
+    },
   },
   {
     id: 'return-from-break',
@@ -170,6 +198,13 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
     },
+    evidence: {
+      minWeekCount: 8,
+      minTotalSessions: 24,
+      maxSessionsOnAnyDay: 1,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'BEGINNER_RUN_CAP_EXCEEDED'],
+      forbiddenSoftWarningCodes: ['WEEKLY_MINUTES_OUT_OF_BOUNDS'],
+    },
   },
   {
     id: 'event-near-taper',
@@ -199,6 +234,12 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minAvailabilityAdherenceRate: 1,
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
+    },
+    evidence: {
+      minWeekCount: 6,
+      minTotalSessions: 24,
+      maxSessionsOnAnyDay: 2,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION'],
     },
   },
   {
@@ -234,6 +275,12 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
     },
+    evidence: {
+      minWeekCount: 26,
+      minTotalSessions: 150,
+      maxSessionsOnAnyDay: 2,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'MAX_INTENSITY_DAYS_EXCEEDED'],
+    },
   },
   {
     id: 'half-to-full-marathon-bridge',
@@ -267,6 +314,94 @@ export const qualityGateV2Scenarios: QualityGateV2Scenario[] = [
       minAvailabilityAdherenceRate: 1,
       minDoublesComplianceRate: 1,
       minIntensityCapComplianceRate: 1,
+    },
+    evidence: {
+      minWeekCount: 18,
+      minTotalSessions: 90,
+      maxSessionsOnAnyDay: 2,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION'],
+    },
+  },
+  {
+    id: 'conservative-profile-zero-doubles',
+    description: 'Conservative profile with strict no-doubles must stay single-session/day and in availability.',
+    setup: {
+      ...baseSetup,
+      weeksToEvent: 16,
+      eventDate: '2026-05-25',
+      weeklyAvailabilityDays: [1, 2, 4, 6],
+      weeklyAvailabilityMinutes: 280,
+      disciplineEmphasis: 'run',
+      riskTolerance: 'low',
+      maxIntensityDaysPerWeek: 1,
+      maxDoublesPerWeek: 0,
+      policyProfileId: 'coachkit-conservative-v1',
+      coachGuidanceText: 'Beginner-intermediate runner. Durability first, no doubles.',
+      requestContext: {
+        experienceLevel: 'Beginner',
+        availabilityDays: ['Mon', 'Tue', 'Thu', 'Sat'],
+        constraintsNotes: 'No double days due to work + parenting load',
+      },
+    },
+    thresholds: {
+      minScore: 95,
+      maxHardViolations: 0,
+      maxSoftWarnings: 1,
+      minWeeklyMinutesInBandRate: 0.95,
+      minKeySessionBandPassRate: 1,
+      minNonConsecutiveIntensityRate: 1,
+      minNoLongThenIntensityRate: 1,
+      minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
+    },
+    evidence: {
+      minWeekCount: 16,
+      minTotalSessions: 48,
+      maxSessionsOnAnyDay: 1,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'CONSECUTIVE_INTENSITY_DAYS'],
+    },
+  },
+  {
+    id: 'performance-profile-controlled-doubles',
+    description: 'Performance profile allows doubles but must remain capped and avoid off-day drift.',
+    setup: {
+      ...baseSetup,
+      weeksToEvent: 20,
+      eventDate: '2026-06-22',
+      weeklyAvailabilityDays: [1, 2, 3, 4, 5, 6, 0],
+      weeklyAvailabilityMinutes: 640,
+      disciplineEmphasis: 'balanced',
+      riskTolerance: 'high',
+      maxIntensityDaysPerWeek: 2,
+      maxDoublesPerWeek: 2,
+      policyProfileId: 'coachkit-performance-v1',
+      coachGuidanceText: 'Advanced triathlete building race specificity while managing stress stacking.',
+      requestContext: {
+        experienceLevel: 'Advanced',
+        availabilityDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        constraintsNotes: 'Keep doubles controlled to two max per week.',
+      },
+    },
+    thresholds: {
+      minScore: 88,
+      maxHardViolations: 0,
+      maxSoftWarnings: 4,
+      minWeeklyMinutesInBandRate: 0.9,
+      minKeySessionBandPassRate: 1,
+      minNonConsecutiveIntensityRate: 1,
+      minNoLongThenIntensityRate: 0.9,
+      minExplainabilityCoverageRate: 1,
+      minAvailabilityAdherenceRate: 1,
+      minDoublesComplianceRate: 1,
+      minIntensityCapComplianceRate: 1,
+    },
+    evidence: {
+      minWeekCount: 20,
+      minTotalSessions: 120,
+      maxSessionsOnAnyDay: 2,
+      forbiddenHardViolationCodes: ['MAX_DOUBLES_EXCEEDED', 'OFF_DAY_SESSION', 'MAX_INTENSITY_DAYS_EXCEEDED'],
     },
   },
 ];

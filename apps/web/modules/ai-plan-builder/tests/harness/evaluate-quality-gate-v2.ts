@@ -4,6 +4,9 @@ import type { QualityGateV2Scenario } from './quality-gate-v2-scenarios';
 
 export type QualityGateV2Evaluation = {
   scenarioId: string;
+  weekCount: number;
+  totalSessionCount: number;
+  maxSessionsOnAnyDay: number;
   score: number;
   hardViolationCount: number;
   softWarningCount: number;
@@ -91,11 +94,43 @@ function computeWeekComplianceRates(scenario: QualityGateV2Scenario): {
   };
 }
 
+function computePlanShapeStats(scenario: QualityGateV2Scenario): {
+  weekCount: number;
+  totalSessionCount: number;
+  maxSessionsOnAnyDay: number;
+} {
+  const evaluation = evaluatePhaseCScenario(scenario.setup);
+  const weeks = evaluation.draft.weeks ?? [];
+  let totalSessionCount = 0;
+  let maxSessionsOnAnyDay = 0;
+
+  for (const week of weeks) {
+    const perDayCount = new Map<number, number>();
+    for (const session of Array.isArray(week.sessions) ? week.sessions : []) {
+      totalSessionCount += 1;
+      const day = Number(session.dayOfWeek ?? -1);
+      const next = (perDayCount.get(day) ?? 0) + 1;
+      perDayCount.set(day, next);
+      if (next > maxSessionsOnAnyDay) maxSessionsOnAnyDay = next;
+    }
+  }
+
+  return {
+    weekCount: weeks.length,
+    totalSessionCount,
+    maxSessionsOnAnyDay,
+  };
+}
+
 export function evaluateQualityGateV2Scenario(scenario: QualityGateV2Scenario): QualityGateV2Evaluation {
   const evaluation = evaluatePhaseCScenario(scenario.setup);
   const weekCompliance = computeWeekComplianceRates(scenario);
+  const planShape = computePlanShapeStats(scenario);
   return {
     scenarioId: scenario.id,
+    weekCount: planShape.weekCount,
+    totalSessionCount: planShape.totalSessionCount,
+    maxSessionsOnAnyDay: planShape.maxSessionsOnAnyDay,
     score: evaluation.metrics.qualityScore,
     hardViolationCount: evaluation.metrics.hardViolationCount,
     softWarningCount: evaluation.metrics.softWarningCount,
