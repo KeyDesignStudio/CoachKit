@@ -31,6 +31,24 @@ describe('ai-plan-builder quality gate v2', () => {
       expect(result.intensityCapComplianceRate, `${scenario.id} intensity cap compliance rate`).toBeGreaterThanOrEqual(
         t.minIntensityCapComplianceRate
       );
+
+      if (scenario.evidence?.minWeekCount != null) {
+        expect(result.weekCount, `${scenario.id} min week count`).toBeGreaterThanOrEqual(scenario.evidence.minWeekCount);
+      }
+      if (scenario.evidence?.minTotalSessions != null) {
+        expect(result.totalSessionCount, `${scenario.id} min total session count`).toBeGreaterThanOrEqual(scenario.evidence.minTotalSessions);
+      }
+      if (scenario.evidence?.maxSessionsOnAnyDay != null) {
+        expect(result.maxSessionsOnAnyDay, `${scenario.id} max sessions on any day`).toBeLessThanOrEqual(
+          scenario.evidence.maxSessionsOnAnyDay
+        );
+      }
+      for (const code of scenario.evidence?.forbiddenHardViolationCodes ?? []) {
+        expect(result.hardViolationCodes, `${scenario.id} hard violation code ${code}`).not.toContain(code);
+      }
+      for (const code of scenario.evidence?.forbiddenSoftWarningCodes ?? []) {
+        expect(result.softWarningCodes, `${scenario.id} soft warning code ${code}`).not.toContain(code);
+      }
     }
   });
 
