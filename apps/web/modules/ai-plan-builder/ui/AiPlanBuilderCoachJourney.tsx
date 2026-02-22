@@ -885,6 +885,30 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         : 'Next: Start new request to capture this training block.';
   const hasDraft = Boolean(draftPlanLatest?.id);
   const isPublished = publishStatus?.visibilityStatus === 'PUBLISHED';
+  const allDraftSessions = useMemo(() => (Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : []), [draftPlanLatest?.sessions]);
+  const detailCoverage = useMemo(() => {
+    const total = allDraftSessions.length;
+    if (!total) return { total: 0, detailed: 0, missing: 0 };
+    let detailed = 0;
+    for (const session of allDraftSessions) {
+      const sessionId = String(session?.id ?? '');
+      const lazyDetail = sessionId ? sessionDetailsById[sessionId]?.detailJson : null;
+      const parsed = sessionDetailV1Schema.safeParse(lazyDetail ?? session?.detailJson ?? null);
+      if (parsed.success) detailed += 1;
+    }
+    return { total, detailed, missing: Math.max(0, total - detailed) };
+  }, [allDraftSessions, sessionDetailsById]);
+  const publishGuard = useMemo(() => {
+    if (!hasDraft) return { canPublish: false, reason: 'Generate weekly structure first.' };
+    if (detailCoverage.total === 0) return { canPublish: false, reason: 'No sessions found in this draft yet.' };
+    if (detailCoverage.missing > 0) {
+      return {
+        canPublish: false,
+        reason: `Generate details for the entire plan before publishing (${detailCoverage.missing} session${detailCoverage.missing === 1 ? '' : 's'} still missing detail).`,
+      };
+    }
+    return { canPublish: true, reason: '' };
+  }, [detailCoverage.missing, detailCoverage.total, hasDraft]);
   const requestContextApplied = useMemo(() => {
     const source = (draftPlanLatest as any)?.setupJson?.requestContextApplied;
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
@@ -1520,6 +1544,22 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek, startProgressOverlay, stopProgressOverlay]);
 
+  const generateDetailsForEntirePlan = useCallback(async () => {
+    const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
+    if (!allSessions.length) return;
+    startProgressOverlay({
+      title: 'Generating details for entire plan...',
+      expectedSeconds: Math.max(8, Math.min(120, Math.round(allSessions.length * 2.2))),
+    });
+    try {
+      await loadAllDetailsForWeek(allSessions, 'Session details generated for the entire plan.');
+      stopProgressOverlay(true);
+    } catch {
+      stopProgressOverlay(false);
+      throw new Error('Failed to generate session details for the entire plan.');
+    }
+  }, [draftPlanLatest?.sessions, loadAllDetailsForWeek, startProgressOverlay, stopProgressOverlay]);
+
   const openSessionEditor = useCallback(
     async (session: any) => {
       const sessionId = String(session?.id ?? '');
@@ -2146,6 +2186,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const publishPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!draftPlanId) return;
+    if (!publishGuard.canPublish) {
+      setError(publishGuard.reason || 'Generate details for the entire plan before publishing.');
+      return;
+    }
 
     setBusy('publish-plan');
     setError(null);
@@ -2163,7 +2207,40 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     } finally {
       setBusy(null);
     }
-  }, [athleteId, draftPlanLatest?.id, fetchPublishStatus, request]);
+  }, [athleteId, draftPlanLatest?.id, fetchPublishStatus, publishGuard.canPublish, publishGuard.reason, request]);
+
+  const deletePublishedPlan = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!draftPlanId) return;
+    const confirmed = window.confirm(
+      'Delete this plan? This removes the draft and deletes all published AI plan sessions from the calendars for this athlete.'
+    );
+    if (!confirmed) return;
+
+    setBusy('delete-plan');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ deleted: boolean; softDeletedCalendarItems: number; wasPublished: boolean }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/delete`,
+        {
+          method: 'POST',
+          data: { aiPlanDraftId: draftPlanId },
+        }
+      );
+      setDraftPlanLatest(null);
+      setPublishStatus(null);
+      setSessionDetailsById({});
+      setWeekCarouselStart(0);
+      setInfo(
+        `Plan deleted. ${Number(data.softDeletedCalendarItems ?? 0)} calendar session${Number(data.softDeletedCalendarItems ?? 0) === 1 ? '' : 's'} removed.`
+      );
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to delete plan.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest?.id, request]);
 
   return (
     <div className="space-y-4">
@@ -2649,6 +2726,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       </div>
 
       <Block title="3) Week-by-Week Draft Review">
+        <div id="apb-weekly-draft-review" />
         {!hasDraft ? (
           <div className="text-sm text-[var(--fg-muted)]">No draft generated yet. Complete Step 2 and generate weekly structure.</div>
         ) : (
@@ -3291,13 +3369,63 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         )}
       </Block>
 
-      <Block title="4) Approve and Publish" rightAction={<Button disabled={busy != null || !hasDraft} onClick={() => void publishPlan()}>Publish plan</Button>}>
+      <Block
+        title="4) Approve and Publish"
+        rightAction={
+          <Button disabled={busy != null || !hasDraft || !publishGuard.canPublish} onClick={() => void publishPlan()}>
+            {isPublished ? 'Republish plan' : 'Publish plan'}
+          </Button>
+        }
+      >
         <div className="space-y-2 text-sm">
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             Athlete sees only the currently published version. Drafts remain hidden until publish.
           </div>
+          <div
+            className={`rounded-md border px-3 py-2 text-xs ${
+              publishGuard.canPublish ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-amber-300 bg-amber-50 text-amber-900'
+            }`}
+          >
+            <div className="font-medium">
+              Detail coverage: {detailCoverage.detailed}/{detailCoverage.total} sessions
+            </div>
+            <div>
+              {publishGuard.canPublish
+                ? 'Ready to publish. Every session has generated detail.'
+                : publishGuard.reason || 'Generate details for the entire plan before publishing.'}
+            </div>
+          </div>
+          {!publishGuard.canPublish && hasDraft ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void generateDetailsForEntirePlan()}>
+                Generate details for entire plan
+              </Button>
+            </div>
+          ) : null}
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm">
             Current status: <strong>{isPublished ? 'Published' : hasDraft ? 'Draft (not visible to athlete)' : 'No draft yet'}</strong>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy != null || !hasDraft}
+              onClick={() => {
+                const el = document.getElementById('apb-weekly-draft-review');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              Review/Edit draft
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="text-red-700 hover:bg-red-50"
+              disabled={busy != null || !hasDraft}
+              onClick={() => void deletePublishedPlan()}
+            >
+              Delete plan
+            </Button>
           </div>
         </div>
       </Block>

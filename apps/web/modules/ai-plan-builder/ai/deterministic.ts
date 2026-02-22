@@ -170,6 +170,12 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
         equipment: typeof input?.constraints?.equipment === 'string' ? input.constraints.equipment : undefined,
         environmentTags: Array.isArray(input?.constraints?.environmentTags) ? input.constraints.environmentTags : undefined,
         fatigueState: typeof input?.constraints?.fatigueState === 'string' ? input.constraints.fatigueState : undefined,
+        constraintsNotes: typeof input?.constraints?.constraintsNotes === 'string' ? input.constraints.constraintsNotes : undefined,
+        sessionNotes: typeof input?.session?.notes === 'string' ? input.session.notes : undefined,
+        isTravelDay:
+          typeof input?.session?.isTravelDay === 'boolean'
+            ? input.session.isTravelDay
+            : /\b(travel|travell|business trip|hotel|flight|airport|away)\b/i.test(String(input?.session?.notes ?? '')),
         weekIndex: Number(input?.session?.weekIndex ?? 0),
         dayOfWeek: Number(input?.session?.dayOfWeek ?? 0),
         sessionOrdinal: Number(input?.session?.ordinal ?? 0),

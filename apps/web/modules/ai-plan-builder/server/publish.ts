@@ -11,9 +11,14 @@ import { requireAiPlanBuilderV1Enabled } from './flag';
 import { computeStableSha256 } from '../rules/stable-hash';
 import { summarizePlanChanges } from '../rules/publish-summary';
 import { evaluateDraftQualityGate } from '../rules/constraint-validator';
+import { sessionDetailV1Schema } from '../rules/session-detail';
 import { refreshPolicyRuntimeOverridesFromDb } from './policy-tuning';
 
 export const publishDraftPlanSchema = z.object({
+  aiPlanDraftId: z.string().min(1),
+});
+
+export const deleteDraftPlanSchema = z.object({
   aiPlanDraftId: z.string().min(1),
 });
 
@@ -46,6 +51,45 @@ export async function publishAiDraftPlan(params: {
 
     if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
       throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+    }
+
+    const draftSessions = await tx.aiPlanDraftSession.findMany({
+      where: { draftId: draft.id },
+      select: {
+        id: true,
+        weekIndex: true,
+        dayOfWeek: true,
+        discipline: true,
+        type: true,
+        detailJson: true,
+      },
+      orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
+    });
+
+    if (!draftSessions.length) {
+      throw new ApiError(400, 'EMPTY_DRAFT', 'Cannot publish an empty draft. Generate weekly structure first.');
+    }
+
+    const missingDetail = draftSessions.filter((s) => !sessionDetailV1Schema.safeParse((s as any).detailJson ?? null).success);
+    if (missingDetail.length) {
+      throw new ApiError(
+        400,
+        'DETAIL_GENERATION_REQUIRED',
+        'Cannot publish until every session has detailed prescription. Generate details for the entire plan first.',
+        {
+          diagnostics: {
+            totalSessions: draftSessions.length,
+            missingDetailCount: missingDetail.length,
+            sampleMissingSessions: missingDetail.slice(0, 12).map((s) => ({
+              sessionId: s.id,
+              weekIndex: Number(s.weekIndex ?? 0),
+              dayOfWeek: Number(s.dayOfWeek ?? 0),
+              discipline: String(s.discipline ?? ''),
+              type: String(s.type ?? ''),
+            })),
+          },
+        }
+      );
     }
 
     const setupCandidate = ((draft.setupJson as any) ?? (draft.planJson as any)?.setup) as any;
@@ -132,6 +176,69 @@ export async function publishAiDraftPlan(params: {
     });
 
     return { draft: updated, published: true, summaryText: summaryWithQuality, hash };
+  });
+}
+
+export async function deleteAiDraftPlan(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  now?: Date;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const now = params.now ?? new Date();
+  const sourcePrefix = 'apb:';
+  const origin = 'AI_PLAN_BUILDER';
+
+  return prisma.$transaction(async (tx) => {
+    const draft = await tx.aiPlanDraft.findUnique({
+      where: { id: params.aiPlanDraftId },
+      select: {
+        id: true,
+        athleteId: true,
+        coachId: true,
+        visibilityStatus: true,
+        sessions: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
+      throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+    }
+
+    const sourceActivityIds = draft.sessions.map((s) => `${sourcePrefix}${s.id}`);
+    let softDeletedCount = 0;
+
+    if (sourceActivityIds.length) {
+      const res = await tx.calendarItem.updateMany({
+        where: {
+          athleteId: params.athleteId,
+          coachId: params.coachId,
+          origin,
+          sourceActivityId: { in: sourceActivityIds },
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: now,
+          deletedByUserId: params.coachId,
+        },
+      });
+      softDeletedCount = res.count;
+    }
+
+    await tx.aiPlanDraft.delete({
+      where: { id: draft.id },
+    });
+
+    return {
+      deleted: true,
+      softDeletedCalendarItems: softDeletedCount,
+      wasPublished: draft.visibilityStatus === 'PUBLISHED',
+    };
   });
 }
 

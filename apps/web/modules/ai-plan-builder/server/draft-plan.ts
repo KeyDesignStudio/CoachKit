@@ -979,6 +979,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
           discipline: true,
           type: true,
           durationMinutes: true,
+          notes: true,
           detailJson: true,
           detailInputHash: true,
           detailGeneratedAt: true,
@@ -1021,6 +1022,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
     availableTimeMinutes: Number(requestContext?.weeklyMinutes ?? 0) || undefined,
     equipment: typeof requestContext?.equipment === 'string' ? String(requestContext.equipment) : undefined,
     environmentTags,
+    constraintsNotes: typeof requestContext?.constraintsNotes === 'string' ? String(requestContext.constraintsNotes) : undefined,
     fatigueState:
       typeof requestContext?.fatigueState === 'string'
         ? String(requestContext.fatigueState)
@@ -1058,10 +1060,12 @@ export async function generateSessionDetailsForDraftPlan(params: {
         environmentTags: environmentTags.length ? environmentTags : undefined,
         fatigueState: contextForDetails.fatigueState as 'fresh' | 'normal' | 'fatigued' | 'cooked' | undefined,
         availableTimeMinutes: Number(requestContext?.availableTimeMinutes ?? 0) || undefined,
+        constraintsNotes: typeof requestContext?.constraintsNotes === 'string' ? String(requestContext.constraintsNotes) : undefined,
       },
       session: {
         weekIndex: s.weekIndex,
         dayOfWeek: s.dayOfWeek,
+        notes: s.notes ?? null,
         discipline: s.discipline,
         type: s.type,
         durationMinutes: s.durationMinutes,
@@ -1086,6 +1090,8 @@ export async function generateSessionDetailsForDraftPlan(params: {
               weekIndex: Number(s.weekIndex ?? 0),
               dayOfWeek: Number(s.dayOfWeek ?? 0),
               sessionOrdinal: Number(s.ordinal ?? 0),
+              sessionNotes: typeof s.notes === 'string' ? s.notes : undefined,
+              isTravelDay: /\b(travel|travell|business trip|hotel|flight|airport|away)\b/i.test(String(s.notes ?? '')),
             },
           });
 
@@ -1103,6 +1109,8 @@ export async function generateSessionDetailsForDraftPlan(params: {
                 weekIndex: Number(s.weekIndex ?? 0),
                 dayOfWeek: Number(s.dayOfWeek ?? 0),
                 sessionOrdinal: Number(s.ordinal ?? 0),
+                sessionNotes: typeof s.notes === 'string' ? s.notes : undefined,
+                isTravelDay: /\b(travel|travell|business trip|hotel|flight|airport|away)\b/i.test(String(s.notes ?? '')),
               },
             }),
             totalMinutes: s.durationMinutes,
@@ -1128,6 +1136,8 @@ export async function generateSessionDetailsForDraftPlan(params: {
           weekIndex: Number(s.weekIndex ?? 0),
           dayOfWeek: Number(s.dayOfWeek ?? 0),
           sessionOrdinal: Number(s.ordinal ?? 0),
+          sessionNotes: typeof s.notes === 'string' ? s.notes : undefined,
+          isTravelDay: /\b(travel|travell|business trip|hotel|flight|airport|away)\b/i.test(String(s.notes ?? '')),
         },
       });
 
@@ -1145,6 +1155,8 @@ export async function generateSessionDetailsForDraftPlan(params: {
                 weekIndex: Number(s.weekIndex ?? 0),
                 dayOfWeek: Number(s.dayOfWeek ?? 0),
                 sessionOrdinal: Number(s.ordinal ?? 0),
+                sessionNotes: typeof s.notes === 'string' ? s.notes : undefined,
+                isTravelDay: /\b(travel|travell|business trip|hotel|flight|airport|away)\b/i.test(String(s.notes ?? '')),
               },
             }),
             totalMinutes: s.durationMinutes,
