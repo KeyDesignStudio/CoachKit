@@ -34,6 +34,7 @@ type TrainingRequestForm = {
   goalDetails: string;
   goalFocus: string;
   primaryDisciplineFocus: '' | 'balanced' | 'swim' | 'bike' | 'run';
+  blockStartDate: string;
   eventName: string;
   eventDate: string;
   goalTimeline: string;
@@ -81,6 +82,7 @@ type ProgressOverlayState = {
   title: string;
   progress: number;
   etaSeconds: number | null;
+  overdueSeconds: number;
 };
 
 type ChangeSummaryState = {
@@ -256,6 +258,7 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
     goalDetails: String(profile?.primaryGoal ?? ''),
     goalFocus: String(profile?.focus ?? ''),
     primaryDisciplineFocus: deriveDisciplineEmphasis(profile?.disciplines ?? null),
+    blockStartDate: '',
     eventName: String(profile?.eventName ?? ''),
     eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
     goalTimeline: '',
@@ -316,6 +319,7 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
       map.primary_discipline_focus === 'balanced' || map.primary_discipline_focus === 'swim' || map.primary_discipline_focus === 'bike' || map.primary_discipline_focus === 'run'
         ? (map.primary_discipline_focus as TrainingRequestForm['primaryDisciplineFocus'])
         : '',
+    blockStartDate: isDayKey(String(map.block_start_date ?? '')) ? String(map.block_start_date) : '',
     eventName: String(map.event_name ?? ''),
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
     goalTimeline: String(map.goal_timeline ?? ''),
@@ -346,6 +350,7 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     goal_details: form.goalDetails.trim() || null,
     goal_focus: form.goalFocus.trim() || null,
     primary_discipline_focus: form.primaryDisciplineFocus || null,
+    block_start_date: form.blockStartDate || null,
     event_name: form.eventName.trim() || null,
     event_date: form.eventDate || null,
     goal_timeline: form.goalTimeline || null,
@@ -672,9 +677,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [setup]);
 
   const requestDefaults = useMemo(() => {
+    const explicitStartDate = isDayKey(trainingRequest.blockStartDate) ? trainingRequest.blockStartDate : null;
     const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
     const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
-    const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
+    const startDate = explicitStartDate ?? (completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null);
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
     const weeklyAvailabilityDaysRaw = dayIndicesFromShorts(trainingRequest.availabilityDays);
     const nonNegotiableDayIdx = new Set(dayIndicesFromShorts(trainingRequest.nonNegotiableDays));
@@ -1233,18 +1239,20 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const expectedSeconds = Math.max(4, params.expectedSeconds);
     const startedAt = Date.now();
 
-    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds });
+    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds, overdueSeconds: 0 });
     if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
     progressOverlayTimerRef.current = setInterval(() => {
       const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-      const ratio = Math.min(0.92, elapsedSec / expectedSeconds);
-      const remaining = expectedSeconds - elapsedSec;
+      const overdueSeconds = Math.max(0, elapsedSec - expectedSeconds);
+      const inRangeProgress = Math.max(6, Math.round(Math.min(92, (elapsedSec / expectedSeconds) * 92)));
+      const overdueProgress = Math.min(99, 92 + Math.floor(overdueSeconds / 3));
       setProgressOverlay((prev) =>
         prev
           ? {
               ...prev,
-              progress: Math.max(6, Math.round(ratio * 100)),
-              etaSeconds: remaining <= 0 ? 1 : remaining,
+              progress: overdueSeconds > 0 ? overdueProgress : inRangeProgress,
+              etaSeconds: overdueSeconds > 0 ? null : Math.max(1, expectedSeconds - elapsedSec),
+              overdueSeconds,
             }
           : prev
       );
@@ -1259,7 +1267,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       return;
     }
 
-    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0 } : prev));
+    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0, overdueSeconds: 0 } : prev));
     setTimeout(() => setProgressOverlay(null), 350);
   }, []);
 
@@ -2160,7 +2168,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="w-[min(560px,90vw)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-lg">
             <div className="text-sm font-medium">{progressOverlay.title}</div>
             <div className="mt-1 text-xs text-[var(--fg-muted)]">
-              {progressOverlay.etaSeconds != null ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s` : 'Estimating...'}
+              {progressOverlay.overdueSeconds > 0
+                ? `Taking longer than expected (+${progressOverlay.overdueSeconds}s)`
+                : progressOverlay.etaSeconds != null
+                  ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
+                  : 'Estimating...'}
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
               <div
@@ -2227,6 +2239,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <option value="bike">Bike</option>
                 <option value="swim">Swim</option>
               </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Block start date</label>
+              <Input type="date" value={trainingRequest.blockStartDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, blockStartDate: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Event name</label>
