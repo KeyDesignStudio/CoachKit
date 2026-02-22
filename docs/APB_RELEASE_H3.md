@@ -21,6 +21,7 @@ All items must be `PASS` before production release:
 
 3. UAT
 - `docs/APB_UAT_H2.md` complete.
+- `npm run uat:ai-plan-builder:evidence` generates `PASS` gate.
 - No open `P0`/`P1`.
 - Any open `P2` has approved workaround and owner.
 
@@ -101,4 +102,3 @@ Status:
 
 Timestamp:
 - `<fill>`
-

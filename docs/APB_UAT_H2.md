@@ -190,3 +190,19 @@ Required fields:
 - `screenshot_path`
 - `notes`
 
+## Automated Evidence (Phase J1)
+After updating `docs/APB_UAT_H2_RESULTS.csv`, run:
+
+```bash
+cd apps/web
+npm run uat:ai-plan-builder:evidence
+```
+
+Artifacts generated:
+- `apps/web/apb-uat-evidence-report.json`
+- `apps/web/apb-uat-evidence-report.md`
+
+Release gate expectation:
+- All required cases (`C1-C10`, `A1-A4`) are present.
+- No `FAIL`/`BLOCKED` results.
+- No `P0`/`P1` severity entries.
