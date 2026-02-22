@@ -34,6 +34,7 @@ type TrainingRequestForm = {
   goalDetails: string;
   goalFocus: string;
   primaryDisciplineFocus: '' | 'balanced' | 'swim' | 'bike' | 'run';
+  blockStartDate: string;
   eventName: string;
   eventDate: string;
   goalTimeline: string;
@@ -81,6 +82,7 @@ type ProgressOverlayState = {
   title: string;
   progress: number;
   etaSeconds: number | null;
+  overdueSeconds: number;
 };
 
 type ChangeSummaryState = {
@@ -256,6 +258,7 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
     goalDetails: String(profile?.primaryGoal ?? ''),
     goalFocus: String(profile?.focus ?? ''),
     primaryDisciplineFocus: deriveDisciplineEmphasis(profile?.disciplines ?? null),
+    blockStartDate: '',
     eventName: String(profile?.eventName ?? ''),
     eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
     goalTimeline: '',
@@ -316,6 +319,7 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
       map.primary_discipline_focus === 'balanced' || map.primary_discipline_focus === 'swim' || map.primary_discipline_focus === 'bike' || map.primary_discipline_focus === 'run'
         ? (map.primary_discipline_focus as TrainingRequestForm['primaryDisciplineFocus'])
         : '',
+    blockStartDate: isDayKey(String(map.block_start_date ?? '')) ? String(map.block_start_date) : '',
     eventName: String(map.event_name ?? ''),
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
     goalTimeline: String(map.goal_timeline ?? ''),
@@ -346,6 +350,7 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     goal_details: form.goalDetails.trim() || null,
     goal_focus: form.goalFocus.trim() || null,
     primary_discipline_focus: form.primaryDisciplineFocus || null,
+    block_start_date: form.blockStartDate || null,
     event_name: form.eventName.trim() || null,
     event_date: form.eventDate || null,
     goal_timeline: form.goalTimeline || null,
@@ -672,9 +677,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   }, [setup]);
 
   const requestDefaults = useMemo(() => {
+    const explicitStartDate = isDayKey(trainingRequest.blockStartDate) ? trainingRequest.blockStartDate : null;
     const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
     const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
-    const startDate = completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null;
+    const startDate = explicitStartDate ?? (completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null);
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
     const weeklyAvailabilityDaysRaw = dayIndicesFromShorts(trainingRequest.availabilityDays);
     const nonNegotiableDayIdx = new Set(dayIndicesFromShorts(trainingRequest.nonNegotiableDays));
@@ -841,7 +847,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const issues: string[] = [];
     if (requestDefaults.startDate && setup.startDate !== requestDefaults.startDate) issues.push('start date');
     if (requestDefaults.completionDate && setup.completionDate !== requestDefaults.completionDate) issues.push('completion date');
-    if (requestDefaults.weeksToEventOverride && setup.weeksToEventOverride !== requestDefaults.weeksToEventOverride) issues.push('block length');
     if (requestDefaults.weeklyAvailabilityMinutes && Number(setup.weeklyAvailabilityMinutes) !== Number(requestDefaults.weeklyAvailabilityMinutes)) {
       issues.push('weekly minutes');
     }
@@ -854,7 +859,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const hasRequestValues =
       Boolean(requestDefaults.startDate) ||
       Boolean(requestDefaults.completionDate) ||
-      Boolean(requestDefaults.weeksToEventOverride) ||
       Boolean(requestDefaults.weeklyAvailabilityMinutes) ||
       requestDefaults.weeklyAvailabilityDays.length > 0;
 
@@ -1233,18 +1237,20 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const expectedSeconds = Math.max(4, params.expectedSeconds);
     const startedAt = Date.now();
 
-    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds });
+    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds, overdueSeconds: 0 });
     if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
     progressOverlayTimerRef.current = setInterval(() => {
       const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-      const ratio = Math.min(0.92, elapsedSec / expectedSeconds);
-      const remaining = expectedSeconds - elapsedSec;
+      const overdueSeconds = Math.max(0, elapsedSec - expectedSeconds);
+      const inRangeProgress = Math.max(6, Math.round(Math.min(92, (elapsedSec / expectedSeconds) * 92)));
+      const overdueProgress = Math.min(99, 92 + Math.floor(overdueSeconds / 3));
       setProgressOverlay((prev) =>
         prev
           ? {
               ...prev,
-              progress: Math.max(6, Math.round(ratio * 100)),
-              etaSeconds: remaining <= 0 ? 1 : remaining,
+              progress: overdueSeconds > 0 ? overdueProgress : inRangeProgress,
+              etaSeconds: overdueSeconds > 0 ? null : Math.max(1, expectedSeconds - elapsedSec),
+              overdueSeconds,
             }
           : prev
       );
@@ -1259,7 +1265,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       return;
     }
 
-    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0 } : prev));
+    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0, overdueSeconds: 0 } : prev));
     setTimeout(() => setProgressOverlay(null), 350);
   }, []);
 
@@ -2160,7 +2166,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="w-[min(560px,90vw)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-lg">
             <div className="text-sm font-medium">{progressOverlay.title}</div>
             <div className="mt-1 text-xs text-[var(--fg-muted)]">
-              {progressOverlay.etaSeconds != null ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s` : 'Estimating...'}
+              {progressOverlay.overdueSeconds > 0
+                ? `Taking longer than expected (+${progressOverlay.overdueSeconds}s)`
+                : progressOverlay.etaSeconds != null
+                  ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
+                  : 'Estimating...'}
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
               <div
@@ -2227,6 +2237,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 <option value="bike">Bike</option>
                 <option value="swim">Swim</option>
               </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">Block start date</label>
+              <Input type="date" value={trainingRequest.blockStartDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, blockStartDate: e.target.value }))} disabled={!hasOpenRequest} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Event name</label>
@@ -2498,39 +2512,39 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <span className="text-xs text-[var(--fg-muted)]">Coach plan library is managed in <Link className="underline" href="/coach/settings">Settings</Link>.</span>
           </div>
 
+          <div className="rounded-md border border-[var(--border-subtle)] p-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">From training request (read-only)</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block start date</label>
+                <Input type="date" value={setup.startDate} readOnly disabled />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block completion date</label>
+                <Input type="date" value={setup.completionDate} readOnly disabled />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block length (weeks)</label>
+                <Input
+                  value={String(setup.weeksToEventOverride ?? deriveWeeksToCompletionFromDates({
+                    startDate: setup.startDate,
+                    completionDate: setup.completionDate,
+                    weekStart: setup.weekStart,
+                  }) ?? '')}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Weekly training time (minutes)</label>
+                <Input value={String(setup.weeklyAvailabilityMinutes)} readOnly disabled />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--border-subtle)] p-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Planner overrides (optional)</div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block length (weeks)</label>
-              <Input
-                value={setup.weeksToEventOverride ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value.trim();
-                  const parsed = Number(value);
-                  setSetup((prev) => ({ ...prev, weeksToEventOverride: value && Number.isFinite(parsed) ? Math.max(1, Math.min(52, Math.round(parsed))) : null }));
-                }}
-                inputMode="numeric"
-                placeholder="Auto"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block start date</label>
-              <Input type="date" value={setup.startDate} onChange={(e) => setSetup((p) => ({ ...p, startDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block completion date</label>
-              <Input type="date" value={setup.completionDate} onChange={(e) => setSetup((p) => ({ ...p, completionDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Weekly training time (minutes)</label>
-              <Input
-                value={setup.weeklyAvailabilityMinutes}
-                onChange={(e) => {
-                  const parsed = Number(e.target.value);
-                  setSetup((prev) => ({ ...prev, weeklyAvailabilityMinutes: Number.isFinite(parsed) ? parsed : 0 }));
-                }}
-                inputMode="numeric"
-              />
-            </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Risk tolerance</label>
               <Select value={setup.riskTolerance} onChange={(e) => setSetup((prev) => ({ ...prev, riskTolerance: e.target.value as SetupState['riskTolerance'] }))}>
@@ -2556,6 +2570,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               </Select>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium">Max intensity days/week</label>
+              <Input
+                value={setup.maxIntensityDaysPerWeek}
+                onChange={(e) => {
+                  const parsed = Number(e.target.value);
+                  setSetup((prev) => ({ ...prev, maxIntensityDaysPerWeek: Number.isFinite(parsed) ? Math.max(1, Math.min(3, parsed)) : 1 }));
+                }}
+                inputMode="numeric"
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium">Max doubles/week</label>
               <Input
                 value={setup.maxDoublesPerWeek}
@@ -2566,6 +2591,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 inputMode="numeric"
               />
             </div>
+          </div>
           </div>
 
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
