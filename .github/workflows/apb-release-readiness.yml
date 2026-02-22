@@ -1,0 +1,84 @@
+name: APB Release Readiness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/scripts/apb-release-readiness-check.mjs"
+      - "apps/web/scripts/apb-uat-evidence.mjs"
+      - "apps/web/modules/ai-plan-builder/**"
+      - "docs/APB_RELEASE_H3.md"
+      - "docs/APB_UAT_H2_RESULTS.csv"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/apb-release-readiness.yml"
+
+jobs:
+  release-readiness:
+    name: APB Release Readiness Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "apps/web/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build quality gate artifacts
+        run: |
+          npm run test:ai-plan-builder:gates:ci
+          npm run test:ai-plan-builder:gates:report
+
+      - name: Build UAT evidence artifact
+        run: npm run uat:ai-plan-builder:evidence
+
+      - name: Evaluate release readiness gate
+        run: npm run release:ai-plan-builder:check
+
+      - name: Release readiness summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## APB Release Readiness";
+            echo "";
+            echo "- Workflow: \`APB Release Readiness\`";
+            echo "- Commands:";
+            echo "  - \`npm run test:ai-plan-builder:gates:ci\`";
+            echo "  - \`npm run test:ai-plan-builder:gates:report\`";
+            echo "  - \`npm run uat:ai-plan-builder:evidence\`";
+            echo "  - \`npm run release:ai-plan-builder:check\`";
+            echo "";
+            if [[ -f apb-release-readiness.md ]]; then
+              cat apb-release-readiness.md;
+            else
+              echo "_Release readiness markdown not generated._";
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload readiness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apb-release-readiness
+          path: |
+            apps/web/apb-quality-gates-report.json
+            apps/web/apb-quality-gates-report.md
+            apps/web/apb-uat-evidence-report.json
+            apps/web/apb-uat-evidence-report.md
+            apps/web/apb-release-readiness.json
+            apps/web/apb-release-readiness.md
+          if-no-files-found: error

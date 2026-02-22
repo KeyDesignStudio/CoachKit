@@ -67,6 +67,8 @@ apps/web/apb-quality-gates.log
 apps/web/apb-quality-gates-report.log
 apps/web/apb-uat-evidence-report.json
 apps/web/apb-uat-evidence-report.md
+apps/web/apb-release-readiness.json
+apps/web/apb-release-readiness.md
 
 # Screenshots (generated proof artifacts)
 screenshots/
