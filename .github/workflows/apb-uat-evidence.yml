@@ -1,0 +1,68 @@
+name: APB UAT Evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/APB_UAT_H2_RESULTS.csv"
+      - "docs/APB_UAT_H2.md"
+      - "apps/web/scripts/apb-uat-evidence.mjs"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/apb-uat-evidence.yml"
+
+jobs:
+  apb-uat-evidence:
+    name: APB UAT Evidence Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "apps/web/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate UAT evidence report
+        run: npm run uat:ai-plan-builder:evidence
+
+      - name: UAT Evidence Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## APB UAT Evidence";
+            echo "";
+            echo "- Workflow: \`APB UAT Evidence\`";
+            echo "- Command: \`npm run uat:ai-plan-builder:evidence\`";
+            if [[ -f apb-uat-evidence-report.md ]]; then
+              echo "";
+              cat apb-uat-evidence-report.md;
+            else
+              echo "";
+              echo "_UAT evidence markdown report not generated._";
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload UAT evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apb-uat-evidence
+          path: |
+            apps/web/apb-uat-evidence-report.json
+            apps/web/apb-uat-evidence-report.md
+          if-no-files-found: error
