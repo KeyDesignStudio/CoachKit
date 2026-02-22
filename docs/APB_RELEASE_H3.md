@@ -15,6 +15,7 @@ All items must be `PASS` before production release:
 
 1. CI gates
 - `npm run test:ai-plan-builder:gates:ci` passes in GitHub Actions (`APB Quality Gates` workflow).
+- `npm run release:ai-plan-builder:check` passes (`APB Release Readiness` workflow).
 
 2. Publish/redraft E2E
 - `npm run test:ai-plan-builder:h1` passes in APB harness.
@@ -77,6 +78,18 @@ Track:
 - Proposal apply failures (especially `PROPOSAL_CONFLICT` volume spikes).
 - Publish failures and calendar materialisation errors.
 - AI fallback rate and rate-limit events.
+
+## Automated Readiness Command (J3)
+```bash
+cd apps/web
+npm run test:ai-plan-builder:gates:report
+npm run uat:ai-plan-builder:evidence
+npm run release:ai-plan-builder:check
+```
+
+Outputs:
+- `apps/web/apb-release-readiness.json`
+- `apps/web/apb-release-readiness.md`
 
 Escalation thresholds:
 - Any `P0` -> immediate rollback decision.
