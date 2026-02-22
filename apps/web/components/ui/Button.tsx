@@ -29,14 +29,16 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = 'primary', size = 'md', disabled, ...props },
+  { className, variant = 'primary', size = 'md', disabled, children, ...props },
   ref
 ) {
+  const isBusy = props['aria-busy'] === true || props['aria-busy'] === 'true';
+
   return (
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0',
+        'relative isolate inline-flex items-center justify-center overflow-hidden font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0',
         tokens.spacing.touchTarget,
         tokens.borders.focus,
         tokens.radius.button,
@@ -47,6 +49,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       disabled={disabled}
       {...props}
-    />
+    >
+      {isBusy ? <span aria-hidden className="pointer-events-none absolute inset-0 origin-left animate-button-progress-fill bg-black/20" /> : null}
+      <span className="relative z-[1] inline-flex items-center justify-center">{children}</span>
+    </button>
   );
 });

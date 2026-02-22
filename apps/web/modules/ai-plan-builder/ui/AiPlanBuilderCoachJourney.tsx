@@ -2445,7 +2445,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                         }))
                       }
                       className={`rounded-md border px-3 py-1.5 text-sm ${
-                        selected ? 'border-[var(--primary)] bg-[var(--primary)] text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
+                        selected ? 'border-black bg-black text-white' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)]'
                       } ${disabled && !selected ? 'opacity-50' : ''}`}
                     >
                       {day}
@@ -2458,32 +2458,41 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
           <div>
             <label className="mb-1 block text-xs font-medium">Daily time windows (optional)</label>
-            <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
-              {DAY_SHORTS_MON_FIRST.map((day) => (
-                <div key={`window:${day}`}>
-                  <label className="mb-0.5 block text-[11px] font-medium text-[var(--fg-muted)]">{day}</label>
-                  <Select
-                    className="px-2 py-1.5 pr-7 text-xs"
-                    value={trainingRequest.dailyTimeWindows[day as (typeof DAY_SHORTS)[number]] ?? 'any'}
-                    onChange={(e) =>
-                      setTrainingRequest((prev) => ({
-                        ...prev,
-                        dailyTimeWindows: {
-                          ...prev.dailyTimeWindows,
-                          [day]: e.target.value as 'any' | 'am' | 'midday' | 'pm' | 'evening',
-                        },
-                      }))
-                    }
-                    disabled={!hasOpenRequest}
-                  >
-                    {TIME_WINDOW_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Select>
+            <div className="overflow-x-auto">
+              <div className="min-w-[720px] space-y-1.5">
+                <div className="grid grid-cols-7 gap-2">
+                  {DAY_SHORTS_MON_FIRST.map((day) => (
+                    <label key={`window-label:${day}`} className="mb-0.5 block text-[11px] font-medium text-[var(--fg-muted)]">
+                      {day}
+                    </label>
+                  ))}
                 </div>
-              ))}
+                <div className="grid grid-cols-7 gap-2">
+                  {DAY_SHORTS_MON_FIRST.map((day) => (
+                    <Select
+                      key={`window:${day}`}
+                      className="px-2 py-1.5 pr-7 text-xs"
+                      value={trainingRequest.dailyTimeWindows[day as (typeof DAY_SHORTS)[number]] ?? 'any'}
+                      onChange={(e) =>
+                        setTrainingRequest((prev) => ({
+                          ...prev,
+                          dailyTimeWindows: {
+                            ...prev.dailyTimeWindows,
+                            [day]: e.target.value as 'any' | 'am' | 'midday' | 'pm' | 'evening',
+                          },
+                        }))
+                      }
+                      disabled={!hasOpenRequest}
+                    >
+                      {TIME_WINDOW_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2552,7 +2561,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium">Training/Event environment factors</label>
+            <label className="mb-1 block text-xs font-medium">Training Environment</label>
             <div className="flex flex-wrap gap-2">
               {ENVIRONMENT_OPTIONS.map((tag) => {
                 const selected = trainingRequest.environmentTags.includes(tag);
@@ -2596,8 +2605,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 </Button>
               ) : (
                 <>
-                  <Button onClick={() => void saveTrainingRequestDraft()} disabled={busy != null}>Save draft</Button>
-                  <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null}>Submit request</Button>
+                  <Button onClick={() => void saveTrainingRequestDraft()} disabled={busy != null} aria-busy={busy === 'save-request'}>
+                    Save draft
+                  </Button>
+                  <Button variant="secondary" onClick={() => void markRequestComplete()} disabled={busy != null} aria-busy={busy === 'complete-request'}>
+                    Submit request
+                  </Button>
                 </>
               )}
             </div>
