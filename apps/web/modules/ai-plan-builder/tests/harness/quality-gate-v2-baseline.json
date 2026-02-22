@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "capturedAt": "2026-02-22",
+  "summary": {
+    "scenarioCount": 9,
+    "avgScore": 92.889,
+    "minScore": 80,
+    "avgWeeklyMinutesInBandRate": 0.959,
+    "avgKeySessionBandPassRate": 1,
+    "avgNonConsecutiveIntensityRate": 1,
+    "avgNoLongThenIntensityRate": 0.858,
+    "avgExplainabilityCoverageRate": 1,
+    "avgAvailabilityAdherenceRate": 1,
+    "avgDoublesComplianceRate": 1,
+    "avgIntensityCapComplianceRate": 1
+  }
+}

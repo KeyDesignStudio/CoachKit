@@ -61,6 +61,10 @@ logs
 # Local perf artifacts
 perf/lh-prod/
 perf/lh/
+apps/web/apb-quality-gates-report.json
+apps/web/apb-quality-gates-report.md
+apps/web/apb-quality-gates.log
+apps/web/apb-quality-gates-report.log
 
 # Screenshots (generated proof artifacts)
 screenshots/

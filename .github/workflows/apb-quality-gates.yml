@@ -46,6 +46,14 @@ jobs:
           set -o pipefail
           npm run test:ai-plan-builder:gates:ci 2>&1 | tee apb-quality-gates.log
 
+      - name: Generate APB drift report artifact
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          npm run test:ai-plan-builder:gates:report 2>&1 | tee apb-quality-gates-report.log
+          exit 0
+
       - name: Gate summary
         if: always()
         shell: bash
@@ -56,6 +64,23 @@ jobs:
             echo "- Workflow: \`APB Gates (CI)\`";
             echo "- Command: \`npm run test:ai-plan-builder:gates:ci\`";
             echo "- Result: **${{ job.status }}**";
+            echo "- Drift report command: \`npm run test:ai-plan-builder:gates:report\`";
+            echo "";
+            echo "### Drift Report";
+            if [[ -f apb-quality-gates-report.md ]]; then
+              cat apb-quality-gates-report.md;
+            else
+              echo "_Drift report file not generated._";
+            fi
+            echo "";
+            echo "### Failure Visibility";
+            if [[ -f apb-quality-gates.log ]]; then
+              echo '```text';
+              tail -n 80 apb-quality-gates.log;
+              echo '```';
+            else
+              echo "_No gate log found._";
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APB gate logs
@@ -63,5 +88,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: apb-quality-gates-log
-          path: apps/web/apb-quality-gates.log
+          path: |
+            apps/web/apb-quality-gates.log
+            apps/web/apb-quality-gates-report.log
+            apps/web/apb-quality-gates-report.json
+            apps/web/apb-quality-gates-report.md
           if-no-files-found: ignore
