@@ -1,0 +1,67 @@
+name: APB Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/modules/ai-plan-builder/**"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/apb-quality-gates.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/modules/ai-plan-builder/**"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/apb-quality-gates.yml"
+
+jobs:
+  apb-gates:
+    name: APB Gates (CI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "apps/web/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run APB strict quality gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:ai-plan-builder:gates:ci 2>&1 | tee apb-quality-gates.log
+
+      - name: Gate summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## APB Quality Gates";
+            echo "";
+            echo "- Workflow: \`APB Gates (CI)\`";
+            echo "- Command: \`npm run test:ai-plan-builder:gates:ci\`";
+            echo "- Result: **${{ job.status }}**";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APB gate logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apb-quality-gates-log
+          path: apps/web/apb-quality-gates.log
+          if-no-files-found: ignore
