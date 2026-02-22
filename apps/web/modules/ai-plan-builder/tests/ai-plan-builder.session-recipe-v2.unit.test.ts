@@ -68,4 +68,25 @@ describe('ai-plan-builder session recipe v2', () => {
     const total = parsed.data.structure.reduce((sum, block) => sum + (block.durationMinutes ?? 0), 0);
     expect(total).toBeLessThanOrEqual(45);
   });
+
+  it('generates travel-compatible alternatives when travel constraints are present', () => {
+    const detail = buildDeterministicSessionDetailV1({
+      discipline: 'swim',
+      type: 'technique',
+      durationMinutes: 45,
+      context: {
+        constraintsNotes: 'Travelling for business this week, likely no pool access.',
+        sessionNotes: 'Travel-adjusted · key session',
+      },
+    });
+
+    const parsed = sessionDetailV1Schema.safeParse(detail);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const allSteps = parsed.data.structure.map((block) => String(block.steps ?? '').toLowerCase()).join(' ');
+    expect(allSteps).toMatch(/mobility|band|hotel|bodyweight|treadmill|easy cardio/);
+    expect(parsed.data.explainability?.whyToday?.toLowerCase()).toContain('travel');
+    expect((parsed.data.variants ?? []).some((v) => String(v.label).startsWith('travel-'))).toBe(true);
+  });
 });

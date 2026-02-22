@@ -42,7 +42,18 @@ export const sessionDetailExplainabilitySchema = z
 
 export const sessionDetailVariantSchema = z
   .object({
-    label: z.enum(['short-on-time', 'standard', 'longer-window', 'trainer', 'road', 'heat-adjusted', 'hills-adjusted', 'fatigue-adjusted']),
+    label: z.enum([
+      'short-on-time',
+      'standard',
+      'longer-window',
+      'trainer',
+      'road',
+      'heat-adjusted',
+      'hills-adjusted',
+      'fatigue-adjusted',
+      'travel-hotel-room',
+      'travel-hotel-gym',
+    ]),
     whenToUse: z.string().min(1).max(260),
     durationMinutes: z.number().int().min(5).max(10_000),
     adjustments: z.array(z.string().min(1).max(220)).min(1).max(5),
@@ -636,6 +647,9 @@ export function buildDeterministicSessionDetailV1(params: {
     weekIndex?: number | null;
     dayOfWeek?: number | null;
     sessionOrdinal?: number | null;
+    constraintsNotes?: string | null;
+    sessionNotes?: string | null;
+    isTravelDay?: boolean | null;
   };
 }): SessionDetailV1 {
   const discipline = String(params.discipline || '').trim().toLowerCase();
@@ -677,6 +691,11 @@ export function buildDeterministicSessionDetailV1(params: {
 
   const equipment = String(params.context?.equipment ?? '').toLowerCase();
   const environment = (params.context?.environmentTags ?? []).map((v) => String(v).toLowerCase());
+  const constraintsNotes = String(params.context?.constraintsNotes ?? '').toLowerCase();
+  const sessionNotes = String(params.context?.sessionNotes ?? '').toLowerCase();
+  const isTravelDayExplicit = Boolean(params.context?.isTravelDay ?? false);
+  const isTravelSession =
+    isTravelDayExplicit || /\b(travel|travell|business trip|hotel|flight|airport|away)\b/.test(`${constraintsNotes} ${sessionNotes}`);
   const variationSeed = Math.abs(
     (Number(params.context?.weekIndex ?? 0) + 1) * 31 +
       (Number(params.context?.dayOfWeek ?? 0) + 1) * 17 +
@@ -689,6 +708,29 @@ export function buildDeterministicSessionDetailV1(params: {
   };
 
   const warmupSteps = (() => {
+    if (isTravelSession) {
+      if (discipline === 'swim') {
+        return pick([
+          '5-8 min mobility (shoulders/t-spine/hips) + band activation if available.',
+          '8 min brisk walk + shoulder mobility + breathing reset.',
+          '6 min easy cardio + dynamic movement prep (ankles/hips/shoulders).',
+        ]);
+      }
+      if (discipline === 'bike') {
+        return pick([
+          '8-10 min easy spin on hotel bike or easy walk/jog if bike unavailable.',
+          '6-8 min treadmill walk-jog + hip and ankle mobility.',
+          '5 min light cardio + dynamic warm-up, keep effort easy.',
+        ]);
+      }
+      if (discipline === 'run') {
+        return pick([
+          '8 min easy jog/walk + drills in a safe, well-lit area.',
+          '10 min treadmill easy jog + mobility drills.',
+          '6-8 min brisk walk then easy jog, keep effort comfortable.',
+        ]);
+      }
+    }
     if (discipline === 'swim') return pick(['200m easy + 4 x 50m drill/swim by 25m', '300m relaxed swim with every 4th length backstroke', '8 min easy swim + 6 x 25m form drill']);
     if (discipline === 'bike') return pick(['8-12 min easy spin, include 3 x 30s high cadence', '10 min progressive spin (Z1->Z2)', '5 min easy + 3 x 1 min spin-up / 1 min easy']);
     if (discipline === 'run') return pick(['8-10 min easy jog + mobility + 4 strides', '10 min easy run + drills (A-skips/high knees)', '12 min easy jog with cadence focus']);
@@ -698,6 +740,36 @@ export function buildDeterministicSessionDetailV1(params: {
 
   const mainSteps = (() => {
     const mainWork = Math.max(10, main);
+    if (isTravelSession) {
+      if (discipline === 'swim') {
+        return pick([
+          `${Math.max(3, Math.round(mainWork / 8))} rounds: 45s band row or towel pull, 45s plank, 45s side plank/side, 45s easy mobility. Keep movement quality high.`,
+          `${Math.max(3, Math.round(mainWork / 10))} rounds: 8-10 push-ups, 10-12 band pull-aparts, 8-10 split squats/leg, 60s easy walk recovery.`,
+          `If pool access exists: ${Math.max(12, mainWork - 8)} min easy technique swim. If no pool: substitute with 20-30 min easy cardio + shoulder mobility.`,
+        ]);
+      }
+      if (discipline === 'bike') {
+        return pick([
+          `${Math.max(2, Math.round(mainWork / 12))} x 8-10 min steady aerobic on hotel bike/treadmill, 2 min easy between.`,
+          `${Math.max(20, mainWork - 8)} min continuous aerobic at controlled effort (RPE 4-5).`,
+          `${Math.max(3, Math.round(mainWork / 10))} rounds: 4 min brisk incline walk/jog + 2 min easy.`,
+        ]);
+      }
+      if (discipline === 'run') {
+        return pick([
+          `${Math.max(20, mainWork - 8)} min easy run (or treadmill) with smooth cadence; no hard surges.`,
+          `${Math.max(3, Math.round(mainWork / 10))} x 6 min steady / 2 min easy jog. Keep controlled.`,
+          `${Math.max(15, mainWork - 10)} min easy jog + 6 x 20s relaxed strides if legs feel good.`,
+        ]);
+      }
+      if (discipline === 'strength') {
+        return pick([
+          `${Math.max(3, Math.round(mainWork / 10))} rounds: split squat 8/leg, single-leg hinge 8/leg, plank 45s, glute bridge 12.`,
+          `${Math.max(2, Math.round(mainWork / 9))} rounds: squat 10, push-up 8-12, row variation 10, side plank 30s/side.`,
+          `${Math.max(3, Math.round(mainWork / 8))} rounds of low-impact mobility + core circuit. Avoid high soreness.`,
+        ]);
+      }
+    }
     if (discipline === 'swim' && type === 'technique') {
       const reps = Math.max(4, Math.min(12, Math.floor(mainWork / 5)));
       return pick([
@@ -762,6 +834,13 @@ export function buildDeterministicSessionDetailV1(params: {
   })();
 
   const cooldownSteps = (() => {
+    if (isTravelSession) {
+      return pick([
+        '5-8 min easy walk/spin and light mobility; restore breathing to baseline.',
+        'Easy cooldown + calf/hip/shoulder mobility for 5-10 min.',
+        'Light stretch and breathing reset. Finish feeling better than you started.',
+      ]);
+    }
     if (discipline === 'swim') return pick(['Easy 100-200m choice stroke + 2 min mobility', '5-8 min easy swim, long strokes', '4 min easy swim + shoulder mobility']);
     if (discipline === 'bike') return pick(['Easy spin, cadence down each minute; finish with hip flexor stretch', '5-10 min very easy spin + light mobility', 'Spin easy and keep breathing controlled to baseline']);
     if (discipline === 'run') return pick(['Easy jog/walk to finish + calf/hamstring mobility', '5-10 min easy jog, then leg swings and calf work', 'Walk 3 min then light posterior-chain stretch']);
@@ -845,6 +924,21 @@ export function buildDeterministicSessionDetailV1(params: {
     },
   ];
 
+  if (isTravelSession) {
+    variants.push({
+      label: 'travel-hotel-room',
+      whenToUse: 'No pool/gym access while travelling.',
+      durationMinutes: Math.max(20, Math.min(45, standardDuration)),
+      adjustments: ['Use bodyweight + mobility circuit', 'Keep effort mostly easy to moderate', 'Prioritize consistency over intensity'],
+    });
+    variants.push({
+      label: 'travel-hotel-gym',
+      whenToUse: 'Basic hotel gym available (treadmill/bike/dumbbells).',
+      durationMinutes: standardDuration,
+      adjustments: ['Use treadmill/bike for aerobic component', 'Keep loads conservative', 'Avoid high-risk maximal work'],
+    });
+  }
+
   if (equipment.includes('trainer')) {
     variants.push({
       label: 'trainer',
@@ -887,11 +981,17 @@ export function buildDeterministicSessionDetailV1(params: {
   }
 
   const explainability: NonNullable<SessionDetailV1['explainability']> = {
-    whyThis: `This session is designed to ${keyStimulusText}.`,
-    whyToday: "It is placed to build adaptation now while protecting tomorrow's training quality and recovery budget.",
+    whyThis: `This session is designed to ${keyStimulusText}${isTravelSession ? ' within current travel constraints.' : '.'}`,
+    whyToday: isTravelSession
+      ? "It is placed as a travel-compatible session to protect consistency while keeping fatigue and logistics manageable."
+      : "It is placed to build adaptation now while protecting tomorrow's training quality and recovery budget.",
     unlocksNext: 'Completing this well supports progression into the next quality workout and long-session durability.',
-    ifMissed: 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
-    ifCooked: 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',
+    ifMissed: isTravelSession
+      ? 'Use a 20-30 min minimum dose (walk/jog/mobility) and resume the plan without catch-up intensity.'
+      : 'Skip catch-up intensity. Resume the plan at the next session and protect consistency for the week.',
+    ifCooked: isTravelSession
+      ? 'Switch to easy aerobic + mobility only, then rejoin normal progression when freshness returns.'
+      : 'Drop one intensity level, reduce reps, or switch to steady aerobic work while keeping technique clean.',
   };
 
   const purpose = `Primary purpose: ${keyStimulusText}.`;
