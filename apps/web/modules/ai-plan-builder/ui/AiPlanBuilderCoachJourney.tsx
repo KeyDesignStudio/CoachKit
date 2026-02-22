@@ -847,7 +847,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const issues: string[] = [];
     if (requestDefaults.startDate && setup.startDate !== requestDefaults.startDate) issues.push('start date');
     if (requestDefaults.completionDate && setup.completionDate !== requestDefaults.completionDate) issues.push('completion date');
-    if (requestDefaults.weeksToEventOverride && setup.weeksToEventOverride !== requestDefaults.weeksToEventOverride) issues.push('block length');
     if (requestDefaults.weeklyAvailabilityMinutes && Number(setup.weeklyAvailabilityMinutes) !== Number(requestDefaults.weeklyAvailabilityMinutes)) {
       issues.push('weekly minutes');
     }
@@ -860,7 +859,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const hasRequestValues =
       Boolean(requestDefaults.startDate) ||
       Boolean(requestDefaults.completionDate) ||
-      Boolean(requestDefaults.weeksToEventOverride) ||
       Boolean(requestDefaults.weeklyAvailabilityMinutes) ||
       requestDefaults.weeklyAvailabilityDays.length > 0;
 
@@ -2514,39 +2512,39 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <span className="text-xs text-[var(--fg-muted)]">Coach plan library is managed in <Link className="underline" href="/coach/settings">Settings</Link>.</span>
           </div>
 
+          <div className="rounded-md border border-[var(--border-subtle)] p-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">From training request (read-only)</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block start date</label>
+                <Input type="date" value={setup.startDate} readOnly disabled />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block completion date</label>
+                <Input type="date" value={setup.completionDate} readOnly disabled />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Block length (weeks)</label>
+                <Input
+                  value={String(setup.weeksToEventOverride ?? deriveWeeksToCompletionFromDates({
+                    startDate: setup.startDate,
+                    completionDate: setup.completionDate,
+                    weekStart: setup.weekStart,
+                  }) ?? '')}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium">Weekly training time (minutes)</label>
+                <Input value={String(setup.weeklyAvailabilityMinutes)} readOnly disabled />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-[var(--border-subtle)] p-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Planner overrides (optional)</div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block length (weeks)</label>
-              <Input
-                value={setup.weeksToEventOverride ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value.trim();
-                  const parsed = Number(value);
-                  setSetup((prev) => ({ ...prev, weeksToEventOverride: value && Number.isFinite(parsed) ? Math.max(1, Math.min(52, Math.round(parsed))) : null }));
-                }}
-                inputMode="numeric"
-                placeholder="Auto"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block start date</label>
-              <Input type="date" value={setup.startDate} onChange={(e) => setSetup((p) => ({ ...p, startDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Block completion date</label>
-              <Input type="date" value={setup.completionDate} onChange={(e) => setSetup((p) => ({ ...p, completionDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Weekly training time (minutes)</label>
-              <Input
-                value={setup.weeklyAvailabilityMinutes}
-                onChange={(e) => {
-                  const parsed = Number(e.target.value);
-                  setSetup((prev) => ({ ...prev, weeklyAvailabilityMinutes: Number.isFinite(parsed) ? parsed : 0 }));
-                }}
-                inputMode="numeric"
-              />
-            </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Risk tolerance</label>
               <Select value={setup.riskTolerance} onChange={(e) => setSetup((prev) => ({ ...prev, riskTolerance: e.target.value as SetupState['riskTolerance'] }))}>
@@ -2572,6 +2570,17 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               </Select>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium">Max intensity days/week</label>
+              <Input
+                value={setup.maxIntensityDaysPerWeek}
+                onChange={(e) => {
+                  const parsed = Number(e.target.value);
+                  setSetup((prev) => ({ ...prev, maxIntensityDaysPerWeek: Number.isFinite(parsed) ? Math.max(1, Math.min(3, parsed)) : 1 }));
+                }}
+                inputMode="numeric"
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium">Max doubles/week</label>
               <Input
                 value={setup.maxDoublesPerWeek}
@@ -2582,6 +2591,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 inputMode="numeric"
               />
             </div>
+          </div>
           </div>
 
           <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
