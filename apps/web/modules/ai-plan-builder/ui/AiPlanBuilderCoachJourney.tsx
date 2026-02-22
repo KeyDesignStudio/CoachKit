@@ -37,7 +37,6 @@ type TrainingRequestForm = {
   blockStartDate: string;
   eventName: string;
   eventDate: string;
-  goalTimeline: string;
   weeklyMinutes: string;
   availabilityDays: string[];
   nonNegotiableDays: string[];
@@ -209,7 +208,6 @@ const DAY_NAME_TO_SHORT: Record<string, string> = {
 };
 const DAY_SHORTS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const DAY_SHORTS_MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-const GOAL_TIMELINE_OPTIONS = ['No date in mind', 'In 6-8 weeks', 'In 2-3 months', 'In 3-6 months', 'In 6-12 months'];
 const EQUIPMENT_OPTIONS = [
   { value: '', label: 'Select equipment context' },
   { value: 'mixed', label: 'Mixed' },
@@ -261,7 +259,6 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
     blockStartDate: '',
     eventName: String(profile?.eventName ?? ''),
     eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
-    goalTimeline: '',
     weeklyMinutes: profile?.weeklyMinutesTarget != null ? String(profile.weeklyMinutesTarget) : '',
     availabilityDays: dayShortsFromProfileDays(profile?.availableDays ?? null),
     nonNegotiableDays: [],
@@ -322,7 +319,6 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
     blockStartDate: isDayKey(String(map.block_start_date ?? '')) ? String(map.block_start_date) : '',
     eventName: String(map.event_name ?? ''),
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
-    goalTimeline: String(map.goal_timeline ?? ''),
     weeklyMinutes: map.weekly_minutes != null ? String(map.weekly_minutes) : '',
     availabilityDays,
     nonNegotiableDays,
@@ -353,7 +349,6 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     block_start_date: form.blockStartDate || null,
     event_name: form.eventName.trim() || null,
     event_date: form.eventDate || null,
-    goal_timeline: form.goalTimeline || null,
     weekly_minutes: form.weeklyMinutes ? Number(form.weeklyMinutes) : null,
     availability_days: form.availabilityDays,
     non_negotiable_days: form.nonNegotiableDays,
@@ -368,23 +363,6 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     available_time_minutes: form.availableTimeMinutes ? Number(form.availableTimeMinutes) : null,
     constraints_notes: form.constraintsNotes.trim() || null,
   };
-}
-
-function goalTimelineToWeeks(raw: string): number | null {
-  const value = String(raw ?? '').trim();
-  if (!value || value === 'No date in mind') return null;
-  if (value === 'In 6-8 weeks') return 8;
-  if (value === 'In 2-3 months') return 12;
-  if (value === 'In 3-6 months') return 24;
-  if (value === 'In 6-12 months') return 48;
-  return null;
-}
-
-function subtractWeeksFromDayKey(dayKey: string, weeks: number): string {
-  if (!isDayKey(dayKey) || !Number.isFinite(weeks) || weeks <= 1) return dayKey;
-  const date = parseDayKeyToUtcDate(dayKey);
-  date.setUTCDate(date.getUTCDate() - (weeks - 1) * 7);
-  return date.toISOString().slice(0, 10);
 }
 
 function dayIndicesFromShorts(days: string[]): number[] {
@@ -469,22 +447,35 @@ function deriveWeeksToCompletionFromDates(params: { startDate: string; completio
   return Math.max(1, Math.min(52, weeks));
 }
 
-function getWeekLabel(weekIndex: number, weekSessions: any[]): string {
-  const dayKeys = weekSessions
-    .map((s) => String(s?.dayKey ?? ''))
-    .filter((dayKey) => isDayKey(dayKey))
-    .sort();
-  if (!dayKeys.length) return `Week ${weekIndex + 1}`;
+function getWeekLabel(
+  weekIndex: number,
+  weekSessions: any[],
+  params?: { planStartDayKey?: string | null; weekStart?: 'monday' | 'sunday' }
+): string {
+  let mondayKey: string | null = null;
+  if (params?.planStartDayKey && isDayKey(params.planStartDayKey)) {
+    const week0Start = startOfWeekDayKeyWithWeekStart(params.planStartDayKey, params.weekStart ?? 'monday');
+    const weekStartKey = addDaysToDayKey(week0Start, weekIndex * 7);
+    mondayKey = startOfWeekDayKeyWithWeekStart(weekStartKey, 'monday');
+  } else {
+    const dayKeys = weekSessions
+      .map((s) => String(s?.dayKey ?? ''))
+      .filter((dayKey) => isDayKey(dayKey))
+      .sort();
+    if (dayKeys.length) {
+      mondayKey = startOfWeekDayKeyWithWeekStart(dayKeys[0], 'monday');
+    }
+  }
 
-  const mondayKey = startOfWeekDayKeyWithWeekStart(dayKeys[0], 'monday');
+  if (!mondayKey) return `Week ${weekIndex + 1}`;
   const mondayDate = parseDayKeyToUtcDate(mondayKey);
-  const mondayLabel = new Intl.DateTimeFormat('en-AU', {
-    day: 'numeric',
+  const mondayLabel = new Intl.DateTimeFormat('en-US', {
     month: 'long',
+    day: 'numeric',
     year: 'numeric',
     timeZone: 'UTC',
   }).format(mondayDate);
-  return `Week ${weekIndex + 1} (commencing ${mondayLabel})`;
+  return `Week ${weekIndex + 1} - commencing ${mondayLabel}`;
 }
 
 function startOfWeekDayKeyWithWeekStart(dayKey: string, weekStart: 'monday' | 'sunday'): string {
@@ -679,8 +670,15 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const requestDefaults = useMemo(() => {
     const explicitStartDate = isDayKey(trainingRequest.blockStartDate) ? trainingRequest.blockStartDate : null;
     const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
-    const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
-    const startDate = explicitStartDate ?? (completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null);
+    const weeksToEventOverride =
+      explicitStartDate && completionDate
+        ? deriveWeeksToCompletionFromDates({
+            startDate: explicitStartDate,
+            completionDate,
+            weekStart: setup.weekStart,
+          })
+        : null;
+    const startDate = explicitStartDate;
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
     const weeklyAvailabilityDaysRaw = dayIndicesFromShorts(trainingRequest.availabilityDays);
     const nonNegotiableDayIdx = new Set(dayIndicesFromShorts(trainingRequest.nonNegotiableDays));
@@ -727,7 +725,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           : null,
       coachGuidanceText: coachGuidanceText || null,
     };
-  }, [trainingRequest]);
+  }, [setup.weekStart, trainingRequest]);
 
   const applyRequestToSetup = useCallback(
     (forceClearDraft = false) => {
@@ -779,11 +777,14 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     () =>
       sessionsByWeek.map(([weekIndex, weekSessions]) => ({
         weekIndex,
-        label: getWeekLabel(weekIndex, weekSessions),
+        label: getWeekLabel(weekIndex, weekSessions, {
+          planStartDayKey: isDayKey(setup.startDate) ? setup.startDate : null,
+          weekStart: effectiveWeekStart,
+        }),
         totalMinutes: weekSessions.reduce((sum, s) => sum + Number(s?.durationMinutes ?? 0), 0),
         sessions: weekSessions,
       })),
-    [sessionsByWeek]
+    [effectiveWeekStart, sessionsByWeek, setup.startDate]
   );
   const visibleWeekCards = useMemo(() => weekCards.slice(weekCarouselStart, weekCarouselStart + 4), [weekCards, weekCarouselStart]);
   const adaptationMemory = useMemo(() => {
@@ -893,8 +894,43 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     return source && typeof source === 'object' ? (source as Record<string, unknown>) : null;
   }, [draftPlanLatest]);
 
+  const draftSetupSync = useMemo(() => {
+    if (!hasDraft) return { inSync: false, issues: [] as string[] };
+    const source = draftPlanLatest?.setupJson && typeof draftPlanLatest.setupJson === 'object' ? (draftPlanLatest.setupJson as Record<string, unknown>) : null;
+    if (!source) return { inSync: false, issues: ['draft setup missing'] };
+
+    const issues: string[] = [];
+    const draftStartDate = String(source.startDate ?? '');
+    const draftCompletionDate = String(source.completionDate ?? source.eventDate ?? '');
+    const draftWeeklyMinutes = Number(source.weeklyAvailabilityMinutes ?? NaN);
+    const draftRiskTolerance = String(source.riskTolerance ?? '');
+    const draftPolicyProfileId = String(source.policyProfileId ?? '');
+    const draftMaxIntensity = Number(source.maxIntensityDaysPerWeek ?? NaN);
+    const draftMaxDoubles = Number(source.maxDoublesPerWeek ?? NaN);
+    const draftDiscipline = String(source.disciplineEmphasis ?? '');
+
+    if (isDayKey(setup.startDate) && draftStartDate !== setup.startDate) issues.push('start date');
+    if (isDayKey(setup.completionDate) && draftCompletionDate !== setup.completionDate) issues.push('completion date');
+    if (Number.isFinite(draftWeeklyMinutes) && Number(setup.weeklyAvailabilityMinutes) !== draftWeeklyMinutes) issues.push('weekly minutes');
+    if (draftRiskTolerance && draftRiskTolerance !== setup.riskTolerance) issues.push('risk tolerance');
+    if (draftPolicyProfileId && draftPolicyProfileId !== setup.policyProfileId) issues.push('policy profile');
+    if (Number.isFinite(draftMaxIntensity) && draftMaxIntensity !== setup.maxIntensityDaysPerWeek) issues.push('max intensity');
+    if (Number.isFinite(draftMaxDoubles) && draftMaxDoubles !== setup.maxDoublesPerWeek) issues.push('max doubles');
+    if (draftDiscipline && draftDiscipline !== setup.disciplineEmphasis) issues.push('discipline focus');
+
+    const draftDaysRaw = Array.isArray(source.weeklyAvailabilityDays) ? source.weeklyAvailabilityDays : [];
+    const draftDays = draftDaysRaw
+      .map((v) => Number(v))
+      .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6)
+      .sort((a, b) => a - b);
+    const setupDays = [...setup.weeklyAvailabilityDays].sort((a, b) => a - b);
+    if (draftDays.length && !arraysEqual(draftDays, setupDays)) issues.push('available days');
+
+    return { inSync: issues.length === 0, issues };
+  }, [draftPlanLatest, hasDraft, setup]);
+
   const isBlueprintReady = hasSubmittedRequest && setupSync.inSync;
-  const hasWeeklyDraft = hasDraft && weekCards.length > 0;
+  const hasWeeklyDraft = hasDraft && weekCards.length > 0 && requestStatus === 'submitted' && isBlueprintReady && draftSetupSync.inSync;
 
   const fetchAthleteProfile = useCallback(async () => {
     const data = await request<{ athlete: AthleteProfileSummary }>(`/api/coach/athletes/${athleteId}`);
@@ -1383,7 +1419,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           primaryDisciplineFocus: trainingRequest.primaryDisciplineFocus || undefined,
           eventName: trainingRequest.eventName || undefined,
           eventDate: trainingRequest.eventDate || undefined,
-          goalTimeline: trainingRequest.goalTimeline || undefined,
           weeklyMinutes: trainingRequest.weeklyMinutes ? Number(trainingRequest.weeklyMinutes) : undefined,
           availabilityDays: trainingRequest.availabilityDays,
           nonNegotiableDays: trainingRequest.nonNegotiableDays,
@@ -2153,7 +2188,9 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         </div>
         <div className={`rounded-md border px-3 py-2 text-xs ${hasWeeklyDraft ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
           <div className="font-medium">Step 3 Weekly Draft</div>
-          <div>{hasWeeklyDraft ? 'Generated' : 'Pending generation'}</div>
+          <div>
+            {hasWeeklyDraft ? 'Generated' : hasDraft ? 'Out of date - regenerate required' : 'Pending generation'}
+          </div>
         </div>
         <div className={`rounded-md border px-3 py-2 text-xs ${isPublished ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
           <div className="font-medium">Step 4 Publish</div>
@@ -2249,15 +2286,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <div>
               <label className="mb-1 block text-xs font-medium">Event date</label>
               <Input type="date" value={trainingRequest.eventDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventDate: e.target.value }))} disabled={!hasOpenRequest} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Target timeline</label>
-              <Select value={trainingRequest.goalTimeline} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalTimeline: e.target.value }))} disabled={!hasOpenRequest}>
-                <option value="">Select timeline</option>
-                {GOAL_TIMELINE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </Select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Weekly time budget (minutes)</label>
@@ -2625,6 +2653,12 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="text-sm text-[var(--fg-muted)]">No draft generated yet. Complete Step 2 and generate weekly structure.</div>
         ) : (
           <div className="space-y-3">
+            {!hasWeeklyDraft ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Current draft is out of date for this request/blueprint
+                {draftSetupSync.issues.length ? ` (${draftSetupSync.issues.join(', ')})` : ''}. Regenerate weekly structure.
+              </div>
+            ) : null}
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-3 py-2 text-xs text-[var(--fg-muted)]">
               Share skeleton with athlete for review, then generate detailed sessions by selected week or entire plan.
             </div>

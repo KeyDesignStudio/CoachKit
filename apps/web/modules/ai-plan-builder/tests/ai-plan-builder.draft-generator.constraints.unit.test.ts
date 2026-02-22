@@ -117,7 +117,7 @@ describe('AI Plan Builder v1: deterministic constraints', () => {
     expect(maxSessionsOnAnyDay).toBeLessThanOrEqual(1);
   });
 
-  it('applies injury/travel guidance by reducing run intensity and blocking doubles in overlapping travel week', () => {
+  it('applies injury/travel guidance with nuanced travel-week sessions (no doubles, no run intensity, reduced travel-day load)', () => {
     const out = generateDraftPlanDeterministicV1({
       weekStart: 'monday',
       startDate: '2026-03-02',
@@ -137,14 +137,20 @@ describe('AI Plan Builder v1: deterministic constraints', () => {
     expect(week0).toBeDefined();
 
     const perDayCounts = new Map<number, number>();
+    const travelDays = new Set([0, 2, 3, 4, 5, 6]); // Mar 3-8 when week starts Monday Mar 2
     for (const session of week0?.sessions ?? []) {
       perDayCounts.set(session.dayOfWeek, (perDayCounts.get(session.dayOfWeek) ?? 0) + 1);
       if (session.discipline === 'run') {
         expect(session.type === 'tempo' || session.type === 'threshold').toBe(false);
       }
+      if (travelDays.has(session.dayOfWeek)) {
+        expect(session.durationMinutes).toBeLessThanOrEqual(session.discipline === 'run' ? 40 : 50);
+        expect(String(session.notes ?? '').toLowerCase()).toContain('travel');
+      }
     }
 
     const maxSessionsOnAnyDay = Math.max(...Array.from(perDayCounts.values()));
     expect(maxSessionsOnAnyDay).toBeLessThanOrEqual(1);
+    expect((week0?.sessions ?? []).length).toBeGreaterThan(0);
   });
 });
