@@ -22,6 +22,8 @@ import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
+import type { GoalCountdown } from '@/lib/goal-countdown';
+import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -72,6 +74,16 @@ type DashboardResponse = {
     skippedWorkouts: number;
     awaitingCoachReview: number;
   };
+  goalCountdowns: Array<{
+    athleteId: string;
+    athleteName: string | null;
+    goalCountdown: GoalCountdown;
+  }>;
+  selectedGoalCountdown: {
+    athleteId: string;
+    athleteName: string | null;
+    goalCountdown: GoalCountdown;
+  } | null;
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
   stravaVitals: StravaVitalsComparison;
   reviewInbox: ReviewItem[];
@@ -481,6 +493,10 @@ export default function CoachDashboardConsolePage() {
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
   }, [data?.athletes]);
+  const visibleGoalCountdowns = useMemo(
+    () => (data?.goalCountdowns ?? []).filter((entry) => entry.goalCountdown.mode !== 'none').slice(0, 4),
+    [data?.goalCountdowns]
+  );
 
   const inboxItems = useMemo(() => {
     const items = data?.reviewInbox ?? [];
@@ -606,6 +622,27 @@ export default function CoachDashboardConsolePage() {
             </p>
           </div>
         </div>
+
+        {data?.selectedGoalCountdown?.goalCountdown?.mode && data.selectedGoalCountdown.goalCountdown.mode !== 'none' ? (
+          <div className="mt-3">
+            <GoalCountdownCallout
+              goal={data.selectedGoalCountdown.goalCountdown}
+              athleteName={data.selectedGoalCountdown.athleteName}
+              variant="hero"
+            />
+          </div>
+        ) : visibleGoalCountdowns.length > 0 ? (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+            {visibleGoalCountdowns.map((entry) => (
+              <GoalCountdownCallout
+                key={entry.athleteId}
+                goal={entry.goalCountdown}
+                athleteName={entry.athleteName}
+                variant="ribbon"
+              />
+            ))}
+          </div>
+        ) : null}
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
         <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start md:mt-4 md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>

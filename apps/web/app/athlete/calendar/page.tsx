@@ -22,6 +22,8 @@ import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calend
 import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@/lib/perf/calendar-perf';
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
+import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
+import type { GoalCountdown } from '@/lib/goal-countdown';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -117,6 +119,7 @@ export default function AthleteCalendarPage() {
   });
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
+  const [goalCountdown, setGoalCountdown] = useState<GoalCountdown | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -276,12 +279,13 @@ export default function AthleteCalendarPage() {
         ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1&t=${Date.now()}`
         : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1`;
 
-      const data = await request<{ items: CalendarItem[]; dayWeather?: Record<string, WeatherSummary> }>(
+      const data = await request<{ items: CalendarItem[]; dayWeather?: Record<string, WeatherSummary>; goalCountdown?: GoalCountdown | null }>(
         url,
         bypassCache ? { cache: 'no-store' } : undefined
       );
       setItems(data.items.map((item) => ({ ...item, title: resolveCalendarItemTitle(item) })));
       setDayWeatherByDate(data.dayWeather ?? {});
+      setGoalCountdown(data.goalCountdown ?? null);
       markCalendarPerf('data');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar.');
@@ -547,6 +551,10 @@ export default function AthleteCalendarPage() {
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading calendar...</p> : null}
       </header>
 
+      {goalCountdown && goalCountdown.mode !== 'none' ? (
+        <GoalCountdownCallout goal={goalCountdown} variant="ribbon" />
+      ) : null}
+
       {!userLoading && (!user || user.role !== 'ATHLETE') ? (
         <p className="text-[var(--muted)]">Athlete access required.</p>
       ) : null}
@@ -560,6 +568,7 @@ export default function AthleteCalendarPage() {
         monthWeeks={monthWeeks}
         todayKey={todayKey}
         athleteTimezone={athleteTimezone}
+        goalEventDateKey={goalCountdown?.eventDate ?? null}
         onDayClick={handleDayClick}
         onAddClick={openCreateDrawer}
         onItemClick={handleItemIdClick}

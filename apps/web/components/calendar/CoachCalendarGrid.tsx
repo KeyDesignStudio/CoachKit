@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { CalendarItem } from '@/components/coach/types';
+import type { GoalCountdown } from '@/lib/goal-countdown';
 
 export type CoachAthleteOption = {
   userId: string;
@@ -71,6 +72,7 @@ type CoachCalendarGridProps = {
   items: CalendarItem[];
   itemsById: Map<string, CalendarItem>;
   todayKey: string;
+  goalCountdownByAthlete?: Record<string, GoalCountdown>;
   onContextMenu: (e: React.MouseEvent, type: 'session' | 'day', data: any) => void;
   onAddClick: (athleteId: string, date: string) => void;
   onMonthDayClick: (dateStr: string) => void;
@@ -90,6 +92,7 @@ export function CoachCalendarGrid({
   items,
   itemsById,
   todayKey,
+  goalCountdownByAthlete = {},
   onContextMenu,
   onAddClick,
   onMonthDayClick,
@@ -169,6 +172,7 @@ export function CoachCalendarGrid({
                 dayWeather={day.weather}
                 isEmpty={false}
                 isToday={day.isToday}
+                isGoalDay={day.athleteRows.some((row) => goalCountdownByAthlete[row.athlete.userId]?.eventDate === day.dateKey)}
                 headerTestId="coach-calendar-date-header"
                 onContextMenu={(e) => onContextMenu(e, 'day', { date: day.dateKey })}
               >
@@ -267,6 +271,7 @@ export function CoachCalendarGrid({
                 dayWeather={day.weather}
                 isEmpty={false}
                 isToday={day.isToday}
+                isGoalDay={day.athleteRows.some((row) => goalCountdownByAthlete[row.athlete.userId]?.eventDate === day.dateKey)}
                 headerTestId="coach-calendar-date-header"
                 onContextMenu={(e) => onContextMenu(e, 'day', { date: day.dateKey })}
                 useSubgrid
@@ -280,8 +285,15 @@ export function CoachCalendarGrid({
                     className="flex flex-col gap-1.5 md:gap-2 min-w-0"
                   >
                     <div className="hidden md:flex h-8 items-center justify-between gap-2">
-                      <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
-                        {row.athlete.user.name || row.athlete.userId}
+                      <div className="min-w-0 flex items-center gap-2">
+                        <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
+                          {row.athlete.user.name || row.athlete.userId}
+                        </div>
+                        {goalCountdownByAthlete[row.athlete.userId]?.mode && goalCountdownByAthlete[row.athlete.userId].mode !== 'none' ? (
+                          <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                            {goalCountdownByAthlete[row.athlete.userId].shortLabel}
+                          </span>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -348,6 +360,7 @@ export function CoachCalendarGrid({
                 items={day.items as any}
                 isCurrentMonth={day.isCurrentMonth}
                 isToday={day.dateStr === todayKey}
+                isGoalDay={day.items.some((item) => goalCountdownByAthlete[String(item.athleteId ?? '')]?.eventDate === day.dateStr)}
                 canAdd={selectedAthleteIds.size === 1}
                 onDayClick={onMonthDayClick}
                 onAddClick={onMonthAddClick}

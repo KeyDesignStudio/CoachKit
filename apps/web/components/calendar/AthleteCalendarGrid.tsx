@@ -52,6 +52,7 @@ type AthleteCalendarGridProps = {
   monthWeeks: AthleteMonthWeek[];
   todayKey: string;
   athleteTimezone: string;
+  goalEventDateKey?: string | null;
   onDayClick: (dateStr: string) => void;
   onAddClick: (dateStr: string) => void;
   onItemClick: (itemId: string) => void;
@@ -67,6 +68,7 @@ export function AthleteCalendarGrid({
   monthWeeks,
   todayKey,
   athleteTimezone,
+  goalEventDateKey,
   onDayClick,
   onAddClick,
   onItemClick,
@@ -92,6 +94,7 @@ export function AthleteCalendarGrid({
               dayWeather={day.weather}
               isEmpty={day.items.length === 0}
               isToday={day.date === todayKey}
+              isGoalDay={Boolean(goalEventDateKey && day.date === goalEventDateKey)}
               headerTestId="athlete-calendar-date-header"
               onAddClick={() => onAddClick(day.date)}
               onContextMenu={(e) => onContextMenu(e, 'day', { date: day.date })}
@@ -170,6 +173,7 @@ export function AthleteCalendarGrid({
                 items={day.items}
                 isCurrentMonth={day.isCurrentMonth}
                 isToday={day.dateStr === todayKey}
+                isGoalDay={Boolean(goalEventDateKey && day.dateStr === goalEventDateKey)}
                 athleteTimezone={athleteTimezone}
                 onDayClick={onDayClick}
                 onAddClick={onAddClick}

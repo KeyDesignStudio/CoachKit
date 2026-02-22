@@ -28,6 +28,8 @@ import { WorkoutDetail } from '@/components/workouts/WorkoutDetail';
 import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
+import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
+import type { GoalCountdown } from '@/lib/goal-countdown';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { CalendarItem } from '@/components/coach/types';
 
@@ -71,6 +73,7 @@ type WorkoutTitleOption = {
 type CopyMode = 'skipExisting' | 'overwrite';
 type ViewMode = 'week' | 'month';
 type PublicationStatus = 'DRAFT' | 'PUBLISHED';
+type GoalCountdownByAthlete = Record<string, GoalCountdown>;
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -247,6 +250,7 @@ export default function CoachCalendarPage() {
   });
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [dayWeatherByDate, setDayWeatherByDate] = useState<Record<string, WeatherSummary>>({});
+  const [goalCountdownByAthlete, setGoalCountdownByAthlete] = useState<GoalCountdownByAthlete>({});
   const [drawerMode, setDrawerMode] = useState<'closed' | 'create' | 'edit' | 'view_completed'>('closed');
   const [sessionForm, setSessionForm] = useState(() => emptyForm(weekStartKey));
   const [editItemId, setEditItemId] = useState('');
@@ -320,6 +324,29 @@ export default function CoachCalendarPage() {
     });
     return map;
   }, [selectedAthletes]);
+  const selectedGoalCountdowns = useMemo(
+    () =>
+      Array.from(selectedAthleteIds)
+        .map((athleteId) => {
+          const goal = goalCountdownByAthlete[athleteId];
+          if (!goal || goal.mode === 'none') return null;
+          return {
+            athleteId,
+            athleteName: selectedAthletesById.get(athleteId)?.user.name ?? athleteId,
+            goal,
+          };
+        })
+        .filter((entry): entry is { athleteId: string; athleteName: string; goal: GoalCountdown } => Boolean(entry))
+        .sort((a, b) => {
+          const ad = a.goal.daysRemaining;
+          const bd = b.goal.daysRemaining;
+          if (ad == null && bd == null) return a.athleteName.localeCompare(b.athleteName);
+          if (ad == null) return 1;
+          if (bd == null) return -1;
+          return ad - bd;
+        }),
+    [goalCountdownByAthlete, selectedAthleteIds, selectedAthletesById]
+  );
 
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
@@ -665,7 +692,7 @@ export default function CoachCalendarPage() {
     try {
       if (selectedAthleteIds.size === 1) {
         const athleteId = Array.from(selectedAthleteIds)[0];
-        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string; dayWeather?: Record<string, WeatherSummary> }>(
+        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string; dayWeather?: Record<string, WeatherSummary>; goalCountdownByAthlete?: GoalCountdownByAthlete }>(
           `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
 
@@ -696,6 +723,7 @@ export default function CoachCalendarPage() {
           }))
         );
         setDayWeatherByDate(itemsData.dayWeather ?? {});
+        setGoalCountdownByAthlete(itemsData.goalCountdownByAthlete ?? {});
         if (itemsData.athleteTimezone) {
           setAthleteTimezone(itemsData.athleteTimezone);
         }
@@ -712,7 +740,7 @@ export default function CoachCalendarPage() {
         // Stacked mode: load all selected athletes in a single API request.
         const selected = Array.from(selectedAthleteIds);
         setDayWeatherByDate({});
-        const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string }>(
+        const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string; goalCountdownByAthlete?: GoalCountdownByAthlete }>(
           `/api/coach/calendar?athleteIds=${encodeURIComponent(selected.join(','))}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
         const publicationByWeek = new Map<string, PublicationStatus>();
@@ -740,6 +768,7 @@ export default function CoachCalendarPage() {
             };
           })
         );
+        setGoalCountdownByAthlete(itemsData.goalCountdownByAthlete ?? {});
         setWeekStatus('DRAFT');
         markCalendarPerf('data');
       }
@@ -1650,6 +1679,25 @@ export default function CoachCalendarPage() {
         {sessionDetailLoadingId ? <p className="text-sm text-[var(--muted)]">Loading workout details…</p> : null}
       </header>
 
+      {selectedGoalCountdowns.length === 1 ? (
+        <GoalCountdownCallout
+          goal={selectedGoalCountdowns[0].goal}
+          athleteName={selectedGoalCountdowns[0].athleteName}
+          variant="ribbon"
+        />
+      ) : selectedGoalCountdowns.length > 1 ? (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {selectedGoalCountdowns.slice(0, 6).map((entry) => (
+            <GoalCountdownCallout
+              key={entry.athleteId}
+              goal={entry.goal}
+              athleteName={entry.athleteName}
+              variant="ribbon"
+            />
+          ))}
+        </div>
+      ) : null}
+
       {/* Copy Week Form */}
       {copyFormOpen ? (
         <Card className="rounded-3xl">
@@ -1702,6 +1750,7 @@ export default function CoachCalendarPage() {
         items={items}
         itemsById={itemsById}
         todayKey={todayKey}
+        goalCountdownByAthlete={goalCountdownByAthlete}
         onContextMenu={handleContextMenu}
         onAddClick={openCreateDrawerForAthlete}
         onMonthDayClick={(dateStr) => {

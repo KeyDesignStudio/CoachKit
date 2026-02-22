@@ -12,6 +12,7 @@ type AthleteWeekDayColumnProps = {
   formattedDate: string;
   dayWeather?: WeatherSummary;
   isToday?: boolean;
+  isGoalDay?: boolean;
   isEmpty: boolean;
   onHeaderClick?: () => void;
   onEmptyClick?: () => void;
@@ -28,6 +29,7 @@ export function AthleteWeekDayColumn({
   formattedDate,
   dayWeather,
   isToday = false,
+  isGoalDay = false,
   isEmpty,
   onHeaderClick,
   onEmptyClick,
@@ -81,7 +83,11 @@ export function AthleteWeekDayColumn({
       className={cn(
         'min-w-0 rounded bg-[var(--bg-structure)] overflow-hidden',
         useSubgrid ? 'grid' : 'flex flex-col',
-        isToday ? 'border-2 border-[var(--today-border)]' : 'border border-[var(--border-subtle)]'
+        isGoalDay
+          ? 'border-2 border-orange-400 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.25)]'
+          : isToday
+            ? 'border-2 border-[var(--today-border)]'
+            : 'border border-[var(--border-subtle)]'
       )}
     >
       <WeatherTooltip weather={dayWeather}>
@@ -110,6 +116,9 @@ export function AthleteWeekDayColumn({
           <div className="flex items-center gap-2 flex-shrink-0">
             {isToday ? (
               <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">Today</span>
+            ) : null}
+            {isGoalDay ? (
+              <span className="bg-orange-500/15 text-orange-700 text-[10px] px-2 py-0.5 rounded border border-orange-300">Goal</span>
             ) : null}
             {addButton}
           </div>

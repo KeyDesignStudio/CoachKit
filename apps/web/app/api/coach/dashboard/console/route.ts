@@ -9,6 +9,8 @@ import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getStravaVitalsComparisonForAthletes, type StravaVitalsComparison } from '@/lib/strava-vitals';
+import { getTodayDayKey } from '@/lib/day-key';
+import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +106,16 @@ type DashboardAggregates = {
   };
   disciplineLoad: Array<{ discipline: string; totalMinutes: number; totalDistanceKm: number }>;
   stravaVitals: StravaVitalsComparison;
+  goalCountdowns: Array<{
+    athleteId: string;
+    athleteName: string | null;
+    goalCountdown: GoalCountdown;
+  }>;
+  selectedGoalCountdown: {
+    athleteId: string;
+    athleteName: string | null;
+    goalCountdown: GoalCountdown;
+  } | null;
   meta: {
     completedItemCount: number;
   };
@@ -206,7 +218,10 @@ async function getDashboardAggregates(params: {
       select: {
         userId: true,
         disciplines: true,
-        user: { select: { id: true, name: true } },
+        eventName: true,
+        eventDate: true,
+        timelineWeeks: true,
+        user: { select: { id: true, name: true, timezone: true } },
       },
       orderBy: [{ user: { name: 'asc' } }],
     });
@@ -218,6 +233,28 @@ async function getDashboardAggregates(params: {
     }));
 
     const targetAthleteIdsForVitals = params.selectedAthleteIds.length > 0 ? params.selectedAthleteIds : athleteRows.map((row) => row.id);
+    const targetAthleteIdsForGoals = new Set(targetAthleteIdsForVitals);
+    const goalCountdowns = athletes
+      .filter((athlete) => targetAthleteIdsForGoals.has(athlete.userId))
+      .map((athlete) => ({
+        athleteId: athlete.userId,
+        athleteName: athlete.user.name,
+        goalCountdown: getGoalCountdown({
+          eventName: athlete.eventName,
+          eventDate: athlete.eventDate,
+          timelineWeeks: athlete.timelineWeeks,
+          todayDayKey: getTodayDayKey(athlete.user.timezone ?? 'UTC'),
+        }),
+      }))
+      .sort((a, b) => {
+        const ad = a.goalCountdown.daysRemaining;
+        const bd = b.goalCountdown.daysRemaining;
+        if (ad == null && bd == null) return (a.athleteName ?? '').localeCompare(b.athleteName ?? '');
+        if (ad == null) return 1;
+        if (bd == null) return -1;
+        return ad - bd;
+      });
+    const selectedGoalCountdown = goalCountdowns.length === 1 ? goalCountdowns[0] : null;
 
     const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount, stravaVitals] =
       await Promise.all([
@@ -339,6 +376,8 @@ async function getDashboardAggregates(params: {
       },
       disciplineLoad,
       stravaVitals,
+      goalCountdowns,
+      selectedGoalCountdown,
       meta: {
         completedItemCount: completedItems.length,
       },
@@ -623,6 +662,8 @@ export async function GET(request: NextRequest) {
         attention: aggregates.value.attention,
         disciplineLoad: aggregates.value.disciplineLoad,
         stravaVitals: aggregates.value.stravaVitals,
+        goalCountdowns: aggregates.value.goalCountdowns,
+        selectedGoalCountdown: aggregates.value.selectedGoalCountdown,
         reviewInbox: inboxPage.value.items,
         reviewInboxPage: {
           offset: inboxOffset,

@@ -14,6 +14,7 @@ import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isSt
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getStravaVitalsComparisonForAthlete, type StravaVitalsComparison } from '@/lib/strava-vitals';
+import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,7 @@ type AthleteDashboardResponse = {
     plannedStartTimeLocal: string | null;
   }>;
   stravaVitals: StravaVitalsComparison;
+  goalCountdown: GoalCountdown | null;
 };
 
 const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
@@ -130,7 +132,15 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const [items, stravaVitals] = await Promise.all([
+    const [athleteProfile, items, stravaVitals] = await Promise.all([
+      prisma.athleteProfile.findUnique({
+        where: { userId: params.athleteId },
+        select: {
+          eventName: true,
+          eventDate: true,
+          timelineWeeks: true,
+        },
+      }),
       prisma.calendarItem.findMany({
         where: {
           athleteId: params.athleteId,
@@ -169,6 +179,14 @@ async function getAthleteDashboardData(params: {
         includeLoadModel: params.includeLoadModel,
       }),
     ]);
+    const goalCountdown = athleteProfile
+      ? getGoalCountdown({
+          eventName: athleteProfile.eventName,
+          eventDate: athleteProfile.eventDate,
+          timelineWeeks: athleteProfile.timelineWeeks,
+          todayDayKey: params.todayKey,
+        })
+      : null;
 
     const filteredItems = items
       .map((item) => {
@@ -252,6 +270,7 @@ async function getAthleteDashboardData(params: {
       rangeSummary,
       nextUp,
       stravaVitals,
+      goalCountdown,
     } satisfies AthleteDashboardResponse;
   })();
 

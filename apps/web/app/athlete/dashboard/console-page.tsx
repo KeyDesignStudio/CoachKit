@@ -20,6 +20,8 @@ import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
+import type { GoalCountdown } from '@/lib/goal-countdown';
+import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 
@@ -76,6 +78,7 @@ type AthleteDashboardResponse = {
     plannedStartTimeLocal: string | null;
   }>;
   stravaVitals: StravaVitalsComparison;
+  goalCountdown: GoalCountdown | null;
 };
 
 function NeedsAttentionItem({
@@ -286,6 +289,12 @@ export default function AthleteDashboardConsolePage() {
             </p>
           </div>
         </div>
+
+        {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
+          <div className="mt-3">
+            <GoalCountdownCallout goal={data.goalCountdown} variant="hero" />
+          </div>
+        ) : null}
 
         <div className="mt-4">
           <div className={cn('grid grid-cols-1 min-w-0 items-start md:grid-cols-2 xl:grid-cols-3', tokens.spacing.gridGap)}>
