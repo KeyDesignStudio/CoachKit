@@ -37,7 +37,6 @@ type TrainingRequestForm = {
   blockStartDate: string;
   eventName: string;
   eventDate: string;
-  goalTimeline: string;
   weeklyMinutes: string;
   availabilityDays: string[];
   nonNegotiableDays: string[];
@@ -209,7 +208,6 @@ const DAY_NAME_TO_SHORT: Record<string, string> = {
 };
 const DAY_SHORTS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const DAY_SHORTS_MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-const GOAL_TIMELINE_OPTIONS = ['No date in mind', 'In 6-8 weeks', 'In 2-3 months', 'In 3-6 months', 'In 6-12 months'];
 const EQUIPMENT_OPTIONS = [
   { value: '', label: 'Select equipment context' },
   { value: 'mixed', label: 'Mixed' },
@@ -261,7 +259,6 @@ function buildTrainingRequestFromProfile(profile: AthleteProfileSummary | null):
     blockStartDate: '',
     eventName: String(profile?.eventName ?? ''),
     eventDate: typeof profile?.eventDate === 'string' ? profile.eventDate.slice(0, 10) : '',
-    goalTimeline: '',
     weeklyMinutes: profile?.weeklyMinutesTarget != null ? String(profile.weeklyMinutesTarget) : '',
     availabilityDays: dayShortsFromProfileDays(profile?.availableDays ?? null),
     nonNegotiableDays: [],
@@ -322,7 +319,6 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
     blockStartDate: isDayKey(String(map.block_start_date ?? '')) ? String(map.block_start_date) : '',
     eventName: String(map.event_name ?? ''),
     eventDate: isDayKey(String(map.event_date ?? '')) ? String(map.event_date) : '',
-    goalTimeline: String(map.goal_timeline ?? ''),
     weeklyMinutes: map.weekly_minutes != null ? String(map.weekly_minutes) : '',
     availabilityDays,
     nonNegotiableDays,
@@ -353,7 +349,6 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     block_start_date: form.blockStartDate || null,
     event_name: form.eventName.trim() || null,
     event_date: form.eventDate || null,
-    goal_timeline: form.goalTimeline || null,
     weekly_minutes: form.weeklyMinutes ? Number(form.weeklyMinutes) : null,
     availability_days: form.availabilityDays,
     non_negotiable_days: form.nonNegotiableDays,
@@ -368,23 +363,6 @@ function buildDraftJsonFromTrainingRequest(form: TrainingRequestForm): Record<st
     available_time_minutes: form.availableTimeMinutes ? Number(form.availableTimeMinutes) : null,
     constraints_notes: form.constraintsNotes.trim() || null,
   };
-}
-
-function goalTimelineToWeeks(raw: string): number | null {
-  const value = String(raw ?? '').trim();
-  if (!value || value === 'No date in mind') return null;
-  if (value === 'In 6-8 weeks') return 8;
-  if (value === 'In 2-3 months') return 12;
-  if (value === 'In 3-6 months') return 24;
-  if (value === 'In 6-12 months') return 48;
-  return null;
-}
-
-function subtractWeeksFromDayKey(dayKey: string, weeks: number): string {
-  if (!isDayKey(dayKey) || !Number.isFinite(weeks) || weeks <= 1) return dayKey;
-  const date = parseDayKeyToUtcDate(dayKey);
-  date.setUTCDate(date.getUTCDate() - (weeks - 1) * 7);
-  return date.toISOString().slice(0, 10);
 }
 
 function dayIndicesFromShorts(days: string[]): number[] {
@@ -679,8 +657,15 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const requestDefaults = useMemo(() => {
     const explicitStartDate = isDayKey(trainingRequest.blockStartDate) ? trainingRequest.blockStartDate : null;
     const completionDate = isDayKey(trainingRequest.eventDate) ? trainingRequest.eventDate : null;
-    const weeksToEventOverride = goalTimelineToWeeks(trainingRequest.goalTimeline);
-    const startDate = explicitStartDate ?? (completionDate && weeksToEventOverride ? subtractWeeksFromDayKey(completionDate, weeksToEventOverride) : null);
+    const weeksToEventOverride =
+      explicitStartDate && completionDate
+        ? deriveWeeksToCompletionFromDates({
+            startDate: explicitStartDate,
+            completionDate,
+            weekStart: setup.weekStart,
+          })
+        : null;
+    const startDate = explicitStartDate;
     const weeklyAvailabilityMinutes = Number(trainingRequest.weeklyMinutes);
     const weeklyAvailabilityDaysRaw = dayIndicesFromShorts(trainingRequest.availabilityDays);
     const nonNegotiableDayIdx = new Set(dayIndicesFromShorts(trainingRequest.nonNegotiableDays));
@@ -727,7 +712,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           : null,
       coachGuidanceText: coachGuidanceText || null,
     };
-  }, [trainingRequest]);
+  }, [setup.weekStart, trainingRequest]);
 
   const applyRequestToSetup = useCallback(
     (forceClearDraft = false) => {
@@ -1383,7 +1368,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           primaryDisciplineFocus: trainingRequest.primaryDisciplineFocus || undefined,
           eventName: trainingRequest.eventName || undefined,
           eventDate: trainingRequest.eventDate || undefined,
-          goalTimeline: trainingRequest.goalTimeline || undefined,
           weeklyMinutes: trainingRequest.weeklyMinutes ? Number(trainingRequest.weeklyMinutes) : undefined,
           availabilityDays: trainingRequest.availabilityDays,
           nonNegotiableDays: trainingRequest.nonNegotiableDays,
@@ -2249,15 +2233,6 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             <div>
               <label className="mb-1 block text-xs font-medium">Event date</label>
               <Input type="date" value={trainingRequest.eventDate} onChange={(e) => setTrainingRequest((p) => ({ ...p, eventDate: e.target.value }))} disabled={!hasOpenRequest} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">Target timeline</label>
-              <Select value={trainingRequest.goalTimeline} onChange={(e) => setTrainingRequest((p) => ({ ...p, goalTimeline: e.target.value }))} disabled={!hasOpenRequest}>
-                <option value="">Select timeline</option>
-                {GOAL_TIMELINE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </Select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Weekly time budget (minutes)</label>
