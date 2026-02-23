@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { ReviewDrawer } from '@/components/coach/ReviewDrawer';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
@@ -23,7 +21,6 @@ import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayT
 import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
-import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
@@ -198,122 +195,6 @@ function AlertStripItem({
   );
 }
 
-function ReviewInboxRow({
-  item,
-  timeZone,
-  isChecked,
-  onToggleSelected,
-  onOpen,
-}: {
-  item: ReviewItem;
-  timeZone: string;
-  isChecked: boolean;
-  onToggleSelected: (id: string, checked: boolean) => void;
-  onOpen: (item: ReviewItem) => void;
-}) {
-  const theme = getDisciplineTheme(item.discipline);
-  const athleteName = item.athlete?.name ?? 'Unknown athlete';
-  const disciplineLabel = (item.discipline || 'OTHER').toUpperCase();
-  const painFlag = item.latestCompletedActivity?.painFlag ?? false;
-  const isSkipped = item.status === 'SKIPPED';
-  const isCompleted = item.status.startsWith('COMPLETED');
-
-  function toDateKeyInTimeZone(dateIso: string, tz: string): string | null {
-    const date = new Date(dateIso);
-    if (Number.isNaN(date.getTime())) return null;
-
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(date);
-
-    const yyyy = parts.find((p) => p.type === 'year')?.value;
-    const mm = parts.find((p) => p.type === 'month')?.value;
-    const dd = parts.find((p) => p.type === 'day')?.value;
-    if (!yyyy || !mm || !dd) return null;
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function formatInboxDateLabel(dateKey: string, tz: string): string | null {
-    const formatted = formatDayMonthYearInTimeZone(dateKey, tz);
-    return formatted || null;
-  }
-
-  const completedDateKey = item.latestCompletedActivity?.startTime ? toDateKeyInTimeZone(item.latestCompletedActivity.startTime, timeZone) : null;
-  const plannedDateKey = item.date || null;
-  const displayDateKey = isCompleted ? (completedDateKey ?? plannedDateKey) : plannedDateKey;
-  const dateLabel = displayDateKey ? formatInboxDateLabel(displayDateKey, timeZone) : null;
-
-  const statusText = (item.status === 'SKIPPED' ? 'MISSED' : item.status)
-    .replace('COMPLETED_', 'COMPLETED ')
-    .replace(/_/g, ' ')
-    .trim();
-
-  return (
-    <div className={cn("flex items-center min-w-0", tokens.spacing.widgetGap, tokens.spacing.elementPadding)}>
-      <label className="h-11 w-11 flex items-center justify-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          className="h-5 w-5 accent-blue-600"
-          checked={isChecked}
-          onChange={(e) => {
-            e.stopPropagation();
-            onToggleSelected(item.id, e.target.checked);
-          }}
-          aria-label={`Select ${athleteName} - ${item.title}`}
-        />
-      </label>
-
-      {/* Mobile: compact row (checkbox, date, athlete, discipline icon only) */}
-      <button
-        type="button"
-        onClick={() => onOpen(item)}
-        className={cn(
-          'md:hidden flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
-          tokens.spacing.tinyGap
-        )}
-      >
-        {dateLabel ? (
-          <span className={cn('flex-shrink-0 whitespace-nowrap tabular-nums', tokens.typography.meta)}>{dateLabel}</span>
-        ) : null}
-        <span className={cn('block min-w-0 flex-1 truncate font-medium', tokens.typography.body)}>{athleteName}</span>
-        <Icon name={theme.iconName} size="sm" className={cn('flex-shrink-0', theme.textClass)} aria-hidden />
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onOpen(item)}
-        className={cn(
-          'hidden md:flex items-center min-w-0 flex-1 text-left justify-start min-h-[44px]',
-          tokens.spacing.widgetGap,
-          painFlag ? 'bg-rose-500/10 rounded-xl -mx-2' : ''
-        )}
-        style={painFlag ? { padding: '8px' } : undefined}
-      >
-        <span className={cn("block min-w-0 max-w-[30%] truncate font-medium", tokens.typography.body)}>{athleteName}</span>
-        {dateLabel ? <span className={cn("flex-shrink-0 whitespace-nowrap", tokens.typography.meta)}>{dateLabel}</span> : null}
-        <span className={cn("block min-w-0 flex-1 truncate", tokens.typography.body)}>{item.title}</span>
-
-        <div className={cn("flex items-center flex-shrink-0 whitespace-nowrap", tokens.spacing.tinyGap)}>
-          <Icon name={theme.iconName} size="sm" className={theme.textClass} />
-          <span className={cn('uppercase font-medium', tokens.typography.meta, theme.textClass)}>{disciplineLabel}</span>
-        </div>
-
-        <div className={cn("flex items-center flex-shrink-0 whitespace-nowrap", tokens.spacing.tinyGap)}>
-          <span className={cn('uppercase', painFlag ? 'text-rose-700 font-medium' : tokens.typography.meta)}>{statusText}</span>
-          <div className={cn("flex items-center", tokens.spacing.tinyGap)}>
-            {item.hasAthleteComment ? <Icon name="athleteComment" size="xs" className="text-blue-600" aria-label="Has athlete comment" aria-hidden={false} /> : null}
-            {painFlag ? <Icon name="painFlag" size="xs" className="text-rose-500" aria-label="Pain flagged" aria-hidden={false} /> : null}
-            {isSkipped ? <Icon name="skipped" size="xs" className={tokens.typography.meta} aria-label="Missed" aria-hidden={false} /> : null}
-          </div>
-        </div>
-      </button>
-    </div>
-  );
-}
-
 export default function CoachDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
@@ -339,12 +220,6 @@ export default function CoachDashboardConsolePage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const [inboxLoadingMore, setInboxLoadingMore] = useState(false);
-
-  const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
 
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
 
@@ -381,17 +256,12 @@ export default function CoachDashboardConsolePage() {
   }, [athleteOptions, selectedAthleteIds.size]);
 
   const reload = useCallback(
-    async (options?: { bypassCache?: boolean; inboxOffset?: number; appendInbox?: boolean }) => {
+    async (options?: { bypassCache?: boolean }) => {
       if (!user?.userId || user.role !== 'COACH') return;
       const bypassCache = options?.bypassCache ?? false;
-      const inboxOffset = options?.inboxOffset ?? 0;
-      const appendInbox = options?.appendInbox ?? false;
+      const inboxOffset = 0;
 
-      if (appendInbox) {
-        setInboxLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
       setError('');
 
       const qs = new URLSearchParams();
@@ -408,26 +278,11 @@ export default function CoachDashboardConsolePage() {
 
       try {
         const resp = await request<DashboardResponse>(`/api/coach/dashboard/console?${qs.toString()}`, bypassCache ? { cache: 'no-store' } : undefined);
-        if (appendInbox) {
-          setData((prev) => {
-            if (!prev) return resp;
-            return {
-              ...resp,
-              reviewInbox: [...prev.reviewInbox, ...resp.reviewInbox],
-            };
-          });
-        } else {
-          setData(resp);
-          setSelectedIds(new Set());
-        }
+        setData(resp);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
-        if (appendInbox) {
-          setInboxLoadingMore(false);
-        } else {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     },
     [allAthletesSelected, dateRange.from, dateRange.to, discipline, request, selectedAthleteIdList, showLoadPanel, user?.role, user?.userId]
@@ -494,88 +349,18 @@ export default function CoachDashboardConsolePage() {
       .sort((a, b) => a.localeCompare(b));
   }, [data?.athletes]);
   const visibleGoalCountdowns = useMemo(
-    () => (data?.goalCountdowns ?? []).filter((entry) => entry.goalCountdown.mode !== 'none').slice(0, 4),
+    () =>
+      (data?.goalCountdowns ?? [])
+        .filter((entry) => entry.goalCountdown.mode !== 'none' && entry.goalCountdown.eventDate)
+        .sort((a, b) => {
+          const aDays = typeof a.goalCountdown.daysRemaining === 'number' ? a.goalCountdown.daysRemaining : Number.MAX_SAFE_INTEGER;
+          const bDays = typeof b.goalCountdown.daysRemaining === 'number' ? b.goalCountdown.daysRemaining : Number.MAX_SAFE_INTEGER;
+          if (aDays !== bDays) return aDays - bDays;
+          const aName = String(a.athleteName ?? '');
+          const bName = String(b.athleteName ?? '');
+          return aName.localeCompare(bName);
+        }),
     [data?.goalCountdowns]
-  );
-
-  const inboxItems = useMemo(() => {
-    const items = data?.reviewInbox ?? [];
-    if (inboxPreset === 'ALL' || inboxPreset === 'AWAITING_REVIEW') return items;
-    if (inboxPreset === 'PAIN') return items.filter((i) => i.latestCompletedActivity?.painFlag);
-    if (inboxPreset === 'COMMENTS') return items.filter((i) => i.hasAthleteComment);
-    if (inboxPreset === 'SKIPPED') return items.filter((i) => i.status === 'SKIPPED');
-    return items;
-  }, [data?.reviewInbox, inboxPreset]);
-
-  // Keep bulk selection aligned to the currently visible inbox dataset.
-  useEffect(() => {
-    const allowedIds = new Set(inboxItems.map((item) => item.id));
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      let changed = false;
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (allowedIds.has(id)) next.add(id);
-        else changed = true;
-      });
-      return changed ? next : prev;
-    });
-  }, [inboxItems]);
-
-  const selectedCount = selectedIds.size;
-
-  const handleToggleSelected = useCallback((id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
-
-  const handleBulkMarkReviewed = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
-
-    setBulkLoading(true);
-    setError('');
-    try {
-      await request('/api/coach/review-inbox/bulk-review', {
-        method: 'POST',
-        data: { ids },
-      });
-
-      setData((prev) => {
-        if (!prev) return prev;
-        const nextInbox = prev.reviewInbox.filter((item) => !selectedIds.has(item.id));
-        return {
-          ...prev,
-          attention: {
-            ...prev.attention,
-            awaitingCoachReview: Math.max(0, prev.attention.awaitingCoachReview - selectedIds.size),
-          },
-          reviewInbox: nextInbox,
-        };
-      });
-
-      clearSelection();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to bulk mark reviewed.');
-    } finally {
-      setBulkLoading(false);
-    }
-  }, [clearSelection, request, selectedIds]);
-
-  const markReviewed = useCallback(
-    async (id: string) => {
-      await request(`/api/coach/calendar-items/${id}/review`, { method: 'POST' });
-      await reload({ bypassCache: true });
-    },
-    [reload, request]
   );
 
   const jumpToInbox = useCallback(() => {
@@ -612,37 +397,16 @@ export default function CoachDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
             <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
-            <p className="flex items-baseline gap-1 text-sm font-normal text-[var(--fg-muted)] md:text-base">
+            <p className="flex items-end gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
               <span className="italic">G&apos;day</span>
-              {styledWelcome.name ? <span className="font-semibold text-[var(--text)]">{styledWelcome.name}.</span> : null}
+              {styledWelcome.name ? <span className="text-[var(--text)]">{styledWelcome.name}.</span> : null}
               <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
             </p>
           </div>
         </div>
-
-        {data?.selectedGoalCountdown?.goalCountdown?.mode && data.selectedGoalCountdown.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3">
-            <GoalCountdownCallout
-              goal={data.selectedGoalCountdown.goalCountdown}
-              athleteName={data.selectedGoalCountdown.athleteName}
-              variant="hero"
-            />
-          </div>
-        ) : visibleGoalCountdowns.length > 0 ? (
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-            {visibleGoalCountdowns.map((entry) => (
-              <GoalCountdownCallout
-                key={entry.athleteId}
-                goal={entry.goalCountdown}
-                athleteName={entry.athleteName}
-                variant="ribbon"
-              />
-            ))}
-          </div>
-        ) : null}
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
         <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start md:mt-4 md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
@@ -895,75 +659,57 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            <Block title="Review inbox" padding={false} showHeaderDivider={false}>
-              <div
-                className={cn(
-                  "flex items-center justify-between border-b border-[var(--border-subtle)]",
-                  tokens.spacing.elementPadding,
-                  tokens.spacing.widgetGap
-                )}
-              >
-                <div className={cn("text-[var(--muted)]", tokens.typography.meta)}>
-                  Showing <span className="font-medium text-[var(--text)] tabular-nums">{inboxItems.length}</span>
-                  {inboxPreset !== 'ALL' && inboxPreset !== 'AWAITING_REVIEW' ? <span className="ml-2">(focused)</span> : null}
+            <Block title="Event countdown" padding={false} showHeaderDivider={false}>
+              {visibleGoalCountdowns.length === 0 ? (
+                <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
+                  No athlete event dates available for this selection.
                 </div>
-                <div className={cn("flex items-center", tokens.spacing.widgetGap)}>
-                  <Button type="button" onClick={handleBulkMarkReviewed} disabled={bulkLoading || selectedCount === 0} className="min-h-[44px]">
-                    {bulkLoading ? 'Marking…' : `Mark Reviewed${selectedCount ? ` (${selectedCount})` : ''}`}
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={clearSelection} disabled={selectedCount === 0} className="min-h-[44px]">
-                    Clear
-                  </Button>
+              ) : (
+                <div className="max-h-[420px] overflow-y-auto">
+                  <div className="divide-y divide-[var(--border-subtle)]">
+                    {visibleGoalCountdowns.map((entry) => {
+                      const goal = entry.goalCountdown;
+                      const athleteName = String(entry.athleteName ?? 'Athlete');
+                      const eventName = String(goal.eventName ?? 'Goal event');
+                      const eventDate =
+                        typeof goal.eventDate === 'string' && goal.eventDate
+                          ? formatDayMonthYearInTimeZone(goal.eventDate, 'UTC')
+                          : 'Date not set';
+                      const progress = Math.max(0, Math.min(100, Number(goal.progressPct ?? 0)));
+                      const weeksLabel =
+                        typeof goal.weeksRemaining === 'number' && goal.weeksRemaining >= 0
+                          ? `${goal.weeksRemaining} weeks to go`
+                          : String(goal.label || 'Goal status');
+
+                      return (
+                        <div
+                          key={entry.athleteId}
+                          className={cn(
+                            "grid items-center gap-3 px-4 py-2",
+                            "grid-cols-1 sm:grid-cols-[minmax(140px,1.1fr)_minmax(170px,1.2fr)_minmax(120px,0.8fr)_minmax(200px,1.7fr)_auto]"
+                          )}
+                        >
+                          <div className={cn("truncate", tokens.typography.body)} title={athleteName}>
+                            {athleteName}
+                          </div>
+                          <div className={cn("truncate text-[var(--fg-muted)]", tokens.typography.body)} title={eventName}>
+                            {eventName}
+                          </div>
+                          <div className={cn("whitespace-nowrap text-[var(--fg-muted)]", tokens.typography.body)}>{eventDate}</div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
+                            <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />
+                          </div>
+                          <div className={cn("whitespace-nowrap text-right tabular-nums", tokens.typography.body)}>{weeksLabel}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              {loading ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Loading…</div> : null}
-              {!loading && inboxItems.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>Nothing to review for this range.</div> : null}
-
-              <div className="divide-y divide-[var(--border-subtle)]">
-                {inboxItems.map((item) => (
-                  <ReviewInboxRow
-                    key={item.id}
-                    item={item}
-                    timeZone={coachTimeZone}
-                    isChecked={selectedIds.has(item.id)}
-                    onToggleSelected={handleToggleSelected}
-                    onOpen={(it) => setSelectedItem(it)}
-                  />
-                ))}
-              </div>
-
-              {!loading && (data?.reviewInboxPage?.hasMore ?? false) ? (
-                <div className={cn("border-t border-[var(--border-subtle)]", tokens.spacing.containerPadding)}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="min-h-[44px]"
-                    onClick={() =>
-                      reload({
-                        bypassCache: true,
-                        inboxOffset: data?.reviewInbox.length ?? 0,
-                        appendInbox: true,
-                      })
-                    }
-                    disabled={inboxLoadingMore}
-                  >
-                    {inboxLoadingMore ? 'Loading more…' : 'Load more'}
-                  </Button>
-                </div>
-              ) : null}
+              )}
             </Block>
           </div>
         </div>
       </section>
-
-      <ReviewDrawer
-        item={selectedItem}
-        onClose={() => setSelectedItem(null)}
-        onMarkReviewed={markReviewed}
-        showSessionTimes={false}
-        timeZone={coachTimeZone}
-      />
     </>
   );
 }
