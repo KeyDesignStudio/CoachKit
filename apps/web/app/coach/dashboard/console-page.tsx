@@ -647,7 +647,7 @@ export default function CoachDashboardConsolePage() {
 
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div>
             <StravaVitalsSummaryCard
               comparison={data?.stravaVitals ?? null}
@@ -657,6 +657,8 @@ export default function CoachDashboardConsolePage() {
               onToggleLoadPanel={setShowLoadPanel}
             />
           </div>
+
+          <div aria-hidden="true" />
 
           <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
             <Block title="Event countdown" padding={false} showHeaderDivider={false} className="border-[#cad7eb] bg-[#e9eef8]/85">
