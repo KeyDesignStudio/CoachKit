@@ -552,7 +552,9 @@ export default function AthleteCalendarPage() {
       </header>
 
       {goalCountdown && goalCountdown.mode !== 'none' ? (
-        <GoalCountdownCallout goal={goalCountdown} variant="ribbon" />
+        <div className="flex justify-end">
+          <GoalCountdownCallout goal={goalCountdown} variant="hero" className="w-full xl:w-1/4" />
+        </div>
       ) : null}
 
       {!userLoading && (!user || user.role !== 'ATHLETE') ? (

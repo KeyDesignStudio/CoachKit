@@ -291,8 +291,8 @@ export default function AthleteDashboardConsolePage() {
         </div>
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3">
-            <GoalCountdownCallout goal={data.goalCountdown} variant="hero" />
+          <div className="mt-3 flex justify-end">
+            <GoalCountdownCallout goal={data.goalCountdown} variant="hero" className="w-full xl:w-1/4" />
           </div>
         ) : null}
 
