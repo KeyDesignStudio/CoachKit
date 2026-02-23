@@ -185,10 +185,21 @@ export async function GET(request: NextRequest) {
       const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
       const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
 
-      const [athleteProfile, items] = await Promise.all([
+      const [athleteProfile, latestPublishedDraft, items] = await Promise.all([
         prisma.athleteProfile.findUnique({
           where: { userId: user.id },
           select: { coachId: true, defaultLat: true, defaultLon: true, eventName: true, eventDate: true, timelineWeeks: true },
+        }),
+        prisma.aiPlanDraft.findFirst({
+          where: {
+            athleteId: user.id,
+            visibilityStatus: 'PUBLISHED',
+          },
+          orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            setupJson: true,
+            publishedAt: true,
+          },
         }),
         prisma.calendarItem.findMany({
           where: {
@@ -327,10 +338,19 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+      const fallbackEventDate =
+        (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+        (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+        null;
+      const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+
       const goalCountdown = getGoalCountdown({
-        eventName: athleteProfile.eventName,
-        eventDate: athleteProfile.eventDate,
-        timelineWeeks: athleteProfile.timelineWeeks,
+        eventName: athleteProfile.eventName ?? 'Goal event',
+        eventDate: athleteProfile.eventDate ?? fallbackEventDate,
+        timelineWeeks:
+          athleteProfile.timelineWeeks ??
+          (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),
         todayDayKey: getTodayDayKey(athleteTimezone),
       });
 

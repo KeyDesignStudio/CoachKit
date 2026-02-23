@@ -132,13 +132,24 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const [athleteProfile, items, stravaVitals] = await Promise.all([
+    const [athleteProfile, latestPublishedDraft, items, stravaVitals] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: params.athleteId },
         select: {
           eventName: true,
           eventDate: true,
           timelineWeeks: true,
+        },
+      }),
+      prisma.aiPlanDraft.findFirst({
+        where: {
+          athleteId: params.athleteId,
+          visibilityStatus: 'PUBLISHED',
+        },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          setupJson: true,
+          publishedAt: true,
         },
       }),
       prisma.calendarItem.findMany({
@@ -179,14 +190,21 @@ async function getAthleteDashboardData(params: {
         includeLoadModel: params.includeLoadModel,
       }),
     ]);
-    const goalCountdown = athleteProfile
-      ? getGoalCountdown({
-          eventName: athleteProfile.eventName,
-          eventDate: athleteProfile.eventDate,
-          timelineWeeks: athleteProfile.timelineWeeks,
-          todayDayKey: params.todayKey,
-        })
-      : null;
+    const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+    const fallbackEventDate =
+      (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+      (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+      null;
+    const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+
+    const goalCountdown = getGoalCountdown({
+      eventName: athleteProfile?.eventName ?? 'Goal event',
+      eventDate: athleteProfile?.eventDate ?? fallbackEventDate,
+      timelineWeeks:
+        athleteProfile?.timelineWeeks ??
+        (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),
+      todayDayKey: params.todayKey,
+    });
 
     const filteredItems = items
       .map((item) => {
