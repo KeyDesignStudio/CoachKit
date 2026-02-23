@@ -228,6 +228,12 @@ export async function GET(request: NextRequest) {
         (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
         (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
         null;
+      const fallbackStartDate =
+        (typeof requestContext?.blockStartDate === 'string' && requestContext.blockStartDate.trim()) ||
+        (typeof requestContext?.startDate === 'string' && requestContext.startDate.trim()) ||
+        (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
+        (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
+        null;
       const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
       const profileEventName = typeof athleteProfile.eventName === 'string' ? athleteProfile.eventName.trim() : '';
 
@@ -353,6 +359,7 @@ export async function GET(request: NextRequest) {
       const goalCountdown = getGoalCountdown({
         eventName: profileEventName || fallbackEventName || 'Goal event',
         eventDate: athleteProfile.eventDate ?? fallbackEventDate,
+        blockStartDate: fallbackStartDate,
         timelineWeeks:
           athleteProfile.timelineWeeks ??
           (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),

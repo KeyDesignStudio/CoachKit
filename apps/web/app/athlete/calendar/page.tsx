@@ -553,7 +553,11 @@ export default function AthleteCalendarPage() {
 
       {goalCountdown && goalCountdown.mode !== 'none' ? (
         <div className="flex justify-end">
-          <GoalCountdownCallout goal={goalCountdown} variant="hero" className="w-full xl:w-1/4" />
+          <GoalCountdownCallout
+            goal={goalCountdown}
+            variant="hero"
+            className="w-full xl:w-1/4 ring-0 border border-[#c5cfdf] bg-[#d0d8e8]"
+          />
         </div>
       ) : null}
 
