@@ -18,6 +18,10 @@ export const publishDraftPlanSchema = z.object({
   aiPlanDraftId: z.string().min(1),
 });
 
+export const unpublishDraftPlanSchema = z.object({
+  aiPlanDraftId: z.string().min(1),
+});
+
 export const deleteDraftPlanSchema = z.object({
   aiPlanDraftId: z.string().min(1),
 });
@@ -238,6 +242,76 @@ export async function deleteAiDraftPlan(params: {
       deleted: true,
       softDeletedCalendarItems: softDeletedCount,
       wasPublished: draft.visibilityStatus === 'PUBLISHED',
+    };
+  });
+}
+
+export async function unpublishAiDraftPlan(params: {
+  coachId: string;
+  athleteId: string;
+  aiPlanDraftId: string;
+  now?: Date;
+}) {
+  requireAiPlanBuilderV1Enabled();
+  await assertCoachOwnsAthlete(params.athleteId, params.coachId);
+
+  const now = params.now ?? new Date();
+  const sourcePrefix = 'apb:';
+  const origin = 'AI_PLAN_BUILDER';
+
+  return prisma.$transaction(async (tx) => {
+    const draft = await tx.aiPlanDraft.findUnique({
+      where: { id: params.aiPlanDraftId },
+      select: {
+        id: true,
+        athleteId: true,
+        coachId: true,
+        visibilityStatus: true,
+        sessions: { select: { id: true } },
+      },
+    });
+
+    if (!draft || draft.athleteId !== params.athleteId || draft.coachId !== params.coachId) {
+      throw new ApiError(404, 'NOT_FOUND', 'Draft plan not found.');
+    }
+
+    const sourceActivityIds = draft.sessions.map((s) => `${sourcePrefix}${s.id}`);
+    let softDeletedCalendarItems = 0;
+
+    if (sourceActivityIds.length) {
+      const res = await tx.calendarItem.updateMany({
+        where: {
+          athleteId: params.athleteId,
+          coachId: params.coachId,
+          origin,
+          sourceActivityId: { in: sourceActivityIds },
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: now,
+          deletedByUserId: params.coachId,
+        },
+      });
+      softDeletedCalendarItems = res.count;
+    }
+
+    const updatedDraft = await tx.aiPlanDraft.update({
+      where: { id: draft.id },
+      data: {
+        visibilityStatus: 'DRAFT',
+        publishedAt: null,
+        publishedByCoachId: null,
+      },
+      include: {
+        weeks: { orderBy: [{ weekIndex: 'asc' }] },
+        sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
+      },
+    });
+
+    return {
+      draftPlan: updatedDraft,
+      wasPublished: draft.visibilityStatus === 'PUBLISHED',
+      softDeletedCalendarItems,
     };
   });
 }
