@@ -1351,28 +1351,33 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const total = Math.max(1, params.total);
     setProgressOverlay({
       title: params.title,
-      progress: 0,
+      progress: 2,
       etaSeconds: null,
       overdueSeconds: 0,
-      detailLine: `0/${total} sessions complete`,
+      detailLine: `Completed 0/${total} sessions`,
       isEstimated: false,
     });
   }, []);
 
-  const updateCountProgressOverlay = useCallback((params: { completed: number; total: number; startedAtMs: number }) => {
+  const updateCountProgressOverlay = useCallback((params: { completed: number; total: number; startedAtMs: number; activeSession?: number | null }) => {
     const total = Math.max(1, params.total);
     const completed = Math.max(0, Math.min(total, params.completed));
-    const progress = Math.round((completed / total) * 100);
+    const rawProgress = Math.round((completed / total) * 100);
+    const progress = completed >= total ? 100 : Math.min(95, rawProgress);
     const elapsedSec = Math.max(0, (Date.now() - params.startedAtMs) / 1000);
-    const etaSeconds = completed > 0 && completed < total ? Math.max(1, Math.round((elapsedSec / completed) * (total - completed))) : null;
+    const activeSession = Math.max(1, Math.min(total, Math.round(params.activeSession ?? completed + 1)));
+    const detailLine =
+      completed >= total
+        ? `Completed ${total}/${total} sessions`
+        : `Completed ${completed}/${total} sessions · working on ${activeSession}/${total}`;
     setProgressOverlay((prev) =>
       prev
         ? {
             ...prev,
             progress,
-            etaSeconds,
-            overdueSeconds: 0,
-            detailLine: `${completed}/${total} sessions complete`,
+            etaSeconds: null,
+            overdueSeconds: Math.round(elapsedSec),
+            detailLine,
             isEstimated: false,
           }
         : prev
@@ -1569,9 +1574,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     try {
       let completed = 0;
       for (const session of sessions) {
+        updateCountProgressOverlay({ completed, total, startedAtMs, activeSession: completed + 1 });
         await loadSessionDetail(String(session.id));
         completed += 1;
-        updateCountProgressOverlay({ completed, total, startedAtMs });
+        updateCountProgressOverlay({ completed, total, startedAtMs, activeSession: completed + 1 });
       }
       setInfo(successMessage);
     } catch (e) {
@@ -2361,9 +2367,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                   : progressOverlay.etaSeconds != null
                     ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
                     : 'Estimating...'
-                : progressOverlay.etaSeconds != null
-                  ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
-                  : 'Processing...'}
+                : `Elapsed: ${Math.max(0, progressOverlay.overdueSeconds)}s`}
             </div>
             {progressOverlay.detailLine ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{progressOverlay.detailLine}</div> : null}
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
@@ -2372,11 +2376,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                 style={{ width: `${Math.max(4, Math.min(100, progressOverlay.progress))}%` }}
               />
             </div>
-            {!progressOverlay.isEstimated ? (
-              <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{Math.max(1, Math.min(100, Math.round(progressOverlay.progress)))}%</div>
-            ) : (
-              <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">Estimate only</div>
-            )}
+            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{progressOverlay.isEstimated ? 'Estimate only' : 'Live progress'}</div>
           </div>
         </div>
       ) : null}
