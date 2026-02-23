@@ -132,13 +132,24 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const [athleteProfile, items, stravaVitals] = await Promise.all([
+    const [athleteProfile, latestPublishedDraft, items, stravaVitals] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: params.athleteId },
         select: {
           eventName: true,
           eventDate: true,
           timelineWeeks: true,
+        },
+      }),
+      prisma.aiPlanDraft.findFirst({
+        where: {
+          athleteId: params.athleteId,
+          visibilityStatus: 'PUBLISHED',
+        },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          setupJson: true,
+          publishedAt: true,
         },
       }),
       prisma.calendarItem.findMany({
@@ -179,11 +190,26 @@ async function getAthleteDashboardData(params: {
         includeLoadModel: params.includeLoadModel,
       }),
     ]);
+    const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+    const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
+    const fallbackEventName =
+      (typeof requestContext?.eventName === 'string' && requestContext.eventName.trim()) ||
+      (typeof setupJson.eventName === 'string' && setupJson.eventName.trim()) ||
+      null;
+    const fallbackEventDate =
+      (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+      (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+      null;
+    const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+    const profileEventName = typeof athleteProfile?.eventName === 'string' ? athleteProfile.eventName.trim() : '';
+
     const goalCountdown = athleteProfile
       ? getGoalCountdown({
-          eventName: athleteProfile.eventName,
-          eventDate: athleteProfile.eventDate,
-          timelineWeeks: athleteProfile.timelineWeeks,
+          eventName: profileEventName || fallbackEventName || 'Goal event',
+          eventDate: athleteProfile.eventDate ?? fallbackEventDate,
+          timelineWeeks:
+            athleteProfile.timelineWeeks ??
+            (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),
           todayDayKey: params.todayKey,
         })
       : null;

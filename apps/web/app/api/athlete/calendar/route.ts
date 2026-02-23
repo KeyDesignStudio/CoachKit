@@ -185,10 +185,21 @@ export async function GET(request: NextRequest) {
       const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
       const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
 
-      const [athleteProfile, items] = await Promise.all([
+      const [athleteProfile, latestPublishedDraft, items] = await Promise.all([
         prisma.athleteProfile.findUnique({
           where: { userId: user.id },
           select: { coachId: true, defaultLat: true, defaultLon: true, eventName: true, eventDate: true, timelineWeeks: true },
+        }),
+        prisma.aiPlanDraft.findFirst({
+          where: {
+            athleteId: user.id,
+            visibilityStatus: 'PUBLISHED',
+          },
+          orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            setupJson: true,
+            publishedAt: true,
+          },
         }),
         prisma.calendarItem.findMany({
           where: {
@@ -207,6 +218,18 @@ export async function GET(request: NextRequest) {
       if (!athleteProfile) {
         return { items: [] };
       }
+      const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+      const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
+      const fallbackEventName =
+        (typeof requestContext?.eventName === 'string' && requestContext.eventName.trim()) ||
+        (typeof setupJson.eventName === 'string' && setupJson.eventName.trim()) ||
+        null;
+      const fallbackEventDate =
+        (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+        (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+        null;
+      const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+      const profileEventName = typeof athleteProfile.eventName === 'string' ? athleteProfile.eventName.trim() : '';
 
       const preparedItems = items.map((item: any) => {
         const completions = (item.completedActivities ?? []) as Array<{
@@ -328,9 +351,11 @@ export async function GET(request: NextRequest) {
       }
 
       const goalCountdown = getGoalCountdown({
-        eventName: athleteProfile.eventName,
-        eventDate: athleteProfile.eventDate,
-        timelineWeeks: athleteProfile.timelineWeeks,
+        eventName: profileEventName || fallbackEventName || 'Goal event',
+        eventDate: athleteProfile.eventDate ?? fallbackEventDate,
+        timelineWeeks:
+          athleteProfile.timelineWeeks ??
+          (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),
         todayDayKey: getTodayDayKey(athleteTimezone),
       });
 
