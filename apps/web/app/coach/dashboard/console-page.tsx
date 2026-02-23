@@ -199,10 +199,11 @@ export default function CoachDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
-  const welcomeMessage = useMemo(
+  const fallbackWelcomeMessage = useMemo(
     () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
     [user?.name, user?.timezone]
   );
+  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
   const styledWelcome = useMemo(() => {
     const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
     if (!match) return { name: '', rest: welcomeMessage };
@@ -374,6 +375,38 @@ export default function CoachDashboardConsolePage() {
     },
     [jumpToInbox]
   );
+
+  const coachGreetingContext = useMemo(() => {
+    const completed = Math.max(0, Number(data?.kpis?.workoutsCompleted ?? 0));
+    const skipped = Math.max(0, Number(data?.kpis?.workoutsSkipped ?? 0));
+    const nextGoal = data?.selectedGoalCountdown?.goalCountdown?.eventName
+      ? String(data.selectedGoalCountdown.goalCountdown.eventName)
+      : '';
+    return [
+      `squad completed workouts: ${completed}`,
+      `squad missed workouts: ${skipped}`,
+      nextGoal ? `nearest athlete event: ${nextGoal}` : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+  }, [data?.kpis?.workoutsCompleted, data?.kpis?.workoutsSkipped, data?.selectedGoalCountdown?.goalCountdown?.eventName]);
+
+  useEffect(() => {
+    setWelcomeMessage(fallbackWelcomeMessage);
+  }, [fallbackWelcomeMessage]);
+
+  useEffect(() => {
+    if (!user?.userId || user.role !== 'COACH') return;
+    const qs = new URLSearchParams();
+    if (coachGreetingContext) qs.set('context', coachGreetingContext);
+    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
+      .then((resp) => {
+        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
+      })
+      .catch(() => {
+        setWelcomeMessage(fallbackWelcomeMessage);
+      });
+  }, [coachGreetingContext, fallbackWelcomeMessage, request, user?.role, user?.userId]);
 
   if (userLoading || (!user && !userError)) {
     return (
