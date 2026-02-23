@@ -16,6 +16,7 @@ import { StravaVitalsCard } from '@/components/profile/StravaVitalsCard';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
 import {
+  ATHLETE_TRAINING_REQUEST_PATH,
   buildTrainingRequestReminderMessage,
   buildTrainingRequestStartMessage,
 } from '@/modules/ai-plan-builder/shared/training-request';
@@ -357,7 +358,7 @@ export default function AthleteProfilePage() {
         method: 'POST',
         data: { draftJson: {} },
       });
-      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}/athlete/intake` : '/athlete/intake';
+      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}${ATHLETE_TRAINING_REQUEST_PATH}` : ATHLETE_TRAINING_REQUEST_PATH;
       await request('/api/messages/send', {
         method: 'POST',
         data: {
@@ -380,7 +381,7 @@ export default function AthleteProfilePage() {
     setError('');
     setSuccess('');
     try {
-      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}/athlete/intake` : '/athlete/intake';
+      const intakeUrl = typeof window !== 'undefined' ? `${window.location.origin}${ATHLETE_TRAINING_REQUEST_PATH}` : ATHLETE_TRAINING_REQUEST_PATH;
       await request('/api/messages/send', {
         method: 'POST',
         data: {

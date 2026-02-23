@@ -172,10 +172,11 @@ export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
-  const welcomeMessage = useMemo(
+  const fallbackWelcomeMessage = useMemo(
     () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
     [user?.name, user?.timezone]
   );
+  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
   const styledWelcome = useMemo(() => {
     const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
     if (!match) return { name: '', rest: welcomeMessage };
@@ -257,6 +258,41 @@ export default function AthleteDashboardConsolePage() {
   }, [reloadTrainingRequestLifecycle, user?.role]);
 
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
+
+  const workoutGreetingContext = useMemo(() => {
+    const totals = data?.rangeSummary?.totals;
+    if (!totals) return '';
+    const completed = Math.max(0, Number(totals.workoutsCompleted ?? 0));
+    const planned = Math.max(0, Number(totals.workoutsPlanned ?? 0));
+    const minutes = Math.max(0, Number(totals.completedMinutes ?? 0));
+    const next = data?.nextUp?.[0];
+    const nextTitle = next?.title ? String(next.title) : '';
+    const nextDiscipline = next?.discipline ? String(next.discipline).toLowerCase() : '';
+    return [
+      `completed workouts: ${completed}/${planned}`,
+      `completed minutes: ${minutes}`,
+      nextTitle || nextDiscipline ? `next scheduled: ${nextTitle || nextDiscipline}` : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+  }, [data?.nextUp, data?.rangeSummary?.totals]);
+
+  useEffect(() => {
+    setWelcomeMessage(fallbackWelcomeMessage);
+  }, [fallbackWelcomeMessage]);
+
+  useEffect(() => {
+    if (!user?.userId || user.role !== 'ATHLETE') return;
+    const qs = new URLSearchParams();
+    if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
+    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
+      .then((resp) => {
+        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
+      })
+      .catch(() => {
+        setWelcomeMessage(fallbackWelcomeMessage);
+      });
+  }, [fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -359,7 +395,7 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/intake')}>
+                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/training-request')}>
                   Complete Training Request
                 </Button>
               </div>
@@ -368,7 +404,7 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3">
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
