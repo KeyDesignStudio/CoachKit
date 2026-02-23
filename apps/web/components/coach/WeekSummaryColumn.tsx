@@ -33,7 +33,7 @@ export function WeekSummaryColumn({
 
   return (
      <div 
-       className={cn("hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border-2 border-white", className)}
+       className={cn("hidden md:flex flex-col min-w-0 rounded bg-[rgb(209,217,232)] overflow-hidden border-2 border-white", className)}
        style={style}
     >
       <div className="px-3 py-1.5">
