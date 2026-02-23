@@ -569,6 +569,7 @@ export default function AthleteCalendarPage() {
         todayKey={todayKey}
         athleteTimezone={athleteTimezone}
         goalEventDateKey={goalCountdown?.eventDate ?? null}
+        goalCountdown={goalCountdown}
         onDayClick={handleDayClick}
         onAddClick={openCreateDrawer}
         onItemClick={handleItemIdClick}

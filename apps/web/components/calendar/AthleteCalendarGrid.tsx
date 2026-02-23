@@ -10,6 +10,7 @@ import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell, MonthSession } from '@/components/athlete/AthleteMonthDayCell';
 import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
+import type { GoalCountdown } from '@/lib/goal-countdown';
 
 export type AthleteWeekDay = {
   date: string;
@@ -53,6 +54,7 @@ type AthleteCalendarGridProps = {
   todayKey: string;
   athleteTimezone: string;
   goalEventDateKey?: string | null;
+  goalCountdown?: GoalCountdown | null;
   onDayClick: (dateStr: string) => void;
   onAddClick: (dateStr: string) => void;
   onItemClick: (itemId: string) => void;
@@ -69,6 +71,7 @@ export function AthleteCalendarGrid({
   todayKey,
   athleteTimezone,
   goalEventDateKey,
+  goalCountdown,
   onDayClick,
   onAddClick,
   onItemClick,
@@ -116,6 +119,9 @@ export function AthleteCalendarGrid({
             <div className="px-3 py-1.5">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
               <p className="text-sm font-medium truncate">This week</p>
+              {goalCountdown?.weeksRemaining ? (
+                <p className="mt-0.5 text-[11px] text-[var(--muted)] tabular-nums">{goalCountdown.weeksRemaining} weeks to event</p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-2 p-2">
               {!weekSummary ? (

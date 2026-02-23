@@ -1,4 +1,5 @@
 import { sessionDetailV1Schema, type SessionDetailV1 } from '@/modules/ai-plan-builder/rules/session-detail';
+import type { SessionRecipeV2 } from '@/modules/ai-plan-builder/rules/session-recipe';
 
 function formatBlockLabel(blockType: SessionDetailV1['structure'][number]['blockType']): string {
   switch (blockType) {
@@ -15,6 +16,23 @@ function formatBlockLabel(blockType: SessionDetailV1['structure'][number]['block
     default:
       return String(blockType ?? '').trim().toUpperCase() || 'SESSION';
   }
+}
+
+function formatRecipeInterval(interval: SessionRecipeV2['blocks'][number]['intervals'][number]): string {
+  const lead = interval.reps ? `${interval.reps} x ${interval.on}` : interval.on;
+  const withRest = interval.off ? `${lead}, ${interval.off}` : lead;
+  return `${withRest}. ${interval.intent}`;
+}
+
+function formatRecipeBlockSteps(block: SessionRecipeV2['blocks'][number]): string {
+  const parts: string[] = [];
+  if (Array.isArray(block.intervals) && block.intervals.length) {
+    parts.push(block.intervals.map((interval) => formatRecipeInterval(interval)).join(' '));
+  }
+  if (Array.isArray(block.notes) && block.notes.length) {
+    parts.push(block.notes.join(' '));
+  }
+  return parts.join(' ').trim();
 }
 
 function toIntMinutes(value: unknown): number {
@@ -57,17 +75,29 @@ export function assertNormalizedSessionDetailMatchesTotal(params: {
 
 export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1): string {
   const objective = stripDurationTokens(String(detail.objective ?? '').trim());
-  const purpose = String((detail as any).purpose ?? '').trim();
+  const purpose = String((detail as any).purpose ?? detail.recipeV2?.executionSummary ?? '').trim();
+  const recipeBlocks = Array.isArray(detail.recipeV2?.blocks) ? detail.recipeV2.blocks : [];
 
-  const blockLines = (detail.structure ?? [])
-    .map((block) => {
-      const label = formatBlockLabel(block.blockType);
-      const duration = toIntMinutes((block as any)?.durationMinutes);
-      const steps = String((block as any)?.steps ?? '').trim();
-      if (!steps) return null;
-      return `${label}: ${duration} min – ${steps}`;
-    })
-    .filter((x): x is string => Boolean(x));
+  const blockLines =
+    recipeBlocks.length > 0
+      ? recipeBlocks
+          .map((block) => {
+            const label = formatBlockLabel(block.key as SessionDetailV1['structure'][number]['blockType']);
+            const duration = toIntMinutes(block.durationMinutes);
+            const steps = formatRecipeBlockSteps(block);
+            if (!steps) return null;
+            return `${label}: ${duration} min – ${steps}`;
+          })
+          .filter((x): x is string => Boolean(x))
+      : (detail.structure ?? [])
+          .map((block) => {
+            const label = formatBlockLabel(block.blockType);
+            const duration = toIntMinutes((block as any)?.durationMinutes);
+            const steps = String((block as any)?.steps ?? '').trim();
+            if (!steps) return null;
+            return `${label}: ${duration} min – ${steps}`;
+          })
+          .filter((x): x is string => Boolean(x));
 
   const lines: string[] = [];
   if (objective) lines.push(objective);
@@ -79,11 +109,13 @@ export function renderWorkoutDetailFromSessionDetailV1(detail: SessionDetailV1):
   const explainability = (detail as any).explainability as
     | { whyThis?: string; whyToday?: string; unlocksNext?: string; ifMissed?: string; ifCooked?: string }
     | undefined;
-  if (explainability) {
-    const whyThis = String(explainability.whyThis ?? '').trim();
-    const whyToday = String(explainability.whyToday ?? '').trim();
-    const ifMissed = String(explainability.ifMissed ?? '').trim();
-    const ifCooked = String(explainability.ifCooked ?? '').trim();
+  if (explainability || detail.recipeV2?.adjustments || detail.recipeV2?.executionSummary) {
+    const recipeMissed = String(detail.recipeV2?.adjustments?.ifMissed?.[0] ?? '').trim();
+    const recipeCooked = String(detail.recipeV2?.adjustments?.ifCooked?.[0] ?? '').trim();
+    const whyThis = String(explainability?.whyThis ?? detail.recipeV2?.executionSummary ?? '').trim();
+    const whyToday = String(explainability?.whyToday ?? '').trim();
+    const ifMissed = String(recipeMissed || explainability?.ifMissed || '').trim();
+    const ifCooked = String(recipeCooked || explainability?.ifCooked || '').trim();
     if (whyThis || whyToday || ifMissed || ifCooked) {
       if (lines.length) lines.push('');
       if (whyThis) lines.push(`WHY THIS: ${whyThis}`);
