@@ -52,7 +52,19 @@ type AthleteDashboardResponse = {
   }>;
   stravaVitals: StravaVitalsComparison;
   goalCountdown: GoalCountdown | null;
+  todayTraining: {
+    completedToday: number;
+    scheduledToday: number;
+    completedTitles: string[];
+    scheduledTitles: string[];
+  };
 };
+
+const COMPLETED_STATUSES: CalendarItemStatus[] = [
+  CalendarItemStatus.COMPLETED_MANUAL,
+  CalendarItemStatus.COMPLETED_SYNCED,
+  CalendarItemStatus.COMPLETED_SYNCED_DRAFT,
+];
 
 const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
 const athleteDashboardCache = new Map<
@@ -285,6 +297,13 @@ async function getAthleteDashboardData(params: {
         plannedStartTimeLocal: item.plannedStartTimeLocal,
       }));
 
+    const todayItems = filteredItems
+      .map(({ item }) => item)
+      .filter((item) => getLocalDayKey(item.date, params.timezone) === params.todayKey);
+    const completedTodayItems = todayItems.filter((item) => COMPLETED_STATUSES.includes(item.status));
+    const scheduledTodayItems = todayItems.filter((item) => item.status === CalendarItemStatus.PLANNED);
+    const asTitle = (item: (typeof todayItems)[number]) => String(item.title ?? item.discipline ?? 'session').trim();
+
     return {
       attention: {
         pendingConfirmation: pendingConfirmationCount,
@@ -295,6 +314,12 @@ async function getAthleteDashboardData(params: {
       nextUp,
       stravaVitals,
       goalCountdown,
+      todayTraining: {
+        completedToday: completedTodayItems.length,
+        scheduledToday: scheduledTodayItems.length,
+        completedTitles: completedTodayItems.map(asTitle).slice(0, 3),
+        scheduledTitles: scheduledTodayItems.map(asTitle).slice(0, 3),
+      },
     } satisfies AthleteDashboardResponse;
   })();
 

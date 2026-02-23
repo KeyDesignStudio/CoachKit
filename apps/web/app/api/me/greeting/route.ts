@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
 
 const querySchema = z.object({
   context: z.string().trim().max(320).optional(),
+  completedToday: z.coerce.number().int().min(0).max(12).optional(),
+  scheduledToday: z.coerce.number().int().min(0).max(12).optional(),
 });
 
 const greetingSchema = z
@@ -25,6 +27,8 @@ export async function GET(request: NextRequest) {
     const { user } = await requireAuth();
     const parsed = querySchema.parse({
       context: request.nextUrl.searchParams.get('context') ?? undefined,
+      completedToday: request.nextUrl.searchParams.get('completedToday') ?? undefined,
+      scheduledToday: request.nextUrl.searchParams.get('scheduledToday') ?? undefined,
     });
 
     const firstName = getFirstName(user.name);
@@ -36,6 +40,8 @@ export async function GET(request: NextRequest) {
       timeOfDay,
       role: String(user.role).toLowerCase(),
       workoutContext: parsed.context ?? '',
+      completedToday: parsed.completedToday ?? 0,
+      scheduledToday: parsed.scheduledToday ?? 0,
     };
 
     let greeting = fallback;
@@ -54,7 +60,11 @@ export async function GET(request: NextRequest) {
           'Keep it natural, warm, and coach-grade.\n' +
           'Reference physical and mental wellbeing.\n' +
           'Mention morning/afternoon/evening logically.\n' +
-          'If workoutContext is provided, weave in a subtle specific nod to completed or scheduled training.\n' +
+          'If role is athlete: only mention training when it is explicitly supported by completedToday or scheduledToday counts.\n' +
+          'Use past tense only for completedToday > 0.\n' +
+          'Use future tense only for scheduledToday > 0.\n' +
+          'If both are 0, do not imply any completed or scheduled workout today.\n' +
+          'If workoutContext is provided, use it as factual context only.\n' +
           'Avoid hype, avoid emojis, avoid hashtags, avoid lists, avoid quotes.',
         input: JSON.stringify(llmInput),
         schema: greetingSchema,
@@ -67,6 +77,9 @@ export async function GET(request: NextRequest) {
         rawGreeting: result.greeting,
         firstName,
         timeOfDay,
+        completedToday: parsed.completedToday ?? 0,
+        scheduledToday: parsed.scheduledToday ?? 0,
+        role: String(user.role).toLowerCase(),
       });
       source = 'ai';
     } catch {
@@ -90,4 +103,3 @@ export async function GET(request: NextRequest) {
     return handleError(error);
   }
 }
-
