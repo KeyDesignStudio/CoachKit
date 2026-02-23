@@ -269,6 +269,10 @@ async function getDashboardAggregates(params: {
           (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
           (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
           null;
+        const fallbackStartDate =
+          (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
+          (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
+          null;
         const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
         const profileEventName = typeof athlete.eventName === 'string' ? athlete.eventName.trim() : '';
 
@@ -278,6 +282,7 @@ async function getDashboardAggregates(params: {
           goalCountdown: getGoalCountdown({
             eventName: profileEventName || fallbackEventName || 'Goal event',
             eventDate: athlete.eventDate ?? fallbackEventDate,
+            blockStartDate: fallbackStartDate,
             timelineWeeks:
               athlete.timelineWeeks ??
               (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),

@@ -46,15 +46,25 @@ function diffDays(fromDayKey: string, toDayKey: string): number {
 export function getGoalCountdown(params: {
   eventName?: string | null;
   eventDate?: Date | string | null;
+  blockStartDate?: Date | string | null;
   timelineWeeks?: number | null;
   todayDayKey: string;
 }): GoalCountdown {
   const eventName = String(params.eventName ?? '').trim() || null;
   const eventDate = normalizeEventDateDayKey(params.eventDate ?? null);
+  const blockStartDate = normalizeEventDateDayKey(params.blockStartDate ?? null);
+  const derivedWeeksTotal =
+    blockStartDate && eventDate
+      ? (() => {
+          const days = diffDays(blockStartDate, eventDate);
+          if (!Number.isFinite(days) || days <= 0) return null;
+          return Math.max(1, Math.min(52, Math.ceil(days / 7)));
+        })()
+      : null;
   const weeksTotal =
     typeof params.timelineWeeks === 'number' && Number.isFinite(params.timelineWeeks) && params.timelineWeeks > 0
       ? Math.max(1, Math.min(52, Math.round(params.timelineWeeks)))
-      : null;
+      : derivedWeeksTotal;
 
   if (!eventDate) {
     return {
@@ -76,8 +86,21 @@ export function getGoalCountdown(params: {
 
   const daysRemaining = diffDays(params.todayDayKey, eventDate);
   const weeksRemaining = daysRemaining > 0 ? Math.ceil(daysRemaining / 7) : null;
-  const weeksElapsed = weeksTotal != null ? Math.max(0, weeksTotal - Math.max(0, weeksRemaining ?? 0)) : null;
-  const progressPct = weeksTotal != null ? Math.max(0, Math.min(100, Math.round(((weeksElapsed ?? 0) / weeksTotal) * 100))) : null;
+  const startAwareProgress =
+    weeksTotal != null && blockStartDate && eventDate
+      ? (() => {
+          const totalDays = Math.max(1, diffDays(blockStartDate, eventDate));
+          const elapsedDays = Math.max(0, Math.min(totalDays, diffDays(blockStartDate, params.todayDayKey)));
+          const weeksElapsed = Math.max(0, Math.min(weeksTotal, Math.floor(elapsedDays / 7)));
+          const progressPct = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)));
+          return { weeksElapsed, progressPct };
+        })()
+      : null;
+  const weeksElapsed =
+    startAwareProgress?.weeksElapsed ?? (weeksTotal != null ? Math.max(0, weeksTotal - Math.max(0, weeksRemaining ?? 0)) : null);
+  const progressPct =
+    startAwareProgress?.progressPct ??
+    (weeksTotal != null ? Math.max(0, Math.min(100, Math.round(((weeksElapsed ?? 0) / weeksTotal) * 100))) : null);
 
   if (daysRemaining === 0) {
     return {

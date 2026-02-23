@@ -404,11 +404,11 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3">
+          <div className="mt-3 grid grid-cols-1 lg:grid-cols-3">
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
-              className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85"
+              className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 lg:col-start-3 lg:w-full"
             />
           </div>
         ) : null}
