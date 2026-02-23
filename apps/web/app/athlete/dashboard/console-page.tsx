@@ -395,7 +395,7 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/training-request' as never)}>
+                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/training-request')}>
                   Complete Training Request
                 </Button>
               </div>
