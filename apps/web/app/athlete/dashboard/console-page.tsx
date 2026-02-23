@@ -372,7 +372,7 @@ export default function AthleteDashboardConsolePage() {
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
-              className="w-full xl:w-1/4 ring-0 border border-[#cad7eb] bg-[#e9eef8]/85"
+              className="w-full xl:w-1/4 ring-0 border border-[#c5cfdf] bg-[#d0d8e8]/90"
             />
           </div>
         ) : null}

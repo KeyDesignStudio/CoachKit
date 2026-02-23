@@ -658,10 +658,8 @@ export default function CoachDashboardConsolePage() {
             />
           </div>
 
-          <div aria-hidden="true" />
-
-          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            <Block title="Event countdown" padding={false} showHeaderDivider={false} className="border-[#cad7eb] bg-[#e9eef8]/85">
+          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="xl:col-span-2">
+            <Block title="Event countdown" padding={false} showHeaderDivider={false} className="border-[#c5cfdf] bg-[#d0d8e8]/90">
               {visibleGoalCountdowns.length === 0 ? (
                 <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
                   No athlete event dates available for this selection.
