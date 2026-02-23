@@ -22,7 +22,6 @@ import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calend
 import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@/lib/perf/calendar-perf';
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
-import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -550,16 +549,6 @@ export default function AthleteCalendarPage() {
         {error ? <p className="mt-3 text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading calendar...</p> : null}
       </header>
-
-      {goalCountdown && goalCountdown.mode !== 'none' ? (
-        <div className="flex justify-end">
-          <GoalCountdownCallout
-            goal={goalCountdown}
-            variant="hero"
-            className="w-full xl:w-1/4 ring-0 border border-[#c5cfdf] bg-[#d0d8e8]"
-          />
-        </div>
-      ) : null}
 
       {!userLoading && (!user || user.role !== 'ATHLETE') ? (
         <p className="text-[var(--muted)]">Athlete access required.</p>

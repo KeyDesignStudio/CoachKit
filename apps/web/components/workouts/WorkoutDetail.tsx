@@ -260,7 +260,7 @@ export function WorkoutDetail({
     <div className={cn(tokens.spacing.dashboardSectionGap, className)}>
       {/* Header Info (Title, Status, Weather) if not in Drawer, or specialized header */}
       <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
-           <div className={cn('flex flex-wrap items-baseline', tokens.spacing.widgetGap)}>
+           <div className={cn('flex flex-wrap items-center', tokens.spacing.widgetGap)}>
             <div className={cn('flex items-center', tokens.spacing.widgetGap)}>
               {statusIndicator ? (
                 <Icon 

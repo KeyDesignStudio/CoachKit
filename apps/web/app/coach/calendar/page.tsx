@@ -28,7 +28,6 @@ import { WorkoutDetail } from '@/components/workouts/WorkoutDetail';
 import { CalendarContextMenu, Position, ContextMenuAction } from '@/components/coach/CalendarContextMenu';
 import { CoachCalendarHelp } from '@/components/coach/CoachCalendarHelp';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
-import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { CalendarItem } from '@/components/coach/types';
@@ -324,30 +323,6 @@ export default function CoachCalendarPage() {
     });
     return map;
   }, [selectedAthletes]);
-  const selectedGoalCountdowns = useMemo(
-    () =>
-      Array.from(selectedAthleteIds)
-        .map((athleteId) => {
-          const goal = goalCountdownByAthlete[athleteId];
-          if (!goal || goal.mode === 'none') return null;
-          return {
-            athleteId,
-            athleteName: selectedAthletesById.get(athleteId)?.user.name ?? athleteId,
-            goal,
-          };
-        })
-        .filter((entry): entry is { athleteId: string; athleteName: string; goal: GoalCountdown } => Boolean(entry))
-        .sort((a, b) => {
-          const ad = a.goal.daysRemaining;
-          const bd = b.goal.daysRemaining;
-          if (ad == null && bd == null) return a.athleteName.localeCompare(b.athleteName);
-          if (ad == null) return 1;
-          if (bd == null) return -1;
-          return ad - bd;
-        }),
-    [goalCountdownByAthlete, selectedAthleteIds, selectedAthletesById]
-  );
-
   const dateRange = useMemo(() => {
     if (viewMode === 'week') {
       return {
@@ -1678,25 +1653,6 @@ export default function CoachCalendarPage() {
         {loading ? <p className="text-sm text-[var(--muted)]">Loading calendar…</p> : null}
         {sessionDetailLoadingId ? <p className="text-sm text-[var(--muted)]">Loading workout details…</p> : null}
       </header>
-
-      {selectedGoalCountdowns.length === 1 ? (
-        <GoalCountdownCallout
-          goal={selectedGoalCountdowns[0].goal}
-          athleteName={selectedGoalCountdowns[0].athleteName}
-          variant="ribbon"
-        />
-      ) : selectedGoalCountdowns.length > 1 ? (
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          {selectedGoalCountdowns.slice(0, 6).map((entry) => (
-            <GoalCountdownCallout
-              key={entry.athleteId}
-              goal={entry.goal}
-              athleteName={entry.athleteName}
-              variant="ribbon"
-            />
-          ))}
-        </div>
-      ) : null}
 
       {/* Copy Week Form */}
       {copyFormOpen ? (

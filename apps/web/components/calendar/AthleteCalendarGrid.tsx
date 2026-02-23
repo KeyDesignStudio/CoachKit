@@ -115,7 +115,7 @@ export function AthleteCalendarGrid({
             </AthleteWeekDayColumn>
           ))}
 
-          <div className="hidden md:flex flex-col min-w-0 rounded bg-emerald-600/25 overflow-hidden border-2 border-white">
+          <div className="hidden md:flex flex-col min-w-0 rounded bg-blue-500/50 overflow-hidden border-2 border-white">
             <div className="px-3 py-1.5">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
               <p className="text-sm font-medium truncate">This week</p>
