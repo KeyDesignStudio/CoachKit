@@ -350,13 +350,6 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
-      const fallbackEventDate =
-        (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
-        (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
-        null;
-      const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
-
       const goalCountdown = getGoalCountdown({
         eventName: profileEventName || fallbackEventName || 'Goal event',
         eventDate: athleteProfile.eventDate ?? fallbackEventDate,
