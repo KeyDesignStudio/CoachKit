@@ -80,6 +80,12 @@ type AthleteDashboardResponse = {
   }>;
   stravaVitals: StravaVitalsComparison;
   goalCountdown: GoalCountdown | null;
+  todayTraining?: {
+    completedToday: number;
+    scheduledToday: number;
+    completedTitles?: string[];
+    scheduledTitles?: string[];
+  };
 };
 
 type AthleteIntakeLifecycleResponse = {
@@ -260,22 +266,24 @@ export default function AthleteDashboardConsolePage() {
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
 
   const workoutGreetingContext = useMemo(() => {
-    const totals = data?.rangeSummary?.totals;
-    if (!totals) return '';
-    const completed = Math.max(0, Number(totals.workoutsCompleted ?? 0));
-    const planned = Math.max(0, Number(totals.workoutsPlanned ?? 0));
-    const minutes = Math.max(0, Number(totals.completedMinutes ?? 0));
-    const next = data?.nextUp?.[0];
-    const nextTitle = next?.title ? String(next.title) : '';
-    const nextDiscipline = next?.discipline ? String(next.discipline).toLowerCase() : '';
+    const todayTraining = data?.todayTraining;
+    if (!todayTraining) return '';
+    const completed = Math.max(0, Number(todayTraining.completedToday ?? 0));
+    const scheduled = Math.max(0, Number(todayTraining.scheduledToday ?? 0));
+    const completedExample = Array.isArray(todayTraining.completedTitles) ? String(todayTraining.completedTitles[0] ?? '').trim() : '';
+    const scheduledExample = Array.isArray(todayTraining.scheduledTitles) ? String(todayTraining.scheduledTitles[0] ?? '').trim() : '';
     return [
-      `completed workouts: ${completed}/${planned}`,
-      `completed minutes: ${minutes}`,
-      nextTitle || nextDiscipline ? `next scheduled: ${nextTitle || nextDiscipline}` : '',
+      `today completed: ${completed}`,
+      `today scheduled: ${scheduled}`,
+      completedExample ? `example completed: ${completedExample}` : '',
+      scheduledExample ? `example scheduled: ${scheduledExample}` : '',
     ]
       .filter(Boolean)
       .join('; ');
-  }, [data?.nextUp, data?.rangeSummary?.totals]);
+  }, [data?.todayTraining]);
+
+  const todayCompletedCount = Math.max(0, Number(data?.todayTraining?.completedToday ?? 0));
+  const todayScheduledCount = Math.max(0, Number(data?.todayTraining?.scheduledToday ?? 0));
 
   useEffect(() => {
     setWelcomeMessage(fallbackWelcomeMessage);
@@ -285,6 +293,8 @@ export default function AthleteDashboardConsolePage() {
     if (!user?.userId || user.role !== 'ATHLETE') return;
     const qs = new URLSearchParams();
     if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
+    qs.set('completedToday', String(todayCompletedCount));
+    qs.set('scheduledToday', String(todayScheduledCount));
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -292,7 +302,7 @@ export default function AthleteDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
+  }, [fallbackWelcomeMessage, request, todayCompletedCount, todayScheduledCount, user?.role, user?.userId, workoutGreetingContext]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {

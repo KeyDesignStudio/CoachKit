@@ -87,6 +87,9 @@ export function sanitizeAiGreeting(params: {
   rawGreeting: string;
   firstName: string;
   timeOfDay: TimeOfDay;
+  completedToday?: number;
+  scheduledToday?: number;
+  role?: string;
 }): string {
   const suffixByTime: Record<TimeOfDay, string> = {
     morning: 'this morning',
@@ -108,10 +111,25 @@ export function sanitizeAiGreeting(params: {
   body = body.replace(/^[-:,. ]+/, '').trim();
   if (!body) body = `Hope you're taking care of your body and mind ${suffixByTime[params.timeOfDay]}.`;
 
+  // Fix merged sentence boundaries like "...todayrest..." from model output.
+  body = body.replace(/([a-z])([A-Z][a-z])/g, '$1. $2');
+
   const withTimeAnchor = body.toLowerCase().includes('morning') || body.toLowerCase().includes('afternoon') || body.toLowerCase().includes('evening')
     ? body
     : `${body} ${suffixByTime[params.timeOfDay]}.`;
 
-  const finalBody = withTimeAnchor.replace(/\.+$/, '');
+  let finalBody = withTimeAnchor.trim();
+  if (!/[.!?]$/.test(finalBody)) finalBody = `${finalBody}.`;
+
+  const completedToday = Math.max(0, Number(params.completedToday ?? 0));
+  const scheduledToday = Math.max(0, Number(params.scheduledToday ?? 0));
+  const role = String(params.role ?? '').toLowerCase();
+  const mentionsWorkoutToday =
+    /\b(session|sessions|workout|workouts|training)\b/i.test(finalBody) &&
+    /\btoday|tonight|this morning|this afternoon|this evening\b/i.test(finalBody);
+  if (role === 'athlete' && completedToday === 0 && scheduledToday === 0 && mentionsWorkoutToday) {
+    return getWarmWelcomeMessage({ name: params.firstName });
+  }
+
   return `${normalizedPrefix} ${finalBody}`.slice(0, 220);
 }
