@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClientError, useApi } from '@/components/api-client';
 import { Block } from '@/components/ui/Block';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -612,6 +613,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const hasAutoSyncedRequestRef = useRef(false);
 
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<null | 'delete' | 'unpublish'>(null);
   const [error, setError] = useState<string | null>(null);
   const [constraintErrors, setConstraintErrors] = useState<string[]>([]);
   const [info, setInfo] = useState<string | null>(null);
@@ -2210,13 +2212,36 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [athleteId, draftPlanLatest?.id, fetchPublishStatus, publishGuard.canPublish, publishGuard.reason, request]);
 
+  const unpublishPlan = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!draftPlanId) return;
+
+    setBusy('publish-plan');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ wasPublished: boolean; softDeletedCalendarItems: number; draftPlan: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/unpublish`,
+        {
+          method: 'POST',
+          data: { aiPlanDraftId: draftPlanId },
+        }
+      );
+      setDraftPlanLatest(data.draftPlan ?? draftPlanLatest ?? null);
+      await fetchPublishStatus(draftPlanId);
+      setInfo(
+        `Plan unpublished. ${Number(data.softDeletedCalendarItems ?? 0)} calendar session${Number(data.softDeletedCalendarItems ?? 0) === 1 ? '' : 's'} removed.`
+      );
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to unpublish plan.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest, fetchPublishStatus, request]);
+
   const deletePublishedPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!draftPlanId) return;
-    const confirmed = window.confirm(
-      'Delete this plan? This removes the draft and deletes all published AI plan sessions from the calendars for this athlete.'
-    );
-    if (!confirmed) return;
 
     setBusy('delete-plan');
     setError(null);
@@ -3435,6 +3460,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             Current status: <strong>{isPublished ? 'Published' : hasDraft ? 'Draft (not visible to athlete)' : 'No draft yet'}</strong>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isPublished ? (
+              <Button size="sm" variant="secondary" disabled={busy != null || !hasDraft} onClick={() => setConfirmAction('unpublish')}>
+                Unpublish plan
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="secondary"
@@ -3451,13 +3481,37 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               variant="secondary"
               className="text-red-700 hover:bg-red-50"
               disabled={busy != null || !hasDraft}
-              onClick={() => void deletePublishedPlan()}
+              onClick={() => setConfirmAction('delete')}
             >
               Delete plan
             </Button>
           </div>
         </div>
       </Block>
+
+      <ConfirmModal
+        isOpen={confirmAction != null}
+        title={confirmAction === 'delete' ? 'Delete plan?' : 'Unpublish plan?'}
+        message={
+          confirmAction === 'delete'
+            ? 'This removes the draft and deletes all published AI plan sessions from the calendars for this athlete.'
+            : 'Athlete-visible APB sessions will be removed from the calendar. You can revise the draft before republishing.'
+        }
+        confirmLabel={confirmAction === 'delete' ? 'Delete plan' : 'Unpublish'}
+        cancelLabel="Cancel"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const nextAction = confirmAction;
+          setConfirmAction(null);
+          if (nextAction === 'delete') {
+            void deletePublishedPlan();
+            return;
+          }
+          if (nextAction === 'unpublish') {
+            void unpublishPlan();
+          }
+        }}
+      />
     </div>
   );
 }
