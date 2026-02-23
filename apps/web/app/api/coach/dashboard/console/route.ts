@@ -225,6 +225,28 @@ async function getDashboardAggregates(params: {
       },
       orderBy: [{ user: { name: 'asc' } }],
     });
+    const athleteIds = athletes.map((a) => a.userId);
+    const latestPublishedDrafts = athleteIds.length
+      ? await prisma.aiPlanDraft.findMany({
+          where: {
+            athleteId: { in: athleteIds },
+            visibilityStatus: 'PUBLISHED',
+          },
+          select: {
+            athleteId: true,
+            setupJson: true,
+            publishedAt: true,
+            createdAt: true,
+          },
+          orderBy: [{ athleteId: 'asc' }, { publishedAt: 'desc' }, { createdAt: 'desc' }],
+        })
+      : [];
+    const latestPublishedSetupByAthlete = new Map<string, Record<string, unknown>>();
+    for (const row of latestPublishedDrafts) {
+      if (!latestPublishedSetupByAthlete.has(row.athleteId)) {
+        latestPublishedSetupByAthlete.set(row.athleteId, ((row.setupJson as any) ?? {}) as Record<string, unknown>);
+      }
+    }
 
     const athleteRows = athletes.map((a) => ({
       id: a.userId,
@@ -236,16 +258,33 @@ async function getDashboardAggregates(params: {
     const targetAthleteIdsForGoals = new Set(targetAthleteIdsForVitals);
     const goalCountdowns = athletes
       .filter((athlete) => targetAthleteIdsForGoals.has(athlete.userId))
-      .map((athlete) => ({
-        athleteId: athlete.userId,
-        athleteName: athlete.user.name,
-        goalCountdown: getGoalCountdown({
-          eventName: athlete.eventName,
-          eventDate: athlete.eventDate,
-          timelineWeeks: athlete.timelineWeeks,
-          todayDayKey: getTodayDayKey(athlete.user.timezone ?? 'UTC'),
-        }),
-      }))
+      .map((athlete) => {
+        const setupJson = latestPublishedSetupByAthlete.get(athlete.userId) ?? {};
+        const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
+        const fallbackEventName =
+          (typeof requestContext?.eventName === 'string' && requestContext.eventName.trim()) ||
+          (typeof setupJson.eventName === 'string' && setupJson.eventName.trim()) ||
+          null;
+        const fallbackEventDate =
+          (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+          (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+          null;
+        const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+        const profileEventName = typeof athlete.eventName === 'string' ? athlete.eventName.trim() : '';
+
+        return {
+          athleteId: athlete.userId,
+          athleteName: athlete.user.name,
+          goalCountdown: getGoalCountdown({
+            eventName: profileEventName || fallbackEventName || 'Goal event',
+            eventDate: athlete.eventDate ?? fallbackEventDate,
+            timelineWeeks:
+              athlete.timelineWeeks ??
+              (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),
+            todayDayKey: getTodayDayKey(athlete.user.timezone ?? 'UTC'),
+          }),
+        };
+      })
       .sort((a, b) => {
         const ad = a.goalCountdown.daysRemaining;
         const bd = b.goalCountdown.daysRemaining;
