@@ -1,6 +1,9 @@
 import { sessionDetailV1Schema, type SessionDetailV1 } from '@/modules/ai-plan-builder/rules/session-detail';
 import type { SessionRecipeV2 } from '@/modules/ai-plan-builder/rules/session-recipe';
 
+type RecipeBlock = SessionRecipeV2['blocks'][number];
+type RecipeInterval = NonNullable<RecipeBlock['intervals']>[number];
+
 function formatBlockLabel(blockType: SessionDetailV1['structure'][number]['blockType']): string {
   switch (blockType) {
     case 'warmup':
@@ -18,13 +21,13 @@ function formatBlockLabel(blockType: SessionDetailV1['structure'][number]['block
   }
 }
 
-function formatRecipeInterval(interval: SessionRecipeV2['blocks'][number]['intervals'][number]): string {
+function formatRecipeInterval(interval: RecipeInterval): string {
   const lead = interval.reps ? `${interval.reps} x ${interval.on}` : interval.on;
   const withRest = interval.off ? `${lead}, ${interval.off}` : lead;
   return `${withRest}. ${interval.intent}`;
 }
 
-function formatRecipeBlockSteps(block: SessionRecipeV2['blocks'][number]): string {
+function formatRecipeBlockSteps(block: RecipeBlock): string {
   const parts: string[] = [];
   if (Array.isArray(block.intervals) && block.intervals.length) {
     parts.push(block.intervals.map((interval) => formatRecipeInterval(interval)).join(' '));
