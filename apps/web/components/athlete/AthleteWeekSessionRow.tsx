@@ -201,10 +201,10 @@ export function AthleteWeekSessionRow({
                   'border-sky-500/40 text-sky-700 bg-sky-50',
                   'dark:border-sky-400/30 dark:text-sky-200 dark:bg-sky-900/20'
                 )}
-                title="AI Plan Builder session"
-                aria-label="AI Plan Builder session"
+                title="CoachKit session"
+                aria-label="CoachKit session"
               >
-                AI
+                CK
               </span>
             ) : null}
           </p>
