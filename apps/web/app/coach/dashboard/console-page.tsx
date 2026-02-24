@@ -12,6 +12,7 @@ import { Block } from '@/components/ui/Block';
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { AthleteSelector } from '@/components/coach/AthleteSelector';
+import { CoachOnboardingModal } from '@/components/coach/CoachOnboardingModal';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
@@ -232,6 +233,8 @@ export default function CoachDashboardConsolePage() {
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [inboxPreset, setInboxPreset] = useState<InboxPreset>('ALL');
   const [showLoadPanel, setShowLoadPanel] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -309,6 +312,32 @@ export default function CoachDashboardConsolePage() {
       reload();
     }
   }, [reload, user?.role]);
+
+  useEffect(() => {
+    if (onboardingChecked) return;
+    if (user?.role !== 'COACH') return;
+    if (!data) return;
+
+    const hasAthletes = Array.isArray(data.athletes) && data.athletes.length > 0;
+    if (hasAthletes) {
+      setOnboardingChecked(true);
+      return;
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const skipped = window.localStorage.getItem('coachkit-coach-onboarding-skip') === '1';
+        const completed = window.localStorage.getItem('coachkit-coach-onboarding-complete') === '1';
+        if (!skipped && !completed) {
+          setShowOnboardingModal(true);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      setOnboardingChecked(true);
+    }
+  }, [data, onboardingChecked, user?.role]);
 
   useEffect(() => {
     if (user?.role === 'ATHLETE') {
@@ -700,7 +729,7 @@ export default function CoachDashboardConsolePage() {
         {error ? <div className={cn("mt-4 rounded-2xl bg-rose-500/10 text-rose-700", tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
         <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div>
+          <div className="xl:col-span-1">
             <StravaVitalsSummaryCard
               comparison={data?.stravaVitals ?? null}
               loading={loading && !data}
@@ -710,9 +739,7 @@ export default function CoachDashboardConsolePage() {
             />
           </div>
 
-          <div aria-hidden="true" />
-
-          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
+          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="xl:col-span-2">
             <Block
               title="Event countdown"
               padding={false}
@@ -770,6 +797,23 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
       </section>
+      <CoachOnboardingModal
+        isOpen={showOnboardingModal}
+        onClose={() => setShowOnboardingModal(false)}
+        onComplete={() => {
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('coachkit-coach-onboarding-complete', '1');
+            }
+          } catch {
+            // noop
+          }
+          setShowOnboardingModal(false);
+        }}
+        request={request}
+        initialTimezone={user?.timezone || 'Australia/Brisbane'}
+        initialSquadName="CoachKit"
+      />
     </>
   );
 }
