@@ -547,6 +547,27 @@ export default function AthleteCalendarPage() {
             </Button>
           </div>
         </div>
+        <div className="flex justify-end pt-1">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-[var(--muted)]">
+            <span className="font-medium text-[var(--text)]">Legend:</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
+              Published Plan
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
+              Scheduled
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
+              Missed or skipped
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
+              Completed
+            </span>
+          </div>
+        </div>
         {error ? <p className="mt-3 text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading calendar...</p> : null}
       </header>
