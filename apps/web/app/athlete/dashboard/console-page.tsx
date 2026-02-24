@@ -24,7 +24,7 @@ import type { GoalCountdown } from '@/lib/goal-countdown';
 import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import { Button } from '@/components/ui/Button';
 
-type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
+type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'LAST_60' | 'LAST_90' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM';
 
 type AthleteDashboardResponse = {
   attention: {
@@ -80,12 +80,6 @@ type AthleteDashboardResponse = {
   }>;
   stravaVitals: StravaVitalsComparison;
   goalCountdown: GoalCountdown | null;
-  todayTraining?: {
-    completedToday: number;
-    scheduledToday: number;
-    completedTitles?: string[];
-    scheduledTitles?: string[];
-  };
 };
 
 type AthleteIntakeLifecycleResponse = {
@@ -168,7 +162,23 @@ function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string
   if (preset === 'CUSTOM') {
     return { from: customFrom || todayKey, to: customTo || todayKey };
   }
-  const days = preset === 'LAST_14' ? 14 : preset === 'LAST_30' ? 30 : 7;
+
+  if (preset === 'THIS_MONTH') {
+    const from = `${todayKey.slice(0, 7)}-01`;
+    return { from, to: todayKey };
+  }
+
+  if (preset === 'LAST_MONTH') {
+    const year = Number(todayKey.slice(0, 4));
+    const month = Number(todayKey.slice(5, 7));
+    const currentMonthStartUtc = new Date(Date.UTC(year, month - 1, 1));
+    const lastMonthStartUtc = new Date(Date.UTC(year, month - 2, 1));
+    const lastMonthEndUtc = addDays(currentMonthStartUtc, -1);
+    return { from: toDateInput(lastMonthStartUtc), to: toDateInput(lastMonthEndUtc) };
+  }
+
+  const days =
+    preset === 'LAST_90' ? 90 : preset === 'LAST_60' ? 60 : preset === 'LAST_30' ? 30 : preset === 'LAST_14' ? 14 : 7;
   const from = toDateInput(addDays(todayUtcMidnight, -(days - 1)));
   const to = toDateInput(todayUtcMidnight);
   return { from, to };
@@ -189,7 +199,7 @@ export default function AthleteDashboardConsolePage() {
     return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
   }, [welcomeMessage]);
 
-  const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
+  const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [discipline, setDiscipline] = useState<string | null>(null);
@@ -266,24 +276,22 @@ export default function AthleteDashboardConsolePage() {
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
 
   const workoutGreetingContext = useMemo(() => {
-    const todayTraining = data?.todayTraining;
-    if (!todayTraining) return '';
-    const completed = Math.max(0, Number(todayTraining.completedToday ?? 0));
-    const scheduled = Math.max(0, Number(todayTraining.scheduledToday ?? 0));
-    const completedExample = Array.isArray(todayTraining.completedTitles) ? String(todayTraining.completedTitles[0] ?? '').trim() : '';
-    const scheduledExample = Array.isArray(todayTraining.scheduledTitles) ? String(todayTraining.scheduledTitles[0] ?? '').trim() : '';
+    const totals = data?.rangeSummary?.totals;
+    if (!totals) return '';
+    const completed = Math.max(0, Number(totals.workoutsCompleted ?? 0));
+    const planned = Math.max(0, Number(totals.workoutsPlanned ?? 0));
+    const minutes = Math.max(0, Number(totals.completedMinutes ?? 0));
+    const next = data?.nextUp?.[0];
+    const nextTitle = next?.title ? String(next.title) : '';
+    const nextDiscipline = next?.discipline ? String(next.discipline).toLowerCase() : '';
     return [
-      `today completed: ${completed}`,
-      `today scheduled: ${scheduled}`,
-      completedExample ? `example completed: ${completedExample}` : '',
-      scheduledExample ? `example scheduled: ${scheduledExample}` : '',
+      `completed workouts: ${completed}/${planned}`,
+      `completed minutes: ${minutes}`,
+      nextTitle || nextDiscipline ? `next scheduled: ${nextTitle || nextDiscipline}` : '',
     ]
       .filter(Boolean)
       .join('; ');
-  }, [data?.todayTraining]);
-
-  const todayCompletedCount = Math.max(0, Number(data?.todayTraining?.completedToday ?? 0));
-  const todayScheduledCount = Math.max(0, Number(data?.todayTraining?.scheduledToday ?? 0));
+  }, [data?.nextUp, data?.rangeSummary?.totals]);
 
   useEffect(() => {
     setWelcomeMessage(fallbackWelcomeMessage);
@@ -293,8 +301,6 @@ export default function AthleteDashboardConsolePage() {
     if (!user?.userId || user.role !== 'ATHLETE') return;
     const qs = new URLSearchParams();
     if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
-    qs.set('completedToday', String(todayCompletedCount));
-    qs.set('scheduledToday', String(todayScheduledCount));
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -302,7 +308,7 @@ export default function AthleteDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [fallbackWelcomeMessage, request, todayCompletedCount, todayScheduledCount, user?.role, user?.userId, workoutGreetingContext]);
+  }, [fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -405,7 +411,7 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/training-request')}>
+                <Button type="button" className="min-h-[44px]" onClick={() => router.push('/athlete/training-request' as never)}>
                   Complete Training Request
                 </Button>
               </div>
@@ -414,11 +420,11 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3 flex justify-start">
+          <div className="mt-3 grid grid-cols-1 lg:grid-cols-3">
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
-              className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 w-full lg:w-1/4"
+              className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 lg:col-start-3 lg:w-full"
             />
           </div>
         ) : null}
@@ -489,9 +495,13 @@ export default function AthleteDashboardConsolePage() {
                         onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
                         data-testid="athlete-dashboard-time-range"
                       >
-                        <option value="LAST_7">Last 7 days</option>
-                        <option value="LAST_14">Last 14 days</option>
                         <option value="LAST_30">Last 30 days</option>
+                        <option value="LAST_60">Last 60 days</option>
+                        <option value="LAST_90">Last 90 days</option>
+                        <option value="THIS_MONTH">This month</option>
+                        <option value="LAST_MONTH">Last month</option>
+                        <option value="LAST_14">Last 14 days</option>
+                        <option value="LAST_7">Last 7 days</option>
                         <option value="CUSTOM">Custom</option>
                       </SelectField>
                       {timeRange === 'CUSTOM' ? (
