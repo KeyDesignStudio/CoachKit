@@ -179,7 +179,7 @@ export default function CoachNotificationsPage() {
   }
 
   return (
-    <section className={cn('flex flex-col', tokens.spacing.dashboardSectionGap)}>
+    <section className={cn('mx-auto flex w-full flex-col xl:w-1/2', tokens.spacing.dashboardSectionGap)}>
       <Block>
         <div className="flex items-center justify-between gap-3">
           <div>
