@@ -55,6 +55,8 @@ export async function AppHeader() {
 
   // Get user from database if authenticated
   let userRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null = null;
+  let currentDbUserId: string | null = null;
+  let unreadNotificationsCount = 0;
   let clubBranding = {
     displayName: DEFAULT_BRAND_NAME,
     logoUrl: null as string | null,
@@ -97,6 +99,7 @@ export async function AppHeader() {
 
     if (user) {
       userRole = user.role;
+      currentDbUserId = user.id;
 
       // Resolve the coachId we should use for club branding
       if (user.role === 'COACH' || user.role === 'ADMIN') {
@@ -128,6 +131,7 @@ export async function AppHeader() {
   } else if (authDisabled) {
     const { user } = await requireAuth();
     userRole = user.role;
+    currentDbUserId = user.id;
 
     if (user.role === 'COACH' || user.role === 'ADMIN') {
       brandingCoachId = user.id;
@@ -155,6 +159,25 @@ export async function AppHeader() {
     }
   }
 
+  if (currentDbUserId && (userRole === 'COACH' || userRole === 'ATHLETE')) {
+    unreadNotificationsCount = await prisma.message.count({
+      where:
+        userRole === 'COACH'
+          ? {
+              deletedAt: null,
+              senderRole: 'ATHLETE',
+              coachReadAt: null,
+              thread: { coachId: currentDbUserId },
+            }
+          : {
+              deletedAt: null,
+              senderRole: 'COACH',
+              athleteReadAt: null,
+              thread: { athleteId: currentDbUserId },
+            },
+    });
+  }
+
   // Filter navigation by authenticated role
   const navLinks = userRole
     ? allNavLinks.filter((link) => link.roles.includes(userRole))
@@ -174,7 +197,7 @@ export async function AppHeader() {
   return (
     <>
       {/* Mobile-only top branding: scrolls away; sticky header remains */}
-      <div data-mobile-top-branding="v1" className="md:hidden px-4 pt-3">
+      <div data-mobile-top-branding="v1" className="md:hidden px-0 pt-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {headerClubBranding.type === 'logo' ? (
@@ -232,9 +255,9 @@ export async function AppHeader() {
         </div>
       </div>
 
-      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-2 md:px-6 md:pt-6">
+      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-0 pt-0 md:px-0 md:pt-0">
         {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
-        <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
+        <Card className="rounded-none bg-[var(--bg-surface)] p-0">
           {/* Mobile (iOS-first): single row header */}
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
@@ -320,9 +343,18 @@ export async function AppHeader() {
                     key={desktopNotificationsLink.href}
                     href={desktopNotificationsLink.href}
                     aria-label="Notifications"
-                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
+                    className={cn(DESKTOP_NAV_LINK_CLASS, "relative justify-center")}
                   >
                     <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
+                    {unreadNotificationsCount > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
+                      />
+                    ) : null}
+                    {unreadNotificationsCount > 0 ? (
+                      <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
+                    ) : null}
                     <span className="sr-only">Notifications</span>
                   </Link>
                 ) : null}

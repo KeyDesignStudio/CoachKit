@@ -202,7 +202,7 @@ function MetricHelpTrigger({
             onOpenMobile(metricId);
           }
         }}
-        className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border-subtle)] text-xs text-[var(--muted)] hover:bg-[var(--bg-surface)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        className="ml-1 inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-[12px] leading-none text-[var(--muted)] hover:text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         aria-label={`Help for ${content.title}`}
       >
         ⓘ

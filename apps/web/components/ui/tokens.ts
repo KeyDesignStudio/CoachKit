@@ -1,30 +1,112 @@
-export const tokens = {
-  spacing: {
+type UiDensity = 'compact' | 'comfortable';
+
+const uiDensity: UiDensity =
+  String(process.env.NEXT_PUBLIC_UI_DENSITY ?? 'compact').toLowerCase() === 'comfortable'
+    ? 'comfortable'
+    : 'compact';
+
+const spacingByDensity = {
+  compact: {
+    // Global Layout
+    screenPadding: 'p-3 md:p-4',
+    dashboardSectionGap: 'space-y-4',
+
+    // Container Internals
+    blockPadding: 'p-3 md:p-4',
+    blockPaddingX: 'px-3 md:px-4',
+    blockPaddingY: 'py-3 md:py-4',
+
+    // Component Stacking
+    blockGapY: 'space-y-3',
+    blockRowGap: 'gap-3',
+    gridGap: 'gap-3 lg:gap-4',
+
+    // Detailed Spacing
+    widgetGap: 'gap-2',
+    fieldGapY: 'space-y-3',
+    tight: 'space-y-1',
+    tinyGap: 'gap-1',
+
+    // Specific container presets
+    elementPadding: 'px-2.5 py-1.5',
+    pill: 'px-2 py-0.5',
+    containerPadding: 'p-2.5',
+  },
+  comfortable: {
     // Global Layout
     screenPadding: 'p-4 md:p-6',
     dashboardSectionGap: 'space-y-6',
-    
+
     // Container Internals
-    blockPadding: 'p-4 md:p-5', 
+    blockPadding: 'p-4 md:p-5',
     blockPaddingX: 'px-4 md:px-5',
     blockPaddingY: 'py-4 md:py-5',
-    
+
     // Component Stacking
-    blockGapY: 'space-y-4',       // Standard gap between significant elements
-    blockRowGap: 'gap-4',         // Horizontal gap for flex items
-    gridGap: 'gap-4 lg:gap-6',    // Standard grid spacing
-    
+    blockGapY: 'space-y-4',
+    blockRowGap: 'gap-4',
+    gridGap: 'gap-4 lg:gap-6',
+
     // Detailed Spacing
-    widgetGap: 'gap-2',           // Tighter gap for widgets/lists
-    fieldGapY: 'space-y-4',       // form field spacing (kept backward compat name)
-    tight: 'space-y-1.5',         // Label + Value
-    tinyGap: 'gap-1',             // Metadata/Icon spacing
-    
+    widgetGap: 'gap-2',
+    fieldGapY: 'space-y-4',
+    tight: 'space-y-1.5',
+    tinyGap: 'gap-1',
+
     // Specific container presets
-    elementPadding: 'px-3 py-2',  // Buttons, Inputs
-    pill: 'px-2 py-0.5',          // Tags, badges
-    containerPadding: 'p-3',      // Small cards
-    
+    elementPadding: 'px-3 py-2',
+    pill: 'px-2 py-0.5',
+    containerPadding: 'p-3',
+  },
+} as const;
+
+const typographyByDensity = {
+  compact: {
+    body: 'text-sm text-[var(--text)] leading-normal',
+    bodySemi: 'text-sm font-semibold text-[var(--text)] leading-normal',
+    bodyBold: 'text-sm font-bold text-[var(--text)] leading-normal',
+    bodyLarge: 'text-base text-[var(--text)] leading-snug',
+    bodyMuted: 'text-sm text-[var(--muted)] leading-normal',
+  },
+  comfortable: {
+    body: 'text-sm text-[var(--text)] leading-relaxed',
+    bodySemi: 'text-sm font-semibold text-[var(--text)] leading-relaxed',
+    bodyBold: 'text-sm font-bold text-[var(--text)] leading-relaxed',
+    bodyLarge: 'text-base text-[var(--text)] leading-relaxed',
+    bodyMuted: 'text-sm text-[var(--muted)] leading-relaxed',
+  },
+} as const;
+
+const spacing = spacingByDensity[uiDensity];
+const typographyDensity = typographyByDensity[uiDensity];
+
+export const tokens = {
+  spacing: {
+    // Global Layout
+    screenPadding: spacing.screenPadding,
+    dashboardSectionGap: spacing.dashboardSectionGap,
+
+    // Container Internals
+    blockPadding: spacing.blockPadding,
+    blockPaddingX: spacing.blockPaddingX,
+    blockPaddingY: spacing.blockPaddingY,
+
+    // Component Stacking
+    blockGapY: spacing.blockGapY, // Standard gap between significant elements
+    blockRowGap: spacing.blockRowGap, // Horizontal gap for flex items
+    gridGap: spacing.gridGap, // Standard grid spacing
+
+    // Detailed Spacing
+    widgetGap: spacing.widgetGap, // Tighter gap for widgets/lists
+    fieldGapY: spacing.fieldGapY, // form field spacing (kept backward compat name)
+    tight: spacing.tight, // Label + Value
+    tinyGap: spacing.tinyGap, // Metadata/Icon spacing
+
+    // Specific container presets
+    elementPadding: spacing.elementPadding, // Buttons, Inputs
+    pill: spacing.pill, // Tags, badges
+    containerPadding: spacing.containerPadding, // Small cards
+
     // Touch targets
     touchTarget: 'min-h-[44px]',
   },
@@ -113,11 +195,11 @@ export const tokens = {
     navLink: 'text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] uppercase tracking-wide transition-colors',
     
     // Body
-    body: 'text-sm text-[var(--text)] leading-relaxed',
-    bodySemi: 'text-sm font-semibold text-[var(--text)] leading-relaxed',
-    bodyBold: 'text-sm font-bold text-[var(--text)] leading-relaxed',
-    bodyLarge: 'text-base text-[var(--text)] leading-relaxed',
-    bodyMuted: 'text-sm text-[var(--muted)] leading-relaxed',
+    body: typographyDensity.body,
+    bodySemi: typographyDensity.bodySemi,
+    bodyBold: typographyDensity.bodyBold,
+    bodyLarge: typographyDensity.bodyLarge,
+    bodyMuted: typographyDensity.bodyMuted,
     
     // Data
     meta: 'text-xs text-[var(--muted)]',
@@ -148,5 +230,8 @@ export const tokens = {
   transition: {
     default: 'transition-all duration-200 ease-in-out',
     fast: 'transition-all duration-100 ease-out',
-  }
+  },
+  system: {
+    uiDensity,
+  },
 } as const;

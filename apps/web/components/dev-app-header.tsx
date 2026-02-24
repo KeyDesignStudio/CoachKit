@@ -139,7 +139,7 @@ export function DevAppHeader() {
   return (
     <>
       {/* Mobile-only top branding: scrolls away; sticky header remains */}
-      <div data-mobile-top-branding="v1" className="md:hidden px-4 pt-3">
+      <div data-mobile-top-branding="v1" className="md:hidden px-0 pt-0">
         <div className="flex items-center justify-between gap-3">
           <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">Your Club</span>
           <Link
@@ -164,8 +164,8 @@ export function DevAppHeader() {
         </div>
       </div>
 
-      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-4 pt-2 md:px-6 md:pt-6">
-        <Card className="rounded-3xl bg-[var(--bg-surface)] p-0">
+      <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-0 pt-0 md:px-0 md:pt-0">
+        <Card className="rounded-none bg-[var(--bg-surface)] p-0">
           {/* Mobile: single-row header */}
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}

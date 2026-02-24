@@ -17,6 +17,21 @@ import { buildAiPlanBuilderSessionTitle } from '../lib/session-title';
 export const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';
 export const APB_SOURCE_PREFIX = 'apb:';
 export const APB_MANUAL_EDIT_TAG = 'APB_MANUAL_EDITED';
+export const APB_SESSION_SOURCE_TAG = 'CK';
+
+function normalizeApbSessionTags(existingTags: string[] | null | undefined): string[] {
+  const tags = Array.isArray(existingTags) ? existingTags : [];
+  const next = new Set<string>();
+  for (const tag of tags) {
+    const value = String(tag ?? '').trim();
+    if (!value) continue;
+    // Legacy cleanup: stop emitting historical AI label for APB sessions.
+    if (value.toUpperCase() === 'AI') continue;
+    next.add(value);
+  }
+  next.add(APB_SESSION_SOURCE_TAG);
+  return Array.from(next);
+}
 
 function clampInt(value: unknown, min: number, max: number, fallback: number) {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
@@ -274,15 +289,22 @@ export async function materialisePublishedAiPlanToCalendar(params: {
         deletedAt: null,
         deletedByUserId: null,
       };
+      const preserveManualEditsButPublish: Prisma.CalendarItemUpdateInput = {
+        ...restoreOnly,
+        planningStatus: 'PUBLISHED',
+        tags: normalizeApbSessionTags(existingTags),
+      };
 
       const fullUpdate: Prisma.CalendarItemUpdateInput = {
         ...restoreOnly,
         ...(canUpdateDate ? { date } : {}),
+        planningStatus: 'PUBLISHED',
         discipline: toCalendarDiscipline(s.discipline),
         subtype: String((s as any)?.type ?? '').trim() || null,
         title,
         plannedDurationMinutes: Math.max(0, Math.round(s.durationMinutes ?? 0)),
         notes: s.notes ?? null,
+        tags: normalizeApbSessionTags(existingTags),
         workoutDetail,
         workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
         attachmentsJson,
@@ -302,7 +324,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           date,
           plannedStartTimeLocal: null,
           origin: APB_CALENDAR_ORIGIN,
-          planningStatus: 'PLANNED',
+          planningStatus: 'PUBLISHED',
           sourceActivityId,
           discipline: toCalendarDiscipline(s.discipline),
           subtype: String((s as any)?.type ?? '').trim() || null,
@@ -311,7 +333,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           plannedDistanceKm: null,
           distanceMeters: null,
           intensityTarget: null,
-          tags: [],
+          tags: [APB_SESSION_SOURCE_TAG],
           equipment: [],
           workoutStructure: (detailParsed.data as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
           notes: s.notes ?? null,
@@ -323,7 +345,7 @@ export async function materialisePublishedAiPlanToCalendar(params: {
           deletedAt: null,
           deletedByUserId: null,
         },
-        update: isManuallyEdited ? restoreOnly : fullUpdate,
+        update: isManuallyEdited ? preserveManualEditsButPublish : fullUpdate,
       });
 
       upsertedCount += 1;

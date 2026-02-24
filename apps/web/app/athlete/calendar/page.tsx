@@ -22,7 +22,6 @@ import { getRangeCompletionSummary, isCompletedCalendarItem } from '@/lib/calend
 import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@/lib/perf/calendar-perf';
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
-import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -82,6 +81,15 @@ function pad2(value: number): string {
 function getMonthGridStartKey(year: number, monthIndex: number): string {
   const firstOfMonth = `${year}-${pad2(monthIndex + 1)}-01`;
   return startOfWeekDayKey(firstOfMonth);
+}
+
+function normalizeLocalTime(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const match = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+  if (!match) return undefined;
+  return `${match[1]}:${match[2]}`;
 }
 
 function resolveCalendarItemTitle(item: CalendarItem): string {
@@ -419,20 +427,25 @@ export default function AthleteCalendarPage() {
       
       try {
         setLoading(true);
+        const title = String(clipboard.title ?? '').trim();
+        const discipline = String(clipboard.discipline ?? '').trim();
+        const workoutDetailRaw = clipboard.workoutDetail ?? clipboard.notes;
+        const workoutDetail =
+          typeof workoutDetailRaw === 'string' && workoutDetailRaw.trim() ? workoutDetailRaw.trim() : undefined;
+
         await request('/api/athlete/calendar-items', {
           method: 'POST',
           data: {
             date: contextData.date,
-            plannedStartTimeLocal: clipboard.plannedStartTimeLocal || undefined,
-            title: clipboard.title,
-            discipline: clipboard.discipline,
-            workoutDetail: clipboard.workoutDetail,
-            notes: clipboard.notes,
+            plannedStartTimeLocal: normalizeLocalTime(clipboard.plannedStartTimeLocal),
+            title: title || (discipline ? `${discipline} workout` : 'Workout'),
+            discipline: discipline || 'OTHER',
+            workoutDetail,
           },
         });
         await loadItems(true);
       } catch(e) {
-         setError('Couldn’t paste session.');
+         setError(e instanceof Error ? e.message : 'Couldn’t paste session.');
       } finally {
          setLoading(false);
       }
@@ -547,9 +560,14 @@ export default function AthleteCalendarPage() {
             </Button>
           </div>
         </div>
+<<<<<<< codex/athlete-calendar-legend-pr3
         <div className="flex justify-end pt-1">
           <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-[var(--muted)]">
             <span className="font-medium text-[var(--text)]">Legend:</span>
+=======
+        <div className="flex min-h-[44px] items-center justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
+>>>>>>> main
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
               Published Plan
@@ -571,10 +589,6 @@ export default function AthleteCalendarPage() {
         {error ? <p className="mt-3 text-sm text-rose-500">{error}</p> : null}
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading calendar...</p> : null}
       </header>
-
-      {goalCountdown && goalCountdown.mode !== 'none' ? (
-        <GoalCountdownCallout goal={goalCountdown} variant="ribbon" />
-      ) : null}
 
       {!userLoading && (!user || user.role !== 'ATHLETE') ? (
         <p className="text-[var(--muted)]">Athlete access required.</p>

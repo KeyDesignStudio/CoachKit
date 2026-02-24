@@ -218,6 +218,24 @@ export async function GET(request: NextRequest) {
       if (!athleteProfile) {
         return { items: [] };
       }
+      const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+      const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
+      const fallbackEventName =
+        (typeof requestContext?.eventName === 'string' && requestContext.eventName.trim()) ||
+        (typeof setupJson.eventName === 'string' && setupJson.eventName.trim()) ||
+        null;
+      const fallbackEventDate =
+        (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
+        (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
+        null;
+      const fallbackStartDate =
+        (typeof requestContext?.blockStartDate === 'string' && requestContext.blockStartDate.trim()) ||
+        (typeof requestContext?.startDate === 'string' && requestContext.startDate.trim()) ||
+        (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
+        (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
+        null;
+      const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
+      const profileEventName = typeof athleteProfile.eventName === 'string' ? athleteProfile.eventName.trim() : '';
 
       const preparedItems = items.map((item: any) => {
         const completions = (item.completedActivities ?? []) as Array<{
@@ -338,16 +356,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
-      const fallbackEventDate =
-        (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
-        (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
-        null;
-      const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
-
       const goalCountdown = getGoalCountdown({
-        eventName: athleteProfile.eventName ?? 'Goal event',
+        eventName: profileEventName || fallbackEventName || 'Goal event',
         eventDate: athleteProfile.eventDate ?? fallbackEventDate,
+        blockStartDate: fallbackStartDate,
         timelineWeeks:
           athleteProfile.timelineWeeks ??
           (Number.isFinite(fallbackWeeksToEvent) && fallbackWeeksToEvent > 0 ? fallbackWeeksToEvent : null),

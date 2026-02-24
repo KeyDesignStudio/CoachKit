@@ -112,16 +112,16 @@ export function WeatherTooltip({ weather, children, sideOffsetPx = 10 }: Weather
             // pointer-events none ensures we never block clicks into workout pills.
             className={cn(
               'pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full',
-              'px-3 py-2 rounded-md border border-[var(--border-subtle)]',
-              'bg-[var(--bg-card)] text-[var(--text)] shadow-lg'
+              'px-3 py-2 rounded-md border border-white/20',
+              'bg-black text-white shadow-lg'
             )}
             style={{ left: pos.x, top: pos.y }}
           >
             <div className="flex items-center gap-2">
-              <Icon name={WEATHER_ICON_NAME[weather!.icon]} size="sm" className="text-[16px]" aria-hidden />
+              <Icon name={WEATHER_ICON_NAME[weather!.icon]} size="sm" className="text-[16px] text-white" aria-hidden />
               <div className="flex flex-col">
                 <div className="text-xs font-medium">Max: {Math.round(weather!.maxTempC)}°C</div>
-                <div className="text-[11px] text-[var(--muted)]">
+                <div className="text-[11px] text-white/80">
                   Sunrise {weather!.sunriseLocal} · Sunset {weather!.sunsetLocal}
                 </div>
               </div>

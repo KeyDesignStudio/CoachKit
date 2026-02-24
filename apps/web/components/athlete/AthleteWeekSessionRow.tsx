@@ -129,6 +129,7 @@ export function AthleteWeekSessionRow({
 
   const pain = item.latestCompletedActivity?.painFlag ?? false;
   const statusBar = getStatusBarConfig({ item, now: effectiveNow, timeZone });
+  const apbStripBgClassName = 'bg-[#eef1f5]';
 
   const isStacked = variant === 'stacked';
 
@@ -201,10 +202,11 @@ export function AthleteWeekSessionRow({
                   'border-sky-500/40 text-sky-700 bg-sky-50',
                   'dark:border-sky-400/30 dark:text-sky-200 dark:bg-sky-900/20'
                 )}
-                title="AI Plan Builder session"
-                aria-label="AI Plan Builder session"
+                title="CoachKit session"
+                aria-label="CoachKit session"
               >
-                AI
+                <Icon name="planned" size="xs" className="mr-1 text-[11px] leading-none" aria-hidden />
+                CK
               </span>
             ) : null}
           </p>
@@ -263,18 +265,18 @@ export function AthleteWeekSessionRow({
         </div>
       )}
 
-      {statusIndicatorVariant === 'bar' && statusBar.showBar ? (
+      {statusIndicatorVariant === 'bar' && (statusBar.showBar || isAiPlanBuilder) ? (
         <div
           className={cn(
             'absolute right-0 top-0 bottom-0 w-2 md:w-4',
-            statusBar.bgClassName
+            isAiPlanBuilder ? apbStripBgClassName : statusBar.bgClassName
           )}
           title={statusBar.title ?? undefined}
           aria-hidden
         >
           <div className="hidden md:flex h-full w-full items-center justify-center">
             <Icon
-              name={statusBar.iconName}
+              name={isAiPlanBuilder ? 'planned' : statusBar.iconName}
               size="xs"
               className={cn('text-black leading-none scale-[1.035] origin-center')}
               aria-hidden

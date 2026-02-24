@@ -4,7 +4,7 @@ export const TRAINING_REQUEST_INIT_PREFIX = 'Training Request: Please complete y
 export const TRAINING_REQUEST_REMINDER_PREFIX = 'Reminder: your Training Request is still pending.';
 export const TRAINING_REQUEST_FIRST_REMINDER_HOURS = 24;
 export const TRAINING_REQUEST_REPEAT_REMINDER_HOURS = 72;
-export const ATHLETE_TRAINING_REQUEST_PATH = '/athlete/intake';
+export const ATHLETE_TRAINING_REQUEST_PATH = '/athlete/training-request';
 
 function normalizeIntakeUrl(intakeUrl?: string): string {
   const trimmed = String(intakeUrl ?? '').trim();

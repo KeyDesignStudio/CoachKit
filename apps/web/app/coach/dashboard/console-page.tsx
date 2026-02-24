@@ -22,7 +22,7 @@ import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 
-type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'CUSTOM';
+type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'LAST_60' | 'LAST_90' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM';
 type InboxPreset = 'ALL' | 'PAIN' | 'COMMENTS' | 'SKIPPED' | 'AWAITING_REVIEW';
 
 type DashboardAthlete = {
@@ -119,7 +119,22 @@ function getDateRangeFromPreset(preset: TimeRangePreset, coachTimeZone: string, 
     return { from: customFrom || todayKey, to: customTo || todayKey };
   }
 
-  const days = preset === 'LAST_14' ? 14 : preset === 'LAST_30' ? 30 : 7;
+  if (preset === 'THIS_MONTH') {
+    const from = `${todayKey.slice(0, 7)}-01`;
+    return { from, to: todayKey };
+  }
+
+  if (preset === 'LAST_MONTH') {
+    const year = Number(todayKey.slice(0, 4));
+    const month = Number(todayKey.slice(5, 7));
+    const currentMonthStartUtc = new Date(Date.UTC(year, month - 1, 1));
+    const lastMonthStartUtc = new Date(Date.UTC(year, month - 2, 1));
+    const lastMonthEndUtc = addDays(currentMonthStartUtc, -1);
+    return { from: toDateInput(lastMonthStartUtc), to: toDateInput(lastMonthEndUtc) };
+  }
+
+  const days =
+    preset === 'LAST_90' ? 90 : preset === 'LAST_60' ? 60 : preset === 'LAST_30' ? 30 : preset === 'LAST_14' ? 14 : 7;
   const from = toDateInput(addDays(todayUtcMidnight, -(days - 1)));
   const to = toDateInput(todayUtcMidnight);
   return { from, to };
@@ -199,17 +214,18 @@ export default function CoachDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
-  const welcomeMessage = useMemo(
+  const fallbackWelcomeMessage = useMemo(
     () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
     [user?.name, user?.timezone]
   );
+  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
   const styledWelcome = useMemo(() => {
     const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
     if (!match) return { name: '', rest: welcomeMessage };
     return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
   }, [welcomeMessage]);
 
-  const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_7');
+  const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
@@ -375,6 +391,38 @@ export default function CoachDashboardConsolePage() {
     [jumpToInbox]
   );
 
+  const coachGreetingContext = useMemo(() => {
+    const completed = Math.max(0, Number(data?.kpis?.workoutsCompleted ?? 0));
+    const skipped = Math.max(0, Number(data?.kpis?.workoutsSkipped ?? 0));
+    const nextGoal = data?.selectedGoalCountdown?.goalCountdown?.eventName
+      ? String(data.selectedGoalCountdown.goalCountdown.eventName)
+      : '';
+    return [
+      `squad completed workouts: ${completed}`,
+      `squad missed workouts: ${skipped}`,
+      nextGoal ? `nearest athlete event: ${nextGoal}` : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+  }, [data?.kpis?.workoutsCompleted, data?.kpis?.workoutsSkipped, data?.selectedGoalCountdown?.goalCountdown?.eventName]);
+
+  useEffect(() => {
+    setWelcomeMessage(fallbackWelcomeMessage);
+  }, [fallbackWelcomeMessage]);
+
+  useEffect(() => {
+    if (!user?.userId || user.role !== 'COACH') return;
+    const qs = new URLSearchParams();
+    if (coachGreetingContext) qs.set('context', coachGreetingContext);
+    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
+      .then((resp) => {
+        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
+      })
+      .catch(() => {
+        setWelcomeMessage(fallbackWelcomeMessage);
+      });
+  }, [coachGreetingContext, fallbackWelcomeMessage, request, user?.role, user?.userId]);
+
   if (userLoading || (!user && !userError)) {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
@@ -503,9 +551,13 @@ export default function CoachDashboardConsolePage() {
                       value={timeRange}
                       onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
                     >
-                      <option value="LAST_7">Last 7 days</option>
-                      <option value="LAST_14">Last 14 days</option>
                       <option value="LAST_30">Last 30 days</option>
+                      <option value="LAST_60">Last 60 days</option>
+                      <option value="LAST_90">Last 90 days</option>
+                      <option value="THIS_MONTH">This month</option>
+                      <option value="LAST_MONTH">Last month</option>
+                      <option value="LAST_14">Last 14 days</option>
+                      <option value="LAST_7">Last 7 days</option>
                       <option value="CUSTOM">Custom</option>
                     </SelectField>
 
@@ -661,7 +713,13 @@ export default function CoachDashboardConsolePage() {
           <div aria-hidden="true" />
 
           <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox">
-            <Block title="Event countdown" padding={false} showHeaderDivider={false} className="border-[#cad7eb] bg-[#e9eef8]/85">
+            <Block
+              title="Event countdown"
+              padding={false}
+              showHeaderDivider={false}
+              className="border"
+              style={{ borderColor: '#cad7eb', backgroundColor: 'rgba(233, 238, 248, 0.85)' }}
+            >
               {visibleGoalCountdowns.length === 0 ? (
                 <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
                   No athlete event dates available for this selection.

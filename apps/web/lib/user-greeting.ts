@@ -1,6 +1,6 @@
-type TimeOfDay = 'morning' | 'afternoon' | 'evening';
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening';
 
-function getTimeOfDay(timeZone?: string | null): TimeOfDay {
+export function getTimeOfDay(timeZone?: string | null): TimeOfDay {
   const formatter = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     hour12: false,
@@ -18,49 +18,34 @@ function getTimeOfDay(timeZone?: string | null): TimeOfDay {
   return 'evening';
 }
 
-function getFirstName(name?: string | null): string {
+export function getFirstName(name?: string | null): string {
   const trimmed = String(name ?? '').trim();
   if (!trimmed) return 'there';
   return trimmed.split(/\s+/)[0] || 'there';
 }
 
 const MORNING_TEMPLATES = [
-  "G'day {firstName}. Hope you're ready to make this morning count",
-  "G'day {firstName}. Hope you're starting the morning strong",
-  "G'day {firstName}. Hope this morning sets the tone",
-  "G'day {firstName}. Hope you're feeling fresh this morning",
-  "G'day {firstName}. Hope this morning builds momentum",
-  "G'day {firstName}. Hope you're stepping into the morning with purpose",
-  "G'day {firstName}. Hope this morning moves you forward",
-  "G'day {firstName}. Hope you're focused and ready this morning",
-  "G'day {firstName}. Hope this morning starts with intent",
-  "G'day {firstName}. Hope you're owning the morning",
+  "G'day {firstName}. Start with calm focus this morning and your body and mind will thank you all day.",
+  "G'day {firstName}. A steady session and a steady mind this morning can shape a strong day ahead.",
+  "G'day {firstName}. Progress today comes from simple wins: breathe well, move well, recover well.",
+  "G'day {firstName}. This morning is a chance to build confidence through consistent, healthy effort.",
+  "G'day {firstName}. Begin with intent this morning; small disciplined choices become big results.",
 ];
 
 const AFTERNOON_TEMPLATES = [
-  "G'day {firstName}. Hope your afternoon's building well",
-  "G'day {firstName}. Hope you're keeping the momentum this afternoon",
-  "G'day {firstName}. Hope this afternoon moves the needle",
-  "G'day {firstName}. Hope you're staying sharp this afternoon",
-  "G'day {firstName}. Hope your afternoon's productive and focused",
-  "G'day {firstName}. Hope you're finishing strong this afternoon",
-  "G'day {firstName}. Hope this afternoon brings solid progress",
-  "G'day {firstName}. Hope you're staying consistent this afternoon",
-  "G'day {firstName}. Hope your afternoon's lining up well",
-  "G'day {firstName}. Hope you're making this afternoon count",
+  "G'day {firstName}. Keep the afternoon simple: quality effort, good posture, and steady breathing.",
+  "G'day {firstName}. Consistency this afternoon builds both physical durability and mental resilience.",
+  "G'day {firstName}. If energy dips this afternoon, reduce intensity but protect your routine.",
+  "G'day {firstName}. Strong afternoons are built on smart pacing, not forcing every rep.",
+  "G'day {firstName}. Keep momentum this afternoon with focused work and deliberate recovery choices.",
 ];
 
 const EVENING_TEMPLATES = [
-  "G'day {firstName}. Hope you're wrapping up the evening strong",
-  "G'day {firstName}. Hope this evening feels productive",
-  "G'day {firstName}. Hope you're proud of your effort this evening",
-  "G'day {firstName}. Hope this evening helps you reset well",
-  "G'day {firstName}. Hope you're finishing the day with intent",
-  "G'day {firstName}. Hope this evening feels like progress",
-  "G'day {firstName}. Hope you're closing out the day strong",
-  "G'day {firstName}. Hope this evening gives you a solid win",
-  "G'day {firstName}. Hope you're winding down with purpose this evening",
-  "G'day {firstName}. Hope this evening sets you up for tomorrow",
+  "G'day {firstName}. This evening, a calm finish and good recovery habits set up tomorrow's performance.",
+  "G'day {firstName}. Be proud of the effort today; quality rest tonight is part of elite preparation.",
+  "G'day {firstName}. Use tonight to reset: hydrate, breathe, and let your body adapt to today's work.",
+  "G'day {firstName}. Evening discipline matters too; recovery is where training becomes progress.",
+  "G'day {firstName}. Finish the day with purpose and give your mind and body space to recharge.",
 ];
 
 function templatePoolForTimeOfDay(partOfDay: TimeOfDay): string[] {
@@ -96,4 +81,55 @@ export function getWarmWelcomeMessage(params: { name?: string | null; timeZone?:
   const templates = templatePoolForTimeOfDay(partOfDay);
   const template = templates[stableTemplateIndex({ max: templates.length, firstName, timeZone: params.timeZone, partOfDay })] ?? templates[0];
   return template.replaceAll('{firstName}', firstName);
+}
+
+export function sanitizeAiGreeting(params: {
+  rawGreeting: string;
+  firstName: string;
+  timeOfDay: TimeOfDay;
+  completedToday?: number;
+  scheduledToday?: number;
+  role?: string;
+}): string {
+  const suffixByTime: Record<TimeOfDay, string> = {
+    morning: 'this morning',
+    afternoon: 'this afternoon',
+    evening: 'this evening',
+  };
+
+  const cleaned = String(params.rawGreeting ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim();
+
+  if (!cleaned) {
+    return getWarmWelcomeMessage({ name: params.firstName });
+  }
+
+  const normalizedPrefix = `G'day ${params.firstName}.`;
+  let body = cleaned.replace(/^g['’]day\b[^.]*\.\s*/i, '');
+  body = body.replace(/^[-:,. ]+/, '').trim();
+  if (!body) body = `Hope you're taking care of your body and mind ${suffixByTime[params.timeOfDay]}.`;
+
+  // Fix merged sentence boundaries like "...todayrest..." from model output.
+  body = body.replace(/([a-z])([A-Z][a-z])/g, '$1. $2');
+
+  const withTimeAnchor = body.toLowerCase().includes('morning') || body.toLowerCase().includes('afternoon') || body.toLowerCase().includes('evening')
+    ? body
+    : `${body} ${suffixByTime[params.timeOfDay]}.`;
+
+  let finalBody = withTimeAnchor.trim();
+  if (!/[.!?]$/.test(finalBody)) finalBody = `${finalBody}.`;
+
+  const completedToday = Math.max(0, Number(params.completedToday ?? 0));
+  const scheduledToday = Math.max(0, Number(params.scheduledToday ?? 0));
+  const role = String(params.role ?? '').toLowerCase();
+  const mentionsWorkoutToday =
+    /\b(session|sessions|workout|workouts|training)\b/i.test(finalBody) &&
+    /\btoday|tonight|this morning|this afternoon|this evening\b/i.test(finalBody);
+  if (role === 'athlete' && completedToday === 0 && scheduledToday === 0 && mentionsWorkoutToday) {
+    return getWarmWelcomeMessage({ name: params.firstName });
+  }
+
+  return `${normalizedPrefix} ${finalBody}`.slice(0, 220);
 }

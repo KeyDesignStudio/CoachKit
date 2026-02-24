@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClientError, useApi } from '@/components/api-client';
 import { Block } from '@/components/ui/Block';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -82,6 +83,8 @@ type ProgressOverlayState = {
   progress: number;
   etaSeconds: number | null;
   overdueSeconds: number;
+  detailLine: string | null;
+  isEstimated: boolean;
 };
 
 type ChangeSummaryState = {
@@ -612,6 +615,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const hasAutoSyncedRequestRef = useRef(false);
 
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<null | 'unpublish' | 'delete'>(null);
   const [error, setError] = useState<string | null>(null);
   const [constraintErrors, setConstraintErrors] = useState<string[]>([]);
   const [info, setInfo] = useState<string | null>(null);
@@ -1298,13 +1302,20 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     const expectedSeconds = Math.max(4, params.expectedSeconds);
     const startedAt = Date.now();
 
-    setProgressOverlay({ title: params.title, progress: 6, etaSeconds: expectedSeconds, overdueSeconds: 0 });
+    setProgressOverlay({
+      title: params.title,
+      progress: 12,
+      etaSeconds: expectedSeconds,
+      overdueSeconds: 0,
+      detailLine: null,
+      isEstimated: true,
+    });
     if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
     progressOverlayTimerRef.current = setInterval(() => {
       const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
       const overdueSeconds = Math.max(0, elapsedSec - expectedSeconds);
-      const inRangeProgress = Math.max(6, Math.round(Math.min(92, (elapsedSec / expectedSeconds) * 92)));
-      const overdueProgress = Math.min(99, 92 + Math.floor(overdueSeconds / 3));
+      const inRangeProgress = Math.max(12, Math.round(Math.min(86, 12 + (elapsedSec / expectedSeconds) * 74)));
+      const overdueProgress = Math.min(94, 86 + Math.floor(Math.log2(overdueSeconds + 1) * 2));
       setProgressOverlay((prev) =>
         prev
           ? {
@@ -1312,6 +1323,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               progress: overdueSeconds > 0 ? overdueProgress : inRangeProgress,
               etaSeconds: overdueSeconds > 0 ? null : Math.max(1, expectedSeconds - elapsedSec),
               overdueSeconds,
+              detailLine:
+                overdueSeconds > 0
+                  ? `Still running… elapsed ${elapsedSec}s`
+                  : `Elapsed ${elapsedSec}s`,
             }
           : prev
       );
@@ -1326,8 +1341,47 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       return;
     }
 
-    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0, overdueSeconds: 0 } : prev));
+    setProgressOverlay((prev) => (prev ? { ...prev, progress: 100, etaSeconds: 0, overdueSeconds: 0, detailLine: null } : prev));
     setTimeout(() => setProgressOverlay(null), 350);
+  }, []);
+
+  const startCountProgressOverlay = useCallback((params: { title: string; total: number }) => {
+    if (progressOverlayTimerRef.current) clearInterval(progressOverlayTimerRef.current);
+    progressOverlayTimerRef.current = null;
+    const total = Math.max(1, params.total);
+    setProgressOverlay({
+      title: params.title,
+      progress: 2,
+      etaSeconds: null,
+      overdueSeconds: 0,
+      detailLine: `Completed 0/${total} sessions`,
+      isEstimated: false,
+    });
+  }, []);
+
+  const updateCountProgressOverlay = useCallback((params: { completed: number; total: number; startedAtMs: number; activeSession?: number | null }) => {
+    const total = Math.max(1, params.total);
+    const completed = Math.max(0, Math.min(total, params.completed));
+    const rawProgress = Math.round((completed / total) * 100);
+    const progress = completed >= total ? 100 : Math.min(95, rawProgress);
+    const elapsedSec = Math.max(0, (Date.now() - params.startedAtMs) / 1000);
+    const activeSession = Math.max(1, Math.min(total, Math.round(params.activeSession ?? completed + 1)));
+    const detailLine =
+      completed >= total
+        ? `Completed ${total}/${total} sessions`
+        : `Completed ${completed}/${total} sessions · working on ${activeSession}/${total}`;
+    setProgressOverlay((prev) =>
+      prev
+        ? {
+            ...prev,
+            progress,
+            etaSeconds: null,
+            overdueSeconds: Math.round(elapsedSec),
+            detailLine,
+            isEstimated: false,
+          }
+        : prev
+    );
   }, []);
 
   useEffect(() => {
@@ -1509,14 +1563,21 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, request]
   );
 
-  const loadAllDetailsForWeek = useCallback(async (sessions: any[], successMessage: string) => {
+  const loadAllDetailsForWeek = useCallback(async (sessions: any[], successMessage: string, progressTitle: string) => {
     if (!sessions.length) return;
     setBusy('load-week-details');
     setError(null);
     setInfo(null);
+    const total = sessions.length;
+    const startedAtMs = Date.now();
+    startCountProgressOverlay({ title: progressTitle, total });
     try {
+      let completed = 0;
       for (const session of sessions) {
+        updateCountProgressOverlay({ completed, total, startedAtMs, activeSession: completed + 1 });
         await loadSessionDetail(String(session.id));
+        completed += 1;
+        updateCountProgressOverlay({ completed, total, startedAtMs, activeSession: completed + 1 });
       }
       setInfo(successMessage);
     } catch (e) {
@@ -1525,41 +1586,37 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     } finally {
       setBusy(null);
     }
-  }, [loadSessionDetail]);
+  }, [loadSessionDetail, startCountProgressOverlay, updateCountProgressOverlay]);
 
   const loadDetailsForScope = useCallback(async () => {
     const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
     const sessionsForScope = detailGenerationScope === 'entire-plan' ? allSessions : detailGenerationWeek?.sessions ?? [];
     if (!sessionsForScope.length) return;
     const isEntirePlan = detailGenerationScope === 'entire-plan';
-    startProgressOverlay({
-      title: isEntirePlan ? 'Generating details for entire plan...' : 'Generating details for selected week...',
-      expectedSeconds: Math.max(8, Math.min(120, Math.round(sessionsForScope.length * 2.2))),
-    });
     try {
-      await loadAllDetailsForWeek(sessionsForScope, isEntirePlan ? 'Session details generated for the entire plan.' : 'Session details generated for this week.');
+      await loadAllDetailsForWeek(
+        sessionsForScope,
+        isEntirePlan ? 'Session details generated for the entire plan.' : 'Session details generated for this week.',
+        isEntirePlan ? 'Generating details for entire plan...' : 'Generating details for selected week...'
+      );
       stopProgressOverlay(true);
     } catch {
       stopProgressOverlay(false);
       throw new Error('Failed to generate session details.');
     }
-  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek, startProgressOverlay, stopProgressOverlay]);
+  }, [detailGenerationScope, detailGenerationWeek?.sessions, draftPlanLatest?.sessions, loadAllDetailsForWeek, stopProgressOverlay]);
 
   const generateDetailsForEntirePlan = useCallback(async () => {
     const allSessions = Array.isArray(draftPlanLatest?.sessions) ? draftPlanLatest.sessions : [];
     if (!allSessions.length) return;
-    startProgressOverlay({
-      title: 'Generating details for entire plan...',
-      expectedSeconds: Math.max(8, Math.min(120, Math.round(allSessions.length * 2.2))),
-    });
     try {
-      await loadAllDetailsForWeek(allSessions, 'Session details generated for the entire plan.');
+      await loadAllDetailsForWeek(allSessions, 'Session details generated for the entire plan.', 'Generating details for entire plan...');
       stopProgressOverlay(true);
     } catch {
       stopProgressOverlay(false);
       throw new Error('Failed to generate session details for the entire plan.');
     }
-  }, [draftPlanLatest?.sessions, loadAllDetailsForWeek, startProgressOverlay, stopProgressOverlay]);
+  }, [draftPlanLatest?.sessions, loadAllDetailsForWeek, stopProgressOverlay]);
 
   const openSessionEditor = useCallback(
     async (session: any) => {
@@ -2210,13 +2267,36 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [athleteId, draftPlanLatest?.id, fetchPublishStatus, publishGuard.canPublish, publishGuard.reason, request]);
 
+  const unpublishPlan = useCallback(async () => {
+    const draftPlanId = String(draftPlanLatest?.id ?? '');
+    if (!draftPlanId) return;
+
+    setBusy('publish-plan');
+    setError(null);
+    setInfo(null);
+    try {
+      const data = await request<{ wasPublished: boolean; softDeletedCalendarItems: number; draftPlan: any }>(
+        `/api/coach/athletes/${athleteId}/ai-plan-builder/draft-plan/unpublish`,
+        {
+          method: 'POST',
+          data: { aiPlanDraftId: draftPlanId },
+        }
+      );
+      setDraftPlanLatest(data.draftPlan ?? draftPlanLatest ?? null);
+      await fetchPublishStatus(draftPlanId);
+      setInfo(
+        `Plan unpublished. ${Number(data.softDeletedCalendarItems ?? 0)} calendar session${Number(data.softDeletedCalendarItems ?? 0) === 1 ? '' : 's'} removed.`
+      );
+    } catch (e) {
+      setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to unpublish plan.');
+    } finally {
+      setBusy(null);
+    }
+  }, [athleteId, draftPlanLatest, fetchPublishStatus, request]);
+
   const deletePublishedPlan = useCallback(async () => {
     const draftPlanId = String(draftPlanLatest?.id ?? '');
     if (!draftPlanId) return;
-    const confirmed = window.confirm(
-      'Delete this plan? This removes the draft and deletes all published AI plan sessions from the calendars for this athlete.'
-    );
-    if (!confirmed) return;
 
     setBusy('delete-plan');
     setError(null);
@@ -2281,19 +2361,22 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
           <div className="w-[min(560px,90vw)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-lg">
             <div className="text-sm font-medium">{progressOverlay.title}</div>
             <div className="mt-1 text-xs text-[var(--fg-muted)]">
-              {progressOverlay.overdueSeconds > 0
-                ? `Taking longer than expected (+${progressOverlay.overdueSeconds}s)`
-                : progressOverlay.etaSeconds != null
-                  ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
-                  : 'Estimating...'}
+              {progressOverlay.isEstimated
+                ? progressOverlay.overdueSeconds > 0
+                  ? `Still generating… elapsed +${progressOverlay.overdueSeconds}s beyond estimate`
+                  : progressOverlay.etaSeconds != null
+                    ? `Estimated remaining: ${Math.max(0, progressOverlay.etaSeconds)}s`
+                    : 'Estimating...'
+                : `Elapsed: ${Math.max(0, progressOverlay.overdueSeconds)}s`}
             </div>
+            {progressOverlay.detailLine ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{progressOverlay.detailLine}</div> : null}
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
               <div
                 className="h-full rounded-full bg-[var(--primary)] transition-all duration-300"
                 style={{ width: `${Math.max(4, Math.min(100, progressOverlay.progress))}%` }}
               />
             </div>
-            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{Math.max(1, Math.min(100, Math.round(progressOverlay.progress)))}%</div>
+            <div className="mt-2 text-right text-xs text-[var(--fg-muted)]">{progressOverlay.isEstimated ? 'Estimate only' : 'Live progress'}</div>
           </div>
         </div>
       ) : null}
@@ -3448,6 +3531,11 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             Current status: <strong>{isPublished ? 'Published' : hasDraft ? 'Draft (not visible to athlete)' : 'No draft yet'}</strong>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isPublished ? (
+              <Button size="sm" variant="secondary" disabled={busy != null || !hasDraft} onClick={() => setConfirmAction('unpublish')}>
+                Unpublish plan
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="secondary"
@@ -3464,13 +3552,37 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
               variant="secondary"
               className="text-red-700 hover:bg-red-50"
               disabled={busy != null || !hasDraft}
-              onClick={() => void deletePublishedPlan()}
+              onClick={() => setConfirmAction('delete')}
             >
               Delete plan
             </Button>
           </div>
         </div>
       </Block>
+
+      <ConfirmModal
+        isOpen={confirmAction != null}
+        title={confirmAction === 'delete' ? 'Delete plan?' : 'Unpublish plan?'}
+        message={
+          confirmAction === 'delete'
+            ? 'This removes the draft and deletes all published AI plan sessions from the calendars for this athlete.'
+            : 'Athlete-visible APB sessions will be removed from the calendar. You can revise the draft before republishing.'
+        }
+        confirmLabel={confirmAction === 'delete' ? 'Delete plan' : 'Unpublish'}
+        cancelLabel="Cancel"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const action = confirmAction;
+          setConfirmAction(null);
+          if (action === 'delete') {
+            void deletePublishedPlan();
+            return;
+          }
+          if (action === 'unpublish') {
+            void unpublishPlan();
+          }
+        }}
+      />
     </div>
   );
 }

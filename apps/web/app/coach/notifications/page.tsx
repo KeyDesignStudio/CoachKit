@@ -1,282 +1,217 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
 import { Block } from '@/components/ui/Block';
-import { BlockTitle } from '@/components/ui/BlockTitle';
+import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 
-type MessageThreadSummary = {
+type MailboxItem = {
+  id: string;
   threadId: string;
-  athlete: { id: string; name: string | null };
-  lastMessagePreview: string;
-  lastMessageAt: string | null;
-  unreadCountForCoach: number;
+  createdAt: string;
+  direction: 'INBOX' | 'SENT';
+  subject: string;
+  body: string;
+  counterpartName: string;
+  counterpartId: string;
 };
 
-type ThreadMessagesResponse = {
-  threadId: string;
-  messages: Array<{
-    id: string;
-    body: string;
-    createdAt: string;
-    senderRole: 'COACH' | 'ATHLETE';
-    senderUserId: string;
-  }>;
+type Recipient = {
+  id: string;
+  name: string;
+  type: 'COACH' | 'ATHLETE' | 'ALL_SQUAD';
 };
 
-function renderMessageBodyWithLinks(body: string, isCoach: boolean) {
-  const parts = String(body ?? '').split(/(https?:\/\/[^\s]+)/g);
-  return (
-    <>
-      {parts.map((part, idx) => {
-        const isUrl = /^https?:\/\/[^\s]+$/.test(part);
-        if (!isUrl) return <span key={`${idx}:${part}`}>{part}</span>;
-        return (
-          <a
-            key={`${idx}:${part}`}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn('underline underline-offset-2 break-all', isCoach ? 'text-white' : 'text-blue-700 dark:text-blue-300')}
-          >
-            {part}
-          </a>
-        );
-      })}
-    </>
-  );
-}
+const SUBJECT_LIMIT = 300;
+const BODY_LIMIT = 3000;
 
 export default function CoachNotificationsPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
   const searchParams = useSearchParams();
 
-  const [threads, setThreads] = useState<MessageThreadSummary[]>([]);
-  const [threadsLoading, setThreadsLoading] = useState(false);
-  const [threadsError, setThreadsError] = useState('');
+  const [mailbox, setMailbox] = useState<MailboxItem[]>([]);
+  const [mailboxLoading, setMailboxLoading] = useState(false);
+  const [mailboxError, setMailboxError] = useState('');
 
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messagesError, setMessagesError] = useState('');
-  const [messages, setMessages] = useState<ThreadMessagesResponse['messages']>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const [recipientDropdownOpen, setRecipientDropdownOpen] = useState(false);
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
 
+  const [activeTab, setActiveTab] = useState<'INBOX' | 'SENT'>('INBOX');
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [subject, setSubject] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState('');
 
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  const selectedThreadRef = useRef<HTMLButtonElement | null>(null);
-
-  // Deep-link handling: ?athleteId=...
-  useEffect(() => {
-    const athleteId = searchParams.get('athleteId');
-    if (!athleteId || threadsLoading || !user || user.role !== 'COACH') return;
-
-    // Check if we already have the thread
-    const existing = threads.find((t) => t.athlete.id === athleteId);
-    if (existing) {
-      if (selectedThreadId !== existing.threadId) {
-        setSelectedThreadId(existing.threadId);
-        // Focus composer after a short delay to allow render
-        setTimeout(() => composerRef.current?.focus(), 100);
-      }
-      return;
-    }
-
-    // Not found? Create/Ensure thread
-    const ensureThread = async () => {
-       try {
-         const res = await request<{ threadId: string }>('/api/messages/threads', {
-           method: 'POST',
-           body: JSON.stringify({ athleteId }),
-         });
-         // Reload threads to pull it in, select it
-         await loadThreads(true);
-         setSelectedThreadId(res.threadId);
-         setTimeout(() => composerRef.current?.focus(), 100);
-       } catch (err) {
-         console.error('Failed to ensure thread', err);
-       }
-    };
-    
-    // Safety check: Only run if we actually have loaded threads (length > 0) or if we tried and got empty.
-    // If threads haven't loaded yet (threadsLoading was false but threads is empty, implies initial load hasn't happened or empty list).
-    // Better logic: Wait for initial loadThreads to complete.
-    // We can rely on `loadThreads` being called by the next useEffect.
-    // But we need to know if we *have* loaded.
-    // Let's add a `loaded` state.
-    // Simplifying: Just let the user click if it doesn't auto-load, but we want auto-load.
-    
-    // We can add `const [initialLoadDone, setInitialLoadDone] = useState(false);`
-  }, [searchParams, threads, threadsLoading, user]); // Note: dependency on threads means it re-runs when threads change, which is good.
-
-  // Mark threads loaded
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
-
-  const sortedThreads = useMemo(() => {
-    const rows = [...threads];
-    rows.sort((a, b) => {
-      const au = a.unreadCountForCoach ?? 0;
-      const bu = b.unreadCountForCoach ?? 0;
-      if (au !== bu) return bu - au;
-      const at = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
-      const bt = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
-      return bt - at;
-    });
-    return rows;
-  }, [threads]);
-
-  const selectedThread = useMemo(() => {
-    if (!selectedThreadId) return null;
-    return threads.find((t) => t.threadId === selectedThreadId) ?? null;
-  }, [selectedThreadId, threads]);
-
-  const loadThreads = useCallback(
+  const loadMailbox = useCallback(
     async (bypassCache = false) => {
       if (!user?.userId || user.role !== 'COACH') return;
-
-      setThreadsLoading(true);
-      setThreadsError('');
-
-      const qs = new URLSearchParams();
-      if (bypassCache) qs.set('t', String(Date.now()));
-
+      setMailboxLoading(true);
+      setMailboxError('');
       try {
-        const resp = await request<MessageThreadSummary[]>(
-          `/api/messages/threads${qs.toString() ? `?${qs.toString()}` : ''}`,
-          bypassCache ? { cache: 'no-store' } : undefined
-        );
-        setThreads(resp);
-        setInitialLoadDone(true);
+        const qs = new URLSearchParams();
+        if (bypassCache) qs.set('t', String(Date.now()));
+        const res = await request<{ items: MailboxItem[] }>(`/api/messages/mailbox${qs.toString() ? `?${qs.toString()}` : ''}`);
+        setMailbox(Array.isArray(res?.items) ? res.items : []);
       } catch (err) {
-        setThreadsError(err instanceof Error ? err.message : 'Failed to load notifications.');
+        setMailboxError(err instanceof Error ? err.message : 'Failed to load mailbox.');
+        setMailbox([]);
       } finally {
-        setThreadsLoading(false);
+        setMailboxLoading(false);
       }
     },
     [request, user?.role, user?.userId]
   );
-  
-  // Revised Deep-link handling with load check
-  useEffect(() => {
-    const athleteId = searchParams.get('athleteId');
-    if (!athleteId || !initialLoadDone || !user || user.role !== 'COACH') return;
 
-    const existing = threads.find((t) => t.athlete.id === athleteId);
-    if (existing) {
-      if (selectedThreadId !== existing.threadId) {
-        setSelectedThreadId(existing.threadId);
-        setTimeout(() => composerRef.current?.focus(), 150);
+  const loadRecipients = useCallback(async () => {
+    if (!user?.userId || user.role !== 'COACH') return;
+    setRecipientsLoading(true);
+    try {
+      const res = await request<{ recipients: Recipient[] }>('/api/messages/recipients', { cache: 'no-store' });
+      const rows = Array.isArray(res?.recipients) ? res.recipients : [];
+      setRecipients(rows);
+
+      const deepLinkedAthleteId = searchParams.get('athleteId');
+      if (deepLinkedAthleteId && rows.some((row) => row.id === deepLinkedAthleteId)) {
+        setSelectedRecipientIds([deepLinkedAthleteId]);
       }
-    } else {
-        // Only try to create if we haven't selected it yet (avoid loops)
-       if (selectedThreadId) return; // If we have a selected thread ID, assume we found it or user clicked something else. 
-       // Actually, if selectedThreadId is null, we can try to create.
-       
-       // Use a ref to prevent double-firing ensureThread?
-       // React Effects run twice in strict mode.
-       // Let's just fire it.
-       const ensure = async () => {
-         try {
-            const res = await request<{ threadId: string }>('/api/messages/threads', {
-                method: 'POST',
-                body: JSON.stringify({ athleteId }),
-            });
-            await loadThreads(true);
-            setSelectedThreadId(res.threadId);
-            setTimeout(() => composerRef.current?.focus(), 150);
-         } catch(e) { /* ignore */ }
-       };
-       void ensure();
+    } finally {
+      setRecipientsLoading(false);
     }
-  }, [initialLoadDone, searchParams, threads, user, selectedThreadId]); // Remove loadThreads from deps to avoid cycle if it's not stable (it is stable though)
-
-  const loadMessages = useCallback(
-    async (threadId: string, bypassCache = false) => {
-      if (!user?.userId || user.role !== 'COACH') return;
-
-      setMessagesLoading(true);
-      setMessagesError('');
-
-      const qs = new URLSearchParams();
-      if (bypassCache) qs.set('t', String(Date.now()));
-
-      try {
-        const resp = await request<ThreadMessagesResponse>(
-          `/api/messages/threads/${threadId}${qs.toString() ? `?${qs.toString()}` : ''}`,
-          bypassCache ? { cache: 'no-store' } : undefined
-        );
-
-        // Mark as read for coach.
-        await request('/api/messages/mark-read', { method: 'POST', data: { threadId } });
-
-        setMessages(resp.messages);
-
-        // Update the local unread count without forcing a full reload.
-        setThreads((prev) => prev.map((t) => (t.threadId === threadId ? { ...t, unreadCountForCoach: 0 } : t)));
-      } catch (err) {
-        setMessagesError(err instanceof Error ? err.message : 'Failed to load messages.');
-        setMessages([]);
-      } finally {
-        setMessagesLoading(false);
-      }
-    },
-    [request, user?.role, user?.userId]
-  );
+  }, [request, searchParams, user?.role, user?.userId]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
-      void loadThreads(true);
+      void Promise.all([loadMailbox(true), loadRecipients()]);
     }
-  }, [loadThreads, user?.role]);
+  }, [loadMailbox, loadRecipients, user?.role]);
 
-  useEffect(() => {
-    if (!selectedThreadId) return;
-    void loadMessages(selectedThreadId, true);
-  }, [loadMessages, selectedThreadId]);
+  const filteredRecipients = useMemo(() => {
+    const needle = recipientSearch.trim().toLowerCase();
+    if (!needle) return recipients;
+    return recipients.filter((row) => row.name.toLowerCase().includes(needle));
+  }, [recipientSearch, recipients]);
 
-  useEffect(() => {
-    // Default selection: newest unread thread, else newest thread.
-    if (selectedThreadId) return;
-    if (sortedThreads.length === 0) return;
-    const unread = sortedThreads.find((t) => (t.unreadCountForCoach ?? 0) > 0);
-    setSelectedThreadId((unread ?? sortedThreads[0])?.threadId ?? null);
-  }, [selectedThreadId, sortedThreads]);
+  const selectedRecipients = useMemo(
+    () => recipients.filter((row) => selectedRecipientIds.includes(row.id)),
+    [recipients, selectedRecipientIds]
+  );
+
+  const visibleItems = useMemo(
+    () => mailbox.filter((item) => item.direction === activeTab).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
+    [activeTab, mailbox]
+  );
+  const visibleItemIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
+  const allVisibleSelected =
+    visibleItemIds.length > 0 && visibleItemIds.every((messageId) => selectedMessageIds.includes(messageId));
+  const selectedVisibleCount = visibleItemIds.filter((messageId) => selectedMessageIds.includes(messageId)).length;
+
+  const toggleRecipient = useCallback((recipientId: string) => {
+    setSelectedRecipientIds((prev) => {
+      if (recipientId === 'ALL_SQUAD') {
+        return prev.includes('ALL_SQUAD') ? [] : ['ALL_SQUAD'];
+      }
+
+      const withoutAll = prev.filter((id) => id !== 'ALL_SQUAD');
+      return withoutAll.includes(recipientId)
+        ? withoutAll.filter((id) => id !== recipientId)
+        : [...withoutAll, recipientId];
+    });
+  }, []);
+
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds((prev) =>
+      prev.includes(messageId) ? prev.filter((id) => id !== messageId) : [...prev, messageId]
+    );
+  }, []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedMessageIds((prev) => {
+      if (visibleItemIds.length === 0) return prev;
+      if (allVisibleSelected) {
+        return prev.filter((id) => !visibleItemIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...visibleItemIds]));
+    });
+  }, [allVisibleSelected, visibleItemIds]);
+
+  const deleteSelectedMessages = useCallback(async () => {
+    const idsToDelete = visibleItemIds.filter((id) => selectedMessageIds.includes(id));
+    if (!idsToDelete.length) return;
+    setDeleting(true);
+    setMailboxError('');
+    setStatus('');
+    try {
+      await request('/api/messages/bulk-delete', {
+        method: 'POST',
+        data: { messageIds: idsToDelete },
+      });
+      setSelectedMessageIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+      setStatus(idsToDelete.length === 1 ? 'Message deleted.' : `${idsToDelete.length} messages deleted.`);
+      await loadMailbox(true);
+    } catch (err) {
+      setMailboxError(err instanceof Error ? err.message : 'Failed to delete selected messages.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [loadMailbox, request, selectedMessageIds, visibleItemIds]);
 
   const handleSend = useCallback(async () => {
-    if (!selectedThread?.athlete?.id) return;
     const body = draft.trim();
+    const trimmedSubject = subject.trim();
     if (!body) return;
+
+    const selected = recipients.filter((row) => selectedRecipientIds.includes(row.id));
+    const allSquad = selected.some((row) => row.id === 'ALL_SQUAD');
+    const athleteIds = selected.filter((row) => row.type === 'ATHLETE').map((row) => row.id);
+
+    if (!allSquad && athleteIds.length === 0) {
+      setMailboxError('Select at least one recipient.');
+      return;
+    }
 
     setSending(true);
     setStatus('');
-    setMessagesError('');
+    setMailboxError('');
 
     try {
       await request('/api/messages/send', {
         method: 'POST',
-        data: { body, recipients: { athleteIds: [selectedThread.athlete.id] } },
+        data: {
+          subject: trimmedSubject || undefined,
+          body,
+          recipients: allSquad ? { allAthletes: true } : { athleteIds },
+        },
       });
+      setSubject('');
       setDraft('');
-      setStatus('Sent.');
-      if (selectedThreadId) {
-        await loadMessages(selectedThreadId, true);
-      }
-      await loadThreads(true);
+      setComposerOpen(false);
+      setRecipientSearch('');
+      setRecipientDropdownOpen(false);
+      setSelectedRecipientIds([]);
+      setStatus('Message sent.');
+      await loadMailbox(true);
+      setActiveTab('SENT');
     } catch (err) {
-      setMessagesError(err instanceof Error ? err.message : 'Failed to send message.');
+      setMailboxError(err instanceof Error ? err.message : 'Failed to send message.');
     } finally {
       setSending(false);
     }
-  }, [draft, loadMessages, loadThreads, request, selectedThread?.athlete?.id, selectedThreadId]);
+  }, [draft, loadMailbox, recipients, request, selectedRecipientIds, subject]);
 
   if (userLoading) {
     return <p className="text-[var(--muted)]">Loading…</p>;
@@ -286,135 +221,175 @@ export default function CoachNotificationsPage() {
     return <p className="text-[var(--muted)]">Coach access required.</p>;
   }
 
-  const displayMessages = [...messages].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-
   return (
-    <section className={cn("flex flex-col", tokens.spacing.dashboardSectionGap)}>
+    <section className={cn('mx-auto flex w-full flex-col xl:w-1/2', tokens.spacing.dashboardSectionGap)}>
       <Block>
-        <p className={tokens.typography.sectionLabel}>Notifications</p>
-        <h1 className={tokens.typography.h1}>Messages</h1>
-        <p className={tokens.typography.bodyMuted}>Message your athletes and review unread threads.</p>
-      </Block>
-
-      <div className={cn("grid grid-cols-1 min-w-0 lg:grid-cols-3", tokens.spacing.gridGap)}>
-        <Block className="lg:col-span-1 min-w-0">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <BlockTitle>Threads</BlockTitle>
-            <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadThreads(true)} disabled={threadsLoading}>
-              Refresh
-            </Button>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className={tokens.typography.sectionLabel}>Notifications</p>
+            <h1 className={tokens.typography.h1}>Mailbox</h1>
           </div>
+          <Button
+            type="button"
+            className="min-h-[44px] bg-[#ef4444] text-white hover:bg-[#dc2626]"
+            onClick={() => {
+              setComposerOpen((prev) => !prev);
+              setRecipientDropdownOpen(false);
+            }}
+          >
+            New message
+          </Button>
+        </div>
 
-          {threadsLoading ? <p className={cn("mt-3", tokens.typography.bodyMuted)}>Loading…</p> : null}
-          {threadsError ? <p className={cn("mt-3 text-red-700", tokens.typography.body)}>{threadsError}</p> : null}
-
-          <div className="flex flex-col gap-2">
-            {sortedThreads.length === 0 && !threadsLoading ? (
-              <p className={tokens.typography.bodyMuted}>No messages yet.</p>
-            ) : null}
-
-            {sortedThreads.map((t) => {
-              const active = t.threadId === selectedThreadId;
-              const unread = Math.max(0, t.unreadCountForCoach ?? 0);
-              return (
+        {composerOpen ? (
+          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="relative min-w-0 flex-1">
                 <button
-                  key={t.threadId}
                   type="button"
-                  onClick={() => setSelectedThreadId(t.threadId)}
-                  className={cn(
-                    'w-full rounded-md px-3 py-3 text-left transition-colors border',
-                    active
-                      ? 'bg-[var(--bg-surface)] border-[var(--ring)] ring-1 ring-[var(--ring)]'
-                      : 'bg-transparent border-transparent hover:bg-[var(--bg-surface)] hover:border-[var(--border-subtle)]'
-                  )}
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-[var(--border-subtle)] px-3 text-left text-sm"
+                  onClick={() => setRecipientDropdownOpen((prev) => !prev)}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-[var(--text)] truncate">{t.athlete.name ?? 'Unnamed athlete'}</div>
-                      {t.lastMessagePreview ? (
-                        <div className="mt-1 text-xs text-[var(--muted)] truncate">{t.lastMessagePreview}</div>
-                      ) : (
-                        <div className="mt-1 text-xs text-[var(--muted)]">No messages</div>
-                      )}
-                    </div>
-                    {unread > 0 ? (
-                      <div className="flex-shrink-0 rounded-full bg-blue-600/10 px-2 py-1 text-xs font-semibold text-blue-700 tabular-nums">
-                        {unread}
-                      </div>
-                    ) : null}
-                  </div>
+                  <Icon name="search" size="sm" className="text-[var(--muted)]" />
+                  <span className="truncate">
+                    {selectedRecipients.length
+                      ? selectedRecipients.map((r) => r.name).join(', ')
+                      : recipientsLoading
+                        ? 'Loading recipients...'
+                        : 'Search recipients'}
+                  </span>
+                  <Icon name="expandMore" size="sm" className="ml-auto text-[var(--muted)]" />
                 </button>
-              );
-            })}
-          </div>
-        </Block>
 
-        <Block className="lg:col-span-2 min-w-0">
-          <div className="flex items-start justify-between gap-3 mb-6">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold truncate">{selectedThread?.athlete?.name ?? 'Thread'}</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">{selectedThreadId ? `Viewing thread` : 'Select a thread'}</p>
+                {recipientDropdownOpen ? (
+                  <div className="absolute z-20 mt-2 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 shadow-lg">
+                    <Input
+                      value={recipientSearch}
+                      onChange={(e) => setRecipientSearch(e.target.value)}
+                      placeholder="Search recipients"
+                      className="mb-2"
+                    />
+                    <div className="max-h-56 overflow-y-auto">
+                      {filteredRecipients.map((row) => {
+                        const checked = selectedRecipientIds.includes(row.id);
+                        return (
+                          <label key={row.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 hover:bg-[var(--bg-surface)]">
+                            <input type="checkbox" checked={checked} onChange={() => toggleRecipient(row.id)} />
+                            <span className="text-sm">{row.name}</span>
+                          </label>
+                        );
+                      })}
+                      {!filteredRecipients.length ? (
+                        <div className="px-2 py-2 text-sm text-[var(--muted)]">No recipients found.</div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <button type="button" className="text-[var(--muted)]" onClick={() => setComposerOpen(false)} aria-label="Close compose">
+                <Icon name="close" size="md" />
+              </button>
             </div>
-            {selectedThreadId ? (
-              <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => void loadMessages(selectedThreadId, true)} disabled={messagesLoading}>
-                Refresh
-              </Button>
-            ) : null}
-          </div>
 
-          <div className="pb-6">
-            <Textarea
-              ref={composerRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={selectedThread ? `Message ${selectedThread.athlete.name ?? 'athlete'}…` : 'Select a thread to message…'}
-              disabled={!selectedThread || sending}
-              rows={3}
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value.slice(0, SUBJECT_LIMIT))}
+              placeholder="Enter subject..."
               className="mb-3"
             />
-            <div className="flex justify-end">
-              <Button type="button" onClick={() => void handleSend()} disabled={!selectedThread || sending || !draft.trim()}>
-                {sending ? 'Sending…' : 'Send'}
-              </Button>
-            </div>
+            <div className="mb-1 text-right text-xs text-[var(--muted)]">{subject.length}/{SUBJECT_LIMIT}</div>
+
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value.slice(0, BODY_LIMIT))}
+              placeholder="Type a message..."
+              rows={5}
+            />
+            <div className="mb-3 text-right text-xs text-[var(--muted)]">{draft.length}/{BODY_LIMIT}</div>
+
+            <Button type="button" onClick={() => void handleSend()} disabled={sending || !draft.trim() || selectedRecipientIds.length === 0}>
+              {sending ? 'Sending...' : 'Send'}
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="mt-4 rounded-xl border border-[var(--border-subtle)]">
+          <div className="flex border-b border-[var(--border-subtle)]">
+            <button
+              type="button"
+              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              onClick={() => {
+                setActiveTab('INBOX');
+                setSelectedMessageIds([]);
+              }}
+            >
+              Inbox
+            </button>
+            <button
+              type="button"
+              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              onClick={() => {
+                setActiveTab('SENT');
+                setSelectedMessageIds([]);
+              }}
+            >
+              Sent
+            </button>
           </div>
 
-          <div className="mt-2 text-sm text-[var(--muted)] border-t border-[var(--border-subtle)] pt-4">Messages</div>
+          <div className="p-4">
+            {mailboxLoading ? <p className="text-sm text-[var(--muted)]">Loading...</p> : null}
+            {mailboxError ? <p className="text-sm text-red-700">{mailboxError}</p> : null}
+            {status ? <p className="mb-2 text-sm text-emerald-700">{status}</p> : null}
 
-          {messagesLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Loading messages…</p> : null}
-          {messagesError ? <p className="mt-3 text-sm text-red-700">{messagesError}</p> : null}
-          {status ? <p className="mt-3 text-sm text-emerald-700">{status}</p> : null}
-
-          <div className="mt-4 flex flex-col gap-3 max-h-[52vh] overflow-y-auto pr-1">
-            {selectedThreadId && displayMessages.length === 0 && !messagesLoading ? (
-              <p className="text-sm text-[var(--muted)]">No messages in this thread yet.</p>
+            {!mailboxLoading && visibleItems.length === 0 ? (
+              <p className="py-8 text-center text-[var(--muted)]">Your {activeTab === 'INBOX' ? 'Inbox' : 'Sent'} folder is empty</p>
             ) : null}
 
-            {displayMessages.map((m) => {
-              const isCoach = m.senderRole === 'COACH';
-              return (
-                <div key={m.id} className={cn('flex', isCoach ? 'justify-end' : 'justify-start')}>
-                  <div
-                    className={cn(
-                      'max-w-[min(520px,90%)] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap break-words',
-                      isCoach ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
-                    )}
-                  >
-                    {renderMessageBodyWithLinks(m.body, isCoach)}
-                    <div className={cn("mt-1 text-[10px] tabular-nums opacity-70", isCoach ? "text-indigo-100" : "text-slate-500 dark:text-slate-400")}>
-                      {new Date(m.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            {!mailboxLoading && visibleItems.length > 0 ? (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
+                  <span>Select all</span>
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={deleting || selectedVisibleCount === 0}
+                  onClick={() => void deleteSelectedMessages()}
+                >
+                  {deleting ? 'Deleting...' : selectedVisibleCount <= 1 ? 'Delete selected' : `Delete selected (${selectedVisibleCount})`}
+                </Button>
+              </div>
+            ) : null}
 
-        <div className="hidden">
-            {/* Removed footer */}
+            <div className="flex flex-col gap-3">
+              {visibleItems.map((item) => (
+                <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedMessageIds.includes(item.id)}
+                        onChange={() => toggleMessageSelection(item.id)}
+                        aria-label="Select message"
+                      />
+                      <div className="truncate text-sm font-semibold">
+                        {activeTab === 'INBOX' ? `From ${item.counterpartName}` : `To ${item.counterpartName}`}
+                      </div>
+                    </div>
+                    <div className="text-xs tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
+                  </div>
+                  {item.subject ? <div className="mb-1 text-sm font-medium">{item.subject}</div> : null}
+                  <div className="whitespace-pre-wrap text-sm text-[var(--text)]">{item.body}</div>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
       </Block>
-      </div>
     </section>
   );
 }

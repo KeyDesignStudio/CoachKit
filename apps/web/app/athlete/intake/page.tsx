@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Block } from '@/components/ui/Block';
-import { uiEyebrow, uiH1, uiMuted } from '@/components/ui/typography';
+import { uiH1, uiMuted } from '@/components/ui/typography';
 
 import { INTAKE_SECTIONS, type IntakeQuestion } from '@/modules/athlete-intake/questions';
 import { computeWeeklyMinutesTarget, normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
@@ -343,7 +343,6 @@ export default function AthleteIntakePage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8">
       <header className="space-y-2">
-        <p className={uiEyebrow}>Coaching Intake</p>
         <h1 className={uiH1}>Athlete Intake</h1>
         <p className={uiMuted}>Short answers only — this shapes your coaching plan.</p>
       </header>
