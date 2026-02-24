@@ -25,27 +25,36 @@ export function getFirstName(name?: string | null): string {
 }
 
 const MORNING_TEMPLATES = [
-  "G'day {firstName}. Start with calm focus this morning and your body and mind will thank you all day.",
-  "G'day {firstName}. A steady session and a steady mind this morning can shape a strong day ahead.",
-  "G'day {firstName}. Progress today comes from simple wins: breathe well, move well, recover well.",
-  "G'day {firstName}. This morning is a chance to build confidence through consistent, healthy effort.",
-  "G'day {firstName}. Begin with intent this morning; small disciplined choices become big results.",
+  "G'day {firstName}. Start this morning with calm focus and let consistency carry you.",
+  "G'day {firstName}. One disciplined session this morning can set the tone for your whole day.",
+  "G'day {firstName}. Build confidence this morning through simple, repeatable habits.",
+  "G'day {firstName}. Keep your effort smooth this morning and your recovery deliberate.",
+  "G'day {firstName}. A clear plan and steady breathing this morning are powerful tools.",
+  "G'day {firstName}. This morning is ideal for quality movement and clean execution.",
+  "G'day {firstName}. Mental clarity first this morning; performance usually follows.",
+  "G'day {firstName}. A focused start this morning creates momentum you can trust.",
 ];
 
 const AFTERNOON_TEMPLATES = [
-  "G'day {firstName}. Keep the afternoon simple: quality effort, good posture, and steady breathing.",
-  "G'day {firstName}. Consistency this afternoon builds both physical durability and mental resilience.",
-  "G'day {firstName}. If energy dips this afternoon, reduce intensity but protect your routine.",
-  "G'day {firstName}. Strong afternoons are built on smart pacing, not forcing every rep.",
-  "G'day {firstName}. Keep momentum this afternoon with focused work and deliberate recovery choices.",
+  "G'day {firstName}. Keep this afternoon simple: execute well, then recover with intent.",
+  "G'day {firstName}. Smart pacing this afternoon will beat forced intensity every time.",
+  "G'day {firstName}. If energy dips this afternoon, reduce the load but protect the routine.",
+  "G'day {firstName}. This afternoon is a chance to sharpen focus and stack quality work.",
+  "G'day {firstName}. Build momentum this afternoon with control, not rush.",
+  "G'day {firstName}. A composed afternoon session can strengthen both confidence and form.",
+  "G'day {firstName}. Good decisions this afternoon will improve tomorrow's readiness.",
+  "G'day {firstName}. Stay patient this afternoon and let consistency do the heavy lifting.",
 ];
 
 const EVENING_TEMPLATES = [
-  "G'day {firstName}. This evening, a calm finish and good recovery habits set up tomorrow's performance.",
-  "G'day {firstName}. Be proud of the effort today; quality rest tonight is part of elite preparation.",
-  "G'day {firstName}. Use tonight to reset: hydrate, breathe, and let your body adapt to today's work.",
-  "G'day {firstName}. Evening discipline matters too; recovery is where training becomes progress.",
-  "G'day {firstName}. Finish the day with purpose and give your mind and body space to recharge.",
+  "G'day {firstName}. Finish this evening with purpose and set up tomorrow with quality recovery.",
+  "G'day {firstName}. Be proud of today's effort and protect your sleep tonight.",
+  "G'day {firstName}. Use this evening to reset: hydrate well and let adaptation happen.",
+  "G'day {firstName}. Evening discipline counts; recovery is where progress is built.",
+  "G'day {firstName}. A calm evening routine can sharpen both focus and resilience.",
+  "G'day {firstName}. Close this evening strong by choosing consistency over perfection.",
+  "G'day {firstName}. Keep tonight simple: recover well, then arrive ready tomorrow.",
+  "G'day {firstName}. Your best next session starts with what you do this evening.",
 ];
 
 function templatePoolForTimeOfDay(partOfDay: TimeOfDay): string[] {
@@ -113,6 +122,7 @@ export function sanitizeAiGreeting(params: {
 
   // Fix merged sentence boundaries like "...todayrest..." from model output.
   body = body.replace(/([a-z])([A-Z][a-z])/g, '$1. $2');
+  body = body.replace(/\b(today|tonight|morning|afternoon|evening)(rest|recover|hydrate|breathe|reset|focus|stay|keep)\b/gi, '$1. $2');
 
   const withTimeAnchor = body.toLowerCase().includes('morning') || body.toLowerCase().includes('afternoon') || body.toLowerCase().includes('evening')
     ? body
