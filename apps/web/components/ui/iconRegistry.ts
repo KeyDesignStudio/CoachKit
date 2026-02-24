@@ -111,7 +111,7 @@ export const ICONS: Record<IconName, string> = {
   delete: 'delete',
   close: 'close',
   filter: 'filter_list',
-  inbox: 'inbox',
+  inbox: 'mail',
   settings: 'settings',
   expandMore: 'expand_more',
   logout: 'logout',
