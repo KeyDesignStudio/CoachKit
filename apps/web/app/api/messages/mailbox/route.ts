@@ -81,7 +81,9 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const items = rows.map((row) =>
+      const scopedRows = rows.filter((row) => row.senderUserId === user.id || row.senderUserId === row.thread.athleteId);
+
+      const items = scopedRows.map((row) =>
         itemFromMessage({
           id: row.id,
           threadId: row.threadId,
@@ -97,19 +99,9 @@ export async function GET(request: NextRequest) {
       return success({ items });
     }
 
-    const athleteProfile = await prisma.athleteProfile.findUnique({
-      where: { userId: user.id },
-      select: { coachId: true },
-    });
-
-    if (!athleteProfile) {
-      return success({ items: [] });
-    }
-
     const rows = await prisma.message.findMany({
       where: {
         deletedAt: null,
-        thread: { coachId: athleteProfile.coachId },
         OR: [{ thread: { athleteId: user.id } }, { senderUserId: user.id }],
       },
       orderBy: [{ createdAt: 'desc' }],
@@ -157,4 +149,3 @@ export async function GET(request: NextRequest) {
     return handleError(error);
   }
 }
-
