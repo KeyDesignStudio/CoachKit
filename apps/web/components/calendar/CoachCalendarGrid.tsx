@@ -373,7 +373,7 @@ export function CoachCalendarGrid({
               />
             ))}
 
-            <div className="hidden md:block min-h-[110px] bg-[var(--bg-surface)] p-2">
+            <div className="hidden md:block min-h-[110px] bg-[rgb(209,217,232)] p-2">
               <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
               <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
                 {weekBlock.weekSummary ? (

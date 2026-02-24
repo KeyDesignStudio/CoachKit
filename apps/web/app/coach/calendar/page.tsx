@@ -1629,14 +1629,13 @@ export default function CoachCalendarPage() {
         </div>
         <div className="flex justify-end pt-1">
           <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-[var(--muted)]">
-            <span className="font-medium text-[var(--text)]">Legend:</span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
-              Draft
+              Published Plan
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
-              Published
+              Scheduled
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />

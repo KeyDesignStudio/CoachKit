@@ -418,7 +418,11 @@ export default function AthleteDashboardConsolePage() {
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
+<<<<<<< codex/ui-countdown-width-bg-followup
               className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 w-full lg:w-1/4"
+=======
+              className="ring-0 border border-[#c5cfdf] bg-[#d0d8e8] lg:col-start-1 lg:w-full"
+>>>>>>> main
             />
           </div>
         ) : null}
