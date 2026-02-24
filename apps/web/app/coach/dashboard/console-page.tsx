@@ -696,7 +696,8 @@ export default function CoachDashboardConsolePage() {
               title="Event countdown"
               padding={false}
               showHeaderDivider={false}
-              className="border-[#cad7eb] bg-[#e9eef8]/85"
+              className="border"
+              style={{ borderColor: '#cad7eb', backgroundColor: 'rgba(233, 238, 248, 0.85)' }}
             >
               {visibleGoalCountdowns.length === 0 ? (
                 <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
