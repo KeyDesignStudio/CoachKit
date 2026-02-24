@@ -278,6 +278,15 @@ export function StravaVitalsSummaryCard({
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div className="flex items-center text-[var(--muted)]">
+              Swim avg pace
+              <MetricHelpTrigger metricId="swim" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
+            </div>
+            <div className="text-right font-medium">{formatPace(vitals.swim.avgPaceSecPer100m, '/100m')}</div>
+            <div className="col-span-2 text-right">
+              <DeltaInline delta={comparison.deltas.swim.avgPaceSecPer100m} formatter={(value) => `${value}s/100m`} />
+            </div>
+
+            <div className="flex items-center text-[var(--muted)]">
               Bike avg power
               <MetricHelpTrigger metricId="bike" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
             </div>
@@ -293,15 +302,6 @@ export function StravaVitalsSummaryCard({
             <div className="text-right font-medium">{formatPace(vitals.run.avgPaceSecPerKm, '/km')}</div>
             <div className="col-span-2 text-right">
               <DeltaInline delta={comparison.deltas.run.avgPaceSecPerKm} formatter={(value) => `${value}s/km`} />
-            </div>
-
-            <div className="flex items-center text-[var(--muted)]">
-              Swim avg pace
-              <MetricHelpTrigger metricId="swim" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
-            </div>
-            <div className="text-right font-medium">{formatPace(vitals.swim.avgPaceSecPer100m, '/100m')}</div>
-            <div className="col-span-2 text-right">
-              <DeltaInline delta={comparison.deltas.swim.avgPaceSecPer100m} formatter={(value) => `${value}s/100m`} />
             </div>
 
             <div className="flex items-center text-[var(--muted)]">
