@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -215,6 +215,7 @@ export default function CoachDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fallbackWelcomeMessage = useMemo(
     () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
     [user?.name, user?.timezone]
@@ -267,6 +268,7 @@ export default function CoachDashboardConsolePage() {
     customFrom,
     customTo,
   ]);
+  const forceOnboardingModal = searchParams.get('onboarding') === '1';
 
   useEffect(() => {
     if (athleteOptions.length === 0) return;
@@ -314,6 +316,12 @@ export default function CoachDashboardConsolePage() {
   }, [reload, user?.role]);
 
   useEffect(() => {
+    if (user?.role === 'COACH' && forceOnboardingModal) {
+      setShowOnboardingModal(true);
+      setOnboardingChecked(true);
+      return;
+    }
+
     if (onboardingChecked) return;
     if (user?.role !== 'COACH') return;
     if (!data) return;
@@ -337,7 +345,7 @@ export default function CoachDashboardConsolePage() {
     } finally {
       setOnboardingChecked(true);
     }
-  }, [data, onboardingChecked, user?.role]);
+  }, [data, forceOnboardingModal, onboardingChecked, user?.role]);
 
   useEffect(() => {
     if (user?.role === 'ATHLETE') {
