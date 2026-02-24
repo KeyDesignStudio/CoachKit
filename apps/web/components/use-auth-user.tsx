@@ -86,7 +86,22 @@ function resetCachedAuthState() {
  * This replaces the legacy useUser hook from user-context
  */
 export function useAuthUser() {
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const disableAuth =
+    process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true' ||
+    process.env.DISABLE_AUTH === 'true';
+
+  let clerkUser: ReturnType<typeof useUser>['user'] = null;
+  let clerkLoaded = disableAuth;
+  try {
+    const clerk = useUser();
+    clerkUser = clerk.user;
+    clerkLoaded = clerk.isLoaded;
+  } catch {
+    // In auth-disabled/dev surfaces there may be no ClerkProvider.
+    // Keep hook resilient and rely on /api/me as the source of truth.
+    clerkUser = null;
+    clerkLoaded = true;
+  }
   const [state, setState] = useState<AuthState>(() => ({ ...authState }));
 
   useEffect(() => {
