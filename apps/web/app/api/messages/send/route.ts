@@ -44,27 +44,18 @@ export async function POST(request: NextRequest) {
       const includeCoach = payload.recipients?.includeCoach ?? requestedAthleteIds.length === 0;
 
       if (requestedAthleteIds.length > 0) {
-        const ownSquadMemberships = await prisma.squadMember.findMany({
-          where: { athleteId: user.id },
-          select: { squadId: true },
-        });
-        const squadIds = Array.from(new Set(ownSquadMemberships.map((row) => row.squadId)));
-        if (!squadIds.length) {
-          throw forbidden('No squad recipients available.');
-        }
-
-        const allowedRows = await prisma.squadMember.findMany({
+        const allowedRows = await prisma.athleteProfile.findMany({
           where: {
-            squadId: { in: squadIds },
-            athleteId: { in: requestedAthleteIds },
+            coachId: athleteProfile.coachId,
+            userId: { in: requestedAthleteIds },
           },
-          select: { athleteId: true },
+          select: { userId: true },
         });
 
-        const allowedSet = new Set(allowedRows.map((row) => row.athleteId));
+        const allowedSet = new Set(allowedRows.map((row) => row.userId));
         const invalid = requestedAthleteIds.filter((id) => !allowedSet.has(id));
         if (invalid.length > 0) {
-          throw forbidden('One or more recipients are not in your squad.');
+          throw forbidden('One or more recipients are not available in your squad.');
         }
       }
 

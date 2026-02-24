@@ -54,42 +54,30 @@ export async function GET(_request: NextRequest) {
       return success({ recipients: [] });
     }
 
-    const [coach, squadMemberships] = await Promise.all([
+    const [coach, coachedAthletes] = await Promise.all([
       prisma.user.findUnique({
         where: { id: athleteProfile.coachId },
         select: { id: true, name: true },
       }),
-      prisma.squadMember.findMany({
-        where: { athleteId: user.id },
-        select: { squadId: true },
+      prisma.athleteProfile.findMany({
+        where: {
+          coachId: athleteProfile.coachId,
+          userId: { not: user.id },
+        },
+        select: {
+          user: { select: { id: true, name: true } },
+        },
       }),
     ]);
-
-    const squadIds = Array.from(new Set(squadMemberships.map((row) => row.squadId)));
-    let squadMateIds: string[] = [];
-    if (squadIds.length) {
-      const rows = await prisma.squadMember.findMany({
-        where: { squadId: { in: squadIds }, athleteId: { not: user.id } },
-        select: { athleteId: true },
-      });
-      squadMateIds = Array.from(new Set(rows.map((row) => row.athleteId)));
-    }
-
-    const squadMates = squadMateIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: squadMateIds } },
-          select: { id: true, name: true },
-        })
-      : [];
 
     const coachRow: RecipientRow[] = coach
       ? [{ id: coach.id, name: String(coach.name ?? 'Coach'), type: 'COACH' as const }]
       : [];
 
-    const athleteRows: RecipientRow[] = squadMates
+    const athleteRows: RecipientRow[] = coachedAthletes
       .map((row) => ({
-        id: row.id,
-        name: String(row.name ?? 'Athlete'),
+        id: row.user.id,
+        name: String(row.user.name ?? 'Athlete'),
         type: 'ATHLETE' as const,
       }))
       .sort((a, b) => firstNameOf(a.name).localeCompare(firstNameOf(b.name)) || a.name.localeCompare(b.name));
@@ -101,4 +89,3 @@ export async function GET(_request: NextRequest) {
     return handleError(error);
   }
 }
-
