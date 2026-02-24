@@ -213,17 +213,6 @@ export function StravaVitalsCard({ endpoint, title = 'Strava Performance Vitals'
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
-              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Overall</p>
-              <p className="mt-1 text-sm">Sessions: {vitals.sampleSize}</p>
-              <p className="text-sm">Avg HR: {formatNumber(vitals.overall.avgHrBpm, ' bpm')}</p>
-              <MetricDeltaText delta={comparison.deltas.overall.avgHrBpm} formatter={(v) => formatNumber(v, ' bpm')} />
-              <p className="mt-1 text-sm">Avg distance: {formatNumber(vitals.overall.avgDistanceKm, ' km')}</p>
-              <MetricDeltaText delta={comparison.deltas.overall.avgDistanceKm} formatter={(v) => formatNumber(v, ' km')} />
-              <p className="mt-1 text-sm">Avg duration: {formatNumber(vitals.overall.avgDurationMinutes, ' min')}</p>
-              <MetricDeltaText delta={comparison.deltas.overall.avgDurationMinutes} formatter={(v) => formatNumber(v, ' min')} />
-            </div>
-
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Bike</p>
               <p className="mt-1 text-sm">Sessions: {vitals.bike.sessions}</p>
               <p className="text-sm">Avg power: {formatNumber(vitals.bike.avgPowerW, ' W')}</p>
@@ -243,13 +232,24 @@ export function StravaVitalsCard({ endpoint, title = 'Strava Performance Vitals'
               <MetricDeltaText delta={comparison.deltas.run.avgHrBpm} formatter={(v) => formatNumber(v, ' bpm')} />
             </div>
 
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 md:col-span-3">
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Swim</p>
               <p className="mt-1 text-sm">Sessions: {vitals.swim.sessions}</p>
               <p className="text-sm">Avg pace: {formatPace(vitals.swim.avgPaceSecPer100m, '/100m')}</p>
               <MetricDeltaText delta={comparison.deltas.swim.avgPaceSecPer100m} formatter={(v) => formatPace(v, '/100m')} />
               <p className="mt-1 text-sm">Avg HR: {formatNumber(vitals.swim.avgHrBpm, ' bpm')}</p>
               <MetricDeltaText delta={comparison.deltas.swim.avgHrBpm} formatter={(v) => formatNumber(v, ' bpm')} />
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 md:col-span-3">
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Overall</p>
+              <p className="mt-1 text-sm">Avg heart rate: {formatNumber(vitals.overall.avgHrBpm, ' bpm')}</p>
+              <MetricDeltaText delta={comparison.deltas.overall.avgHrBpm} formatter={(v) => formatNumber(v, ' bpm')} />
+              <p className="mt-1 text-sm">Sessions: {vitals.sampleSize}</p>
+              <p className="mt-1 text-sm">Avg distance: {formatNumber(vitals.overall.avgDistanceKm, ' km')}</p>
+              <MetricDeltaText delta={comparison.deltas.overall.avgDistanceKm} formatter={(v) => formatNumber(v, ' km')} />
+              <p className="mt-1 text-sm">Avg duration: {formatNumber(vitals.overall.avgDurationMinutes, ' min')}</p>
+              <MetricDeltaText delta={comparison.deltas.overall.avgDurationMinutes} formatter={(v) => formatNumber(v, ' min')} />
             </div>
           </div>
 

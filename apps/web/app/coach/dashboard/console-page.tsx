@@ -236,6 +236,8 @@ export default function CoachDashboardConsolePage() {
   const [showLoadPanel, setShowLoadPanel] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [selectedReviewItemIds, setSelectedReviewItemIds] = useState<Set<string>>(() => new Set());
+  const [reviewingItems, setReviewingItems] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -415,6 +417,18 @@ export default function CoachDashboardConsolePage() {
         }),
     [data?.goalCountdowns]
   );
+  const visibleReviewInbox = useMemo(() => {
+    const items = data?.reviewInbox ?? [];
+    if (inboxPreset === 'PAIN') return items.filter((item) => Boolean(item.latestCompletedActivity?.painFlag));
+    if (inboxPreset === 'COMMENTS') return items.filter((item) => item.hasAthleteComment);
+    if (inboxPreset === 'SKIPPED') return items.filter((item) => item.status === 'SKIPPED');
+    if (inboxPreset === 'AWAITING_REVIEW') return items;
+    return items;
+  }, [data?.reviewInbox, inboxPreset]);
+  const selectedReviewCount = useMemo(
+    () => visibleReviewInbox.filter((item) => selectedReviewItemIds.has(item.id)).length,
+    [visibleReviewInbox, selectedReviewItemIds]
+  );
 
   const jumpToInbox = useCallback(() => {
     reviewInboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -427,6 +441,46 @@ export default function CoachDashboardConsolePage() {
     },
     [jumpToInbox]
   );
+  const toggleReviewItemSelection = useCallback((itemId: string) => {
+    setSelectedReviewItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }, []);
+  const clearReviewSelection = useCallback(() => {
+    setSelectedReviewItemIds(new Set());
+  }, []);
+  const markSelectedReviewed = useCallback(async () => {
+    const ids = visibleReviewInbox.map((item) => item.id).filter((id) => selectedReviewItemIds.has(id));
+    if (ids.length === 0) return;
+    setReviewingItems(true);
+    setError('');
+    try {
+      await request('/api/coach/review-inbox/bulk-review', {
+        method: 'POST',
+        data: { ids },
+      });
+      setSelectedReviewItemIds(new Set());
+      await reload({ bypassCache: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to mark selected workouts as reviewed.');
+    } finally {
+      setReviewingItems(false);
+    }
+  }, [reload, request, selectedReviewItemIds, visibleReviewInbox]);
+
+  useEffect(() => {
+    setSelectedReviewItemIds((prev) => {
+      const valid = new Set(visibleReviewInbox.map((item) => item.id));
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (valid.has(id)) next.add(id);
+      });
+      return next;
+    });
+  }, [visibleReviewInbox]);
 
   const coachGreetingContext = useMemo(() => {
     const completed = Math.max(0, Number(data?.kpis?.workoutsCompleted ?? 0));
@@ -747,7 +801,83 @@ export default function CoachDashboardConsolePage() {
             />
           </div>
 
-          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="xl:col-span-2">
+          <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="xl:col-span-1">
+            <Block title="Review inbox" className="h-full">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className={cn(tokens.typography.meta, "text-[var(--muted)]")}>Showing {visibleReviewInbox.length}</div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={markSelectedReviewed}
+                      disabled={reviewingItems || selectedReviewCount === 0}
+                    >
+                      Mark reviewed
+                    </Button>
+                    <button
+                      type="button"
+                      className={cn("text-[var(--muted)] hover:text-[var(--text)]", tokens.typography.meta)}
+                      onClick={clearReviewSelection}
+                      disabled={selectedReviewCount === 0}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {visibleReviewInbox.length === 0 ? (
+                    <div className={cn("rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/45", tokens.spacing.elementPadding, tokens.typography.bodyMuted)}>
+                      No workouts currently match this review filter.
+                    </div>
+                  ) : (
+                    visibleReviewInbox.map((item) => (
+                      <label
+                        key={item.id}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)]",
+                          tokens.spacing.elementPadding
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={selectedReviewItemIds.has(item.id)}
+                          onChange={() => toggleReviewItemSelection(item.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className={cn("truncate font-semibold", tokens.typography.body)} title={String(item.athlete?.name ?? 'Athlete')}>
+                              {String(item.athlete?.name ?? 'Athlete')}
+                            </div>
+                            <div className={cn("whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
+                              {formatDayMonthYearInTimeZone(item.date, coachTimeZone)}
+                            </div>
+                          </div>
+                          <div className={cn("mt-1 truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>
+                            {String(item.title ?? '')}
+                          </div>
+                          <div className={cn("mt-1 flex items-center gap-2 text-[var(--muted)]", tokens.typography.meta)}>
+                            <span>{String(item.discipline || 'OTHER').toUpperCase()}</span>
+                            <span>•</span>
+                            <span>{item.status === 'SKIPPED' ? 'Missed' : 'Completed'}</span>
+                            {item.hasAthleteComment ? (
+                              <>
+                                <span>•</span>
+                                <span>{item.commentCount} comment{item.commentCount === 1 ? '' : 's'}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </Block>
+          </div>
+
+          <div className="xl:col-span-1">
             <Block
               title="Event countdown"
               padding={false}
@@ -780,21 +910,26 @@ export default function CoachDashboardConsolePage() {
                         <div
                           key={entry.athleteId}
                           className={cn(
-                            "grid items-center gap-3 px-4 py-2",
-                            "grid-cols-1 sm:grid-cols-[minmax(140px,1.1fr)_minmax(170px,1.2fr)_minmax(120px,0.8fr)_minmax(200px,1.7fr)_auto]"
+                            "space-y-1 px-3 py-2"
                           )}
                         >
-                          <div className={cn("truncate", tokens.typography.body)} title={athleteName}>
-                            {athleteName}
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                            <div className={cn("truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
+                              {athleteName}
+                            </div>
+                            <div className={cn("whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
+                              {weeksLabel}
+                            </div>
                           </div>
-                          <div className={cn("truncate text-[var(--fg-muted)]", tokens.typography.body)} title={eventName}>
-                            {eventName}
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                            <div className={cn("truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
+                              {eventName}
+                            </div>
+                            <div className={cn("whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
                           </div>
-                          <div className={cn("whitespace-nowrap text-[var(--fg-muted)]", tokens.typography.body)}>{eventDate}</div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
                             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />
                           </div>
-                          <div className={cn("whitespace-nowrap text-right tabular-nums", tokens.typography.body)}>{weeksLabel}</div>
                         </div>
                       );
                     })}
