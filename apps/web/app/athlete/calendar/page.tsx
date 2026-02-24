@@ -83,6 +83,15 @@ function getMonthGridStartKey(year: number, monthIndex: number): string {
   return startOfWeekDayKey(firstOfMonth);
 }
 
+function normalizeLocalTime(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const match = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+  if (!match) return undefined;
+  return `${match[1]}:${match[2]}`;
+}
+
 function resolveCalendarItemTitle(item: CalendarItem): string {
   const title = String(item.title ?? '').trim();
   const subtype = String(item.subtype ?? '').trim();
@@ -418,20 +427,25 @@ export default function AthleteCalendarPage() {
       
       try {
         setLoading(true);
+        const title = String(clipboard.title ?? '').trim();
+        const discipline = String(clipboard.discipline ?? '').trim();
+        const workoutDetailRaw = clipboard.workoutDetail ?? clipboard.notes;
+        const workoutDetail =
+          typeof workoutDetailRaw === 'string' && workoutDetailRaw.trim() ? workoutDetailRaw.trim() : undefined;
+
         await request('/api/athlete/calendar-items', {
           method: 'POST',
           data: {
             date: contextData.date,
-            plannedStartTimeLocal: clipboard.plannedStartTimeLocal || undefined,
-            title: clipboard.title,
-            discipline: clipboard.discipline,
-            workoutDetail: clipboard.workoutDetail,
-            notes: clipboard.notes,
+            plannedStartTimeLocal: normalizeLocalTime(clipboard.plannedStartTimeLocal),
+            title: title || (discipline ? `${discipline} workout` : 'Workout'),
+            discipline: discipline || 'OTHER',
+            workoutDetail,
           },
         });
         await loadItems(true);
       } catch(e) {
-         setError('Couldn’t paste session.');
+         setError(e instanceof Error ? e.message : 'Couldn’t paste session.');
       } finally {
          setLoading(false);
       }
