@@ -1627,8 +1627,8 @@ export default function CoachCalendarPage() {
             )}
           </div>
         </div>
-        <div className="flex justify-end pt-1">
-          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-[var(--muted)]">
+        <div className="flex min-h-[44px] items-center justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
               Published Plan

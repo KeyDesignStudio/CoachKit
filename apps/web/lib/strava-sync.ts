@@ -361,8 +361,9 @@ async function matchAndLinkCalendarItem(params: {
       deletedAt: null,
       date: { gte: rangeStart, lte: rangeEnd },
       status: { in: [CalendarItemStatus.PLANNED, CalendarItemStatus.MODIFIED] },
-      // Only match against planned sessions (provider/imported items have origin).
-      origin: null,
+      // Match against coach-planned + athlete-manual planned sessions.
+      // Keep provider/imported items excluded to avoid linking against synced STRAVA rows.
+      OR: [{ origin: null }, { origin: 'MANUAL' }],
     },
     select: {
       id: true,
