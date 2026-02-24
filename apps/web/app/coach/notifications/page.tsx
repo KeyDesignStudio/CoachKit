@@ -49,10 +49,12 @@ export default function CoachNotificationsPage() {
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
 
   const [activeTab, setActiveTab] = useState<'INBOX' | 'SENT'>('INBOX');
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState('');
 
   const loadMailbox = useCallback(
@@ -113,6 +115,10 @@ export default function CoachNotificationsPage() {
     () => mailbox.filter((item) => item.direction === activeTab).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
     [activeTab, mailbox]
   );
+  const visibleItemIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
+  const allVisibleSelected =
+    visibleItemIds.length > 0 && visibleItemIds.every((messageId) => selectedMessageIds.includes(messageId));
+  const selectedVisibleCount = visibleItemIds.filter((messageId) => selectedMessageIds.includes(messageId)).length;
 
   const toggleRecipient = useCallback((recipientId: string) => {
     setSelectedRecipientIds((prev) => {
@@ -126,6 +132,43 @@ export default function CoachNotificationsPage() {
         : [...withoutAll, recipientId];
     });
   }, []);
+
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds((prev) =>
+      prev.includes(messageId) ? prev.filter((id) => id !== messageId) : [...prev, messageId]
+    );
+  }, []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedMessageIds((prev) => {
+      if (visibleItemIds.length === 0) return prev;
+      if (allVisibleSelected) {
+        return prev.filter((id) => !visibleItemIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...visibleItemIds]));
+    });
+  }, [allVisibleSelected, visibleItemIds]);
+
+  const deleteSelectedMessages = useCallback(async () => {
+    const idsToDelete = visibleItemIds.filter((id) => selectedMessageIds.includes(id));
+    if (!idsToDelete.length) return;
+    setDeleting(true);
+    setMailboxError('');
+    setStatus('');
+    try {
+      await request('/api/messages/bulk-delete', {
+        method: 'POST',
+        data: { messageIds: idsToDelete },
+      });
+      setSelectedMessageIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+      setStatus(idsToDelete.length === 1 ? 'Message deleted.' : `${idsToDelete.length} messages deleted.`);
+      await loadMailbox(true);
+    } catch (err) {
+      setMailboxError(err instanceof Error ? err.message : 'Failed to delete selected messages.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [loadMailbox, request, selectedMessageIds, visibleItemIds]);
 
   const handleSend = useCallback(async () => {
     const body = draft.trim();
@@ -276,14 +319,20 @@ export default function CoachNotificationsPage() {
             <button
               type="button"
               className={cn('px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
-              onClick={() => setActiveTab('INBOX')}
+              onClick={() => {
+                setActiveTab('INBOX');
+                setSelectedMessageIds([]);
+              }}
             >
               Inbox
             </button>
             <button
               type="button"
               className={cn('px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
-              onClick={() => setActiveTab('SENT')}
+              onClick={() => {
+                setActiveTab('SENT');
+                setSelectedMessageIds([]);
+              }}
             >
               Sent
             </button>
@@ -298,12 +347,38 @@ export default function CoachNotificationsPage() {
               <p className="py-8 text-center text-[var(--muted)]">Your {activeTab === 'INBOX' ? 'Inbox' : 'Sent'} folder is empty</p>
             ) : null}
 
+            {!mailboxLoading && visibleItems.length > 0 ? (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
+                  <span>Select all</span>
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={deleting || selectedVisibleCount === 0}
+                  onClick={() => void deleteSelectedMessages()}
+                >
+                  {deleting ? 'Deleting...' : selectedVisibleCount <= 1 ? 'Delete selected' : `Delete selected (${selectedVisibleCount})`}
+                </Button>
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-3">
               {visibleItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
                   <div className="mb-1 flex items-center justify-between gap-3">
-                    <div className="truncate text-sm font-semibold">
-                      {activeTab === 'INBOX' ? `From ${item.counterpartName}` : `To ${item.counterpartName}`}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedMessageIds.includes(item.id)}
+                        onChange={() => toggleMessageSelection(item.id)}
+                        aria-label="Select message"
+                      />
+                      <div className="truncate text-sm font-semibold">
+                        {activeTab === 'INBOX' ? `From ${item.counterpartName}` : `To ${item.counterpartName}`}
+                      </div>
                     </div>
                     <div className="text-xs tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
                   </div>
