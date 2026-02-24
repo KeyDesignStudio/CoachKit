@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
@@ -33,6 +34,7 @@ const SUBJECT_LIMIT = 300;
 const BODY_LIMIT = 3000;
 
 export default function AthleteNotificationsPage() {
+  const router = useRouter();
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
 
@@ -64,7 +66,29 @@ export default function AthleteNotificationsPage() {
         const qs = new URLSearchParams();
         if (bypassCache) qs.set('t', String(Date.now()));
         const res = await request<{ items: MailboxItem[] }>(`/api/messages/mailbox${qs.toString() ? `?${qs.toString()}` : ''}`);
-        setMailbox(Array.isArray(res?.items) ? res.items : []);
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setMailbox(items);
+
+        // Clear unread badge state by marking inbox threads as read on mailbox open.
+        const inboxThreadIds = Array.from(
+          new Set(
+            items
+              .filter((item) => item.direction === 'INBOX')
+              .map((item) => String(item.threadId))
+              .filter(Boolean)
+          )
+        );
+        if (inboxThreadIds.length > 0) {
+          await Promise.all(
+            inboxThreadIds.map((threadId) =>
+              request('/api/messages/mark-read', {
+                method: 'POST',
+                data: { threadId },
+              }).catch(() => null)
+            )
+          );
+          router.refresh();
+        }
       } catch (err) {
         setMailboxError(err instanceof Error ? err.message : 'Failed to load mailbox.');
         setMailbox([]);
@@ -72,7 +96,7 @@ export default function AthleteNotificationsPage() {
         setMailboxLoading(false);
       }
     },
-    [request, user?.role, user?.userId]
+    [request, router, user?.role, user?.userId]
   );
 
   const loadRecipients = useCallback(async () => {

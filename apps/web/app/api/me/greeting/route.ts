@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
           "Return JSON only with key 'greeting'.\n" +
           "Format must be: G'day {firstName}. <one or two short sentences>.\n" +
           'Keep it natural, warm, and coach-grade.\n' +
-          'Reference physical and mental wellbeing.\n' +
+          'Vary message focus naturally between physical, mental, educational, and practical coaching cues.\n' +
+          'Do not force both physical and mental themes in every greeting.\n' +
           'Mention morning/afternoon/evening logically.\n' +
           'If role is athlete: only mention training when it is explicitly supported by completedToday or scheduledToday counts.\n' +
           'Use past tense only for completedToday > 0.\n' +

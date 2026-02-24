@@ -482,10 +482,10 @@ export default function CoachDashboardConsolePage() {
     <>
       <section className={cn(tokens.spacing.screenPadding, "pb-10")}>
         <div className={cn("pt-3 md:pt-6")}>
-          <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
             <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
-            <p className="flex items-end gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
+            <p className="flex items-center gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
               <span className="italic">G&apos;day</span>
               {styledWelcome.name ? <span className="text-[var(--text)]">{styledWelcome.name}.</span> : null}
               <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
