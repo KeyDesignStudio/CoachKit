@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { UserRole } from '@prisma/client';
 import { cookies } from 'next/headers';
 
+import { setAuditActor } from '@/lib/audit-context';
 import { prisma } from '@/lib/prisma';
 import { ApiError, forbidden, notFound, unauthorized } from '@/lib/errors';
 
@@ -78,7 +79,7 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
     }));
 
   if (fallbackUser) {
-    return {
+    const context = {
       user: {
         id: fallbackUser.id,
         role: fallbackUser.role,
@@ -88,6 +89,12 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
         authProviderId: fallbackUser.authProviderId ?? `dev-${role.toLowerCase()}`,
       },
     };
+    setAuditActor({
+      userId: context.user.id,
+      email: context.user.email,
+      role: context.user.role,
+    });
+    return context;
   }
 
   // Dev-only escape hatch: create a minimal user so downstream DB writes don't violate FKs.
@@ -112,7 +119,7 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
     },
   });
 
-  return {
+  const context = {
     user: {
       id: created.id,
       role: created.role,
@@ -122,6 +129,12 @@ async function getDevUserContext(role: UserRole): Promise<AuthenticatedContext> 
       authProviderId: created.authProviderId ?? devId,
     },
   };
+  setAuditActor({
+    userId: context.user.id,
+    email: context.user.email,
+    role: context.user.role,
+  });
+  return context;
 }
 
 /**
@@ -213,7 +226,7 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
     throw new Error('Database inconsistency: authProviderId is null after linking');
   }
 
-  return {
+  const context = {
     user: {
       id: user.id,
       role: user.role,
@@ -223,6 +236,12 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
       authProviderId: user.authProviderId,
     },
   };
+  setAuditActor({
+    userId: context.user.id,
+    email: context.user.email,
+    role: context.user.role,
+  });
+  return context;
 }
 
 /**

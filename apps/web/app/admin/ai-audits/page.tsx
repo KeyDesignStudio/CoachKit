@@ -37,7 +37,12 @@ export default async function AdminAiAuditsPage(props: { searchParams?: Record<s
     <div className="mx-auto max-w-6xl p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">AI Invocation Audits</h1>
-        <div className="text-sm text-muted-foreground">Admin: {requester.email}</div>
+        <div className="flex items-center gap-3">
+          <Link href={{ pathname: '/admin/audit' }} className="text-sm underline">
+            Data audit log
+          </Link>
+          <div className="text-sm text-muted-foreground">Admin: {requester.email}</div>
+        </div>
       </div>
 
       <form method="get" className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-6">

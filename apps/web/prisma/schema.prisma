@@ -276,6 +276,12 @@ enum AiUsageAlertScope {
   COACH
 }
 
+enum AdminAuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -327,6 +333,7 @@ model User {
   // AI Plan Builder (Tranche 10)
   aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
   aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
+  adminAuditEvents         AdminAuditEvent[]        @relation("AdminAuditEventActor")
 
   @@index([role])
 }
@@ -1637,4 +1644,27 @@ model AiUsageAlert {
   @@index([createdAt(sort: Desc)])
   @@index([alertType, createdAt(sort: Desc)])
   @@index([dateRangeStart])
+}
+
+model AdminAuditEvent {
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now())
+  action       AdminAuditAction
+  tableName    String
+  fieldName    String
+  recordId     String
+  changeText   String
+  beforeValue  Json?
+  afterValue   Json?
+
+  actorUserId  String?
+  actorEmail   String?
+  actorRole    UserRole?
+
+  actor User? @relation("AdminAuditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([tableName, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
 }
