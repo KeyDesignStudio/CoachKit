@@ -2,7 +2,7 @@ import { ButtonHTMLAttributes, forwardRef } from 'react';
 
 import { cn } from '@/lib/cn';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -16,10 +16,12 @@ import { tokens } from './tokens';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--primary)] text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0',
+    'border border-black bg-white text-black hover:bg-black hover:text-white active:bg-black active:text-white',
   secondary:
-    'bg-[var(--bg-card)] text-[var(--text)] border border-[var(--border-subtle)] hover:bg-[var(--bg-structure)]',
+    'border border-black bg-white text-black hover:bg-black hover:text-white active:bg-black active:text-white',
   ghost: 'text-[var(--text)] hover:bg-[var(--bg-structure)]',
+  danger:
+    'border border-[#e11d48] bg-white text-[#e11d48] hover:bg-[#e11d48] hover:text-white active:bg-[#e11d48] active:text-white',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

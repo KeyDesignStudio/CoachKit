@@ -372,7 +372,7 @@ export default function AthleteNotificationsPage() {
                 <Button
                   type="button"
                   size="sm"
-                  variant="secondary"
+                  variant="danger"
                   disabled={deleting || selectedVisibleCount === 0}
                   onClick={() => void deleteSelectedMessages()}
                 >
