@@ -160,22 +160,34 @@ export async function AppHeader() {
   }
 
   if (currentDbUserId && (userRole === 'COACH' || userRole === 'ATHLETE')) {
-    unreadNotificationsCount = await prisma.message.count({
-      where:
-        userRole === 'COACH'
-          ? {
-              deletedAt: null,
-              senderRole: 'ATHLETE',
-              coachReadAt: null,
-              thread: { coachId: currentDbUserId },
-            }
-          : {
-              deletedAt: null,
-              senderRole: 'COACH',
-              athleteReadAt: null,
-              thread: { athleteId: currentDbUserId },
-            },
-    });
+    if (userRole === 'COACH') {
+      const unreadMessages = await prisma.message.findMany({
+        where: {
+          deletedAt: null,
+          senderRole: 'ATHLETE',
+          coachReadAt: null,
+          thread: { coachId: currentDbUserId },
+        },
+        select: {
+          senderUserId: true,
+          thread: { select: { athleteId: true } },
+        },
+      });
+
+      // Only count unread rows that can appear in the coach mailbox list.
+      unreadNotificationsCount = unreadMessages.filter(
+        (message) => message.senderUserId === message.thread.athleteId
+      ).length;
+    } else {
+      unreadNotificationsCount = await prisma.message.count({
+        where: {
+          deletedAt: null,
+          senderRole: 'COACH',
+          athleteReadAt: null,
+          thread: { athleteId: currentDbUserId },
+        },
+      });
+    }
   }
 
   // Filter navigation by authenticated role
