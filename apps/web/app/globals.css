@@ -25,6 +25,8 @@
   /* Data viz / meters */
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
+  --strava-card-bg: rgba(255, 242, 233, 0.90);
+  --strava-card-border: #f4c9ad;
 
   /* Interaction tokens */
   --today-border: rgba(59, 130, 246, 0.40);
@@ -55,6 +57,8 @@
 
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
+  --strava-card-bg: rgba(255, 242, 233, 0.90);
+  --strava-card-border: #f4c9ad;
 
   --today-border: rgba(59, 130, 246, 0.40);
 
@@ -70,10 +74,10 @@
 :root[data-theme='dark'] {
   --bg-page: #05060e;
   --bg-surface: rgba(13, 17, 35, 0.75);
-  --bg-structure: rgba(18, 24, 45, 0.65);
-  --bg-card: rgba(18, 24, 45, 0.85);
+  --bg-structure: rgba(24, 30, 56, 0.78);
+  --bg-card: rgba(23, 30, 56, 0.92);
   /* Avoid harsh white borders on dark surfaces */
-  --border-subtle: rgba(248, 251, 255, 0.14);
+  --border-subtle: rgba(248, 251, 255, 0.24);
 
   --bg-inverse: rgba(248, 251, 255, 0.92);
   --text-inverse: #05060e;
@@ -81,8 +85,10 @@
   --bg-success: rgba(16, 185, 129, 0.22);
   --text-success: #34d399;
 
-  --bar-track: rgba(248, 251, 255, 0.12);
-  --bar-fill: rgba(248, 251, 255, 0.24);
+  --bar-track: rgba(248, 251, 255, 0.18);
+  --bar-fill: rgba(248, 251, 255, 0.34);
+  --strava-card-bg: rgba(30, 20, 10, 0.78);
+  --strava-card-border: rgba(252, 76, 2, 0.55);
 
   --today-border: rgba(158, 193, 255, 0.50);
 
@@ -90,7 +96,7 @@
   --surface: var(--bg-surface);
   --surface-2: var(--bg-structure);
   --text: #f8fbff;
-  --muted: #94a3b8;
+  --muted: #b6c3db;
   --primary: #7ba6ff;
   --ring: #9ec1ff;
 }
@@ -100,9 +106,9 @@
     /* Preserve existing dark-mode behavior (no new feature work) */
     --bg-page: #05060e;
     --bg-surface: rgba(13, 17, 35, 0.75);
-    --bg-structure: rgba(18, 24, 45, 0.65);
-    --bg-card: rgba(18, 24, 45, 0.85);
-    --border-subtle: rgba(248, 251, 255, 0.14);
+    --bg-structure: rgba(24, 30, 56, 0.78);
+    --bg-card: rgba(23, 30, 56, 0.92);
+    --border-subtle: rgba(248, 251, 255, 0.24);
 
     --bg-inverse: rgba(248, 251, 255, 0.92);
     --text-inverse: #05060e;
@@ -110,8 +116,10 @@
     --bg-success: rgba(16, 185, 129, 0.22);
     --text-success: #34d399;
 
-    --bar-track: rgba(248, 251, 255, 0.12);
-    --bar-fill: rgba(248, 251, 255, 0.24);
+    --bar-track: rgba(248, 251, 255, 0.18);
+    --bar-fill: rgba(248, 251, 255, 0.34);
+    --strava-card-bg: rgba(30, 20, 10, 0.78);
+    --strava-card-border: rgba(252, 76, 2, 0.55);
 
     /* Interaction tokens */
     --today-border: rgba(158, 193, 255, 0.50);
@@ -120,7 +128,7 @@
     --surface: var(--bg-surface);
     --surface-2: var(--bg-structure);
     --text: #f8fbff;
-    --muted: #94a3b8;
+    --muted: #b6c3db;
     --primary: #7ba6ff;
     --ring: #9ec1ff;
   }
