@@ -740,7 +740,7 @@ export default function CoachDashboardConsolePage() {
                         <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
                           {row.label}
                         </div>
-                        <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums', tokens.typography.statValue)}>
+                        <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
                           {row.value}
                         </div>
                       </div>
