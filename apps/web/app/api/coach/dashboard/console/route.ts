@@ -300,7 +300,16 @@ async function getDashboardAggregates(params: {
       });
     const selectedGoalCountdown = goalCountdowns.length === 1 ? goalCountdowns[0] : null;
 
-    const [completedCount, skippedCount, completedItems, painFlagCount, athleteCommentWorkoutCount, awaitingReviewCount, stravaVitals] =
+    const [
+      completedCount,
+      skippedCount,
+      completedItems,
+      attentionPainFlagCount,
+      attentionAthleteCommentWorkoutCount,
+      attentionSkippedCount,
+      awaitingReviewCount,
+      stravaVitals,
+    ] =
       await Promise.all([
         prisma.calendarItem.count({
           where: {
@@ -347,6 +356,8 @@ async function getDashboardAggregates(params: {
             ...params.rangeFilter,
             ...params.athleteFilter,
             ...params.disciplineFilter,
+            status: { in: REVIEWABLE_STATUSES },
+            reviewedAt: null,
             completedActivities: { some: { painFlag: true } },
           },
         }),
@@ -357,7 +368,20 @@ async function getDashboardAggregates(params: {
             ...params.rangeFilter,
             ...params.athleteFilter,
             ...params.disciplineFilter,
+            status: { in: REVIEWABLE_STATUSES },
+            reviewedAt: null,
             comments: { some: { author: { role: 'ATHLETE' } } },
+          },
+        }),
+        prisma.calendarItem.count({
+          where: {
+            coachId: params.coachId,
+            deletedAt: null,
+            ...params.rangeFilter,
+            ...params.athleteFilter,
+            ...params.disciplineFilter,
+            status: CalendarItemStatus.SKIPPED,
+            reviewedAt: null,
           },
         }),
         prisma.calendarItem.count({
@@ -413,9 +437,9 @@ async function getDashboardAggregates(params: {
         totalDistanceKm,
       },
       attention: {
-        painFlagWorkouts: painFlagCount,
-        athleteCommentWorkouts: athleteCommentWorkoutCount,
-        skippedWorkouts: skippedCount,
+        painFlagWorkouts: attentionPainFlagCount,
+        athleteCommentWorkouts: attentionAthleteCommentWorkoutCount,
+        skippedWorkouts: attentionSkippedCount,
         awaitingCoachReview: awaitingReviewCount,
       },
       disciplineLoad,
