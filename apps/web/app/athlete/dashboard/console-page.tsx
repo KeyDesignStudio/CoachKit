@@ -552,6 +552,7 @@ export default function AthleteDashboardConsolePage() {
             <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
               <AtAGlanceCard
                 minHeightPx={xlTopCardHeightPx ?? undefined}
+                loading={loading && !data}
                 testIds={{
                   card: 'athlete-dashboard-at-a-glance',
                   grid: 'athlete-dashboard-at-a-glance-grid',

@@ -716,6 +716,7 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
             <AtAGlanceCard
               minHeightPx={xlTopCardHeightPx ?? undefined}
+              loading={loading && !data}
               testIds={{
                 card: 'coach-dashboard-at-a-glance',
                 grid: 'coach-dashboard-at-a-glance-grid',
