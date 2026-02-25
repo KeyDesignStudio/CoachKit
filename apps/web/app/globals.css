@@ -208,5 +208,8 @@ a {
 }
 
 @layer utilities {
-  /* Custom utility overrides removed to restore standard Tailwind scale */
+  /* Custom utility overrides */
+  .border-black {
+    --tw-border-opacity: 0.25;
+  }
 }

@@ -255,7 +255,7 @@ export default function CoachNotificationsPage() {
           </div>
           <Button
             type="button"
-            className="min-h-[44px] bg-[#ef4444] text-white hover:bg-[#dc2626]"
+            className="min-h-[44px]"
             onClick={() => {
               setComposerOpen((prev) => !prev);
               setRecipientDropdownOpen(false);
