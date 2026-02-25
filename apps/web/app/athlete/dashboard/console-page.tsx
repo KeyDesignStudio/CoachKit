@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
-import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
-import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { AtAGlanceCard } from '@/components/dashboard/AtAGlanceCard';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
@@ -548,118 +546,43 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-              <div
-                className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
-                data-testid="athlete-dashboard-at-a-glance"
-                style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
-              >
-                <div className="flex items-end justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2">
-                    <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <BlockTitle>At a glance</BlockTitle>
-                  </div>
-                </div>
+              <AtAGlanceCard
+                minHeightPx={xlTopCardHeightPx ?? undefined}
+                testIds={{
+                  card: 'athlete-dashboard-at-a-glance',
+                  grid: 'athlete-dashboard-at-a-glance-grid',
+                  stats: 'athlete-dashboard-at-a-glance-stats',
+                  statRow: 'athlete-dashboard-at-a-glance-stat-row',
+                  disciplineLoad: 'athlete-dashboard-discipline-load',
+                }}
+                statsRows={[
+                  { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
+                  { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
+                  { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
+                  { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
+                ]}
+                disciplineRows={(() => {
+                  const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+                  const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+                  for (const row of data?.rangeSummary?.byDiscipline ?? []) {
+                    byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                      totalMinutes: Number(row.completedMinutes ?? 0),
+                      totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+                    });
+                  }
 
-              <div className="flex flex-1 items-center">
-                <div
-                  className={cn(
-                    'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0',
-                    tokens.spacing.widgetGap
-                  )}
-                  data-testid="athlete-dashboard-at-a-glance-grid"
-                >
-                  <div
-                    className={cn('min-w-0 rounded-2xl bg-[var(--bg-structure)]/40', tokens.spacing.elementPadding)}
-                    data-testid="athlete-dashboard-at-a-glance-stats"
-                  >
-                    <div className={cn('grid', tokens.spacing.widgetGap)}>
-                      {[
-                        { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
-                        { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
-                        { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
-                        { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
-                      ].map((row, idx) => (
-                        <div
-                          key={row.label}
-                          className={cn(
-                            'min-w-0 flex items-baseline justify-between',
-                            tokens.spacing.elementPadding,
-                            tokens.spacing.widgetGap,
-                            idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
-                          )}
-                          data-testid="athlete-dashboard-at-a-glance-stat-row"
-                        >
-                          <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
-                            {row.label}
-                          </div>
-                          <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
-                            {row.value}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div
-                    className={cn('min-w-0 rounded-2xl bg-[var(--bg-structure)]/40', tokens.spacing.elementPadding)}
-                    data-testid="athlete-dashboard-discipline-load"
-                  >
-                    <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
-                      {(() => {
-                        const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
-                        const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-                        for (const row of data?.rangeSummary?.byDiscipline ?? []) {
-                          byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
-                            totalMinutes: Number(row.completedMinutes ?? 0),
-                            totalDistanceKm: Number(row.completedDistanceKm ?? 0),
-                          });
-                        }
-                        const rows = seedOrder.map((discipline) => {
-                          const existing = byDiscipline.get(discipline);
-                          return {
-                            discipline,
-                            totalMinutes: existing?.totalMinutes ?? 0,
-                            totalDistanceKm: existing?.totalDistanceKm ?? 0,
-                          };
-                        });
-                        const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                        return (
-                          <>
-                            {rows.map((r) => {
-                              const theme = getDisciplineTheme(r.discipline);
-                              const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                              const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
-                              return (
-                                <div key={r.discipline} className={cn('grid grid-cols-[auto,1fr,auto] items-center min-w-0', tokens.spacing.widgetGap)}>
-                                  <div className={cn('flex items-center min-w-[64px]', tokens.spacing.widgetGap)}>
-                                    <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                    <span className={cn('font-medium text-[var(--text)]', tokens.typography.meta)}>
-                                      {(r.discipline || 'OTHER').toUpperCase()}
-                                    </span>
-                                  </div>
-
-                                  <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
-                                    <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
-                                  </div>
-
-                                  <div
-                                    className={cn('tabular-nums text-right whitespace-nowrap truncate max-w-[120px]', tokens.typography.meta)}
-                                    title={rightValue}
-                                  >
-                                    {rightValue}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-                </div>
-              </div>
+                  return seedOrder.map((discipline) => {
+                    const existing = byDiscipline.get(discipline);
+                    const totalMinutes = existing?.totalMinutes ?? 0;
+                    const totalDistanceKm = existing?.totalDistanceKm ?? 0;
+                    return {
+                      discipline,
+                      totalMinutes,
+                      rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
+                    };
+                  });
+                })()}
+              />
             </div>
           </div>
         </div>
