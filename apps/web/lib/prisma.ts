@@ -50,11 +50,13 @@ function inferRecordId(result: unknown, fallback: string): string {
 }
 
 const prismaMiddlewareClient = basePrisma as unknown as {
-  $use: (fn: (params: any, next: (params: any) => Promise<any>) => Promise<any>) => void;
-  $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
+  $use?: (fn: (params: any, next: (params: any) => Promise<any>) => Promise<any>) => void;
+  $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<number>;
 };
 
-prismaMiddlewareClient.$use(async (params, next) => {
+const registerAuditMiddleware = prismaMiddlewareClient.$use;
+if (typeof registerAuditMiddleware === 'function') {
+  registerAuditMiddleware(async (params, next) => {
   const action = params.action;
   const modelName = params.model;
 
@@ -138,6 +140,7 @@ prismaMiddlewareClient.$use(async (params, next) => {
         typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
           ? crypto.randomUUID()
           : `audit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      if (!prismaMiddlewareClient.$executeRawUnsafe) continue;
       await prismaMiddlewareClient.$executeRawUnsafe(
         `INSERT INTO "AdminAuditEvent"
           ("id","createdAt","action","tableName","fieldName","recordId","changeText","beforeValue","afterValue","actorUserId","actorEmail","actorRole")
@@ -161,7 +164,8 @@ prismaMiddlewareClient.$use(async (params, next) => {
   }
 
   return result;
-});
+  });
+}
 
 export const prisma = basePrisma;
 
