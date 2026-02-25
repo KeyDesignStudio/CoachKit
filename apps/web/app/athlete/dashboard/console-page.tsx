@@ -301,6 +301,7 @@ export default function AthleteDashboardConsolePage() {
     if (!user?.userId || user.role !== 'ATHLETE') return;
     const qs = new URLSearchParams();
     if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
+    if (athleteTimeZone) qs.set('timeZone', athleteTimeZone);
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -308,7 +309,7 @@ export default function AthleteDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
+  }, [athleteTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -559,9 +560,10 @@ export default function AthleteDashboardConsolePage() {
                   </div>
                 </div>
 
+              <div className="flex flex-1 items-center">
                 <div
                   className={cn(
-                    'grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0',
+                    'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0',
                     tokens.spacing.widgetGap
                   )}
                   data-testid="athlete-dashboard-at-a-glance-grid"
@@ -655,6 +657,7 @@ export default function AthleteDashboardConsolePage() {
                       })()}
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             </div>
