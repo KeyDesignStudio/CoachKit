@@ -152,7 +152,7 @@ export function StravaVitalsCard({ endpoint, title = 'Strava Performance Vitals'
   const vitals = comparison?.current ?? null;
 
   return (
-    <section className="mb-6 rounded-2xl border border-[#f05324] bg-[#fff2e9]/90 p-4">
+    <section className="mb-6 rounded-2xl border border-[#f0532436] bg-[#fff2e9]/90 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">{title}</h2>
         <div className="flex flex-wrap items-center gap-2">
