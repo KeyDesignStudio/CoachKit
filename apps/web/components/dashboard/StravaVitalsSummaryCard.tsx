@@ -255,8 +255,8 @@ export function StravaVitalsSummaryCard({
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--text)]">
-          <Icon name="favorite" size="sm" className="text-[var(--text)]" aria-hidden />
+        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <Icon name="strava" size="sm" className="text-[var(--muted)]" aria-hidden />
           {title}
         </h3>
         <div className="flex items-center gap-2">

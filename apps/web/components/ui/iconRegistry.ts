@@ -56,6 +56,7 @@ export const ICON_NAMES = [
 
   // Common UI
   'favorite',
+  'strava',
 
   // Weather
   'weatherSunny',
@@ -122,6 +123,7 @@ export const ICONS: Record<IconName, string> = {
   search: 'search',
   // Common UI
   favorite: 'star',
+  strava: 'link',
 
   // Weather
   weatherSunny: 'sunny',

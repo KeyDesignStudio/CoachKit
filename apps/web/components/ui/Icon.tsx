@@ -16,6 +16,13 @@ const SIZE_CLASSES: Record<IconSize, string> = {
   lg: 'text-xl',   // 20px
 };
 
+const IMAGE_SIZE_CLASSES: Record<IconSize, string> = {
+  xs: 'h-[13px] w-[13px]',
+  sm: 'h-4 w-4',
+  md: 'h-[18px] w-[18px]',
+  lg: 'h-5 w-5',
+};
+
 const OPSZ_BY_SIZE: Record<IconSize, number> = {
   xs: 16,
   sm: 20,
@@ -40,6 +47,18 @@ export function Icon({
   'aria-hidden': ariaHidden = true,
   'aria-label': ariaLabel,
 }: IconProps) {
+  if (name === 'strava') {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src="/integrations/strava-logo.svg"
+        alt={ariaHidden ? '' : ariaLabel ?? 'Strava'}
+        aria-hidden={ariaHidden}
+        className={cn('inline-block align-middle object-contain', IMAGE_SIZE_CLASSES[size], className)}
+      />
+    );
+  }
+
   const materialSymbol = getIcon(name);
   const opsz = OPSZ_BY_SIZE[size];
   const fontSize = size === 'xs' ? '13px' : undefined;
