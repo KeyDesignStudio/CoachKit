@@ -2,7 +2,8 @@ import React from 'react';
 import { cn } from '@/lib/cn';
 import { tokens } from './tokens';
 import { BlockTitle } from './BlockTitle';
-import { Button } from './Button';
+import { Icon } from './Icon';
+import { getBlockIconForTitle } from './blockIconMap';
 
 type BlockProps = React.HTMLAttributes<HTMLDivElement> & {
   title?: string;
@@ -12,6 +13,8 @@ type BlockProps = React.HTMLAttributes<HTMLDivElement> & {
 };
 
 export function Block({ title, rightAction, children, className, padding = true, showHeaderDivider = true, ...props }: BlockProps) {
+  const titleIcon = getBlockIconForTitle(title);
+
   return (
     <div
       className={cn(
@@ -35,7 +38,10 @@ export function Block({ title, rightAction, children, className, padding = true,
         >
           {title && (
             <div className="min-w-0">
-              <BlockTitle>{title}</BlockTitle>
+              <div className="flex items-center gap-2">
+                {titleIcon ? <Icon name={titleIcon} size="sm" className="text-[var(--muted)]" aria-hidden /> : null}
+                <BlockTitle>{title}</BlockTitle>
+              </div>
             </div>
           )}
           {rightAction && <div className="ml-4 shrink-0">{rightAction}</div>}
