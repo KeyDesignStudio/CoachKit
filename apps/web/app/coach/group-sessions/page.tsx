@@ -479,7 +479,7 @@ export default function CoachGroupSessionsPage() {
             {selectedTemplateId ? (
               <Button
                 type="button"
-                variant="ghost"
+                variant="danger"
                 className="min-h-[44px]"
                 onClick={() => void handleDeleteTemplate(selectedTemplateId)}
               >
