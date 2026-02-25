@@ -6,15 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
-import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CoachOnboardingModal } from '@/components/coach/CoachOnboardingModal';
+import { AtAGlanceCard } from '@/components/dashboard/AtAGlanceCard';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
-import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
@@ -505,6 +503,7 @@ export default function CoachDashboardConsolePage() {
     if (!user?.userId || user.role !== 'COACH') return;
     const qs = new URLSearchParams();
     if (coachGreetingContext) qs.set('context', coachGreetingContext);
+    if (coachTimeZone) qs.set('timeZone', coachTimeZone);
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -512,7 +511,7 @@ export default function CoachDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [coachGreetingContext, fallbackWelcomeMessage, request, user?.role, user?.userId]);
+  }, [coachGreetingContext, coachTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId]);
 
   if (userLoading || (!user && !userError)) {
     return (
@@ -702,92 +701,27 @@ export default function CoachDashboardConsolePage() {
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
           <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-            <div
-              className={cn("rounded-2xl bg-[var(--bg-card)] min-h-0 flex flex-col", tokens.spacing.containerPadding)}
-              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
-              data-testid="coach-dashboard-at-a-glance"
-            >
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2">
-                  <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
-                  <BlockTitle>At a glance</BlockTitle>
-                </div>
-              </div>
-
-              <div
-                className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
-                data-testid="coach-dashboard-at-a-glance-grid"
-              >
-                {/* Left: stats */}
-                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-at-a-glance-stats">
-                  <div className={cn("grid", tokens.spacing.widgetGap)}>
-                    {[
-                      { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                      { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                      { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                      { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                    ].map((row, idx) => (
-                      <div
-                        key={row.label}
-                        className={cn(
-                          'min-w-0 flex items-baseline justify-between',
-                          tokens.spacing.elementPadding,
-                          tokens.spacing.widgetGap,
-                          idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
-                        )}
-                        data-testid="coach-dashboard-at-a-glance-stat-row"
-                      >
-                        <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
-                          {row.label}
-                        </div>
-                        <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
-                          {row.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Right: discipline load */}
-                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-discipline-load">
-                  <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
-                    {(() => {
-                      const rows = data?.disciplineLoad ?? [];
-                      const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                      return (
-                        <>
-                          {rows.map((r) => {
-                            const theme = getDisciplineTheme(r.discipline);
-                            const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                            const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
-                            return (
-                              <div key={r.discipline} className={cn("grid grid-cols-[auto,1fr,auto] items-center min-w-0", tokens.spacing.widgetGap)}>
-                                <div className={cn("flex items-center min-w-[64px]", tokens.spacing.widgetGap)}>
-                                  <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                  <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
-                                </div>
-
-                                <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
-                                  <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
-                                </div>
-
-                                <div
-                                  className={cn("tabular-nums text-right whitespace-nowrap truncate max-w-[120px]", tokens.typography.meta)}
-                                  title={rightValue}
-                                >
-                                  {rightValue}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {rows.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.typography.meta, tokens.spacing.elementPadding)}>No data for this range.</div> : null}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AtAGlanceCard
+              minHeightPx={xlTopCardHeightPx ?? undefined}
+              testIds={{
+                card: 'coach-dashboard-at-a-glance',
+                grid: 'coach-dashboard-at-a-glance-grid',
+                stats: 'coach-dashboard-at-a-glance-stats',
+                statRow: 'coach-dashboard-at-a-glance-stat-row',
+                disciplineLoad: 'coach-dashboard-discipline-load',
+              }}
+              statsRows={[
+                { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+              ]}
+              disciplineRows={(data?.disciplineLoad ?? []).map((row) => ({
+                discipline: row.discipline,
+                totalMinutes: row.totalMinutes,
+                rightValue: `${formatMinutes(row.totalMinutes)} · ${formatDistanceKm(row.totalDistanceKm)}`,
+              }))}
+            />
           </div>
         </div>
 

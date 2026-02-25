@@ -80,7 +80,7 @@ export const ICONS: Record<IconName, string> = {
   disciplineBrick: 'layers',
   disciplineStrength: 'fitness_center',
   disciplineRest: 'bedtime',
-  disciplineOther: 'star',
+  disciplineOther: 'restaurant',
   
   // Coaching / feedback metadata
   athleteComment: 'chat_bubble',
