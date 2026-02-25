@@ -24,7 +24,7 @@ const BLOCK_ICON_MAP: BlockIconMap = {
   'strava vitals': 'favorite',
   'athlete strava vitals': 'favorite',
   'squad strava vitals': 'favorite',
-  'review inbox': 'inbox',
+  'review inbox': 'needsReview',
   'event countdown': 'today',
   mailbox: 'inbox',
   'calendar sync': 'calendarAddOn',
@@ -56,4 +56,3 @@ export function getBlockIconForTitle(title?: string | null): IconName | null {
   if (!key) return null;
   return BLOCK_ICON_MAP[key] ?? null;
 }
-

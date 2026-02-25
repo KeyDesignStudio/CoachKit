@@ -523,7 +523,10 @@ export default function CoachSettingsPage() {
         <Block className="w-full">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div>
-              <BlockTitle>Branding</BlockTitle>
+              <div className="flex items-center gap-2">
+                <Icon name="settings" size="sm" className="text-[var(--muted)]" aria-hidden />
+                <BlockTitle>Branding</BlockTitle>
+              </div>
               <p className="mt-1 text-sm text-[var(--muted)]">Update the logo and name athletes will see across CoachKit.</p>
             </div>
             {brandingLoading ? <span className="text-xs text-[var(--muted)]">Loading…</span> : null}
@@ -589,7 +592,10 @@ export default function CoachSettingsPage() {
 
         <div className="flex flex-col gap-6">
           <Block className="w-full">
-            <BlockTitle>Plan Library</BlockTitle>
+            <div className="flex items-center gap-2">
+              <Icon name="planned" size="sm" className="text-[var(--muted)]" aria-hidden />
+              <BlockTitle>Plan Library</BlockTitle>
+            </div>
             <p className="mt-1 text-sm text-[var(--muted)]">
               Upload your historical plans here. They are available for your use and can inform CoachKit AI globally.
             </p>
@@ -673,7 +679,10 @@ export default function CoachSettingsPage() {
           </Block>
 
           <Block className="w-full">
-            <BlockTitle>Timezone</BlockTitle>
+            <div className="flex items-center gap-2">
+              <Icon name="today" size="sm" className="text-[var(--muted)]" aria-hidden />
+              <BlockTitle>Timezone</BlockTitle>
+            </div>
             <p className="mt-1 text-sm text-[var(--muted)]">Times and day-boundaries use your timezone.</p>
             <p className="mt-3 text-sm text-[var(--muted)]">
               Current: <span className="text-[var(--text)] font-medium">{getTimezoneLabel(timezone)}</span>
@@ -686,7 +695,10 @@ export default function CoachSettingsPage() {
           </Block>
 
           <Block className="w-full">
-            <BlockTitle>Appearance</BlockTitle>
+            <div className="flex items-center gap-2">
+              <Icon name="settings" size="sm" className="text-[var(--muted)]" aria-hidden />
+              <BlockTitle>Appearance</BlockTitle>
+            </div>
             <p className="mt-1 text-sm text-[var(--muted)]">Choose light, dark, or follow your system setting.</p>
 
             <div className="mt-3">

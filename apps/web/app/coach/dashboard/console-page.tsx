@@ -708,7 +708,10 @@ export default function CoachDashboardConsolePage() {
               data-testid="coach-dashboard-at-a-glance"
             >
               <div className="flex items-end justify-between gap-3 mb-2">
-                <BlockTitle>At a glance</BlockTitle>
+                <div className="flex items-center gap-2">
+                  <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
+                  <BlockTitle>At a glance</BlockTitle>
+                </div>
               </div>
 
               <div
