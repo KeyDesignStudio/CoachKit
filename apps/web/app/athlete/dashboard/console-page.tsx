@@ -151,7 +151,7 @@ function formatDistanceKm(km: number): string {
 
 function formatCalories(kcal: number | null): string {
   if (kcal == null) return '—';
-  return formatKcal(kcal).replace(' kcal', 'kcal');
+  return formatKcal(kcal);
 }
 
 function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string, customFrom: string, customTo: string) {
@@ -669,6 +669,19 @@ export default function AthleteDashboardConsolePage() {
               const points = summary?.caloriesByDay ?? [];
               const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
               const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
+              const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
+
+              const axisLabelForPoint = (point: (typeof points)[number], idx: number) => {
+                const shouldShow = idx === 0 || idx === points.length - 1 || idx % axisStep === 0;
+                if (!shouldShow) return '';
+                if (points.length <= 31) return point.dayKey.slice(8);
+                const d = new Date(`${point.dayKey}T00:00:00.000Z`);
+                return new Intl.DateTimeFormat('en-AU', {
+                  timeZone: athleteTimeZone,
+                  day: '2-digit',
+                  month: 'short',
+                }).format(d);
+              };
 
               const buildTooltip = (point: typeof points[number]) => {
                 const dateLabel = formatDisplayInTimeZone(point.dayKey, athleteTimeZone);
@@ -695,14 +708,15 @@ export default function AthleteDashboardConsolePage() {
               return (
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-sm text-[var(--muted)]">Total {formatCalories(totalCalories)}</div>
+                    <div className="text-sm text-[var(--muted)]">Total {formatKcal(totalCalories)} burned</div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
                     <div className="flex h-[180px] items-end gap-1" aria-label="Calories per day">
-                      {points.map((point) => {
+                      {points.map((point, idx) => {
                         const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
+                        const axisLabel = axisLabelForPoint(point, idx);
                         return (
                           <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
                             <div className="w-full flex items-end justify-center h-[140px]">
@@ -711,7 +725,9 @@ export default function AthleteDashboardConsolePage() {
                                 style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
                               />
                             </div>
-                            <div className="text-[10px] text-[var(--muted)] tabular-nums">{point.dayKey.slice(8)}</div>
+                            <div className="text-[10px] text-[var(--muted)] tabular-nums h-3 leading-none">
+                              {axisLabel}
+                            </div>
                           </div>
                         );
                       })}
