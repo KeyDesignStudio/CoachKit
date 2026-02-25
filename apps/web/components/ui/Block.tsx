@@ -12,8 +12,9 @@ type BlockProps = React.HTMLAttributes<HTMLDivElement> & {
   showHeaderDivider?: boolean;
 };
 
-export function Block({ title, rightAction, children, className, padding = true, showHeaderDivider = true, ...props }: BlockProps) {
+export function Block({ title, rightAction, children, className, padding = true, showHeaderDivider = false, ...props }: BlockProps) {
   const titleIcon = getBlockIconForTitle(title);
+  void showHeaderDivider;
 
   return (
     <div
@@ -32,8 +33,7 @@ export function Block({ title, rightAction, children, className, padding = true,
           className={cn(
             'flex min-w-0 items-center justify-between',
             tokens.spacing.blockPaddingX,
-            'py-3',
-            showHeaderDivider && 'border-b border-[var(--border-subtle)]'
+            'py-3'
           )}
         >
           {title && (

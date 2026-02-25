@@ -247,7 +247,13 @@ export function StravaVitalsSummaryCard({
   const mobileHelpContent = mobileHelpMetricId ? metricHelpContent(mobileHelpMetricId, comparison) : null;
 
   return (
-    <div className="rounded-2xl border border-[#f4c9ad] bg-[#fff2e9]/90 p-4">
+    <div
+      className="rounded-2xl border p-4"
+      style={{
+        borderColor: 'var(--strava-card-border)',
+        backgroundColor: 'var(--strava-card-bg)',
+      }}
+    >
       <div className="mb-2 flex items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
           <Icon name="strava" size="sm" className="text-[var(--muted)]" aria-hidden />
