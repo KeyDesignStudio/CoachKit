@@ -110,6 +110,17 @@ function formatCalendarDayLabel(dateIso: string, timeZone: string): string {
   return formatDisplayInTimeZone(dateIso, timeZone);
 }
 
+function formatReviewInboxDateShort(value: string, timeZone: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value ?? '');
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  }).format(parsed);
+}
+
 function getDateRangeFromPreset(preset: TimeRangePreset, coachTimeZone: string, customFrom: string, customTo: string) {
   const todayKey = getZonedDateKeyForNow(coachTimeZone);
   const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
@@ -650,9 +661,11 @@ export default function CoachDashboardConsolePage() {
                       <option value="LAST_7">Last 7 days</option>
                       <option value="CUSTOM">Custom</option>
                     </SelectField>
+                  </div>
 
+                  <div className="md:col-start-2 md:row-start-2">
                     {timeRange === 'CUSTOM' ? (
-                      <div className={cn("mt-2 grid grid-cols-2", tokens.spacing.widgetGap)}>
+                      <div className={cn("grid grid-cols-2", tokens.spacing.widgetGap)}>
                         <div>
                           <FieldLabel className="pl-1">From</FieldLabel>
                           <input
@@ -680,16 +693,16 @@ export default function CoachDashboardConsolePage() {
                           />
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-
-                  <div className="md:col-start-2 md:row-start-2">
-                    <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                    <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
-                      <div className={cn("font-medium text-[var(--muted)] text-xs sm:text-sm", tokens.typography.body)}>
-                        {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                        <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
+                          <div className={cn("font-medium text-[var(--muted)] text-xs sm:text-sm", tokens.typography.body)}>
+                            {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -788,7 +801,7 @@ export default function CoachDashboardConsolePage() {
                               {String(item.athlete?.name ?? 'Athlete')}
                             </div>
                             <div className={cn("whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
-                              {formatDayMonthYearInTimeZone(item.date, coachTimeZone)}
+                              {formatReviewInboxDateShort(item.date, coachTimeZone)}
                             </div>
                           </div>
                           <div className={cn("mt-1 truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>

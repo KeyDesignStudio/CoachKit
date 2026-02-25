@@ -503,13 +503,16 @@ export default function AthleteDashboardConsolePage() {
                         <option value="LAST_7">Last 7 days</option>
                         <option value="CUSTOM">Custom</option>
                       </SelectField>
+                    </div>
+
+                    <div className="min-w-0 col-start-2 row-start-2">
                       {timeRange === 'CUSTOM' ? (
-                        <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <label className="text-xs text-[var(--muted)]">
                             From
                             <input
                               type="date"
-                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
                               value={customFrom}
                               onChange={(e) => setCustomFrom(e.target.value)}
                             />
@@ -518,27 +521,28 @@ export default function AthleteDashboardConsolePage() {
                             To
                             <input
                               type="date"
-                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
                               value={customTo}
                               onChange={(e) => setCustomTo(e.target.value)}
                             />
                           </label>
                         </div>
-                      ) : null}
-                    </div>
-
-                    <div className="min-w-0 col-start-2 row-start-2">
-                      <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                      <div
-                        className={cn(
-                          'min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75'
-                        )}
-                        data-testid="athlete-dashboard-range-display"
-                      >
-                        <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
-                          {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                          <div
+                            className={cn(
+                              'min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75'
+                            )}
+                            data-testid="athlete-dashboard-range-display"
+                          >
+                            <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
+                              {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} →{' '}
+                              {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
