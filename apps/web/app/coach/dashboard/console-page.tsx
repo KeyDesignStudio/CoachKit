@@ -505,6 +505,7 @@ export default function CoachDashboardConsolePage() {
     if (!user?.userId || user.role !== 'COACH') return;
     const qs = new URLSearchParams();
     if (coachGreetingContext) qs.set('context', coachGreetingContext);
+    if (coachTimeZone) qs.set('timeZone', coachTimeZone);
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -512,7 +513,7 @@ export default function CoachDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [coachGreetingContext, fallbackWelcomeMessage, request, user?.role, user?.userId]);
+  }, [coachGreetingContext, coachTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId]);
 
   if (userLoading || (!user && !userError)) {
     return (

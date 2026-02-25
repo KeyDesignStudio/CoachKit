@@ -1,11 +1,26 @@
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening';
 
+function resolveTimeZoneOrFallback(timeZone?: string | null): string | undefined {
+  const candidate = String(timeZone ?? '').trim();
+  if (candidate) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+      return candidate;
+    } catch {
+      // ignore invalid timezone and fall through
+    }
+  }
+
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
 export function getTimeOfDay(timeZone?: string | null): TimeOfDay {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    hour12: false,
-    timeZone: timeZone || 'UTC',
-  });
+  const resolvedTz = resolveTimeZoneOrFallback(timeZone);
+  const formatter = new Intl.DateTimeFormat('en-US', resolvedTz ? { hour: 'numeric', hour12: false, timeZone: resolvedTz } : { hour: 'numeric', hour12: false });
 
   const hourPart = formatter
     .formatToParts(new Date())
@@ -74,12 +89,22 @@ function hashString(input: string): number {
 
 function stableTemplateIndex(params: { max: number; firstName: string; timeZone?: string | null; partOfDay: TimeOfDay }): number {
   if (params.max <= 1) return 0;
-  const dayKey = new Intl.DateTimeFormat('en-CA', {
-    timeZone: params.timeZone || 'UTC',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const resolvedTz = resolveTimeZoneOrFallback(params.timeZone);
+  const dayKey = new Intl.DateTimeFormat(
+    'en-CA',
+    resolvedTz
+      ? {
+          timeZone: resolvedTz,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }
+      : {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }
+  ).format(new Date());
   const seed = `${params.firstName.toLowerCase()}|${params.partOfDay}|${dayKey}`;
   return hashString(seed) % params.max;
 }

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { getFirstName, getTimeOfDay, getWarmWelcomeMessage, sanitizeAiGreeting } from '@/lib/user-greeting';
+import { isValidIanaTimeZone } from '@/lib/timezones';
 import { getAiPlanBuilderLlmConfig, getAiPlanBuilderLlmTransport } from '@/modules/ai-plan-builder/ai/providers/factory';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,7 @@ const querySchema = z.object({
   context: z.string().trim().max(320).optional(),
   completedToday: z.coerce.number().int().min(0).max(12).optional(),
   scheduledToday: z.coerce.number().int().min(0).max(12).optional(),
+  timeZone: z.string().trim().max(64).optional(),
 });
 
 const greetingSchema = z
@@ -29,11 +31,16 @@ export async function GET(request: NextRequest) {
       context: request.nextUrl.searchParams.get('context') ?? undefined,
       completedToday: request.nextUrl.searchParams.get('completedToday') ?? undefined,
       scheduledToday: request.nextUrl.searchParams.get('scheduledToday') ?? undefined,
+      timeZone: request.nextUrl.searchParams.get('timeZone') ?? undefined,
     });
 
+    const requestTimeZone = parsed.timeZone && isValidIanaTimeZone(parsed.timeZone) ? parsed.timeZone : null;
+    const userTimeZone = user.timezone && isValidIanaTimeZone(user.timezone) ? user.timezone : null;
+    const effectiveTimeZone = requestTimeZone ?? userTimeZone ?? 'UTC';
+
     const firstName = getFirstName(user.name);
-    const timeOfDay = getTimeOfDay(user.timezone);
-    const fallback = getWarmWelcomeMessage({ name: user.name, timeZone: user.timezone });
+    const timeOfDay = getTimeOfDay(effectiveTimeZone);
+    const fallback = getWarmWelcomeMessage({ name: user.name, timeZone: effectiveTimeZone });
 
     const llmInput = {
       firstName,
