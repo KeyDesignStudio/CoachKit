@@ -18,6 +18,7 @@ type AtAGlanceDisciplineRow = {
 type AtAGlanceCardProps = {
   statsRows: AtAGlanceStatRow[];
   disciplineRows: AtAGlanceDisciplineRow[];
+  loading?: boolean;
   minHeightPx?: number;
   testIds: {
     card: string;
@@ -28,7 +29,7 @@ type AtAGlanceCardProps = {
   };
 };
 
-export function AtAGlanceCard({ statsRows, disciplineRows, minHeightPx, testIds }: AtAGlanceCardProps) {
+export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minHeightPx, testIds }: AtAGlanceCardProps) {
   const maxMinutes = Math.max(1, ...disciplineRows.map((row) => row.totalMinutes));
 
   return (
@@ -98,7 +99,11 @@ export function AtAGlanceCard({ statsRows, disciplineRows, minHeightPx, testIds 
                   </div>
                 );
               })}
-              {disciplineRows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
+              {loading ? (
+                <div className="text-sm text-[var(--muted)] px-1 py-2">Loading data...</div>
+              ) : disciplineRows.length === 0 ? (
+                <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div>
+              ) : null}
             </div>
           </div>
         </div>
