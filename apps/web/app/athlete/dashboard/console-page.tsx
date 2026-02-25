@@ -557,7 +557,6 @@ export default function AthleteDashboardConsolePage() {
                     <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
                     <BlockTitle>At a glance</BlockTitle>
                   </div>
-                  <div className="text-xs text-[var(--muted)]">In this range</div>
                 </div>
 
                 <div
@@ -581,7 +580,8 @@ export default function AthleteDashboardConsolePage() {
                         <div
                           key={row.label}
                           className={cn(
-                            'min-w-0 flex items-baseline justify-between py-2',
+                            'min-w-0 flex items-baseline justify-between',
+                            tokens.spacing.elementPadding,
                             tokens.spacing.widgetGap,
                             idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
                           )}
@@ -590,7 +590,7 @@ export default function AthleteDashboardConsolePage() {
                           <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
                             {row.label}
                           </div>
-                          <div className={cn('flex-shrink-0 leading-[1.05] font-semibold tabular-nums', tokens.typography.body, 'sm:text-base')}>
+                          <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
                             {row.value}
                           </div>
                         </div>
@@ -604,11 +604,22 @@ export default function AthleteDashboardConsolePage() {
                   >
                     <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
                       {(() => {
-                        const rows = (data?.rangeSummary?.byDiscipline ?? []).map((row) => ({
-                          discipline: row.discipline,
-                          totalMinutes: row.completedMinutes,
-                          totalDistanceKm: row.completedDistanceKm,
-                        }));
+                        const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+                        const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+                        for (const row of data?.rangeSummary?.byDiscipline ?? []) {
+                          byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                            totalMinutes: Number(row.completedMinutes ?? 0),
+                            totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+                          });
+                        }
+                        const rows = seedOrder.map((discipline) => {
+                          const existing = byDiscipline.get(discipline);
+                          return {
+                            discipline,
+                            totalMinutes: existing?.totalMinutes ?? 0,
+                            totalDistanceKm: existing?.totalDistanceKm ?? 0,
+                          };
+                        });
                         const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
                         return (
                           <>
