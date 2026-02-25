@@ -26,7 +26,7 @@
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
   --strava-card-bg: rgba(255, 242, 233, 0.90);
-  --strava-card-border: #f05324;
+  --strava-card-border: #f0532436;
 
   /* Interaction tokens */
   --today-border: rgba(59, 130, 246, 0.40);
@@ -58,7 +58,7 @@
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
   --strava-card-bg: rgba(255, 242, 233, 0.90);
-  --strava-card-border: #f05324;
+  --strava-card-border: #f0532436;
 
   --today-border: rgba(59, 130, 246, 0.40);
 
@@ -88,7 +88,7 @@
   --bar-track: rgba(248, 251, 255, 0.18);
   --bar-fill: rgba(248, 251, 255, 0.34);
   --strava-card-bg: rgba(30, 20, 10, 0.78);
-  --strava-card-border: rgba(252, 76, 2, 0.55);
+  --strava-card-border: #f0532436;
 
   --today-border: rgba(158, 193, 255, 0.50);
 
@@ -119,7 +119,7 @@
     --bar-track: rgba(248, 251, 255, 0.18);
     --bar-fill: rgba(248, 251, 255, 0.34);
     --strava-card-bg: rgba(30, 20, 10, 0.78);
-    --strava-card-border: rgba(252, 76, 2, 0.55);
+    --strava-card-border: #f0532436;
 
     /* Interaction tokens */
     --today-border: rgba(158, 193, 255, 0.50);
