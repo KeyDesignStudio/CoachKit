@@ -8,6 +8,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { Icon } from '@/components/ui/Icon';
 import { useAuthUser } from '@/components/use-auth-user';
+import { useThemePreference } from '@/components/theme-preference';
 
 function getDisplayName(user: ReturnType<typeof useUser>['user']): string {
   const first = (user?.firstName ?? '').trim();
@@ -45,6 +46,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
   const { user: authUser } = useAuthUser();
   const pathname = usePathname();
   const router = useRouter();
+  const { preference: themePreference, setThemePreference } = useThemePreference();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 260 });
@@ -128,11 +130,51 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           </div>
           <div className="h-px bg-[var(--border-subtle)]" />
           <div className="p-2">
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Appearance</div>
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setThemePreference('light')}
+                  className={cn(
+                    'min-h-[36px] rounded-lg px-2',
+                    'inline-flex items-center justify-center gap-1.5 text-xs font-semibold',
+                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+                    themePreference === 'light'
+                      ? 'bg-[var(--bg-structure)] text-[var(--text)]'
+                      : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]'
+                  )}
+                  aria-pressed={themePreference === 'light'}
+                >
+                  <Icon name="weatherSunny" size="sm" className="text-[var(--muted)]" />
+                  <span>Light</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setThemePreference('dark')}
+                  className={cn(
+                    'min-h-[36px] rounded-lg px-2',
+                    'inline-flex items-center justify-center gap-1.5 text-xs font-semibold',
+                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
+                    themePreference === 'dark'
+                      ? 'bg-[var(--bg-structure)] text-[var(--text)]'
+                      : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]'
+                  )}
+                  aria-pressed={themePreference === 'dark'}
+                >
+                  <Icon name="weatherCloudy" size="sm" className="text-[var(--muted)]" />
+                  <span>Dark</span>
+                </button>
+              </div>
+            </div>
+
             <button
               type="button"
               role="menuitem"
               className={cn(
-                'w-full min-h-[44px] rounded-xl px-3',
+                'mt-2 w-full min-h-[44px] rounded-xl px-3',
                 'inline-flex items-center gap-2',
                 'text-sm font-medium text-[var(--text)]',
                 'hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)]',
@@ -191,7 +233,20 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
       </>,
       document.body
     );
-  }, [authUser?.role, close, displayName, menuPosition.left, menuPosition.top, menuPosition.width, open, openUserProfile, router, signOut]);
+  }, [
+    authUser?.role,
+    close,
+    displayName,
+    menuPosition.left,
+    menuPosition.top,
+    menuPosition.width,
+    open,
+    openUserProfile,
+    router,
+    setThemePreference,
+    signOut,
+    themePreference,
+  ]);
 
   return (
     <>
