@@ -56,6 +56,7 @@ export const ICON_NAMES = [
 
   // Common UI
   'favorite',
+  'nutrition',
   'strava',
 
   // Weather
@@ -80,7 +81,7 @@ export const ICONS: Record<IconName, string> = {
   disciplineBrick: 'layers',
   disciplineStrength: 'fitness_center',
   disciplineRest: 'bedtime',
-  disciplineOther: 'restaurant',
+  disciplineOther: 'star',
   
   // Coaching / feedback metadata
   athleteComment: 'chat_bubble',
@@ -123,6 +124,7 @@ export const ICONS: Record<IconName, string> = {
   search: 'search',
   // Common UI
   favorite: 'star',
+  nutrition: 'restaurant',
   strava: 'link',
 
   // Weather
