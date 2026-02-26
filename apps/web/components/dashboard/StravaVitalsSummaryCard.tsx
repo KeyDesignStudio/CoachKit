@@ -33,12 +33,44 @@ function metricClass(delta: StravaVitalsMetricDelta) {
 
 function DeltaInline({ delta, formatter }: { delta: StravaVitalsMetricDelta; formatter: (value: number) => string }) {
   if (delta.delta == null) {
-    return <span className="text-xs text-[var(--muted)]">No prior baseline</span>;
+    return <span className="text-xs leading-none text-[var(--muted)]">No prior baseline</span>;
   }
   return (
-    <span className={`text-xs ${metricClass(delta)}`}>
+    <span className={`text-xs leading-none ${metricClass(delta)}`}>
       {metricArrow(delta)} {formatter(Math.abs(delta.delta))}
     </span>
+  );
+}
+
+function MetricValueWithDelta({
+  label,
+  metricId,
+  comparison,
+  onOpenMobile,
+  value,
+  delta,
+  formatter,
+}: {
+  label: string;
+  metricId: string;
+  comparison: StravaVitalsComparison;
+  onOpenMobile: (metricId: string) => void;
+  value: string;
+  delta: StravaVitalsMetricDelta;
+  formatter: (value: number) => string;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4">
+      <div className="flex min-w-0 items-end text-[var(--muted)]">
+        <span className="leading-none">{label}</span>
+        <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
+      </div>
+      <div className="self-end text-right font-medium leading-none">{value}</div>
+      <div aria-hidden />
+      <div className="pb-3 pt-0 text-right leading-none">
+        <DeltaInline delta={delta} formatter={formatter} />
+      </div>
+    </div>
   );
 }
 
@@ -286,42 +318,43 @@ export function StravaVitalsSummaryCard({
 
       {!loading && vitals && vitals.sampleSize > 0 && comparison ? (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <div className="flex items-center text-[var(--muted)]">
-              Swim avg pace
-              <MetricHelpTrigger metricId="swim" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
-            </div>
-            <div className="text-right font-medium">{formatPace(vitals.swim.avgPaceSecPer100m, '/100m')}</div>
-            <div className="col-span-2 text-right">
-              <DeltaInline delta={comparison.deltas.swim.avgPaceSecPer100m} formatter={(value) => `${value}s/100m`} />
-            </div>
-
-            <div className="flex items-center text-[var(--muted)]">
-              Bike avg power
-              <MetricHelpTrigger metricId="bike" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
-            </div>
-            <div className="text-right font-medium">{formatNumber(vitals.bike.avgPowerW, ' W')}</div>
-            <div className="col-span-2 text-right">
-              <DeltaInline delta={comparison.deltas.bike.avgPowerW} formatter={(value) => `${value} W`} />
-            </div>
-
-            <div className="flex items-center text-[var(--muted)]">
-              Run avg pace
-              <MetricHelpTrigger metricId="run" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
-            </div>
-            <div className="text-right font-medium">{formatPace(vitals.run.avgPaceSecPerKm, '/km')}</div>
-            <div className="col-span-2 text-right">
-              <DeltaInline delta={comparison.deltas.run.avgPaceSecPerKm} formatter={(value) => `${value}s/km`} />
-            </div>
-
-            <div className="flex items-center text-[var(--muted)]">
-              Avg heart rate
-              <MetricHelpTrigger metricId="hr" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
-            </div>
-            <div className="text-right font-medium">{formatNumber(vitals.overall.avgHrBpm, ' bpm')}</div>
-            <div className="col-span-2 text-right">
-              <DeltaInline delta={comparison.deltas.overall.avgHrBpm} formatter={(value) => `${value} bpm`} />
-            </div>
+          <div className="space-y-0">
+            <MetricValueWithDelta
+              label="Swim avg pace"
+              metricId="swim"
+              comparison={comparison}
+              onOpenMobile={setMobileHelpMetricId}
+              value={formatPace(vitals.swim.avgPaceSecPer100m, '/100m')}
+              delta={comparison.deltas.swim.avgPaceSecPer100m}
+              formatter={(value) => `${value}s/100m`}
+            />
+            <MetricValueWithDelta
+              label="Bike avg power"
+              metricId="bike"
+              comparison={comparison}
+              onOpenMobile={setMobileHelpMetricId}
+              value={formatNumber(vitals.bike.avgPowerW, ' W')}
+              delta={comparison.deltas.bike.avgPowerW}
+              formatter={(value) => `${value} W`}
+            />
+            <MetricValueWithDelta
+              label="Run avg pace"
+              metricId="run"
+              comparison={comparison}
+              onOpenMobile={setMobileHelpMetricId}
+              value={formatPace(vitals.run.avgPaceSecPerKm, '/km')}
+              delta={comparison.deltas.run.avgPaceSecPerKm}
+              formatter={(value) => `${value}s/km`}
+            />
+            <MetricValueWithDelta
+              label="Avg heart rate"
+              metricId="hr"
+              comparison={comparison}
+              onOpenMobile={setMobileHelpMetricId}
+              value={formatNumber(vitals.overall.avgHrBpm, ' bpm')}
+              delta={comparison.deltas.overall.avgHrBpm}
+              formatter={(value) => `${value} bpm`}
+            />
           </div>
 
           {showLoadPanel && comparison.loadModel ? (

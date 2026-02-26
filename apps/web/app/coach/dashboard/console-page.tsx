@@ -596,11 +596,11 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 order-1 md:order-1">
             <Block
               title="Make your selection"
-              className="flex flex-col justify-between"
+              className="flex flex-col"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
               showHeaderDivider={false}
             >
-              <div>
+              <div className="-mt-3">
                 <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
                   {/* Row 1 */}
                   <div className="md:col-start-1 md:row-start-1">
