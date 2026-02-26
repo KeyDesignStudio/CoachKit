@@ -1506,145 +1506,147 @@ export default function CoachCalendarPage() {
           </div>
         </div>
 
-        {/* Bottom row: View Toggle, Navigation, Actions */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 text-sm">
-          {/* View Toggle */}
-          <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
-            <button
-              onClick={() => setViewMode('week')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
-                viewMode === 'week'
-                  ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                  : 'text-[var(--muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setViewMode('month')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
-                viewMode === 'month'
-                  ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                  : 'text-[var(--muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              Month
-            </button>
-          </div>
-          {/* Mobile: compact date nav: <  January 2026  > */}
-          <div className="md:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
-            <button
-              type="button"
-              onClick={navigatePrev}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Previous"
-            >
-              <Icon name="prev" size="md" />
-            </button>
+        {/* Bottom row: View Toggle, Navigation, Actions, Legend */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col items-stretch gap-3 text-sm md:min-w-0 md:flex-row md:items-center">
+            {/* View Toggle */}
+            <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
+              <button
+                onClick={() => setViewMode('week')}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
+                  viewMode === 'week'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => setViewMode('month')}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
+                  viewMode === 'month'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                Month
+              </button>
+            </div>
+            {/* Mobile: compact date nav: <  January 2026  > */}
+            <div className="md:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
+              <button
+                type="button"
+                onClick={navigatePrev}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Previous"
+              >
+                <Icon name="prev" size="md" />
+              </button>
 
-            <button
-              type="button"
-              onClick={goToToday}
-              className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] truncate hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Go to today"
-              title="Go to today"
-            >
-              {mounted
-                ? viewMode === 'week'
-                  ? formatWeekOfLabel(dateRange.from, athleteTimezone)
-                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
-                : formatWeekOfLabel(dateRange.from, athleteTimezone)}
-            </button>
+              <button
+                type="button"
+                onClick={goToToday}
+                className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] truncate hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Go to today"
+                title="Go to today"
+              >
+                {mounted
+                  ? viewMode === 'week'
+                    ? formatWeekOfLabel(dateRange.from, athleteTimezone)
+                    : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+                  : formatWeekOfLabel(dateRange.from, athleteTimezone)}
+              </button>
 
-            <button
-              type="button"
-              onClick={navigateNext}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Next"
-            >
-              <Icon name="next" size="md" />
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={navigateNext}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Next"
+              >
+                <Icon name="next" size="md" />
+              </button>
+            </div>
 
-          {/* Desktop: full date nav */}
-          <div className="hidden md:flex items-center gap-2">
-            <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
-              <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
-            </Button>
-            <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
-              <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
-            </Button>
-            <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
-              <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
-            </Button>
+            {/* Desktop: full date nav */}
+            <div className="hidden md:flex items-center gap-2">
+              <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
+                <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
+              </Button>
+              <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
+                <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
+              </Button>
+              <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
+                <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <CoachCalendarHelp />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={toggleCopyForm}
+                className="flex-1 md:flex-initial min-h-[44px]"
+                disabled={!singleAthleteId}
+                title={stackedMode ? 'Select a single athlete to copy plans.' : undefined}
+              >
+                {copyFormOpen ? 'Close' : <><Icon name="copyWeek" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Copy</span></>}
+              </Button>
+              {viewMode === 'week' && mounted && selectedAthleteIds.size > 1 ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void runBulkWeekAction('copy')}
+                    disabled={bulkActionLoading}
+                    className="min-h-[44px]"
+                    title="Copy from/to week for all selected athletes"
+                  >
+                    {bulkActionLoading ? 'Working…' : `Bulk Copy (${selectedAthleteIds.size})`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void runBulkWeekAction('publish')}
+                    disabled={bulkActionLoading}
+                    className="min-h-[44px]"
+                    title="Publish this week for all selected athletes"
+                  >
+                    {bulkActionLoading ? 'Publishing…' : `Bulk Publish (${selectedAthleteIds.size})`}
+                  </Button>
+                </>
+              ) : null}
+              {viewMode === 'week' && mounted && !!singleAthleteId && (
+                weekStatus === 'DRAFT' ? (
+                  <Button type="button" variant="primary" onClick={publishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
+                    {publishLoading ? 'Publishing...' : 'Publish weekly plan'}
+                  </Button>
+                ) : (
+                  <Button type="button" variant="ghost" onClick={unpublishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
+                    {publishLoading ? 'Unpublishing...' : 'Unpublish weekly plan'}
+                  </Button>
+                )
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <CoachCalendarHelp />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={toggleCopyForm}
-              className="flex-1 md:flex-initial min-h-[44px]"
-              disabled={!singleAthleteId}
-              title={stackedMode ? 'Select a single athlete to copy plans.' : undefined}
-            >
-              {copyFormOpen ? 'Close' : <><Icon name="copyWeek" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Copy</span></>}
-            </Button>
-            {viewMode === 'week' && mounted && selectedAthleteIds.size > 1 ? (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void runBulkWeekAction('copy')}
-                  disabled={bulkActionLoading}
-                  className="min-h-[44px]"
-                  title="Copy from/to week for all selected athletes"
-                >
-                  {bulkActionLoading ? 'Working…' : `Bulk Copy (${selectedAthleteIds.size})`}
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => void runBulkWeekAction('publish')}
-                  disabled={bulkActionLoading}
-                  className="min-h-[44px]"
-                  title="Publish this week for all selected athletes"
-                >
-                  {bulkActionLoading ? 'Publishing…' : `Bulk Publish (${selectedAthleteIds.size})`}
-                </Button>
-              </>
-            ) : null}
-            {viewMode === 'week' && mounted && !!singleAthleteId && (
-              weekStatus === 'DRAFT' ? (
-                <Button type="button" variant="primary" onClick={publishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
-                  {publishLoading ? 'Publishing...' : 'Publish weekly plan'}
-                </Button>
-              ) : (
-                <Button type="button" variant="ghost" onClick={unpublishWeek} disabled={publishLoading} className="flex-1 md:flex-initial min-h-[44px]">
-                  {publishLoading ? 'Unpublishing...' : 'Unpublish weekly plan'}
-                </Button>
-              )
-            )}
-          </div>
-        </div>
-        <div className="flex min-h-[44px] items-center justify-end">
-          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
-              Published Plan
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
-              Scheduled
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
-              Missed or skipped
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
-              Completed
-            </span>
+          <div className="flex min-h-[44px] items-center md:shrink-0 md:justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
+                Published Plan
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
+                Scheduled
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
+                Missed or skipped
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
+                Completed
+              </span>
+            </div>
           </div>
         </div>
         {copyMessage ? <p className="text-sm text-emerald-600">{copyMessage}</p> : null}
