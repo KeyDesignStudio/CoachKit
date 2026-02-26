@@ -392,7 +392,8 @@ describe('AI Plan Builder v1 (admin reset athlete endpoint)', () => {
     expect(json.data.mode).toBe('ATHLETE_CONTEXT_AND_APB_AND_CALENDAR');
 
     const latestBrief = await getLatestAthleteBrief({ coachId, athleteId });
-    expect(latestBrief?.brief?.snapshot?.primaryGoal ?? null).toBeNull();
+    const latestBriefSnapshot = latestBrief?.brief?.snapshot as { primaryGoal?: string | null } | null | undefined;
+    expect(latestBriefSnapshot?.primaryGoal ?? null).toBeNull();
 
     const latestSubmission = await getLatestAthleteIntakeSubmission({ coachId, athleteId });
     expect(latestSubmission).toBeNull();

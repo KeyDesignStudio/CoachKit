@@ -661,6 +661,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [coachChangeTimeline, setCoachChangeTimeline] = useState<CoachChangeTimelineEntry[]>([]);
   const [timelineDiffPreview, setTimelineDiffPreview] = useState<ProposalDiffPreview | null>(null);
   const [draftReviewTab, setDraftReviewTab] = useState<'share' | 'detail'>('share');
+  const [advancedControlsView, setAdvancedControlsView] = useState<'assist' | 'edit' | 'history'>('assist');
 
   const effectiveWeekStart = useMemo(
     () => normalizeWeekStart((draftPlanLatest as any)?.setupJson?.weekStart ?? setup.weekStart),
@@ -1520,6 +1521,54 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       });
 
       setDraftPlanLatest(data.draftPlan ?? null);
+      setSetup((prev) => {
+        const fromDraft =
+          data.draftPlan?.setupJson && typeof data.draftPlan.setupJson === 'object'
+            ? (data.draftPlan.setupJson as Record<string, unknown>)
+            : null;
+        if (!fromDraft) return prev;
+
+        const draftWeeklyMinutes = Number(fromDraft.weeklyAvailabilityMinutes);
+        const draftMaxIntensity = Number(fromDraft.maxIntensityDaysPerWeek);
+        const draftMaxDoubles = Number(fromDraft.maxDoublesPerWeek);
+        const draftWeeklyDaysRaw = Array.isArray(fromDraft.weeklyAvailabilityDays) ? fromDraft.weeklyAvailabilityDays : null;
+        const draftWeeklyDays =
+          draftWeeklyDaysRaw
+            ?.map((v) => Number(v))
+            .filter((v) => Number.isInteger(v) && v >= 0 && v <= 6) ?? null;
+
+        return {
+          ...prev,
+          startDate: typeof fromDraft.startDate === 'string' && isDayKey(fromDraft.startDate) ? fromDraft.startDate : prev.startDate,
+          completionDate:
+            typeof fromDraft.completionDate === 'string' && isDayKey(fromDraft.completionDate)
+              ? fromDraft.completionDate
+              : typeof fromDraft.eventDate === 'string' && isDayKey(fromDraft.eventDate)
+                ? fromDraft.eventDate
+                : prev.completionDate,
+          weeklyAvailabilityDays: draftWeeklyDays ?? prev.weeklyAvailabilityDays,
+          weeklyAvailabilityMinutes: Number.isFinite(draftWeeklyMinutes) ? draftWeeklyMinutes : prev.weeklyAvailabilityMinutes,
+          disciplineEmphasis:
+            fromDraft.disciplineEmphasis === 'balanced' ||
+            fromDraft.disciplineEmphasis === 'swim' ||
+            fromDraft.disciplineEmphasis === 'bike' ||
+            fromDraft.disciplineEmphasis === 'run'
+              ? fromDraft.disciplineEmphasis
+              : prev.disciplineEmphasis,
+          riskTolerance:
+            fromDraft.riskTolerance === 'low' || fromDraft.riskTolerance === 'med' || fromDraft.riskTolerance === 'high'
+              ? fromDraft.riskTolerance
+              : prev.riskTolerance,
+          maxIntensityDaysPerWeek: Number.isFinite(draftMaxIntensity) ? draftMaxIntensity : prev.maxIntensityDaysPerWeek,
+          maxDoublesPerWeek: Number.isFinite(draftMaxDoubles) ? draftMaxDoubles : prev.maxDoublesPerWeek,
+          policyProfileId:
+            fromDraft.policyProfileId === 'coachkit-conservative-v1' ||
+            fromDraft.policyProfileId === 'coachkit-safe-v1' ||
+            fromDraft.policyProfileId === 'coachkit-performance-v1'
+              ? fromDraft.policyProfileId
+              : prev.policyProfileId,
+        };
+      });
       setSessionDetailsById({});
       setWeekCarouselStart(0);
       if (data.draftPlan?.id) await fetchPublishStatus(String(data.draftPlan.id));
@@ -2372,7 +2421,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
             {progressOverlay.detailLine ? <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{progressOverlay.detailLine}</div> : null}
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
               <div
-                className="h-full rounded-full bg-[var(--primary)] transition-all duration-300"
+                className="h-full rounded-full bg-black transition-all duration-300"
                 style={{ width: `${Math.max(4, Math.min(100, progressOverlay.progress))}%` }}
               />
             </div>
@@ -2909,426 +2958,459 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
 
             <div className="pt-1">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Advanced coach controls (optional)</div>
-              <div className="grid gap-3 xl:grid-cols-2">
-            {adaptationMemory ? (
               <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Adaptation loop (next weeks)</div>
-                  <div className="flex items-center gap-2">
-                    {queuedRecommendations.length && hasNewDataSinceLastEval ? (
-                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900">
-                        New recommendation{queuedRecommendations.length === 1 ? '' : 's'} ({queuedRecommendations.length})
-                      </span>
-                    ) : null}
-                    <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshQueuedRecommendations()}>
-                      Refresh recommendations
-                    </Button>
-                    <Button size="sm" variant="secondary" disabled={busy != null || queuedRecommendations.length === 0} onClick={() => void applySafeQueuedRecommendations()}>
-                      Apply safe recommendations
-                    </Button>
+                  <div className="text-xs text-[var(--fg-muted)]">Pick one workflow to avoid conflicting edits.</div>
+                  <div className="inline-flex rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-0.5">
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1 text-xs ${advancedControlsView === 'assist' ? 'bg-[var(--bg-card)] font-medium' : 'text-[var(--fg-muted)]'}`}
+                      onClick={() => setAdvancedControlsView('assist')}
+                    >
+                      CoachKit suggestions
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1 text-xs ${advancedControlsView === 'edit' ? 'bg-[var(--bg-card)] font-medium' : 'text-[var(--fg-muted)]'}`}
+                      onClick={() => setAdvancedControlsView('edit')}
+                    >
+                      Edit plan
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1 text-xs ${advancedControlsView === 'history' ? 'bg-[var(--bg-card)] font-medium' : 'text-[var(--fg-muted)]'}`}
+                      onClick={() => setAdvancedControlsView('history')}
+                    >
+                      Change log
+                    </button>
                   </div>
                 </div>
-                <div className="mt-2 grid gap-2 text-[11px] text-[var(--fg-muted)] md:grid-cols-2">
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
-                    Last evaluated: {lastEvaluatedAt ? new Date(lastEvaluatedAt).toLocaleString() : 'Not yet evaluated'}
-                  </div>
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
-                    Latest athlete signal: {latestSignalAt ? new Date(latestSignalAt).toLocaleString() : 'No recent signal'}
-                  </div>
-                </div>
-                <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
-                  {hasNewDataSinceLastEval ? 'New athlete data has arrived since the last adaptation evaluation.' : 'No new athlete data since the last adaptation evaluation.'}
-                </div>
-                {latestTriggerAssessment?.ranked?.length ? (
-                  <div className="mt-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px]">
-                    <div className="font-medium text-[var(--text)]">
-                      Trigger quality: {Math.round(Number(latestTriggerAssessment.averageConfidence ?? 0) * 100)}% avg confidence
-                    </div>
-                    <ul className="mt-1 list-disc pl-4 text-[var(--fg-muted)]">
-                      {latestTriggerAssessment.ranked.slice(0, 3).map((row, idx) => (
-                        <li key={`${idx}:${row.triggerType}`}>
-                          {row.triggerType} ({Math.round(Number(row.confidence ?? 0) * 100)}%, {row.impact}): {row.reason}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                {recommendationSuppression ? (
-                  <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-[11px] text-amber-900">
-                    Recommendation suppressed: {recommendationSuppression.reason}
-                  </div>
-                ) : null}
-                <div className="grid gap-2 text-xs md:grid-cols-5">
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    Skips {(Number(adaptationMemory.skipRate ?? 0) * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    Soreness {(Number(adaptationMemory.sorenessRate ?? 0) * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    Pain {(Number(adaptationMemory.painRate ?? 0) * 100).toFixed(0)}%
-                  </div>
-                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    Avg RPE {adaptationMemory.avgRpe != null ? Number(adaptationMemory.avgRpe).toFixed(1) : 'N/A'}
-                  </div>
-                </div>
-                {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes.length ? (
-                  <ul className="mt-2 list-disc pl-4 text-xs text-[var(--fg-muted)]">
-                    {adaptationMemory.notes.slice(0, 3).map((n: unknown, idx: number) => (
-                      <li key={`${idx}:${String(n)}`}>{String(n)}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                {queuedRecommendations.length ? (
-                  <div className="mt-3 space-y-2">
-                    <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Queued recommendations</div>
-                    {queuedRecommendations.map((proposal) => (
-                      <div key={String(proposal.id)} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                        <div className="text-xs font-medium">Recommendation #{String(proposal.id).slice(0, 8)}</div>
-                        <div className="mt-1 text-xs">{String(proposal.rationaleText ?? 'CoachKit detected a safe adaptation opportunity based on recent athlete response.')}</div>
-                        {proposal.changeSummaryText ? <div className="mt-1 text-xs text-[var(--fg-muted)]">{String(proposal.changeSummaryText)}</div> : null}
-                        <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
-                          Triggers: {Array.isArray(proposal.triggerIds) && proposal.triggerIds.length ? proposal.triggerIds.length : 0} | Created:{' '}
-                          {proposal.createdAt ? new Date(proposal.createdAt).toLocaleString() : 'N/A'}
+                {advancedControlsView === 'assist' ? (
+                  <div className="space-y-3">
+                    <div className="text-xs text-[var(--fg-muted)]">Use this when you want CoachKit to recommend next-week adjustments from athlete response signals.</div>
+                    {adaptationMemory ? (
+                      <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">CoachKit suggestions (next weeks)</div>
+                          <div className="flex items-center gap-2">
+                            {queuedRecommendations.length && hasNewDataSinceLastEval ? (
+                              <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900">
+                                New recommendation{queuedRecommendations.length === 1 ? '' : 's'} ({queuedRecommendations.length})
+                              </span>
+                            ) : null}
+                            <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshQueuedRecommendations()}>
+                              Refresh suggestions
+                            </Button>
+                            <Button size="sm" variant="secondary" disabled={busy != null || queuedRecommendations.length === 0} onClick={() => void applySafeQueuedRecommendations()}>
+                              Apply all safe suggestions
+                            </Button>
+                          </div>
                         </div>
-                        {Array.isArray(proposal.reasonChain) && proposal.reasonChain.length ? (
-                          <ul className="mt-2 list-disc pl-4 text-[11px] text-[var(--fg-muted)]">
-                            {proposal.reasonChain.slice(0, 4).map((line, idx) => (
-                              <li key={`${String(proposal.id)}:${idx}:${line}`}>{line}</li>
+                        <div className="mt-2 grid gap-2 text-[11px] text-[var(--fg-muted)] md:grid-cols-2">
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
+                            Last evaluated: {lastEvaluatedAt ? new Date(lastEvaluatedAt).toLocaleString() : 'Not yet evaluated'}
+                          </div>
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-1.5">
+                            Latest athlete signal: {latestSignalAt ? new Date(latestSignalAt).toLocaleString() : 'No recent signal'}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                          {hasNewDataSinceLastEval ? 'New athlete data has arrived since the last adaptation evaluation.' : 'No new athlete data since the last adaptation evaluation.'}
+                        </div>
+                        {latestTriggerAssessment?.ranked?.length ? (
+                          <div className="mt-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-[11px]">
+                            <div className="font-medium text-[var(--text)]">
+                              Trigger quality: {Math.round(Number(latestTriggerAssessment.averageConfidence ?? 0) * 100)}% avg confidence
+                            </div>
+                            <ul className="mt-1 list-disc pl-4 text-[var(--fg-muted)]">
+                              {latestTriggerAssessment.ranked.slice(0, 3).map((row, idx) => (
+                                <li key={`${idx}:${row.triggerType}`}>
+                                  {row.triggerType} ({Math.round(Number(row.confidence ?? 0) * 100)}%, {row.impact}): {row.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {recommendationSuppression ? (
+                          <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-[11px] text-amber-900">
+                            Recommendation suppressed: {recommendationSuppression.reason}
+                          </div>
+                        ) : null}
+                        <div className="grid gap-2 text-xs md:grid-cols-5">
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            Completion {(Number(adaptationMemory.completionRate ?? 0) * 100).toFixed(0)}%
+                          </div>
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            Skips {(Number(adaptationMemory.skipRate ?? 0) * 100).toFixed(0)}%
+                          </div>
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            Soreness {(Number(adaptationMemory.sorenessRate ?? 0) * 100).toFixed(0)}%
+                          </div>
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            Pain {(Number(adaptationMemory.painRate ?? 0) * 100).toFixed(0)}%
+                          </div>
+                          <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            Avg RPE {adaptationMemory.avgRpe != null ? Number(adaptationMemory.avgRpe).toFixed(1) : 'N/A'}
+                          </div>
+                        </div>
+                        {Array.isArray(adaptationMemory.notes) && adaptationMemory.notes.length ? (
+                          <ul className="mt-2 list-disc pl-4 text-xs text-[var(--fg-muted)]">
+                            {adaptationMemory.notes.slice(0, 3).map((n: unknown, idx: number) => (
+                              <li key={`${idx}:${String(n)}`}>{String(n)}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {queuedRecommendations.length ? (
+                          <div className="mt-3 space-y-2">
+                            <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Queued recommendations</div>
+                            {queuedRecommendations.map((proposal) => (
+                              <div key={String(proposal.id)} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                                <div className="text-xs font-medium">Recommendation #{String(proposal.id).slice(0, 8)}</div>
+                                <div className="mt-1 text-xs">{String(proposal.rationaleText ?? 'CoachKit detected a safe adaptation opportunity based on recent athlete response.')}</div>
+                                {proposal.changeSummaryText ? <div className="mt-1 text-xs text-[var(--fg-muted)]">{String(proposal.changeSummaryText)}</div> : null}
+                                <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                                  Triggers: {Array.isArray(proposal.triggerIds) && proposal.triggerIds.length ? proposal.triggerIds.length : 0} | Created:{' '}
+                                  {proposal.createdAt ? new Date(proposal.createdAt).toLocaleString() : 'N/A'}
+                                </div>
+                                {Array.isArray(proposal.reasonChain) && proposal.reasonChain.length ? (
+                                  <ul className="mt-2 list-disc pl-4 text-[11px] text-[var(--fg-muted)]">
+                                    {proposal.reasonChain.slice(0, 4).map((line, idx) => (
+                                      <li key={`${String(proposal.id)}:${idx}:${line}`}>{line}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(proposal.id))}>
+                                    Apply suggestion
+                                  </Button>
+                                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(proposal.id))}>
+                                    Dismiss
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : recommendationRefreshAt ? (
+                          <div className="mt-2 text-xs text-[var(--fg-muted)]">No queued recommendations right now.</div>
+                        ) : null}
+                        {adaptationSignalTimeline.length ? (
+                          <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Recent signals</div>
+                            <ul className="space-y-1 text-[11px] text-[var(--fg-muted)]">
+                              {adaptationSignalTimeline.slice(0, 8).map((item, idx) => (
+                                <li key={`${item.at}:${idx}:${item.summary}`}>
+                                  {new Date(item.at).toLocaleDateString()} - {item.summary}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        <div className="mt-3 space-y-2">
+                          {adaptationSuggestions.slice(0, 2).map((s) => (
+                            <div key={s.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                              <div className="text-xs font-medium">{s.label}</div>
+                              <div className="mt-1 text-xs">{s.guidance}</div>
+                              <div className="mt-1 text-[11px] text-[var(--fg-muted)]">Why: {s.why}</div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 1} onClick={() => void applyAdaptationSuggestion(s, 1)}>
+                                  Apply to next week
+                                </Button>
+                                <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 2} onClick={() => void applyAdaptationSuggestion(s, 2)}>
+                                  Apply to next 2 weeks
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[var(--fg-muted)]">No adaptation data available yet for this athlete.</div>
+                    )}
+                  </div>
+                ) : null}
+                {advancedControlsView === 'edit' ? (
+                  <div className="space-y-3">
+                    <div className="text-xs text-[var(--fg-muted)]">
+                      Use one edit path at a time: quick numeric week edits or instruction-based AI edits. Both produce a proposal before apply.
+                    </div>
+                    <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Quick week edit</div>
+                      <div className="grid gap-2 md:grid-cols-4">
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
+                          <Select value={String(weekEditWeek?.weekIndex ?? '')} onChange={(e) => setWeekEditWeekIndex(Number(e.target.value))}>
+                            {weekOptions.map((w) => (
+                              <option key={w.value} value={String(w.value)}>
+                                {w.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Duration delta (min)</label>
+                          <Input value={weekEditDurationDelta} onChange={(e) => setWeekEditDurationDelta(e.target.value)} placeholder="-10 or 10" inputMode="numeric" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Append note to week sessions (optional)</label>
+                          <Input value={weekEditNoteSuffix} onChange={(e) => setWeekEditNoteSuffix(e.target.value)} placeholder="Travel week: keep it controlled." />
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="secondary" disabled={busy != null || !weekEditWeek} onClick={() => void applyWeekBulkEdit()}>
+                          Propose week edit
+                        </Button>
+                        <span className="text-xs text-[var(--fg-muted)]">Creates a week edit proposal so you can preview and apply safely.</span>
+                      </div>
+                    </div>
+                    {manualProposalPreview ? (
+                      <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Manual edit proposal preview</div>
+                        <div className="text-xs text-[var(--fg-muted)]">
+                          Proposal #{String(manualProposalPreview.proposalId).slice(0, 8)} | {manualProposalPreview.proposedCount} change
+                          {manualProposalPreview.proposedCount === 1 ? '' : 's'}
+                        </div>
+                        {manualProposalPreview.preview?.summary ? (
+                          <div className="mt-2 text-xs">
+                            Sessions changed: {Number(manualProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                            {Number(manualProposalPreview.preview.summary.totalMinutesDelta ?? 0)}
+                          </div>
+                        ) : null}
+                        {renderProposalWeeksList(manualProposalPreview.preview)}
+                        {manualProposalPreview.applySafety?.wouldFailDueToLocks ? (
+                          <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                            {(manualProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                              <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
                             ))}
                           </ul>
                         ) : null}
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(proposal.id))}>
-                            Apply recommendation
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy != null || Boolean(manualProposalPreview.applySafety?.wouldFailDueToLocks)}
+                            onClick={() => void applyManualProposal()}
+                          >
+                            Apply manual proposal
                           </Button>
-                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(proposal.id))}>
-                            Dismiss
+                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectManualProposal()}>
+                            Discard proposal
                           </Button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : recommendationRefreshAt ? (
-                  <div className="mt-2 text-xs text-[var(--fg-muted)]">No queued recommendations right now.</div>
-                ) : null}
-                {adaptationSignalTimeline.length ? (
-                  <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                    <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Recent signals</div>
-                    <ul className="space-y-1 text-[11px] text-[var(--fg-muted)]">
-                      {adaptationSignalTimeline.slice(0, 8).map((item, idx) => (
-                        <li key={`${item.at}:${idx}:${item.summary}`}>
-                          {new Date(item.at).toLocaleDateString()} - {item.summary}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <div className="mt-3 space-y-2">
-                  {adaptationSuggestions.slice(0, 2).map((s) => (
-                    <div key={s.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
-                      <div className="text-xs font-medium">{s.label}</div>
-                      <div className="mt-1 text-xs">{s.guidance}</div>
-                      <div className="mt-1 text-[11px] text-[var(--fg-muted)]">Why: {s.why}</div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 1} onClick={() => void applyAdaptationSuggestion(s, 1)}>
-                          Apply to next week
+                    ) : null}
+                    <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Ask CoachKit to adjust</div>
+                      <div className="grid gap-2 md:grid-cols-4">
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Scope</label>
+                          <Select value={agentScope} onChange={(e) => setAgentScope(e.target.value as 'set' | 'session' | 'week' | 'plan')}>
+                            <option value="set">Single set block</option>
+                            <option value="session">Single session</option>
+                            <option value="week">Selected week</option>
+                            <option value="plan">Entire plan</option>
+                          </Select>
+                        </div>
+                        {agentScope !== 'plan' ? (
+                          <div>
+                            <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
+                            <Select value={String(agentWeek?.weekIndex ?? '')} onChange={(e) => setAgentWeekIndex(Number(e.target.value))}>
+                              {weekOptions.map((w) => (
+                                <option key={w.value} value={String(w.value)}>
+                                  {w.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        ) : null}
+                        {agentScope === 'session' || agentScope === 'set' ? (
+                          <div className="md:col-span-2">
+                            <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Session</label>
+                            <Select value={String(agentSessionId ?? '')} onChange={(e) => setAgentSessionId(e.target.value)}>
+                              <option value="">Select session</option>
+                              {agentSessionOptions.map((s) => (
+                                <option key={s.value} value={s.value}>
+                                  {s.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-2">
+                        <Textarea
+                          value={agentInstruction}
+                          onChange={(e) => setAgentInstruction(e.target.value)}
+                          rows={2}
+                          placeholder="Examples: Reduce intensity by 1 level and cut 10 min. | Main set: 4 x 6 min @ tempo with 2 min easy. | Make this week recovery focused."
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy != null || !agentInstruction.trim() || ((agentScope === 'session' || agentScope === 'set') && !agentSessionId)}
+                          onClick={() => void applyAgentAdjustment()}
+                        >
+                          Propose AI adjustment
                         </Button>
-                        <Button size="sm" variant="secondary" disabled={busy != null || upcomingWeekTargets.length < 2} onClick={() => void applyAdaptationSuggestion(s, 2)}>
-                          Apply to next 2 weeks
-                        </Button>
+                        <span className="text-xs text-[var(--fg-muted)]">Creates a diff proposal first, then you review and apply.</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach bulk week edit</div>
-              <div className="grid gap-2 md:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
-                  <Select value={String(weekEditWeek?.weekIndex ?? '')} onChange={(e) => setWeekEditWeekIndex(Number(e.target.value))}>
-                    {weekOptions.map((w) => (
-                      <option key={w.value} value={String(w.value)}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Duration delta (min)</label>
-                  <Input value={weekEditDurationDelta} onChange={(e) => setWeekEditDurationDelta(e.target.value)} placeholder="-10 or 10" inputMode="numeric" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Append note to week sessions (optional)</label>
-                  <Input value={weekEditNoteSuffix} onChange={(e) => setWeekEditNoteSuffix(e.target.value)} placeholder="Travel week: keep it controlled." />
-                </div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy != null || !weekEditWeek}
-                  onClick={() => void applyWeekBulkEdit()}
-                >
-                  Propose week edit
-                </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Creates a week edit proposal so you can preview and apply safely.</span>
-              </div>
-            </div>
-
-            {manualProposalPreview ? (
-              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Manual edit proposal preview</div>
-                <div className="text-xs text-[var(--fg-muted)]">
-                  Proposal #{String(manualProposalPreview.proposalId).slice(0, 8)} | {manualProposalPreview.proposedCount} change
-                  {manualProposalPreview.proposedCount === 1 ? '' : 's'}
-                </div>
-                {manualProposalPreview.preview?.summary ? (
-                  <div className="mt-2 text-xs">
-                    Sessions changed: {Number(manualProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
-                    {Number(manualProposalPreview.preview.summary.totalMinutesDelta ?? 0)}
-                  </div>
-                ) : null}
-                {renderProposalWeeksList(manualProposalPreview.preview)}
-                {manualProposalPreview.applySafety?.wouldFailDueToLocks ? (
-                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
-                    {(manualProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
-                      <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy != null || Boolean(manualProposalPreview.applySafety?.wouldFailDueToLocks)}
-                    onClick={() => void applyManualProposal()}
-                  >
-                    Apply manual proposal
-                  </Button>
-                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectManualProposal()}>
-                    Discard proposal
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">CoachKit AI adjustment</div>
-              <div className="grid gap-2 md:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Scope</label>
-                  <Select value={agentScope} onChange={(e) => setAgentScope(e.target.value as 'set' | 'session' | 'week' | 'plan')}>
-                    <option value="set">Single set block</option>
-                    <option value="session">Single session</option>
-                    <option value="week">Selected week</option>
-                    <option value="plan">Entire plan</option>
-                  </Select>
-                </div>
-                {agentScope !== 'plan' ? (
-                  <div>
-                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Week</label>
-                    <Select value={String(agentWeek?.weekIndex ?? '')} onChange={(e) => setAgentWeekIndex(Number(e.target.value))}>
-                      {weekOptions.map((w) => (
-                        <option key={w.value} value={String(w.value)}>
-                          {w.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                ) : null}
-                {agentScope === 'session' || agentScope === 'set' ? (
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-[11px] font-medium text-[var(--fg-muted)]">Session</label>
-                    <Select value={String(agentSessionId ?? '')} onChange={(e) => setAgentSessionId(e.target.value)}>
-                      <option value="">Select session</option>
-                      {agentSessionOptions.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                ) : null}
-              </div>
-              <div className="mt-2">
-                <Textarea
-                  value={agentInstruction}
-                  onChange={(e) => setAgentInstruction(e.target.value)}
-                  rows={2}
-                  placeholder="Examples: Reduce intensity by 1 level and cut 10 min. | Main set: 4 x 6 min @ tempo with 2 min easy. | Make this week recovery focused."
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy != null || !agentInstruction.trim() || ((agentScope === 'session' || agentScope === 'set') && !agentSessionId)}
-                  onClick={() => void applyAgentAdjustment()}
-                >
-                  Propose AI adjustment
-                </Button>
-                <span className="text-xs text-[var(--fg-muted)]">Creates a diff proposal first, then you review and apply.</span>
-              </div>
-            </div>
-
-            {agentProposalPreview ? (
-              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">AI adjustment proposal preview</div>
-                <div className="text-xs text-[var(--fg-muted)]">
-                  Proposal #{String(agentProposalPreview.proposalId).slice(0, 8)} | {agentProposalPreview.proposedCount} change
-                  {agentProposalPreview.proposedCount === 1 ? '' : 's'}
-                </div>
-                {agentProposalPreview.preview?.summary ? (
-                  <div className="mt-2 text-xs">
-                    Sessions changed: {Number(agentProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
-                    {Number(agentProposalPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
-                    {agentProposalPreview.preview.summary.intensitySessionsDelta == null
-                      ? 'N/A'
-                      : Number(agentProposalPreview.preview.summary.intensitySessionsDelta)}
-                  </div>
-                ) : null}
-                {renderProposalWeeksList(agentProposalPreview.preview)}
-                {agentProposalPreview.applySafety?.wouldFailDueToLocks ? (
-                  <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
-                    {(agentProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
-                      <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy != null || Boolean(agentProposalPreview.applySafety?.wouldFailDueToLocks)}
-                    onClick={() => void applyProposedAgentAdjustment()}
-                  >
-                    Apply proposed adjustment
-                  </Button>
-                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectProposedAgentAdjustment()}>
-                    Discard proposal
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {changeSummary ? (
-              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
-                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">What changed</div>
-                <div className="text-xs font-medium">{changeSummary.title}</div>
-                <ul className="mt-1 list-disc pl-4 text-xs">
-                  {changeSummary.lines.map((line, idx) => (
-                    <li key={`${changeSummary.createdAt}:${idx}:${line}`}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach change timeline</div>
-                <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshCoachChangeTimeline()}>
-                  Refresh timeline
-                </Button>
-              </div>
-              {(() => {
-                const proposalEntries = coachChangeTimeline.filter((entry) => entry.source === 'proposal');
-                const proposed = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'PROPOSED').length;
-                const applied = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'APPLIED').length;
-                const rejected = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'REJECTED').length;
-                return (
-                  <div className="mb-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs text-[var(--fg-muted)]">
-                    Apply log: {proposed} pending · {applied} applied · {rejected} rejected
-                  </div>
-                );
-              })()}
-              {coachChangeTimeline.length ? (
-                <div className="space-y-2">
-                  {coachChangeTimeline.slice(0, 10).map((entry) => (
-                    <div key={entry.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs">
-                      <div className="font-medium">
-                        {entry.source === 'proposal' ? 'Proposal' : 'Audit'} · {entry.eventType}
-                        {entry.status ? ` · ${entry.status}` : ''}
+                    {agentProposalPreview ? (
+                      <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">AI adjustment proposal preview</div>
+                        <div className="text-xs text-[var(--fg-muted)]">
+                          Proposal #{String(agentProposalPreview.proposalId).slice(0, 8)} | {agentProposalPreview.proposedCount} change
+                          {agentProposalPreview.proposedCount === 1 ? '' : 's'}
+                        </div>
+                        {agentProposalPreview.preview?.summary ? (
+                          <div className="mt-2 text-xs">
+                            Sessions changed: {Number(agentProposalPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                            {Number(agentProposalPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
+                            {agentProposalPreview.preview.summary.intensitySessionsDelta == null
+                              ? 'N/A'
+                              : Number(agentProposalPreview.preview.summary.intensitySessionsDelta)}
+                          </div>
+                        ) : null}
+                        {renderProposalWeeksList(agentProposalPreview.preview)}
+                        {agentProposalPreview.applySafety?.wouldFailDueToLocks ? (
+                          <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                            {(agentProposalPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                              <li key={`${idx}:${r.code}:${r.message}`}>{r.message}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy != null || Boolean(agentProposalPreview.applySafety?.wouldFailDueToLocks)}
+                            onClick={() => void applyProposedAgentAdjustment()}
+                          >
+                            Apply proposed adjustment
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void rejectProposedAgentAdjustment()}>
+                            Discard proposal
+                          </Button>
+                        </div>
                       </div>
-                      <div className="mt-1 text-[var(--fg-muted)]">{entry.summary}</div>
-                      <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{new Date(entry.at).toLocaleString()}</div>
-                      {entry.proposalId ? (
-                        <div className="mt-2">
-                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void loadTimelineProposalPreview(String(entry.proposalId))}>
-                            View diff
-                          </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {advancedControlsView === 'history' ? (
+                  <div className="space-y-3">
+                    <div className="text-xs text-[var(--fg-muted)]">Review what changed, what is pending, and reopen prior proposals when needed.</div>
+                    {changeSummary ? (
+                      <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-3">
+                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">What changed</div>
+                        <div className="text-xs font-medium">{changeSummary.title}</div>
+                        <ul className="mt-1 list-disc pl-4 text-xs">
+                          {changeSummary.lines.map((line, idx) => (
+                            <li key={`${changeSummary.createdAt}:${idx}:${line}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Coach change timeline</div>
+                        <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void refreshCoachChangeTimeline()}>
+                          Refresh timeline
+                        </Button>
+                      </div>
+                      {(() => {
+                        const proposalEntries = coachChangeTimeline.filter((entry) => entry.source === 'proposal');
+                        const proposed = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'PROPOSED').length;
+                        const applied = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'APPLIED').length;
+                        const rejected = proposalEntries.filter((entry) => String(entry.status ?? '').toUpperCase() === 'REJECTED').length;
+                        return (
+                          <div className="mb-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs text-[var(--fg-muted)]">
+                            Apply log: {proposed} pending · {applied} applied · {rejected} rejected
+                          </div>
+                        );
+                      })()}
+                      {coachChangeTimeline.length ? (
+                        <div className="space-y-2">
+                          {coachChangeTimeline.slice(0, 10).map((entry) => (
+                            <div key={entry.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2 text-xs">
+                              <div className="font-medium">
+                                {entry.source === 'proposal' ? 'Proposal' : 'Audit'} · {entry.eventType}
+                                {entry.status ? ` · ${entry.status}` : ''}
+                              </div>
+                              <div className="mt-1 text-[var(--fg-muted)]">{entry.summary}</div>
+                              <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{new Date(entry.at).toLocaleString()}</div>
+                              {entry.proposalId ? (
+                                <div className="mt-2">
+                                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void loadTimelineProposalPreview(String(entry.proposalId))}>
+                                    View diff
+                                  </Button>
+                                </div>
+                              ) : null}
+                              {entry.source === 'proposal' && entry.status === 'PROPOSED' && entry.proposalId ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(entry.proposalId))}>
+                                    Apply
+                                  </Button>
+                                  <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(entry.proposalId))}>
+                                    Discard
+                                  </Button>
+                                </div>
+                              ) : null}
+                              {entry.source === 'proposal' &&
+                              entry.proposalId &&
+                              (entry.status === 'APPLIED' || entry.status === 'REJECTED' || entry.status === 'EXPIRED') ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void reopenTimelineProposal(String(entry.proposalId))}>
+                                    Re-open as new proposal
+                                  </Button>
+                                  {entry.status === 'APPLIED' ? (
+                                    <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void createUndoProposalFromTimeline(String(entry.proposalId))}>
+                                      Create undo proposal
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
-                      ) : null}
-                      {entry.source === 'proposal' && entry.status === 'PROPOSED' && entry.proposalId ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void applyQueuedRecommendation(String(entry.proposalId))}>
-                            Apply
-                          </Button>
-                          <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void dismissQueuedRecommendation(String(entry.proposalId))}>
-                            Discard
-                          </Button>
-                        </div>
-                      ) : null}
-                      {entry.source === 'proposal' &&
-                      entry.proposalId &&
-                      (entry.status === 'APPLIED' || entry.status === 'REJECTED' || entry.status === 'EXPIRED') ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Button size="sm" variant="secondary" disabled={busy != null} onClick={() => void reopenTimelineProposal(String(entry.proposalId))}>
-                            Re-open as new proposal
-                          </Button>
-                          {entry.status === 'APPLIED' ? (
-                            <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => void createUndoProposalFromTimeline(String(entry.proposalId))}>
-                              Create undo proposal
-                            </Button>
+                      ) : (
+                        <div className="text-xs text-[var(--fg-muted)]">No change timeline entries yet.</div>
+                      )}
+                      {timelineDiffPreview ? (
+                        <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Timeline diff preview</div>
+                          <div className="text-xs text-[var(--fg-muted)]">
+                            Proposal #{timelineDiffPreview.proposalId.slice(0, 8)} · loaded {new Date(timelineDiffPreview.loadedAt).toLocaleString()}
+                          </div>
+                          {timelineDiffPreview.preview?.summary ? (
+                            <div className="mt-2 text-xs">
+                              Sessions changed: {Number(timelineDiffPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
+                              {Number(timelineDiffPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
+                              {timelineDiffPreview.preview.summary.intensitySessionsDelta == null
+                                ? 'N/A'
+                                : Number(timelineDiffPreview.preview.summary.intensitySessionsDelta)}
+                            </div>
                           ) : null}
+                          {renderProposalWeeksList(timelineDiffPreview.preview)}
+                          {timelineDiffPreview.applySafety?.wouldFailDueToLocks ? (
+                            <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
+                              {(timelineDiffPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
+                                <li key={`timeline-preview-lock:${idx}:${r.code}:${r.message}`}>{r.message}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                          <div className="mt-2">
+                            <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => setTimelineDiffPreview(null)}>
+                              Close preview
+                            </Button>
+                          </div>
                         </div>
                       ) : null}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-[var(--fg-muted)]">No change timeline entries yet.</div>
-              )}
-              {timelineDiffPreview ? (
-                <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Timeline diff preview</div>
-                  <div className="text-xs text-[var(--fg-muted)]">
-                    Proposal #{timelineDiffPreview.proposalId.slice(0, 8)} · loaded {new Date(timelineDiffPreview.loadedAt).toLocaleString()}
                   </div>
-                  {timelineDiffPreview.preview?.summary ? (
-                    <div className="mt-2 text-xs">
-                      Sessions changed: {Number(timelineDiffPreview.preview.summary.sessionsChangedCount ?? 0)} | Minutes delta:{' '}
-                      {Number(timelineDiffPreview.preview.summary.totalMinutesDelta ?? 0)} | Intensity delta:{' '}
-                      {timelineDiffPreview.preview.summary.intensitySessionsDelta == null
-                        ? 'N/A'
-                        : Number(timelineDiffPreview.preview.summary.intensitySessionsDelta)}
-                    </div>
-                  ) : null}
-                  {renderProposalWeeksList(timelineDiffPreview.preview)}
-                  {timelineDiffPreview.applySafety?.wouldFailDueToLocks ? (
-                    <ul className="mt-2 list-disc pl-4 text-xs text-amber-800">
-                      {(timelineDiffPreview.applySafety.reasons ?? []).slice(0, 3).map((r, idx) => (
-                        <li key={`timeline-preview-lock:${idx}:${r.code}:${r.message}`}>{r.message}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <div className="mt-2">
-                    <Button size="sm" variant="ghost" disabled={busy != null} onClick={() => setTimelineDiffPreview(null)}>
-                      Close preview
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
               </div>
             </div>
-
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Week Carousel</div>
               <div className="flex flex-wrap items-center gap-2">

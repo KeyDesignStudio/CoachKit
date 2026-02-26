@@ -61,7 +61,7 @@ function MetricValueWithDelta({
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
-      <div className="flex min-w-0 self-end items-center text-[var(--muted)]">
+      <div className="flex min-w-0 self-end items-end text-[var(--muted)]">
         <span className="strava-vital-primary">{label}</span>
         <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
       </div>

@@ -86,8 +86,7 @@ describe('athlete profile api', () => {
   it('returns the athlete profile', async () => {
     const { GET } = await import('@/app/api/athlete/profile/route');
 
-    const req = new NextRequest('http://localhost/api/athlete/profile');
-    const res = await GET(req);
+    const res = await GET();
     expect(res.status).toBe(200);
 
     const json = await res.json();

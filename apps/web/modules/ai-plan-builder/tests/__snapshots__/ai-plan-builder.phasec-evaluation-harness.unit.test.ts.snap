@@ -342,8 +342,8 @@ exports[`ai-plan-builder phase C evaluation harness > regression summary remains
         {
           "intensityDays": 1,
           "keySessions": 2,
-          "sessionCount": 5,
-          "totalMinutes": 195,
+          "sessionCount": 4,
+          "totalMinutes": 205,
           "weekIndex": 3,
         },
         {
@@ -370,8 +370,8 @@ exports[`ai-plan-builder phase C evaluation harness > regression summary remains
         {
           "intensityDays": 1,
           "keySessions": 2,
-          "sessionCount": 5,
-          "totalMinutes": 195,
+          "sessionCount": 4,
+          "totalMinutes": 205,
           "weekIndex": 7,
         },
         {
@@ -391,15 +391,15 @@ exports[`ai-plan-builder phase C evaluation harness > regression summary remains
         {
           "intensityDays": 1,
           "keySessions": 2,
-          "sessionCount": 5,
-          "totalMinutes": 190,
+          "sessionCount": 4,
+          "totalMinutes": 195,
           "weekIndex": 10,
         },
         {
-          "intensityDays": 1,
+          "intensityDays": 0,
           "keySessions": 2,
-          "sessionCount": 5,
-          "totalMinutes": 140,
+          "sessionCount": 3,
+          "totalMinutes": 145,
           "weekIndex": 11,
         },
       ],

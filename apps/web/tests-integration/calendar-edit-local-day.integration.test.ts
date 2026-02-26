@@ -118,8 +118,8 @@ describe('calendar edit local-day placement', () => {
     const listRes = await GET(listReq);
     expect(listRes.status).toBe(200);
     const listJson = await listRes.json();
-    const items = listJson.data?.items ?? [];
-    const lookup = new Map(items.map((item: any) => [item.id, item]));
+    const items = (listJson.data?.items ?? []) as Array<{ id: string; date: string }>;
+    const lookup = new Map<string, { id: string; date: string }>(items.map((item) => [item.id, item]));
 
     expect(lookup.get(dateOnlyItem.id)?.date).toBe('2026-02-12');
     expect(lookup.get(timeOnlyItem.id)?.date).toBe('2026-02-14');

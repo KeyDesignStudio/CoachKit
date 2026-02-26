@@ -15,15 +15,16 @@ import { POST as copyWeekPOST } from '@/app/api/coach/calendar/copy-week/route';
 import { createAthlete, createCoach, seedTriggersAndProposal } from './seed';
 
 async function withDevAuthDisabled<T>(fn: () => Promise<T>): Promise<T> {
+  const env = process.env as Record<string, string | undefined>;
   const prevNodeEnv = process.env.NODE_ENV;
   const prevDisable = process.env.DISABLE_AUTH;
   try {
-    process.env.NODE_ENV = 'development';
-    process.env.DISABLE_AUTH = 'true';
+    env.NODE_ENV = 'development';
+    env.DISABLE_AUTH = 'true';
     return await fn();
   } finally {
-    process.env.NODE_ENV = prevNodeEnv;
-    process.env.DISABLE_AUTH = prevDisable;
+    env.NODE_ENV = prevNodeEnv;
+    env.DISABLE_AUTH = prevDisable;
   }
 }
 
