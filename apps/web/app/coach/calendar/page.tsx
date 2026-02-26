@@ -1789,7 +1789,7 @@ export default function CoachCalendarPage() {
             <Button type="button" variant="secondary" onClick={handleAddTitle} disabled={!titleInput.trim()}>
               Add title
             </Button>
-            <Button type="button" variant="ghost" onClick={handleDeleteTitle} disabled={!canDeleteTitle()} title="Delete selected title">
+            <Button type="button" variant="danger" onClick={handleDeleteTitle} disabled={!canDeleteTitle()} title="Delete selected title">
               🗑 Remove
             </Button>
           </div>

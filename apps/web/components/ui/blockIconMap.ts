@@ -20,7 +20,7 @@ const BLOCK_ICON_MAP: BlockIconMap = {
   'needs your attention': 'warning',
   'make your selection': 'filter',
   'planned vs completed': 'planned',
-  calories: 'favorite',
+  calories: 'nutrition',
   'strava vitals': 'strava',
   'athlete strava vitals': 'strava',
   'squad strava vitals': 'strava',

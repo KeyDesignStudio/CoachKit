@@ -126,7 +126,7 @@ export function AskFloatingPopup() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-lg hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+        className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-black bg-white text-black shadow-lg hover:bg-black hover:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
         aria-label={open ? 'Close Ask popup' : 'Open Ask popup'}
         title={open ? 'Close Ask' : 'Ask CoachKit'}
       >

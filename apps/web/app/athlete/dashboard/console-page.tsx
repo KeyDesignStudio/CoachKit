@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation';
 
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
-import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
-import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
-import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { AtAGlanceCard } from '@/components/dashboard/AtAGlanceCard';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
@@ -51,6 +49,8 @@ type AthleteDashboardResponse = {
     };
     byDiscipline: Array<{
       discipline: string;
+      plannedWorkouts: number;
+      completedWorkouts: number;
       plannedMinutes: number;
       completedMinutes: number;
       plannedDistanceKm: number;
@@ -153,7 +153,7 @@ function formatDistanceKm(km: number): string {
 
 function formatCalories(kcal: number | null): string {
   if (kcal == null) return '—';
-  return formatKcal(kcal).replace(' kcal', 'kcal');
+  return formatKcal(kcal);
 }
 
 function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string, customFrom: string, customTo: string) {
@@ -301,6 +301,7 @@ export default function AthleteDashboardConsolePage() {
     if (!user?.userId || user.role !== 'ATHLETE') return;
     const qs = new URLSearchParams();
     if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
+    if (athleteTimeZone) qs.set('timeZone', athleteTimeZone);
     void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
       .then((resp) => {
         if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
@@ -308,7 +309,7 @@ export default function AthleteDashboardConsolePage() {
       .catch(() => {
         setWelcomeMessage(fallbackWelcomeMessage);
       });
-  }, [fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
+  }, [athleteTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -504,13 +505,16 @@ export default function AthleteDashboardConsolePage() {
                         <option value="LAST_7">Last 7 days</option>
                         <option value="CUSTOM">Custom</option>
                       </SelectField>
+                    </div>
+
+                    <div className="min-w-0 col-start-2 row-start-2">
                       {timeRange === 'CUSTOM' ? (
-                        <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <label className="text-xs text-[var(--muted)]">
                             From
                             <input
                               type="date"
-                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
                               value={customFrom}
                               onChange={(e) => setCustomFrom(e.target.value)}
                             />
@@ -519,27 +523,28 @@ export default function AthleteDashboardConsolePage() {
                             To
                             <input
                               type="date"
-                              className="mt-1 w-full min-h-[36px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-sm"
+                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
                               value={customTo}
                               onChange={(e) => setCustomTo(e.target.value)}
                             />
                           </label>
                         </div>
-                      ) : null}
-                    </div>
-
-                    <div className="min-w-0 col-start-2 row-start-2">
-                      <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                      <div
-                        className={cn(
-                          'min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75'
-                        )}
-                        data-testid="athlete-dashboard-range-display"
-                      >
-                        <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
-                          {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                          <div
+                            className={cn(
+                              'min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75'
+                            )}
+                            data-testid="athlete-dashboard-range-display"
+                          >
+                            <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
+                              {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} →{' '}
+                              {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -547,116 +552,44 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-              <div
-                className="rounded-2xl bg-[var(--bg-card)] p-3 min-h-0 flex flex-col"
-                data-testid="athlete-dashboard-at-a-glance"
-                style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
-              >
-                <div className="flex items-end justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2">
-                    <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <BlockTitle>At a glance</BlockTitle>
-                  </div>
-                </div>
+              <AtAGlanceCard
+                minHeightPx={xlTopCardHeightPx ?? undefined}
+                loading={loading && !data}
+                testIds={{
+                  card: 'athlete-dashboard-at-a-glance',
+                  grid: 'athlete-dashboard-at-a-glance-grid',
+                  stats: 'athlete-dashboard-at-a-glance-stats',
+                  statRow: 'athlete-dashboard-at-a-glance-stat-row',
+                  disciplineLoad: 'athlete-dashboard-discipline-load',
+                }}
+                statsRows={[
+                  { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
+                  { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
+                  { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
+                  { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
+                ]}
+                disciplineRows={(() => {
+                  const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+                  const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+                  for (const row of data?.rangeSummary?.byDiscipline ?? []) {
+                    byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                      totalMinutes: Number(row.completedMinutes ?? 0),
+                      totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+                    });
+                  }
 
-                <div
-                  className={cn(
-                    'grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0',
-                    tokens.spacing.widgetGap
-                  )}
-                  data-testid="athlete-dashboard-at-a-glance-grid"
-                >
-                  <div
-                    className={cn('min-w-0 rounded-2xl bg-[var(--bg-structure)]/40', tokens.spacing.elementPadding)}
-                    data-testid="athlete-dashboard-at-a-glance-stats"
-                  >
-                    <div className={cn('grid', tokens.spacing.widgetGap)}>
-                      {[
-                        { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
-                        { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
-                        { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
-                        { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
-                      ].map((row, idx) => (
-                        <div
-                          key={row.label}
-                          className={cn(
-                            'min-w-0 flex items-baseline justify-between',
-                            tokens.spacing.elementPadding,
-                            tokens.spacing.widgetGap,
-                            idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
-                          )}
-                          data-testid="athlete-dashboard-at-a-glance-stat-row"
-                        >
-                          <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
-                            {row.label}
-                          </div>
-                          <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
-                            {row.value}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div
-                    className={cn('min-w-0 rounded-2xl bg-[var(--bg-structure)]/40', tokens.spacing.elementPadding)}
-                    data-testid="athlete-dashboard-discipline-load"
-                  >
-                    <div className={cn('flex flex-col', tokens.spacing.widgetGap)}>
-                      {(() => {
-                        const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
-                        const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-                        for (const row of data?.rangeSummary?.byDiscipline ?? []) {
-                          byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
-                            totalMinutes: Number(row.completedMinutes ?? 0),
-                            totalDistanceKm: Number(row.completedDistanceKm ?? 0),
-                          });
-                        }
-                        const rows = seedOrder.map((discipline) => {
-                          const existing = byDiscipline.get(discipline);
-                          return {
-                            discipline,
-                            totalMinutes: existing?.totalMinutes ?? 0,
-                            totalDistanceKm: existing?.totalDistanceKm ?? 0,
-                          };
-                        });
-                        const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                        return (
-                          <>
-                            {rows.map((r) => {
-                              const theme = getDisciplineTheme(r.discipline);
-                              const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                              const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
-                              return (
-                                <div key={r.discipline} className={cn('grid grid-cols-[auto,1fr,auto] items-center min-w-0', tokens.spacing.widgetGap)}>
-                                  <div className={cn('flex items-center min-w-[64px]', tokens.spacing.widgetGap)}>
-                                    <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                    <span className={cn('font-medium text-[var(--text)]', tokens.typography.meta)}>
-                                      {(r.discipline || 'OTHER').toUpperCase()}
-                                    </span>
-                                  </div>
-
-                                  <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
-                                    <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
-                                  </div>
-
-                                  <div
-                                    className={cn('tabular-nums text-right whitespace-nowrap truncate max-w-[120px]', tokens.typography.meta)}
-                                    title={rightValue}
-                                  >
-                                    {rightValue}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {rows.length === 0 ? <div className="text-sm text-[var(--muted)] px-1 py-2">No data for this range.</div> : null}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  return seedOrder.map((discipline) => {
+                    const existing = byDiscipline.get(discipline);
+                    const totalMinutes = existing?.totalMinutes ?? 0;
+                    const totalDistanceKm = existing?.totalDistanceKm ?? 0;
+                    return {
+                      discipline,
+                      totalMinutes,
+                      rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
+                    };
+                  });
+                })()}
+              />
             </div>
           </div>
         </div>
@@ -670,10 +603,10 @@ export default function AthleteDashboardConsolePage() {
           >
             {(() => {
               const summary = data?.rangeSummary;
-              const plannedTotal = summary?.totals.plannedMinutes ?? 0;
-              const completedTotal = summary?.totals.completedMinutes ?? 0;
+              const plannedTotal = summary?.totals.workoutsPlanned ?? 0;
+              const completedTotal = summary?.totals.workoutsCompleted ?? 0;
               const percent = plannedTotal > 0 ? Math.min(100, Math.round((completedTotal / plannedTotal) * 100)) : 0;
-              const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedMinutes > 0 || row.completedMinutes > 0);
+              const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedWorkouts > 0 || row.completedWorkouts > 0);
 
               return (
                 <div className="flex h-full flex-col gap-4">
@@ -682,13 +615,13 @@ export default function AthleteDashboardConsolePage() {
                       <>
                         <div className="text-lg font-semibold text-[var(--text)]">{percent}% complete</div>
                         <div className="text-sm text-[var(--muted)]">
-                          Completed {formatMinutes(completedTotal)} of {formatMinutes(plannedTotal)} planned
+                          Completed {completedTotal} of {plannedTotal} planned sessions
                         </div>
                       </>
                     ) : completedTotal > 0 ? (
                       <>
                         <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
-                        <div className="text-sm text-[var(--muted)]">Completed {formatMinutes(completedTotal)}</div>
+                        <div className="text-sm text-[var(--muted)]">Completed {completedTotal} sessions</div>
                       </>
                     ) : (
                       <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
@@ -707,12 +640,12 @@ export default function AthleteDashboardConsolePage() {
                       <div className="text-xs text-[var(--muted)]">No sessions logged for this range.</div>
                     ) : (
                       rows.map((row) => {
-                        const planned = row.plannedMinutes;
-                        const completed = row.completedMinutes;
+                        const planned = row.plannedWorkouts;
+                        const completed = row.completedWorkouts;
                         const denom = planned > 0 ? planned : completed > 0 ? completed : 1;
                         const pct = Math.max(0, Math.min(100, Math.round((completed / denom) * 100)));
                         const label = row.discipline.toUpperCase();
-                        const detail = planned > 0 ? `${formatMinutes(completed)} / ${formatMinutes(planned)}` : formatMinutes(completed);
+                        const detail = planned > 0 ? `${completed} / ${planned}` : `${completed}`;
                         return (
                           <div key={row.discipline} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between text-xs">
@@ -738,6 +671,19 @@ export default function AthleteDashboardConsolePage() {
               const points = summary?.caloriesByDay ?? [];
               const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
               const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
+              const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
+
+              const axisLabelForPoint = (point: (typeof points)[number], idx: number) => {
+                const shouldShow = idx === 0 || idx === points.length - 1 || idx % axisStep === 0;
+                if (!shouldShow) return '';
+                if (points.length <= 31) return point.dayKey.slice(8);
+                const d = new Date(`${point.dayKey}T00:00:00.000Z`);
+                return new Intl.DateTimeFormat('en-AU', {
+                  timeZone: athleteTimeZone,
+                  day: '2-digit',
+                  month: 'short',
+                }).format(d);
+              };
 
               const buildTooltip = (point: typeof points[number]) => {
                 const dateLabel = formatDisplayInTimeZone(point.dayKey, athleteTimeZone);
@@ -764,14 +710,15 @@ export default function AthleteDashboardConsolePage() {
               return (
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-sm text-[var(--muted)]">Total {formatCalories(totalCalories)}</div>
+                    <div className="text-sm text-[var(--muted)]">Total {formatKcal(totalCalories)} burned</div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
                     <div className="flex h-[180px] items-end gap-1" aria-label="Calories per day">
-                      {points.map((point) => {
+                      {points.map((point, idx) => {
                         const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
+                        const axisLabel = axisLabelForPoint(point, idx);
                         return (
                           <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
                             <div className="w-full flex items-end justify-center h-[140px]">
@@ -780,7 +727,9 @@ export default function AthleteDashboardConsolePage() {
                                 style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
                               />
                             </div>
-                            <div className="text-[10px] text-[var(--muted)] tabular-nums">{point.dayKey.slice(8)}</div>
+                            <div className="text-[10px] text-[var(--muted)] tabular-nums h-3 leading-none">
+                              {axisLabel}
+                            </div>
                           </div>
                         );
                       })}

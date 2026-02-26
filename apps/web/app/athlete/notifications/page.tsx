@@ -247,7 +247,7 @@ export default function AthleteNotificationsPage() {
           </div>
           <Button
             type="button"
-            className="min-h-[44px] bg-[#ef4444] text-white hover:bg-[#dc2626]"
+            className="min-h-[44px]"
             onClick={() => {
               setComposerOpen((prev) => !prev);
               setRecipientDropdownOpen(false);
@@ -372,7 +372,7 @@ export default function AthleteNotificationsPage() {
                 <Button
                   type="button"
                   size="sm"
-                  variant="secondary"
+                  variant="danger"
                   disabled={deleting || selectedVisibleCount === 0}
                   onClick={() => void deleteSelectedMessages()}
                 >

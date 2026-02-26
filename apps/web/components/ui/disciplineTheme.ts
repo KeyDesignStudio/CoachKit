@@ -61,7 +61,7 @@ export const DISCIPLINE_THEMES: Record<DisciplineKey, DisciplineTheme> = {
     bgClass: 'bg-pink-50/30',
     textClass: 'text-pink-700',
     badgeText: 'OTHER',
-    iconName: 'disciplineOther',
+    iconName: 'favorite',
   },
 };
 

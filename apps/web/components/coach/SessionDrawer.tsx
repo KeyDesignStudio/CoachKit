@@ -60,7 +60,7 @@ export function SessionDrawer({
                 {submitLabel}
               </Button>
               {onDelete ? (
-                <Button type="button" variant="ghost" onClick={onDelete}>
+                <Button type="button" variant="danger" onClick={onDelete}>
                   Delete
                 </Button>
               ) : null}
