@@ -19,7 +19,7 @@ async function getHeaderDateLines(page: any, testId: string) {
   const results: string[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const lines = (await headers.nth(i).locator('p').allTextContents()).map((text) => text.trim());
+    const lines = (await headers.nth(i).locator('p').allTextContents()).map((text: string) => text.trim());
     results.push(lines[1] ?? '');
   }
 

@@ -612,6 +612,57 @@ function keySessionBand(setup: DraftPlanSetupV1): { min: number; max: number } {
   return { min: 2, max: 3 };
 }
 
+const REQUEST_DAY_TO_INDEX: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
+
+function parsePreferredDayIndices(days: unknown): number[] {
+  if (!Array.isArray(days)) return [];
+  const parsed = days
+    .map((d) => REQUEST_DAY_TO_INDEX[String(d ?? '').trim().toLowerCase()])
+    .filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6);
+  return Array.from(new Set(parsed)).sort((a, b) => a - b);
+}
+
+function ensurePreferredKeyDayPlacement(params: {
+  sessions: DraftWeekV1['sessions'];
+  preferredDays: number[];
+}): DraftWeekV1['sessions'] {
+  if (!params.preferredDays.length || !params.sessions.length) return params.sessions;
+  const next = params.sessions.map((s) => ({ ...s }));
+  const hasKeyOnPreferred = next.some((s) => params.preferredDays.includes(s.dayOfWeek) && isKeySession(s));
+  if (hasKeyOnPreferred) return next;
+
+  const preferredCandidate = next
+    .map((s, idx) => ({ idx, s }))
+    .filter((row) => params.preferredDays.includes(row.s.dayOfWeek))
+    .sort((a, b) => Number(b.s.durationMinutes ?? 0) - Number(a.s.durationMinutes ?? 0))[0];
+  if (!preferredCandidate) return next;
+
+  const currentNotes = String(preferredCandidate.s.notes ?? '').trim();
+  next[preferredCandidate.idx] = {
+    ...next[preferredCandidate.idx],
+    notes: currentNotes ? `${currentNotes} · Key session` : 'Key session',
+  };
+  return next;
+}
+
 function enforceWeeklyKeySessionBudget(params: {
   setup: DraftPlanSetupV1;
   sessions: DraftWeekV1['sessions'];
@@ -723,6 +774,7 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
   };
   const setupWithPolicy = applyPlanningPolicyProfileToSetup(setup);
   const effectiveSetup = applyProgramPolicy(setupWithPolicy);
+  const preferredKeyDayIndices = parsePreferredDayIndices(effectiveSetup.requestContext?.preferredKeyDays);
 
   const totalMinutesBase = availabilityTotalMinutes(effectiveSetup.weeklyAvailabilityMinutes);
   const requestedTargetSessions = sessionsPerWeek(effectiveSetup, days.length);
@@ -813,7 +865,11 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
       weeks.push({ weekIndex, locked: false, sessions: [] });
       continue;
     }
-    const targetSessions = Math.max(1, Math.min(requestedTargetSessions, maxSessionsByCapacity));
+    const preferredSessionMinutes = Number(effectiveSetup.requestContext?.availableTimeMinutes);
+    const targetSessions =
+      Number.isFinite(preferredSessionMinutes) && preferredSessionMinutes > 0
+        ? Math.max(1, Math.min(maxSessionsByCapacity, clampInt(weekTotalMinutes / preferredSessionMinutes, 1, maxSessionsByCapacity)))
+        : Math.max(1, Math.min(requestedTargetSessions, maxSessionsByCapacity));
     const weekMaxIntensityDays = injuryFlag || weekHasTravel ? 1 : maxIntensityDaysPerWeek;
     // Determine which days are "intensity" (avoid consecutive). Prefer non-travel days.
     const intensityDays: number[] = [];
@@ -978,7 +1034,8 @@ export function generateDraftPlanDeterministicV1(setupRaw: DraftPlanSetupV1): Dr
     const deStacked = reduceAdjacentIntensity({ sessions: sorted, weekStart });
     const deLongStacked = reduceLongThenIntensity({ sessions: deStacked, weekStart });
     const keyed = enforceWeeklyKeySessionBudget({ setup: effectiveSetup, sessions: deLongStacked });
-    const humanized = humanizeWeekDurations({ sessions: keyed, longDay: planningDays.length ? longDay : defaultLongDay });
+    const preferredAligned = ensurePreferredKeyDayPlacement({ sessions: keyed, preferredDays: preferredKeyDayIndices });
+    const humanized = humanizeWeekDurations({ sessions: preferredAligned, longDay: planningDays.length ? longDay : defaultLongDay });
     const postGuard = humanized.map((session) =>
       applyTravelDaySessionGuardrail({
         setup: effectiveSetup,

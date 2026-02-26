@@ -8,6 +8,11 @@ import { assertCoachOwnsAthlete, requireCoach } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 
+function toAuditJson(value: unknown): Prisma.InputJsonValue | null {
+  if (value === undefined || value === null) return null;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 const updateAthleteSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
@@ -282,6 +287,70 @@ export async function PATCH(
         include: { user: true },
       });
     });
+
+    const userFieldNames = Object.keys(userData);
+    const profileFieldNames = Object.keys(profileData);
+    const auditRows: Array<{
+      tableName: string;
+      fieldName: string;
+      recordId: string;
+      beforeValue: Prisma.InputJsonValue | null;
+      afterValue: Prisma.InputJsonValue | null;
+    }> = [];
+
+    for (const fieldName of userFieldNames) {
+      const beforeValue = (athlete.user as Record<string, unknown> | null)?.[fieldName];
+      const afterValue = (updated.user as Record<string, unknown> | null)?.[fieldName];
+      if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) continue;
+      auditRows.push({
+        tableName: 'User',
+        fieldName,
+        recordId: athlete.userId,
+        beforeValue: toAuditJson(beforeValue),
+        afterValue: toAuditJson(afterValue),
+      });
+    }
+
+    for (const fieldName of profileFieldNames) {
+      const beforeValue = (athlete as Record<string, unknown>)[fieldName];
+      const afterValue = (updated as Record<string, unknown>)[fieldName];
+      if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) continue;
+      auditRows.push({
+        tableName: 'AthleteProfile',
+        fieldName,
+        recordId: athlete.userId,
+        beforeValue: toAuditJson(beforeValue),
+        afterValue: toAuditJson(afterValue),
+      });
+    }
+
+    if (auditRows.length > 0) {
+      try {
+        for (const row of auditRows) {
+          const auditId =
+            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+              ? crypto.randomUUID()
+              : `audit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "AdminAuditEvent"
+              ("id","createdAt","action","tableName","fieldName","recordId","changeText","beforeValue","afterValue","actorUserId","actorEmail","actorRole")
+             VALUES
+              ($1, NOW(), 'UPDATE'::"AdminAuditAction", $2, $3, $4, 'Field updated.', CAST($5 AS jsonb), CAST($6 AS jsonb), $7, $8, CAST($9 AS "UserRole"))`,
+            auditId,
+            row.tableName,
+            row.fieldName,
+            row.recordId,
+            JSON.stringify(row.beforeValue),
+            JSON.stringify(row.afterValue),
+            user.id,
+            user.email,
+            user.role
+          );
+        }
+      } catch {
+        // Audit logging should not block profile updates.
+      }
+    }
 
     return success({ athlete: updated });
   } catch (error) {

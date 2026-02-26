@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { generateAiDraftPlanV1 } from '@/modules/ai-plan-builder/server/draft-plan';
@@ -58,7 +59,7 @@ describe('PlanSource v1 influence (draft shaping)', () => {
         season: 'BASE',
         checksumSha256: nextTestId('checksum'),
         rawText: 'Week 1 Bike endurance 90 min',
-        rawJson: null,
+        rawJson: Prisma.JsonNull,
         isActive: true,
       },
     });
@@ -257,7 +258,7 @@ describe('PlanSource v1 influence (draft shaping)', () => {
         season: 'BASE',
         checksumSha256: nextTestId('checksum_sparse'),
         rawText: 'Week 1 Easy run 30 min',
-        rawJson: null,
+        rawJson: Prisma.JsonNull,
         isActive: true,
       },
     });

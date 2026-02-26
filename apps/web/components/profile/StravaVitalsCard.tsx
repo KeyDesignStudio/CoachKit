@@ -36,12 +36,12 @@ function metricArrowClass(delta: StravaVitalsMetricDelta) {
 
 function MetricDeltaText({ delta, formatter }: { delta: StravaVitalsMetricDelta; formatter: (value: number | null) => string }) {
   if (delta.current == null || delta.previous == null || delta.delta == null) {
-    return <span className="strava-vital-delta block text-xs text-[var(--muted)]">No previous period baseline</span>;
+    return <span className="strava-vital-delta text-xs text-[var(--muted)]">No previous period baseline</span>;
   }
 
   const abs = Math.abs(delta.delta);
   return (
-    <span className={`strava-vital-delta block text-xs ${metricArrowClass(delta)}`}>
+    <span className={`strava-vital-delta text-xs ${metricArrowClass(delta)}`}>
       {metricArrow(delta)} {formatter(abs)} vs previous period
     </span>
   );
@@ -59,11 +59,13 @@ function MetricValueWithDelta({
   formatter: (value: number | null) => string;
 }) {
   return (
-    <div className="mt-1">
-      <p className="strava-vital-primary text-sm">
-        {label}: {value}
-      </p>
-      <MetricDeltaText delta={delta} formatter={formatter} />
+    <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
+      <p className="strava-vital-primary self-end text-[var(--muted)]">{label}</p>
+      <p className="strava-vital-primary self-end text-right font-medium">{value}</p>
+      <div aria-hidden />
+      <div className="text-right">
+        <MetricDeltaText delta={delta} formatter={formatter} />
+      </div>
     </div>
   );
 }

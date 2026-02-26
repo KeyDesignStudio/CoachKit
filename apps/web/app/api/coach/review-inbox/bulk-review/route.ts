@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
         coachId: user.id,
         reviewedAt: null,
         status: {
-          in: [CalendarItemStatus.COMPLETED_MANUAL, CalendarItemStatus.COMPLETED_SYNCED, CalendarItemStatus.SKIPPED],
+          in: [
+            CalendarItemStatus.COMPLETED_MANUAL,
+            CalendarItemStatus.COMPLETED_SYNCED,
+            CalendarItemStatus.COMPLETED_SYNCED_DRAFT,
+            CalendarItemStatus.SKIPPED,
+          ],
         },
       },
       data: {

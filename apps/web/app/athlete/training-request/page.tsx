@@ -23,7 +23,7 @@ type TrainingRequestForm = {
   availabilityDays: DayShort[];
   nonNegotiableDays: DayShort[];
   preferredKeyDays: DayShort[];
-  dailyTimeWindows: Partial<Record<DayShort, TimeWindow>>;
+  dailyTimeWindows: Partial<Record<DayShort, TimeWindow[]>>;
   experienceLevel: string;
   injuryStatus: string;
   disciplineInjuryNotes: string;
@@ -70,7 +70,7 @@ const DAY_NAME_TO_SHORT: Record<string, DayShort> = {
 };
 
 const EQUIPMENT_OPTIONS = [
-  { value: '', label: 'Select equipment context' },
+  { value: '', label: 'Select equipment preferences' },
   { value: 'mixed', label: 'Mixed' },
   { value: 'trainer', label: 'Bike trainer' },
   { value: 'road', label: 'Road/outdoor bike' },
@@ -79,7 +79,15 @@ const EQUIPMENT_OPTIONS = [
   { value: 'gym', label: 'Gym access' },
 ] as const;
 
-const ENVIRONMENT_OPTIONS = ['heat', 'hills', 'altitude', 'wind', 'indoor', 'outdoor'] as const;
+const EXPERIENCE_LEVEL_OPTIONS = [
+  { value: '', label: 'Select experience level' },
+  { value: 'Beginner', label: 'Beginner' },
+  { value: 'Some experience', label: 'Some experience' },
+  { value: 'Intermediate', label: 'Intermediate' },
+  { value: 'Advanced', label: 'Advanced' },
+  { value: 'Competitive', label: 'Competitive' },
+] as const;
+
 const FATIGUE_OPTIONS = [
   { value: '', label: 'Select readiness' },
   { value: 'fresh', label: 'Fresh' },
@@ -164,22 +172,16 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
   const nonNegotiableDays = normalizeDayShortList(map.non_negotiable_days);
   const preferredKeyDays = normalizeDayShortList(map.preferred_key_days);
 
-  const environmentTags = Array.isArray(map.environment_tags)
-    ? Array.from(
-        new Set(
-          map.environment_tags
-            .map((v) => String(v ?? '').toLowerCase().trim())
-            .filter((v) => ENVIRONMENT_OPTIONS.includes(v as (typeof ENVIRONMENT_OPTIONS)[number]))
-        )
-      )
-    : [];
-
   const source = map.daily_time_windows && typeof map.daily_time_windows === 'object' ? (map.daily_time_windows as Record<string, unknown>) : {};
-  const dailyTimeWindows: Partial<Record<DayShort, TimeWindow>> = {};
+  const dailyTimeWindows: Partial<Record<DayShort, TimeWindow[]>> = {};
   for (const day of DAY_SHORTS) {
-    const rawValue = String(source[day] ?? '').toLowerCase();
-    if (rawValue === 'any' || rawValue === 'am' || rawValue === 'midday' || rawValue === 'pm' || rawValue === 'evening') {
-      dailyTimeWindows[day] = rawValue;
+    const rawValue = source[day];
+    const values = (Array.isArray(rawValue) ? rawValue : [rawValue])
+      .map((v) => String(v ?? '').toLowerCase().trim())
+      .filter((v): v is TimeWindow => v === 'any' || v === 'am' || v === 'midday' || v === 'pm' || v === 'evening');
+    if (values.length > 0) {
+      const unique = Array.from(new Set(values));
+      dailyTimeWindows[day] = unique.includes('any') ? ['any'] : unique;
     }
   }
 
@@ -216,7 +218,7 @@ function buildTrainingRequestFromDraftJson(raw: unknown): TrainingRequestForm {
       equipmentValue === 'gym'
         ? (equipmentValue as TrainingRequestForm['equipment'])
         : '',
-    environmentTags,
+    environmentTags: [],
     fatigueState:
       fatigueValue === 'fresh' || fatigueValue === 'normal' || fatigueValue === 'fatigued' || fatigueValue === 'cooked'
         ? (fatigueValue as TrainingRequestForm['fatigueState'])
@@ -276,6 +278,7 @@ export default function AthleteTrainingRequestPage() {
   const [requestStatus, setRequestStatus] = useState<'none' | 'draft' | 'submitted'>('none');
   const [intakeResponseId, setIntakeResponseId] = useState<string | null>(null);
   const [trainingRequest, setTrainingRequest] = useState<TrainingRequestForm>(() => buildTrainingRequestFromProfile(null));
+  const [openTimeWindowDay, setOpenTimeWindowDay] = useState<DayShort | null>(null);
 
   const hasOpenRequest = requestStatus === 'draft' && Boolean(intakeResponseId);
 
@@ -336,6 +339,19 @@ export default function AthleteTrainingRequestPage() {
   useEffect(() => {
     if (user?.role === 'ATHLETE') void load();
   }, [load, user?.role]);
+
+  useEffect(() => {
+    setTrainingRequest((prev) => {
+      const allowed = new Set(prev.availabilityDays);
+      const nextDaily: Partial<Record<DayShort, TimeWindow[]>> = {};
+      for (const day of DAY_SHORTS) {
+        if (allowed.has(day) && prev.dailyTimeWindows[day]?.length) {
+          nextDaily[day] = prev.dailyTimeWindows[day];
+        }
+      }
+      return { ...prev, dailyTimeWindows: nextDaily };
+    });
+  }, [trainingRequest.availabilityDays]);
 
   const openTrainingRequest = useCallback(async () => {
     setBusy('open');
@@ -401,7 +417,47 @@ export default function AthleteTrainingRequestPage() {
     }
   }, [intakeResponseId, load, request, trainingRequest]);
 
-  const dayWindowOptions = useMemo(() => DAY_SHORTS_MON_FIRST, []);
+  const dayWindowOptions = useMemo(
+    () => (trainingRequest.availabilityDays.length ? trainingRequest.availabilityDays : DAY_SHORTS_MON_FIRST),
+    [trainingRequest.availabilityDays]
+  );
+  const experienceValueOptions = useMemo(() => {
+    const current = trainingRequest.experienceLevel.trim();
+    if (!current) return EXPERIENCE_LEVEL_OPTIONS;
+    if (EXPERIENCE_LEVEL_OPTIONS.some((opt) => opt.value === current)) return EXPERIENCE_LEVEL_OPTIONS;
+    return [...EXPERIENCE_LEVEL_OPTIONS, { value: current, label: current }] as const;
+  }, [trainingRequest.experienceLevel]);
+
+  const toggleTimeWindowValue = useCallback((day: DayShort, value: TimeWindow) => {
+    setTrainingRequest((prev) => {
+      const current: TimeWindow[] = prev.dailyTimeWindows[day]?.length ? prev.dailyTimeWindows[day]! : ['any'];
+      let next: TimeWindow[];
+      if (value === 'any') {
+        next = ['any'];
+      } else if (current.includes(value)) {
+        const stripped: TimeWindow[] = current.filter((v) => v !== value && v !== 'any');
+        next = stripped.length ? stripped : ['any'];
+      } else {
+        next = Array.from(new Set([...current.filter((v) => v !== 'any'), value])) as TimeWindow[];
+      }
+
+      return {
+        ...prev,
+        dailyTimeWindows: {
+          ...prev.dailyTimeWindows,
+          [day]: next,
+        },
+      };
+    });
+  }, []);
+
+  const dayWindowLabel = useCallback((day: DayShort) => {
+    const selected = trainingRequest.dailyTimeWindows[day] ?? ['any'];
+    const normalized = selected.includes('any') ? ['any'] : selected;
+    if (normalized.length === 1 && normalized[0] === 'any') return 'Any time';
+    const labels = TIME_WINDOW_OPTIONS.filter((opt) => normalized.includes(opt.value)).map((opt) => opt.label);
+    return labels.join(', ');
+  }, [trainingRequest.dailyTimeWindows]);
 
   if (userLoading || loading) {
     return (
@@ -546,30 +602,41 @@ export default function AthleteTrainingRequestPage() {
 
         <div className="mt-3">
           <div className="mb-1 text-sm font-medium">Daily time windows (optional)</div>
+          <p className="mb-2 text-xs text-[var(--muted)]">Choose one or more windows for each selected available day.</p>
           <div className="grid gap-2 md:grid-cols-4">
             {dayWindowOptions.map((day) => (
-              <label key={`window:${day}`} className="text-xs font-medium">
-                {day}
-                <Select
-                  value={trainingRequest.dailyTimeWindows[day] ?? 'any'}
-                  onChange={(e) =>
-                    setTrainingRequest((prev) => ({
-                      ...prev,
-                      dailyTimeWindows: {
-                        ...prev.dailyTimeWindows,
-                        [day]: (e.target.value || 'any') as TimeWindow,
-                      },
-                    }))
-                  }
+              <div key={`window:${day}`} className="relative text-xs font-medium">
+                <div>{day}</div>
+                <button
+                  type="button"
                   disabled={!hasOpenRequest}
+                  onClick={() => setOpenTimeWindowDay((prev) => (prev === day ? null : day))}
+                  className="mt-1 flex min-h-[44px] w-full items-center justify-between rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-left text-sm font-normal"
                 >
-                  {TIME_WINDOW_OPTIONS.map((opt) => (
-                    <option key={`${day}:${opt.value}`} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+                  <span className="truncate">{dayWindowLabel(day)}</span>
+                  <span className="ml-2 text-[var(--muted)]">⌄</span>
+                </button>
+
+                {openTimeWindowDay === day && hasOpenRequest ? (
+                  <div className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 shadow-lg">
+                    <div className="space-y-1">
+                      {TIME_WINDOW_OPTIONS.map((opt) => {
+                        const selected = (trainingRequest.dailyTimeWindows[day] ?? ['any']).includes(opt.value);
+                        return (
+                          <label key={`${day}:${opt.value}`} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--bg-surface)]">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleTimeWindowValue(day, opt.value)}
+                            />
+                            <span>{opt.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         </div>
@@ -577,7 +644,17 @@ export default function AthleteTrainingRequestPage() {
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="text-sm font-medium">
             Experience level
-            <Input value={trainingRequest.experienceLevel} onChange={(e) => setTrainingRequest((p) => ({ ...p, experienceLevel: e.target.value }))} disabled={!hasOpenRequest} />
+            <Select
+              value={trainingRequest.experienceLevel}
+              onChange={(e) => setTrainingRequest((p) => ({ ...p, experienceLevel: e.target.value }))}
+              disabled={!hasOpenRequest}
+            >
+              {experienceValueOptions.map((opt) => (
+                <option key={opt.value || 'empty'} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
           </label>
           <label className="text-sm font-medium">
             Current injury/pain status
@@ -603,7 +680,7 @@ export default function AthleteTrainingRequestPage() {
             />
           </label>
           <label className="text-sm font-medium">
-            Equipment context
+            Equipment Preferences
             <Select
               value={trainingRequest.equipment}
               onChange={(e) => setTrainingRequest((p) => ({ ...p, equipment: e.target.value as TrainingRequestForm['equipment'] }))}
@@ -632,37 +709,12 @@ export default function AthleteTrainingRequestPage() {
           </label>
         </div>
 
-        <div className="mt-3">
-          <div className="mb-1 text-sm font-medium">Training environment</div>
-          <div className="flex flex-wrap gap-2">
-            {ENVIRONMENT_OPTIONS.map((tag) => {
-              const active = trainingRequest.environmentTags.includes(tag);
-              return (
-                <button
-                  key={`env:${tag}`}
-                  type="button"
-                  disabled={!hasOpenRequest}
-                  onClick={() =>
-                    setTrainingRequest((prev) => ({
-                      ...prev,
-                      environmentTags: active ? prev.environmentTags.filter((v) => v !== tag) : [...prev.environmentTags, tag],
-                    }))
-                  }
-                  className={cn('rounded-md border px-3 py-1 text-sm capitalize', active ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border-subtle)] bg-white')}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => void openTrainingRequest()} disabled={busy != null}>
-            {busy === 'open' ? 'Opening…' : 'Open training request'}
+            {busy === 'open' ? 'Opening…' : 'Edit training reeust'}
           </Button>
           <Button variant="secondary" onClick={() => void saveTrainingRequest()} disabled={busy != null || !hasOpenRequest}>
-            {busy === 'save' ? 'Saving…' : 'Save request draft'}
+            {busy === 'save' ? 'Saving…' : 'Save draft'}
           </Button>
           <Button variant="secondary" onClick={() => void submitTrainingRequest()} disabled={busy != null || !hasOpenRequest}>
             {busy === 'submit' ? 'Submitting…' : 'Submit request'}

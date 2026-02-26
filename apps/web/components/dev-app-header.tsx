@@ -176,7 +176,7 @@ export function DevAppHeader() {
           </div>
 
         {/* Desktop: minimal dev header */}
-        <div className="hidden md:flex items-center justify-between gap-4 p-5">
+        <div className="hidden md:flex items-center justify-between gap-4 px-5 py-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)]">
               <Icon name="menu" size="md" className="text-[var(--muted)]" aria-hidden />

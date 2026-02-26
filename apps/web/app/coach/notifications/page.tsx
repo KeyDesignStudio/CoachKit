@@ -11,6 +11,7 @@ import { Block } from '@/components/ui/Block';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 
@@ -407,7 +408,7 @@ export default function CoachNotificationsPage() {
                     <div className="text-xs tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
                   </div>
                   {item.subject ? <div className="mb-1 text-sm font-medium">{item.subject}</div> : null}
-                  <div className="whitespace-pre-wrap text-sm text-[var(--text)]">{item.body}</div>
+                  <LinkifiedText text={item.body} className="whitespace-pre-wrap text-sm text-[var(--text)]" />
                 </div>
               ))}
             </div>

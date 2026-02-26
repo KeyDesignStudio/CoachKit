@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildPlanReasoningV1 } from '@/lib/ai/plan-reasoning/buildPlanReasoningV1';
 import type { AthleteProfileSnapshot } from '@/modules/ai/athlete-brief/types';
+type BuildPlanReasoningInput = Parameters<typeof buildPlanReasoningV1>[0];
 
 const baseProfile: AthleteProfileSnapshot = {
   firstName: null,
@@ -43,7 +44,7 @@ const baseProfile: AthleteProfileSnapshot = {
   coachJournal: null,
 };
 
-const baseSetup = {
+const baseSetup: BuildPlanReasoningInput['setup'] = {
   weekStart: 'monday',
   startDate: '2026-02-10',
   completionDate: '2026-03-10',
@@ -56,7 +57,7 @@ const baseSetup = {
   longSessionDay: 6,
 };
 
-const draftPlanJson = {
+const draftPlanJson: BuildPlanReasoningInput['draftPlanJson'] = {
   version: 'v1',
   setup: baseSetup,
   weeks: [
