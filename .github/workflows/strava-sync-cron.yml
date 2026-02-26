@@ -62,7 +62,7 @@ jobs:
               // 200 with non-ok payload should still fail
               console.error('[cron] 200 response but ok!=true', payload);
               process.exit(2);
-NODE
+              NODE
               exit_code=$?
               if [ "$exit_code" = "0" ]; then
                 exit 0
