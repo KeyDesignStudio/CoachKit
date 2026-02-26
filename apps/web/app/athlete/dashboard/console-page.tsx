@@ -49,6 +49,8 @@ type AthleteDashboardResponse = {
     };
     byDiscipline: Array<{
       discipline: string;
+      plannedWorkouts: number;
+      completedWorkouts: number;
       plannedMinutes: number;
       completedMinutes: number;
       plannedDistanceKm: number;
@@ -464,11 +466,11 @@ export default function AthleteDashboardConsolePage() {
             <div className="min-w-0 order-1 md:order-1">
               <Block
                 title="Make your selection"
-                className="flex flex-col justify-between"
+                className="flex flex-col"
                 style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 showHeaderDivider={false}
               >
-                <div>
+                <div className="-mt-2">
                   <div className={cn('grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4', tokens.spacing.gridGap)}>
                     <div className="min-w-0 col-start-1 row-start-1">
                       <FieldLabel className="pl-1">Discipline</FieldLabel>
@@ -601,10 +603,10 @@ export default function AthleteDashboardConsolePage() {
           >
             {(() => {
               const summary = data?.rangeSummary;
-              const plannedTotal = summary?.totals.plannedMinutes ?? 0;
-              const completedTotal = summary?.totals.completedMinutes ?? 0;
+              const plannedTotal = summary?.totals.workoutsPlanned ?? 0;
+              const completedTotal = summary?.totals.workoutsCompleted ?? 0;
               const percent = plannedTotal > 0 ? Math.min(100, Math.round((completedTotal / plannedTotal) * 100)) : 0;
-              const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedMinutes > 0 || row.completedMinutes > 0);
+              const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedWorkouts > 0 || row.completedWorkouts > 0);
 
               return (
                 <div className="flex h-full flex-col gap-4">
@@ -613,13 +615,13 @@ export default function AthleteDashboardConsolePage() {
                       <>
                         <div className="text-lg font-semibold text-[var(--text)]">{percent}% complete</div>
                         <div className="text-sm text-[var(--muted)]">
-                          Completed {formatMinutes(completedTotal)} of {formatMinutes(plannedTotal)} planned
+                          Completed {completedTotal} of {plannedTotal} planned sessions
                         </div>
                       </>
                     ) : completedTotal > 0 ? (
                       <>
                         <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
-                        <div className="text-sm text-[var(--muted)]">Completed {formatMinutes(completedTotal)}</div>
+                        <div className="text-sm text-[var(--muted)]">Completed {completedTotal} sessions</div>
                       </>
                     ) : (
                       <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
@@ -638,12 +640,12 @@ export default function AthleteDashboardConsolePage() {
                       <div className="text-xs text-[var(--muted)]">No sessions logged for this range.</div>
                     ) : (
                       rows.map((row) => {
-                        const planned = row.plannedMinutes;
-                        const completed = row.completedMinutes;
+                        const planned = row.plannedWorkouts;
+                        const completed = row.completedWorkouts;
                         const denom = planned > 0 ? planned : completed > 0 ? completed : 1;
                         const pct = Math.max(0, Math.min(100, Math.round((completed / denom) * 100)));
                         const label = row.discipline.toUpperCase();
-                        const detail = planned > 0 ? `${formatMinutes(completed)} / ${formatMinutes(planned)}` : formatMinutes(completed);
+                        const detail = planned > 0 ? `${completed} / ${planned}` : `${completed}`;
                         return (
                           <div key={row.discipline} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between text-xs">

@@ -33,10 +33,10 @@ function metricClass(delta: StravaVitalsMetricDelta) {
 
 function DeltaInline({ delta, formatter }: { delta: StravaVitalsMetricDelta; formatter: (value: number) => string }) {
   if (delta.delta == null) {
-    return <span className="text-xs text-[var(--muted)]">No prior baseline</span>;
+    return <span className="text-xs leading-none text-[var(--muted)]">No prior baseline</span>;
   }
   return (
-    <span className={`text-xs ${metricClass(delta)}`}>
+    <span className={`text-xs leading-none ${metricClass(delta)}`}>
       {metricArrow(delta)} {formatter(Math.abs(delta.delta))}
     </span>
   );
@@ -288,7 +288,7 @@ export function StravaVitalsSummaryCard({
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--text)]">
           <Icon name="strava" size="sm" className="text-[var(--muted)]" aria-hidden />
           {title}
         </h3>
