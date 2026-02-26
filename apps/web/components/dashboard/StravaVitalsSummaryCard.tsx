@@ -61,7 +61,7 @@ function MetricValueWithDelta({
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4">
-      <div className="flex min-w-0 items-end text-[var(--muted)]">
+      <div className="flex min-w-0 self-end items-center text-[var(--muted)]">
         <span className="leading-none">{label}</span>
         <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
       </div>

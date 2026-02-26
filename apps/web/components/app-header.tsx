@@ -280,7 +280,7 @@ export async function AppHeader() {
           </div>
 
         {/* Desktop: keep existing multi-brand header */}
-        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-4 md:px-6 md:py-2">
+        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-4 md:px-6 md:py-0">
           {/* Left block: Club branding (row 1, col 1) */}
           <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (

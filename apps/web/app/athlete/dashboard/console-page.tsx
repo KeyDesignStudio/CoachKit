@@ -470,7 +470,7 @@ export default function AthleteDashboardConsolePage() {
                 style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 showHeaderDivider={false}
               >
-                <div className="-mt-3">
+                <div className="-mt-2">
                   <div className={cn('grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4', tokens.spacing.gridGap)}>
                     <div className="min-w-0 col-start-1 row-start-1">
                       <FieldLabel className="pl-1">Discipline</FieldLabel>
