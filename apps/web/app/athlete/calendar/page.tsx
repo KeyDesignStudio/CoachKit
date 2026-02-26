@@ -514,70 +514,72 @@ export default function AthleteCalendarPage() {
               )}
             </p>
           </div>
-          <div className="flex flex-col md:flex-row md:items-center gap-3 text-sm">
-            {/* View Toggle */}
-            <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
-              <button
-                onClick={() => setViewMode('week')}
-                className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
-                  viewMode === 'week'
-                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                    : 'text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-3 text-sm md:min-w-0 md:flex-row md:items-center">
+              {/* View Toggle */}
+              <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
+                <button
+                  onClick={() => setViewMode('week')}
+                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
+                    viewMode === 'week'
+                      ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  Week
+                </button>
+                <button
+                  onClick={() => setViewMode('month')}
+                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
+                    viewMode === 'month'
+                      ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  Month
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
+                  <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
+                </Button>
+                <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
+                  <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
+                </Button>
+                <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
+                  <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => loadItems(true)}
+                disabled={loading}
+                className="w-full md:w-auto min-h-[44px]"
               >
-                Week
-              </button>
-              <button
-                onClick={() => setViewMode('month')}
-                className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
-                  viewMode === 'month'
-                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                    : 'text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
-              >
-                Month
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
-                <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
-              </Button>
-              <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
-                <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
-              </Button>
-              <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
-                <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
+                <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
               </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => loadItems(true)}
-              disabled={loading}
-              className="w-full md:w-auto min-h-[44px]"
-            >
-              <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
-            </Button>
-          </div>
-        </div>
-        <div className="flex min-h-[44px] items-center justify-end">
-          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
-              Published Plan
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
-              Scheduled
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
-              Missed or skipped
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
-              Completed
-            </span>
+            <div className="flex min-h-[44px] items-center md:shrink-0 md:justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
+                  Published Plan
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
+                  Scheduled
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
+                  Missed or skipped
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
+                  Completed
+                </span>
+              </div>
+            </div>
           </div>
         </div>
         {error ? <p className="mt-3 text-sm text-rose-500">{error}</p> : null}

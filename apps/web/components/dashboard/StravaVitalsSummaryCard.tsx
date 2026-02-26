@@ -60,14 +60,15 @@ function MetricValueWithDelta({
   formatter: (value: number) => string;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4">
-      <div className="flex min-w-0 self-end items-center text-[var(--muted)]">
-        <span className="leading-none">{label}</span>
-        <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
+    <div className="space-y-0.5">
+      <div className="grid grid-cols-2 gap-x-4 text-sm">
+        <div className="flex items-center text-[var(--muted)]">
+          {label}
+          <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
+        </div>
+        <div className="text-right font-medium">{value}</div>
       </div>
-      <div className="self-end text-right font-medium leading-none">{value}</div>
-      <div aria-hidden />
-      <div className="pb-3 pt-0 text-right leading-none">
+      <div className="pb-2 text-right">
         <DeltaInline delta={delta} formatter={formatter} />
       </div>
     </div>
@@ -318,7 +319,7 @@ export function StravaVitalsSummaryCard({
 
       {!loading && vitals && vitals.sampleSize > 0 && comparison ? (
         <div className="space-y-3">
-          <div className="space-y-0">
+          <div className="space-y-1">
             <MetricValueWithDelta
               label="Swim avg pace"
               metricId="swim"
