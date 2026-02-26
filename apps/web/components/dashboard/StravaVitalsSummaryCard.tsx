@@ -33,10 +33,10 @@ function metricClass(delta: StravaVitalsMetricDelta) {
 
 function DeltaInline({ delta, formatter }: { delta: StravaVitalsMetricDelta; formatter: (value: number) => string }) {
   if (delta.delta == null) {
-    return <span className="text-xs leading-none text-[var(--muted)]">No prior baseline</span>;
+    return <span className="strava-vital-delta text-xs text-[var(--muted)]">No prior baseline</span>;
   }
   return (
-    <span className={`text-xs leading-none ${metricClass(delta)}`}>
+    <span className={`strava-vital-delta text-xs ${metricClass(delta)}`}>
       {metricArrow(delta)} {formatter(Math.abs(delta.delta))}
     </span>
   );
@@ -60,15 +60,14 @@ function MetricValueWithDelta({
   formatter: (value: number) => string;
 }) {
   return (
-    <div className="space-y-0.5">
-      <div className="grid grid-cols-2 gap-x-4 text-sm">
-        <div className="flex items-center text-[var(--muted)]">
-          {label}
-          <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
-        </div>
-        <div className="text-right font-medium">{value}</div>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
+      <div className="flex min-w-0 self-end items-center text-[var(--muted)]">
+        <span className="strava-vital-primary">{label}</span>
+        <MetricHelpTrigger metricId={metricId} comparison={comparison} onOpenMobile={onOpenMobile} />
       </div>
-      <div className="pb-2 text-right">
+      <div className="strava-vital-primary self-end text-right font-medium">{value}</div>
+      <div aria-hidden />
+      <div className="text-right">
         <DeltaInline delta={delta} formatter={formatter} />
       </div>
     </div>

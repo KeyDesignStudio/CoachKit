@@ -16,7 +16,6 @@ import { cn } from '@/lib/cn';
 import { addDays, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { formatKcal } from '@/lib/calendar/discipline-summary';
-import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
@@ -184,20 +183,68 @@ function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string
   return { from, to };
 }
 
+function getNowPartsInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const read = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? NaN);
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+  };
+}
+
+function getHoursUntilSession(
+  nextSession: AthleteDashboardResponse['nextUp'][number] | null | undefined,
+  timeZone: string
+): number | null {
+  if (!nextSession) return null;
+  const dateMatch = String(nextSession.date ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateMatch) return null;
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const timeMatch = String(nextSession.plannedStartTimeLocal ?? '').match(/^(\d{2}):(\d{2})/);
+  const hour = timeMatch ? Number(timeMatch[1]) : 9;
+  const minute = timeMatch ? Number(timeMatch[2]) : 0;
+  const now = getNowPartsInTimeZone(timeZone);
+
+  if (![year, month, day, hour, minute, now.year, now.month, now.day, now.hour, now.minute].every(Number.isFinite)) {
+    return null;
+  }
+
+  const targetMs = Date.UTC(year, month - 1, day, hour, minute);
+  const nowMs = Date.UTC(now.year, now.month - 1, now.day, now.hour, now.minute);
+  const diffMs = targetMs - nowMs;
+  return Math.max(0, Math.ceil(diffMs / (60 * 60 * 1000)));
+}
+
+function formatNextSessionLabel(nextSession: AthleteDashboardResponse['nextUp'][number] | null | undefined): string {
+  const fromTitle = String(nextSession?.title ?? '').trim();
+  if (fromTitle) {
+    return /\bsession\b/i.test(fromTitle) ? fromTitle : `${fromTitle} session`;
+  }
+
+  const discipline = String(nextSession?.discipline ?? '').trim().toLowerCase();
+  if (discipline) return `${discipline} session`;
+  return 'training session';
+}
+
 export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
-  const fallbackWelcomeMessage = useMemo(
-    () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
-    [user?.name, user?.timezone]
-  );
-  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
-  const styledWelcome = useMemo(() => {
-    const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
-    if (!match) return { name: '', rest: welcomeMessage };
-    return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
-  }, [welcomeMessage]);
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
@@ -274,42 +321,22 @@ export default function AthleteDashboardConsolePage() {
   }, [reloadTrainingRequestLifecycle, user?.role]);
 
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
+  const athleteGreeting = useMemo(() => {
+    const preferredName = String(user?.name ?? 'Athlete').trim().split(/\s+/)[0] || 'Athlete';
+    const nextSession = data?.nextUp?.[0] ?? null;
 
-  const workoutGreetingContext = useMemo(() => {
-    const totals = data?.rangeSummary?.totals;
-    if (!totals) return '';
-    const completed = Math.max(0, Number(totals.workoutsCompleted ?? 0));
-    const planned = Math.max(0, Number(totals.workoutsPlanned ?? 0));
-    const minutes = Math.max(0, Number(totals.completedMinutes ?? 0));
-    const next = data?.nextUp?.[0];
-    const nextTitle = next?.title ? String(next.title) : '';
-    const nextDiscipline = next?.discipline ? String(next.discipline).toLowerCase() : '';
-    return [
-      `completed workouts: ${completed}/${planned}`,
-      `completed minutes: ${minutes}`,
-      nextTitle || nextDiscipline ? `next scheduled: ${nextTitle || nextDiscipline}` : '',
-    ]
-      .filter(Boolean)
-      .join('; ');
-  }, [data?.nextUp, data?.rangeSummary?.totals]);
+    if (!nextSession) {
+      return `G'day ${preferredName}! No upcoming sessions scheduled.`;
+    }
 
-  useEffect(() => {
-    setWelcomeMessage(fallbackWelcomeMessage);
-  }, [fallbackWelcomeMessage]);
+    const sessionLabel = formatNextSessionLabel(nextSession);
+    const hoursUntil = getHoursUntilSession(nextSession, athleteTimeZone);
+    if (hoursUntil == null) {
+      return `G'day ${preferredName}! You've got your next ${sessionLabel} coming up soon.`;
+    }
 
-  useEffect(() => {
-    if (!user?.userId || user.role !== 'ATHLETE') return;
-    const qs = new URLSearchParams();
-    if (workoutGreetingContext) qs.set('context', workoutGreetingContext);
-    if (athleteTimeZone) qs.set('timeZone', athleteTimeZone);
-    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
-      .then((resp) => {
-        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
-      })
-      .catch(() => {
-        setWelcomeMessage(fallbackWelcomeMessage);
-      });
-  }, [athleteTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId, workoutGreetingContext]);
+    return `G'day ${preferredName}! You've got your next ${sessionLabel} in ${hoursUntil} ${hoursUntil === 1 ? 'hour' : 'hours'}.`;
+  }, [athleteTimeZone, data?.nextUp, user?.name]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -372,12 +399,10 @@ export default function AthleteDashboardConsolePage() {
         <div className="pt-3 md:pt-6">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Athlete Console</h1>
-            <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
-            <p className="flex items-center gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
-              <span className="italic">G&apos;day</span>
-              {styledWelcome.name ? <span className="text-[var(--text)]">{styledWelcome.name}.</span> : null}
-              <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
-            </p>
+            <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
+              |
+            </span>
+            <p className={cn(tokens.typography.h1, 'text-[var(--muted)]')}>{athleteGreeting}</p>
           </div>
         </div>
 
@@ -387,7 +412,7 @@ export default function AthleteDashboardConsolePage() {
               <div>
                 <div className="text-sm font-semibold text-amber-900">Complete your Training Request</div>
                 <div className="mt-1 text-xs text-amber-900/90">
-                  {styledWelcome.name ? `${styledWelcome.name}, ` : ''}
+                  {String(user?.name ?? '').trim() ? `${String(user?.name).trim().split(/\s+/)[0]}, ` : ''}
                   this is the primary step to unlock your next training block from your coach.
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-900/90">

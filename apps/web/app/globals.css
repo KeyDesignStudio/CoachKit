@@ -212,4 +212,13 @@ a {
   .border-black {
     --tw-border-opacity: 0.25;
   }
+
+  .strava-vital-primary {
+    line-height: 1;
+  }
+
+  .strava-vital-delta {
+    margin-top: 1px;
+    line-height: 1;
+  }
 }

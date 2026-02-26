@@ -17,7 +17,6 @@ import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateI
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
-import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 
@@ -225,16 +224,6 @@ export default function CoachDashboardConsolePage() {
   const { request } = useApi();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const fallbackWelcomeMessage = useMemo(
-    () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
-    [user?.name, user?.timezone]
-  );
-  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
-  const styledWelcome = useMemo(() => {
-    const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
-    if (!match) return { name: '', rest: welcomeMessage };
-    return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
-  }, [welcomeMessage]);
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
@@ -491,39 +480,6 @@ export default function CoachDashboardConsolePage() {
     });
   }, [visibleReviewInbox]);
 
-  const coachGreetingContext = useMemo(() => {
-    const completed = Math.max(0, Number(data?.kpis?.workoutsCompleted ?? 0));
-    const skipped = Math.max(0, Number(data?.kpis?.workoutsSkipped ?? 0));
-    const nextGoal = data?.selectedGoalCountdown?.goalCountdown?.eventName
-      ? String(data.selectedGoalCountdown.goalCountdown.eventName)
-      : '';
-    return [
-      `squad completed workouts: ${completed}`,
-      `squad missed workouts: ${skipped}`,
-      nextGoal ? `nearest athlete event: ${nextGoal}` : '',
-    ]
-      .filter(Boolean)
-      .join('; ');
-  }, [data?.kpis?.workoutsCompleted, data?.kpis?.workoutsSkipped, data?.selectedGoalCountdown?.goalCountdown?.eventName]);
-
-  useEffect(() => {
-    setWelcomeMessage(fallbackWelcomeMessage);
-  }, [fallbackWelcomeMessage]);
-
-  useEffect(() => {
-    if (!user?.userId || user.role !== 'COACH') return;
-    const qs = new URLSearchParams();
-    if (coachGreetingContext) qs.set('context', coachGreetingContext);
-    if (coachTimeZone) qs.set('timeZone', coachTimeZone);
-    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
-      .then((resp) => {
-        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
-      })
-      .catch(() => {
-        setWelcomeMessage(fallbackWelcomeMessage);
-      });
-  }, [coachGreetingContext, coachTimeZone, fallbackWelcomeMessage, request, user?.role, user?.userId]);
-
   if (userLoading || (!user && !userError)) {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
@@ -548,12 +504,6 @@ export default function CoachDashboardConsolePage() {
         <div className={cn("pt-3 md:pt-6")}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
-            <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
-            <p className="flex items-center gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
-              <span className="italic">G&apos;day</span>
-              {styledWelcome.name ? <span className="text-[var(--text)]">{styledWelcome.name}.</span> : null}
-              <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
-            </p>
           </div>
         </div>
 

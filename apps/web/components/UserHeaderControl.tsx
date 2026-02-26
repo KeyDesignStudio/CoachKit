@@ -269,7 +269,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
       >
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          <img src={avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-black" />
         ) : (
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--bg-structure)] text-xs font-semibold text-[var(--muted)]">
             {initialsFromName(displayName)}
