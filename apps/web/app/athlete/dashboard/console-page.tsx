@@ -466,11 +466,11 @@ export default function AthleteDashboardConsolePage() {
             <div className="min-w-0 order-1 md:order-1">
               <Block
                 title="Make your selection"
-                className="flex flex-col justify-between"
+                className="flex flex-col"
                 style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
                 showHeaderDivider={false}
               >
-                <div>
+                <div className="-mt-3">
                   <div className={cn('grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4', tokens.spacing.gridGap)}>
                     <div className="min-w-0 col-start-1 row-start-1">
                       <FieldLabel className="pl-1">Discipline</FieldLabel>
