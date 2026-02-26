@@ -610,7 +610,7 @@ export default function CoachDashboardConsolePage() {
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
               showHeaderDivider={false}
             >
-              <div className="-mt-3">
+              <div className="-mt-2">
                 <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
                   {/* Row 1 */}
                   <div className="md:col-start-1 md:row-start-1">
