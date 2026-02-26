@@ -26,6 +26,8 @@ export type RangeSummaryItem = {
 
 export type RangeSummaryRow = {
   discipline: string;
+  plannedWorkouts: number;
+  completedWorkouts: number;
   plannedMinutes: number;
   completedMinutes: number;
   plannedDistanceKm: number;
@@ -266,13 +268,23 @@ export function getAthleteRangeSummary(params: {
       caloriesByDay.set(localDayKey, existing);
     }
 
-    if (plannedMinutes <= 0 && completedMinutes <= 0 && plannedDistanceKm <= 0 && completedDistanceKm <= 0 && completedCalories <= 0) {
+    if (
+      plannedMinutes <= 0 &&
+      completedMinutes <= 0 &&
+      plannedDistanceKm <= 0 &&
+      completedDistanceKm <= 0 &&
+      completedCalories <= 0 &&
+      !isPlanned &&
+      !isCompleted
+    ) {
       continue;
     }
 
     const discipline = normalizeDiscipline(item.discipline);
     const existing = map.get(discipline) ?? {
       discipline,
+      plannedWorkouts: 0,
+      completedWorkouts: 0,
       plannedMinutes: 0,
       completedMinutes: 0,
       plannedDistanceKm: 0,
@@ -281,6 +293,8 @@ export function getAthleteRangeSummary(params: {
       completedCaloriesKcal: 0,
     };
 
+    if (isPlanned) existing.plannedWorkouts += 1;
+    if (isCompleted) existing.completedWorkouts += 1;
     existing.plannedMinutes += plannedMinutes;
     existing.completedMinutes += completedMinutes;
     existing.plannedDistanceKm += plannedDistanceKm;
