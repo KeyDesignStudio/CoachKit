@@ -30,10 +30,11 @@ const createAthleteSchema = z
       .optional(),
   })
   .superRefine((data, ctx) => {
-    const schedule = data.trainingPlanSchedule ?? { frequency: TrainingPlanFrequency.WEEKLY };
-    const freq = schedule.frequency;
-    const day = schedule.dayOfWeek ?? null;
-    const week = schedule.weekOfMonth ?? null;
+    if (data.trainingPlanSchedule === undefined || data.trainingPlanSchedule === null) return;
+
+    const freq = data.trainingPlanSchedule.frequency;
+    const day = data.trainingPlanSchedule.dayOfWeek ?? null;
+    const week = data.trainingPlanSchedule.weekOfMonth ?? null;
 
     if (freq === TrainingPlanFrequency.AD_HOC) {
       if (day !== null || week !== null) {
