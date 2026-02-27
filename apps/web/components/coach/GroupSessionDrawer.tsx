@@ -82,24 +82,6 @@ type GroupSessionRecord = {
   targets: GroupSessionTarget[];
 };
 
-type SquadTemplateTarget = {
-  id: string;
-  squadId: string;
-  squad: {
-    id: string;
-    name: string;
-  };
-};
-
-type SquadTemplateRecord = {
-  id: string;
-  name: string;
-  description: string | null;
-  targetPresetJson: unknown;
-  targets: SquadTemplateTarget[];
-  updatedAt: string;
-};
-
 type ApplyResult = {
   createdCount: number;
   skippedExistingCount: number;
@@ -119,8 +101,6 @@ type PlacementSuggestionResult = {
 type GroupSessionDrawerProps = {
   session: GroupSessionRecord | null;
   athletes: AthleteOption[];
-  templates: SquadTemplateRecord[];
-  onSaveAsTemplate: (session: GroupSessionRecord) => Promise<void>;
   onClose: () => void;
   onDuplicate: (session: GroupSessionRecord) => void;
   onSave: (sessionId: string, data: any) => Promise<void>;
@@ -193,8 +173,6 @@ function sessionToForm(session: GroupSessionRecord): SessionFormState {
 export function GroupSessionDrawer({
   session,
   athletes,
-  templates,
-  onSaveAsTemplate,
   onClose,
   onDuplicate,
   onSave,
@@ -226,9 +204,6 @@ export function GroupSessionDrawer({
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
   const [applyError, setApplyError] = useState('');
   const [applyAthleteId, setApplyAthleteId] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [templateActionError, setTemplateActionError] = useState('');
-  const [savingTemplate, setSavingTemplate] = useState(false);
   const [placementSuggestion, setPlacementSuggestion] = useState<PlacementSuggestionResult['suggestion'] | null>(null);
   const [placementLoading, setPlacementLoading] = useState(false);
   const [placementError, setPlacementError] = useState('');
@@ -257,59 +232,6 @@ export function GroupSessionDrawer({
   }, [form.locationLat, form.locationLon]);
 
   if (!session) return null;
-
-  const applyTemplateDefaults = () => {
-    const template = templates.find((item) => item.id === selectedTemplateId);
-    if (!template) {
-      setTemplateActionError('Select a template first.');
-      return;
-    }
-    const preset = ((template.targetPresetJson ?? {}) as Record<string, unknown>) ?? {};
-    const visibilityType = preset.visibilityType;
-    const selectedDays = Array.isArray(preset.selectedDays)
-      ? preset.selectedDays.filter((day): day is string => typeof day === 'string')
-      : undefined;
-    const targetAthleteIds = Array.isArray(preset.targetAthleteIds)
-      ? preset.targetAthleteIds.filter((id): id is string => typeof id === 'string')
-      : undefined;
-
-    setForm((prev) => ({
-      ...prev,
-      title: typeof preset.title === 'string' ? preset.title : prev.title,
-      discipline: typeof preset.discipline === 'string' ? preset.discipline : prev.discipline,
-      location: typeof preset.location === 'string' ? preset.location : prev.location,
-      locationLat:
-        typeof preset.locationLat === 'number' && Number.isFinite(preset.locationLat) ? preset.locationLat : prev.locationLat,
-      locationLon:
-        typeof preset.locationLon === 'number' && Number.isFinite(preset.locationLon) ? preset.locationLon : prev.locationLon,
-      startTimeLocal: typeof preset.startTimeLocal === 'string' ? preset.startTimeLocal : prev.startTimeLocal,
-      durationMinutes:
-        typeof preset.durationMinutes === 'number' && Number.isFinite(preset.durationMinutes)
-          ? String(preset.durationMinutes)
-          : prev.durationMinutes,
-      description: typeof preset.description === 'string' ? preset.description : prev.description,
-      visibilityType:
-        visibilityType === 'ALL' || visibilityType === 'SQUAD' || visibilityType === 'SELECTED'
-          ? visibilityType
-          : prev.visibilityType,
-      selectedDays: selectedDays?.length ? selectedDays : prev.selectedDays,
-      targetAthleteIds: targetAthleteIds ?? prev.targetAthleteIds,
-      squadInput: template.targets.map((target) => target.squadId).join(', '),
-    }));
-    setTemplateActionError('');
-  };
-
-  const handleSaveAsTemplate = async () => {
-    setTemplateActionError('');
-    setSavingTemplate(true);
-    try {
-      await onSaveAsTemplate(session);
-    } catch (error) {
-      setTemplateActionError(error instanceof Error ? error.message : 'Failed to save template.');
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
 
   const toggleDay = (day: string) => {
     const set = new Set(form.selectedDays);
@@ -599,39 +521,6 @@ export function GroupSessionDrawer({
                 </label>
 
               </div>
-            </div>
-
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Template defaults</h3>
-              <div className="grid gap-3 md:grid-cols-[1fr,auto,auto] md:items-end">
-                <label className="flex flex-col gap-2 text-sm font-medium text-[var(--muted)]">
-                  Squad template
-                  <Select
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  >
-                    <option value="">Select template...</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <Button type="button" variant="secondary" className="min-h-[44px]" onClick={applyTemplateDefaults}>
-                  Apply defaults
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-[44px]"
-                  onClick={handleSaveAsTemplate}
-                  disabled={savingTemplate}
-                >
-                  {savingTemplate ? 'Saving template...' : 'Save as template'}
-                </Button>
-              </div>
-              {templateActionError ? <p className="mt-2 text-sm text-rose-500">{templateActionError}</p> : null}
             </div>
 
             {/* Weekdays */}

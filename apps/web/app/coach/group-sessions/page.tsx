@@ -50,24 +50,6 @@ type GroupSessionRecord = {
   targets: GroupSessionTarget[];
 };
 
-type SquadTemplateTarget = {
-  id: string;
-  squadId: string;
-  squad: {
-    id: string;
-    name: string;
-  };
-};
-
-type SquadTemplateRecord = {
-  id: string;
-  name: string;
-  description: string | null;
-  targetPresetJson: unknown;
-  targets: SquadTemplateTarget[];
-  updatedAt: string;
-};
-
 type ApplyResult = {
   createdCount: number;
   skippedExistingCount: number;
@@ -90,17 +72,13 @@ function parseRuleDays(rule: string): string[] {
 }
 
 export default function CoachGroupSessionsPage() {
-  const { user, loading: userLoading } = useAuthUser();
+  const { user } = useAuthUser();
   const { request } = useApi();
   const [sessions, setSessions] = useState<GroupSessionRecord[]>([]);
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [pageError, setPageError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [templateError, setTemplateError] = useState('');
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [squadTemplates, setSquadTemplates] = useState<SquadTemplateRecord[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -134,24 +112,10 @@ export default function CoachGroupSessionsPage() {
     }
   }, [isCoach, request, user?.userId]);
 
-  const loadSquadTemplates = useCallback(async () => {
-    if (!isCoach || !user?.userId) return;
-    setLoadingTemplates(true);
-    try {
-      const data = await request<{ squadTemplates: SquadTemplateRecord[] }>('/api/coach/squad-templates');
-      setSquadTemplates(data.squadTemplates ?? []);
-    } catch (error) {
-      setTemplateError(error instanceof Error ? error.message : 'Failed to load squad templates.');
-    } finally {
-      setLoadingTemplates(false);
-    }
-  }, [isCoach, request, user?.userId]);
-
   useEffect(() => {
     loadSessions();
     loadAthletes();
-    loadSquadTemplates();
-  }, [loadSessions, loadAthletes, loadSquadTemplates]);
+  }, [loadSessions, loadAthletes]);
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -278,117 +242,6 @@ export default function CoachGroupSessionsPage() {
     setIsCreateModalOpen(true);
   }, []);
 
-  const templateToInitialValues = useCallback((template: SquadTemplateRecord) => {
-    const preset = ((template.targetPresetJson ?? {}) as Record<string, unknown>) ?? {};
-    const visibilityType = preset.visibilityType;
-    const selectedDays = Array.isArray(preset.selectedDays)
-      ? preset.selectedDays.filter((day): day is string => typeof day === 'string')
-      : undefined;
-    const targetAthleteIds = Array.isArray(preset.targetAthleteIds)
-      ? preset.targetAthleteIds.filter((id): id is string => typeof id === 'string')
-      : undefined;
-
-    return {
-      title: typeof preset.title === 'string' ? preset.title : '',
-      discipline: typeof preset.discipline === 'string' ? preset.discipline : '',
-      location: typeof preset.location === 'string' ? preset.location : '',
-      locationLat:
-        typeof preset.locationLat === 'number' && Number.isFinite(preset.locationLat) ? preset.locationLat : null,
-      locationLon:
-        typeof preset.locationLon === 'number' && Number.isFinite(preset.locationLon) ? preset.locationLon : null,
-      startTimeLocal: typeof preset.startTimeLocal === 'string' ? preset.startTimeLocal : '05:30',
-      durationMinutes:
-        typeof preset.durationMinutes === 'number' && Number.isFinite(preset.durationMinutes)
-          ? String(preset.durationMinutes)
-          : '60',
-      description: typeof preset.description === 'string' ? preset.description : '',
-      selectedDays: selectedDays?.length ? selectedDays : ['MO'],
-      visibilityType:
-        visibilityType === 'ALL' || visibilityType === 'SQUAD' || visibilityType === 'SELECTED' ? visibilityType : 'SQUAD',
-      targetAthleteIds: targetAthleteIds ?? [],
-      squadInput: template.targets.map((target) => target.squadId).join(', '),
-    };
-  }, []);
-
-  const createTemplateFromSession = useCallback(
-    async (session: GroupSessionRecord) => {
-      setTemplateError('');
-      const squadIds = session.targets.map((target) => target.squadId).filter((value): value is string => Boolean(value));
-      if (!squadIds.length) {
-        setTemplateError('Template requires at least one squad target. Set visibility to SQUAD with squad IDs first.');
-        return;
-      }
-
-      const suggestedName = `${session.title} template`;
-      const name = window.prompt('Template name', suggestedName)?.trim();
-      if (!name) return;
-
-      try {
-        await request('/api/coach/squad-templates', {
-          method: 'POST',
-          data: {
-            name,
-            description: session.description ?? null,
-            targetSquadIds: Array.from(new Set(squadIds)),
-            targetPresetJson: {
-              title: session.title,
-              discipline: session.discipline,
-              location: session.location ?? '',
-              locationLat: session.locationLat ?? null,
-              locationLon: session.locationLon ?? null,
-              startTimeLocal: session.startTimeLocal,
-              durationMinutes: session.durationMinutes,
-              description: session.description ?? '',
-              visibilityType: session.visibilityType,
-              selectedDays: parseRuleDays(session.recurrenceRule),
-              targetAthleteIds: session.targets
-                .map((target) => target.athleteId)
-                .filter((value): value is string => Boolean(value)),
-            },
-          },
-        });
-        setStatusMessage(`Saved template "${name}".`);
-        await loadSquadTemplates();
-      } catch (error) {
-        setTemplateError(error instanceof Error ? error.message : 'Failed to save template.');
-      }
-    },
-    [loadSquadTemplates, request]
-  );
-
-  const handleApplyTemplateToCreate = useCallback(() => {
-    setTemplateError('');
-    const template = squadTemplates.find((item) => item.id === selectedTemplateId);
-    if (!template) {
-      setTemplateError('Select a template first.');
-      return;
-    }
-
-    setCreateInitialValues(templateToInitialValues(template));
-    setSelectedSessionId(null);
-    setIsCreateModalOpen(true);
-  }, [selectedTemplateId, squadTemplates, templateToInitialValues]);
-
-  const handleDeleteTemplate = useCallback(
-    async (templateId: string) => {
-      if (!confirm('Delete this squad template?')) return;
-      setTemplateError('');
-      try {
-        await request(`/api/coach/squad-templates/${templateId}`, {
-          method: 'DELETE',
-        });
-        if (selectedTemplateId === templateId) {
-          setSelectedTemplateId('');
-        }
-        setStatusMessage('Deleted squad template.');
-        await loadSquadTemplates();
-      } catch (error) {
-        setTemplateError(error instanceof Error ? error.message : 'Failed to delete template.');
-      }
-    },
-    [loadSquadTemplates, request, selectedTemplateId]
-  );
-
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || null;
 
   const filteredSessions = sessions.filter((session) => {
@@ -416,7 +269,7 @@ export default function CoachGroupSessionsPage() {
             <div>
               <p className="text-xs md:text-sm uppercase tracking-[0.22em] text-[var(--muted)]">Coaching</p>
               <h1 className="text-2xl md:text-3xl font-semibold">Recurring Group Sessions</h1>
-              <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring templates to apply to athlete calendars</p>
+              <p className="text-xs md:text-sm text-[var(--muted)]">Create recurring sessions to apply to athlete calendars</p>
             </div>
             <Button type="button" onClick={() => setIsCreateModalOpen(true)} variant="primary" className="min-h-[44px] w-full md:w-auto">
               <Icon name="add" size="sm" className="md:mr-1" />
@@ -452,45 +305,7 @@ export default function CoachGroupSessionsPage() {
 
         {pageError && <p className="mt-3 text-sm text-rose-500">{pageError}</p>}
         {statusMessage && <p className="mt-3 text-sm text-emerald-600">{statusMessage}</p>}
-        {templateError && <p className="mt-3 text-sm text-rose-500">{templateError}</p>}
         {loadingSessions && <p className="mt-3 text-sm text-[var(--muted)]">Loading sessions...</p>}
-        {loadingTemplates && <p className="mt-3 text-sm text-[var(--muted)]">Loading templates...</p>}
-
-        <div className="mt-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end">
-            <label className="flex-1 text-sm font-medium text-[var(--muted)]">
-              Squad template
-              <select
-                value={selectedTemplateId}
-                onChange={(event) => setSelectedTemplateId(event.target.value)}
-                className="mt-2 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)]"
-              >
-                <option value="">Select template...</option>
-                {squadTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button type="button" variant="secondary" className="min-h-[44px]" onClick={handleApplyTemplateToCreate}>
-              Apply to new session
-            </Button>
-            {selectedTemplateId ? (
-              <Button
-                type="button"
-                variant="danger"
-                className="min-h-[44px]"
-                onClick={() => void handleDeleteTemplate(selectedTemplateId)}
-              >
-                Delete template
-              </Button>
-            ) : null}
-          </div>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            Save current session settings as reusable squad templates, then apply defaults when creating new sessions.
-          </p>
-        </div>
       </header>
 
       {/* Sessions List */}
@@ -522,8 +337,6 @@ export default function CoachGroupSessionsPage() {
             <GroupSessionDrawer
               session={selectedSession}
               athletes={athletes}
-              templates={squadTemplates}
-              onSaveAsTemplate={createTemplateFromSession}
               onClose={() => setSelectedSessionId(null)}
               onDuplicate={handleDuplicateSession}
               onSave={handleSave}
