@@ -456,7 +456,7 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         <div className="mt-4">
-          <div className={cn('grid grid-cols-1 min-w-0 items-start md:grid-cols-2 xl:grid-cols-3', tokens.spacing.gridGap)}>
+          <div className={cn('grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-3', tokens.spacing.gridGap)}>
             <div className="min-w-0 order-2 md:order-2">
               <div ref={needsCardRef}>
                 <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
@@ -496,8 +496,8 @@ export default function AthleteDashboardConsolePage() {
                 showHeaderDivider={false}
               >
                 <div className="-mt-2">
-                  <div className={cn('grid grid-cols-2 gap-y-6 min-w-0 md:gap-x-4', tokens.spacing.gridGap)}>
-                    <div className="min-w-0 col-start-1 row-start-1">
+                  <div className={cn('grid grid-cols-1 gap-y-4 min-w-0 min-[900px]:grid-cols-2 min-[900px]:gap-y-6 min-[900px]:gap-x-4', tokens.spacing.gridGap)}>
+                    <div className="min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-1">
                       <FieldLabel className="pl-1">Discipline</FieldLabel>
                       <SelectField
                         className="min-h-[44px] w-full"
@@ -511,9 +511,9 @@ export default function AthleteDashboardConsolePage() {
                         <option value="OTHER">Other</option>
                       </SelectField>
                     </div>
-                    <div className="min-w-0 col-start-2 row-start-1" aria-hidden="true" />
+                    <div className="hidden min-w-0 min-[900px]:block min-[900px]:col-start-2 min-[900px]:row-start-1" aria-hidden="true" />
 
-                    <div className="min-w-0 col-start-1 row-start-2">
+                    <div className="min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-2">
                       <FieldLabel className="pl-1">Time range</FieldLabel>
                       <SelectField
                         className="min-h-[44px] w-full"
@@ -532,7 +532,7 @@ export default function AthleteDashboardConsolePage() {
                       </SelectField>
                     </div>
 
-                    <div className="min-w-0 col-start-2 row-start-2">
+                    <div className="min-w-0 min-[900px]:col-start-2 min-[900px]:row-start-2">
                       {timeRange === 'CUSTOM' ? (
                         <div className="grid grid-cols-2 gap-2">
                           <label className="text-xs text-[var(--muted)]">
@@ -563,7 +563,7 @@ export default function AthleteDashboardConsolePage() {
                             )}
                             data-testid="athlete-dashboard-range-display"
                           >
-                            <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
+                            <div className={cn('md:truncate text-xs sm:text-sm', tokens.typography.body)}>
                               {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} →{' '}
                               {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
                             </div>
@@ -674,7 +674,7 @@ export default function AthleteDashboardConsolePage() {
                         return (
                           <div key={row.discipline} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-medium text-[var(--text)] truncate">{label}</span>
+                              <span className="font-medium text-[var(--text)] md:truncate">{label}</span>
                               <span className="tabular-nums text-[var(--muted)]">{detail}</span>
                             </div>
                             <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">

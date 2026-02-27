@@ -613,7 +613,7 @@ export default function AthleteTrainingRequestPage() {
                   onClick={() => setOpenTimeWindowDay((prev) => (prev === day ? null : day))}
                   className="mt-1 flex min-h-[44px] w-full items-center justify-between rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-left text-sm font-normal"
                 >
-                  <span className="truncate">{dayWindowLabel(day)}</span>
+                  <span className="md:truncate">{dayWindowLabel(day)}</span>
                   <span className="ml-2 text-[var(--muted)]">⌄</span>
                 </button>
 

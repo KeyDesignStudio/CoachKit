@@ -38,7 +38,7 @@ export function WeekSummaryColumn({
     >
       <div className="px-3 py-1.5">
         <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
-        <p className="text-sm font-medium truncate">Selected athletes</p>
+        <p className="text-sm font-medium md:truncate">Selected athletes</p>
       </div>
       <div className="flex flex-col gap-3 p-3">
         <div className="rounded p-2">
@@ -70,8 +70,8 @@ export function WeekSummaryColumn({
               <div className="mt-1 space-y-1">
                 {top.map((row) => (
                   <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                    <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                    <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
+                    <div className="text-xs font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
+                    <div className="text-xs text-[var(--muted)] tabular-nums md:whitespace-nowrap">
                       {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                     </div>
                   </div>

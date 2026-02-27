@@ -36,7 +36,7 @@ export function SessionChip({
         <Icon name={theme.iconName} size="sm" className="text-[16px] leading-none" />
       </span>
       <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0">{time || '—'}</span>
-      <span className="flex-1 truncate text-xs text-[var(--text)] font-normal">{title}</span>
+      <span className="flex-1 md:truncate text-xs text-[var(--text)] font-normal">{title}</span>
       <div className="flex items-center gap-0.5 flex-shrink-0">
         {painFlag && (
           <Icon name="painFlag" size="xs" className={`text-rose-500 ${CALENDAR_ACTION_ICON_CLASS}`} aria-label="Pain flagged" aria-hidden={false} />

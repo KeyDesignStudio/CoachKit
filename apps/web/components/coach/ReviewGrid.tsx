@@ -55,7 +55,7 @@ export function ReviewGrid({ children, weekDays, todayIndex = -1 }: ReviewGridPr
               <div className="relative z-10 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
-                  <p className="text-sm font-medium truncate">{getFormattedHeaderDate(dateKey)}</p>
+                  <p className="text-sm font-medium md:truncate">{getFormattedHeaderDate(dateKey)}</p>
                 </div>
                 {isToday ? (
                   <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">

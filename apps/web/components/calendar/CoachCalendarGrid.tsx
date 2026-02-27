@@ -198,7 +198,7 @@ export function CoachCalendarGrid({
                         <div
                           className={cn('h-8 items-center justify-between gap-2', showAthleteSubheaderOnMobile ? 'flex' : 'hidden')}
                         >
-                          <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
+                          <div className="text-[11px] font-medium text-[var(--muted)] md:truncate min-w-0">
                             {row.athlete.user.name || row.athlete.userId}
                           </div>
                           <button
@@ -286,7 +286,7 @@ export function CoachCalendarGrid({
                   >
                     <div className="hidden md:flex h-8 items-center justify-between gap-2">
                       <div className="min-w-0 flex items-center gap-2">
-                        <div className="text-[11px] font-medium text-[var(--muted)] truncate min-w-0">
+                        <div className="text-[11px] font-medium text-[var(--muted)] md:truncate min-w-0">
                           {row.athlete.user.name || row.athlete.userId}
                         </div>
                         {goalCountdownByAthlete[row.athlete.userId]?.mode && goalCountdownByAthlete[row.athlete.userId].mode !== 'none' ? (
@@ -391,8 +391,8 @@ export function CoachCalendarGrid({
                     <div className="mt-1 space-y-0.5">
                       {weekBlock.weekTopDisciplines.map((row) => (
                         <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                          <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                          <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
+                          <div className="text-[11px] font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
+                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap">
                             {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                           </div>
                         </div>

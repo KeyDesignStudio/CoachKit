@@ -227,7 +227,7 @@ function MetricHelpTrigger({
 }) {
   const content = useMemo(() => metricHelpContent(metricId, comparison), [metricId, comparison]);
   return (
-    <div className="group relative inline-flex items-center">
+    <div className="group relative inline-flex items-end self-end">
       <button
         type="button"
         onClick={() => {
@@ -235,7 +235,7 @@ function MetricHelpTrigger({
             onOpenMobile(metricId);
           }
         }}
-        className="ml-1 inline-flex min-h-[28px] min-w-[28px] items-center justify-center text-[12px] leading-none text-[var(--muted)] hover:text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        className="ml-1 inline-flex min-h-[20px] min-w-[20px] items-end justify-center pb-px text-[12px] leading-none text-[var(--muted)] hover:text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         aria-label={`Help for ${content.title}`}
       >
         ⓘ

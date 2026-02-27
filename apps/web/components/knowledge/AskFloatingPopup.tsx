@@ -65,7 +65,7 @@ export function AskFloatingPopup() {
           <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2">
             <div className="flex items-center gap-2 min-w-0">
               <Icon name="chat" size="sm" className="text-[var(--primary)]" aria-hidden />
-              <h2 className="truncate text-xs font-semibold tracking-wide uppercase text-[var(--text)]">Ask CoachKit</h2>
+              <h2 className="md:truncate text-xs font-semibold tracking-wide uppercase text-[var(--text)]">Ask CoachKit</h2>
             </div>
             <button
               type="button"

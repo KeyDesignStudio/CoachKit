@@ -445,7 +445,7 @@ export default function CoachSettingsPage() {
       <div>
         <div className="text-sm font-medium text-[var(--text)]">{label}</div>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 max-w-full truncate text-sm text-[var(--text)]" title={filename || 'No file uploaded'}>
+          <div className="min-w-0 max-w-full md:truncate text-sm text-[var(--text)]" title={filename || 'No file uploaded'}>
             {filename || 'No file uploaded'}
           </div>
 
@@ -667,7 +667,7 @@ export default function CoachSettingsPage() {
                 <ul className="space-y-2 text-sm">
                   {planSources.slice(0, 8).map((src) => (
                     <li key={src.id} className="flex items-center justify-between gap-3">
-                      <span className="truncate">{src.title}</span>
+                      <span className="md:truncate">{src.title}</span>
                       <span className="shrink-0 text-xs text-[var(--muted)]">
                         {src.durationWeeks}w · v{src.latestVersion?.version ?? 1}
                       </span>

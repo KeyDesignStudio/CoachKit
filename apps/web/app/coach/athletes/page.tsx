@@ -189,7 +189,7 @@ export default function CoachAthletesPage() {
                 {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium truncate text-left">
+                    <p className="font-medium md:truncate text-left">
                       {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
                     </p>
                     <a
@@ -206,13 +206,13 @@ export default function CoachAthletesPage() {
                     onClick={() => handleAthleteClick(athlete.userId)}
                     className="mt-1 w-full text-left"
                   >
-                    <div className="text-xs text-[var(--muted)] truncate mt-1">{athlete.user.email}</div>
-                    <div className="text-xs text-[var(--muted)] mt-1 truncate">{formatTrainingPlanLine(athlete)}</div>
+                    <div className="text-xs text-[var(--muted)] md:truncate mt-1">{athlete.user.email}</div>
+                    <div className="text-xs text-[var(--muted)] mt-1 md:truncate">{formatTrainingPlanLine(athlete)}</div>
                     {athlete.dateOfBirth ? (
-                      <div className="text-xs text-[var(--muted)] mt-1 truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
+                      <div className="text-xs text-[var(--muted)] mt-1 md:truncate">DOB: {formatDateOfBirth(athlete.dateOfBirth)}</div>
                     ) : null}
                     {athlete.primaryGoal ? (
-                       <div className="text-xs text-[var(--muted)] mt-1 truncate">
+                       <div className="text-xs text-[var(--muted)] mt-1 md:truncate">
                         <span className="font-medium">Goal:</span> {athlete.primaryGoal}
                        </div>
                     ) : null}

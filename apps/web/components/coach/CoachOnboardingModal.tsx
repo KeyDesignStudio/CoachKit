@@ -351,7 +351,7 @@ export function CoachOnboardingModal(props: Props) {
           </div>
           <div className="grid grid-cols-5 gap-2 text-[11px] text-[var(--fg-muted)]">
             {STEPS.map((step, idx) => (
-              <div key={step.key} className={cn('truncate', idx === stepIndex ? 'font-semibold text-[var(--text)]' : '')}>
+              <div key={step.key} className={cn('md:truncate', idx === stepIndex ? 'font-semibold text-[var(--text)]' : '')}>
                 {idx + 1}. {step.key === 'TRAINING_REQUEST' ? 'Plan Builder' : step.key}
               </div>
             ))}

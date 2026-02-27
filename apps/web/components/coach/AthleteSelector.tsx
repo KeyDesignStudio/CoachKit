@@ -129,7 +129,7 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                   onChange={toggleAll}
                   className="h-5 w-5 flex-none rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                 />
-                <span className="min-w-0 flex-1 truncate font-medium text-sm">
+                <span className="min-w-0 flex-1 md:truncate font-medium text-sm">
                   Select all
                 </span>
               </label>
@@ -150,7 +150,7 @@ export function AthleteSelector({ athletes, selectedIds, onChange }: AthleteSele
                       data-athlete-selector="athlete-checkbox"
                       className="h-5 w-5 flex-none rounded border-[var(--border-subtle)] bg-[var(--bg-card)]"
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm">{athlete.user.name || athlete.userId}</span>
+                    <span className="min-w-0 flex-1 md:truncate text-sm">{athlete.user.name || athlete.userId}</span>
                   </label>
                 ))
               )}

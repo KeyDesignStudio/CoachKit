@@ -122,7 +122,7 @@ export function MobileReviewAccordion({
                           <div className="relative z-10 flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{DAY_NAMES[index]}</p>
-                              <p className="text-sm font-medium truncate">{getFormattedHeaderDate(date)}</p>
+                              <p className="text-sm font-medium md:truncate">{getFormattedHeaderDate(date)}</p>
                             </div>
                             {isToday ? (
                               <span className="bg-blue-500/10 text-blue-700 text-[10px] px-2 py-0.5 rounded border border-[var(--today-border)]">
