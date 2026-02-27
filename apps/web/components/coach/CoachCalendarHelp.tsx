@@ -9,7 +9,12 @@ export function CoachCalendarHelp() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
-    // Check if user has seen the tip
+    // Keep mobile clean: do not auto-open first-time tip on small screens.
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setShowFirstTimeTip(false);
+      return;
+    }
+    // Check if user has seen the tip.
     const hasSeenTip = localStorage.getItem('coach-calendar-right-click-tip-seen');
     if (!hasSeenTip) {
       setShowFirstTimeTip(true);
@@ -39,7 +44,7 @@ export function CoachCalendarHelp() {
       {helpOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/10" onClick={() => setHelpOpen(false)} />
-          <div className="absolute right-0 top-9 z-50 w-72 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+          <div className="absolute left-0 top-9 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200 origin-top-left md:left-auto md:right-0 md:w-72 md:origin-top-right">
             <h3 className="font-semibold text-sm mb-3 text-[var(--text)] flex items-center gap-2">
               <Icon name="idea" size="sm" className="text-[var(--primary)]" />
               Calendar Tips
@@ -77,7 +82,7 @@ export function CoachCalendarHelp() {
 
       {/* First Time Tooltip - Shows until dismissed */}
       {showFirstTimeTip && !helpOpen && (
-        <div className="absolute top-12 right-0 z-40 max-w-[200px] p-3 bg-[var(--bg-inverse)] text-[var(--text-inverse)] rounded-lg shadow-lg text-xs leading-relaxed animate-in slide-in-from-top-2 fade-in duration-300">
+        <div className="absolute top-12 left-0 z-40 max-w-[200px] p-3 bg-[var(--bg-inverse)] text-[var(--text-inverse)] rounded-lg shadow-lg text-xs leading-relaxed animate-in slide-in-from-top-2 fade-in duration-300 md:left-auto md:right-0">
           <div className="flex gap-2 items-start">
             <div className="flex-1">
               <span className="font-bold block mb-1">Coach Tip</span>
@@ -88,7 +93,7 @@ export function CoachCalendarHelp() {
             </button>
           </div>
           {/* Arrow */}
-          <div className="absolute -top-1 right-3.5 w-2 h-2 bg-[var(--bg-inverse)] rotate-45" />
+          <div className="absolute -top-1 left-3.5 h-2 w-2 rotate-45 bg-[var(--bg-inverse)] md:left-auto md:right-3.5" />
         </div>
       )}
     </div>

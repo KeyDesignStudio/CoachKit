@@ -1597,7 +1597,7 @@ export default function CoachCalendarPage() {
                   variant="secondary"
                   onClick={() => void runBulkWeekAction('copy')}
                   disabled={bulkActionLoading}
-                  className="min-h-[44px]"
+                  className="h-10 min-h-0 px-3 py-1.5 text-xs md:min-h-[44px] md:px-5 md:py-2 md:text-sm"
                   title="Copy from/to week for all selected athletes"
                 >
                   {bulkActionLoading ? 'Working…' : `Bulk Copy (${selectedAthleteIds.size})`}
@@ -1607,7 +1607,7 @@ export default function CoachCalendarPage() {
                   variant="primary"
                   onClick={() => void runBulkWeekAction('publish')}
                   disabled={bulkActionLoading}
-                  className="min-h-[44px]"
+                  className="h-10 min-h-0 px-3 py-1.5 text-xs md:min-h-[44px] md:px-5 md:py-2 md:text-sm"
                   title="Publish this week for all selected athletes"
                 >
                   {bulkActionLoading ? 'Publishing…' : `Bulk Publish (${selectedAthleteIds.size})`}
@@ -1627,8 +1627,8 @@ export default function CoachCalendarPage() {
             )}
           </div>
         </div>
-        <div className="flex min-h-[44px] items-center justify-end">
-          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
+        <div className="flex min-h-[44px] items-center justify-center md:justify-end">
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] leading-none text-[var(--muted)] md:justify-end">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
               Published Plan

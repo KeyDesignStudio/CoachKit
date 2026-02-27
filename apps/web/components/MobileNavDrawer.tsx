@@ -56,7 +56,36 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
 
     const hasCoachLinks = dedupedWithIndex.some(({ link }) => String(link.href).startsWith('/coach/'));
     if (!hasCoachLinks) {
-      return dedupedWithIndex.map(({ link }) => link);
+      const hasAthleteLinks = dedupedWithIndex.some(({ link }) => String(link.href).startsWith('/athlete/'));
+      if (!hasAthleteLinks) {
+        return dedupedWithIndex.map(({ link }) => link);
+      }
+
+      const athleteOrder: Array<string> = [
+        '/athlete/dashboard',
+        '/athlete/calendar',
+        '/athlete/notifications',
+        '/athlete/settings',
+      ];
+      const athleteRank = new Map<string, number>(athleteOrder.map((href, idx) => [href, idx]));
+      const normalizedAthlete = dedupedWithIndex.map(({ link, index }) => ({
+        link,
+        href: String(link.href),
+        index,
+      }));
+
+      normalizedAthlete.sort((a, b) => {
+        const ra = athleteRank.get(a.href);
+        const rb = athleteRank.get(b.href);
+        const aKnown = typeof ra === 'number';
+        const bKnown = typeof rb === 'number';
+        if (aKnown && bKnown) return ra! - rb!;
+        if (aKnown) return -1;
+        if (bKnown) return 1;
+        return a.index - b.index;
+      });
+
+      return normalizedAthlete.map(({ link }) => link);
     }
 
     // Mobile-only coach menu rules:
