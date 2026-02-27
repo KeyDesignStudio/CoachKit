@@ -118,7 +118,7 @@ export function AthleteCalendarGrid({
           <div className="hidden md:flex flex-col min-w-0 rounded bg-[rgb(209,217,232)] overflow-hidden border-2 border-white">
             <div className="px-3 py-1.5">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
-              <p className="text-sm font-medium truncate">This week</p>
+              <p className="text-sm font-medium md:truncate">This week</p>
               {goalCountdown?.weeksRemaining ? (
                 <p className="mt-0.5 text-[11px] text-[var(--muted)] tabular-nums">{goalCountdown.weeksRemaining} weeks to event</p>
               ) : null}
@@ -147,8 +147,8 @@ export function AthleteCalendarGrid({
                       <div className="mt-1 space-y-1">
                         {weekTopDisciplines.map((row) => (
                           <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                            <div className="text-xs font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                            <div className="text-xs text-[var(--muted)] tabular-nums whitespace-nowrap">
+                            <div className="text-xs font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
+                            <div className="text-xs text-[var(--muted)] tabular-nums md:whitespace-nowrap">
                               {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                             </div>
                           </div>
@@ -207,8 +207,8 @@ export function AthleteCalendarGrid({
                     <div className="mt-1 space-y-0.5">
                       {weekBlock.weekTopDisciplines.map((row) => (
                         <div key={row.discipline} className="flex items-baseline justify-between gap-2">
-                          <div className="text-[11px] font-medium text-[var(--text)] truncate">{row.discipline}</div>
-                          <div className="text-[11px] text-[var(--muted)] tabular-nums whitespace-nowrap">
+                          <div className="text-[11px] font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
+                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap">
                             {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                           </div>
                         </div>

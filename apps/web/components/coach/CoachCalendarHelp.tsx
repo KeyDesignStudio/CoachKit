@@ -46,23 +46,23 @@ export function CoachCalendarHelp() {
             </h3>
             <ul className="space-y-3 text-xs text-[var(--muted)]">
               <li className="flex gap-2">
-                <span className="font-medium text-[var(--text)] whitespace-nowrap">Right-click Session:</span>
+                <span className="font-medium text-[var(--text)] md:whitespace-nowrap">Right-click Session:</span>
                 <span>Copy, Edit, Delete</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-medium text-[var(--text)] whitespace-nowrap">Right-click Day:</span>
+                <span className="font-medium text-[var(--text)] md:whitespace-nowrap">Right-click Day:</span>
                 <span>Paste, Add from Library</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-medium text-[var(--text)] whitespace-nowrap">Publish weekly schedule:</span>
+                <span className="font-medium text-[var(--text)] md:whitespace-nowrap">Publish weekly schedule:</span>
                 <span>Select a single athlete.</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-medium text-[var(--text)] whitespace-nowrap">Bricks:</span>
+                <span className="font-medium text-[var(--text)] md:whitespace-nowrap">Bricks:</span>
                 <span>Multi-step sessions show distinct sections (e.g. Run + Bike).</span>
               </li>
               <li className="flex gap-2">
-                <span className="font-medium text-[var(--text)] whitespace-nowrap">Draft vs Published:</span>
+                <span className="font-medium text-[var(--text)] md:whitespace-nowrap">Draft vs Published:</span>
                 <span>Drafts are editable; Published is locked and shared with the athlete.</span>
               </li>
             </ul>

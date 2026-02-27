@@ -241,14 +241,14 @@ export default function AthleteNotificationsPage() {
   return (
     <section className={cn('mx-auto flex w-full flex-col xl:w-1/2', tokens.spacing.dashboardSectionGap)}>
       <Block>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className={tokens.typography.sectionLabel}>Notifications</p>
             <h1 className={tokens.typography.h1}>Mailbox</h1>
           </div>
           <Button
             type="button"
-            className="min-h-[44px]"
+            className="min-h-[44px] self-stretch sm:self-auto"
             onClick={() => {
               setComposerOpen((prev) => !prev);
               setRecipientDropdownOpen(false);
@@ -259,23 +259,23 @@ export default function AthleteNotificationsPage() {
         </div>
 
         {composerOpen ? (
-          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:p-4">
+            <div className="mb-3 flex items-start justify-between gap-2 sm:gap-3">
               <div className="relative min-w-0 flex-1">
                 <button
                   type="button"
-                  className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-[var(--border-subtle)] px-3 text-left text-sm"
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-[var(--border-subtle)] px-2.5 sm:px-3 text-left text-sm"
                   onClick={() => setRecipientDropdownOpen((prev) => !prev)}
                 >
                   <Icon name="search" size="sm" className="text-[var(--muted)]" />
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 leading-tight break-words md:truncate">
                     {selectedRecipients.length
                       ? selectedRecipients.map((r) => r.name).join(', ')
                       : recipientsLoading
                         ? 'Loading recipients...'
                         : 'Search recipients'}
                   </span>
-                  <Icon name="expandMore" size="sm" className="ml-auto text-[var(--muted)]" />
+                  <Icon name="expandMore" size="sm" className="ml-1 shrink-0 text-[var(--muted)]" />
                 </button>
 
                 {recipientDropdownOpen ? (
@@ -304,7 +304,7 @@ export default function AthleteNotificationsPage() {
                 ) : null}
               </div>
 
-              <button type="button" className="text-[var(--muted)]" onClick={() => setComposerOpen(false)} aria-label="Close compose">
+              <button type="button" className="text-[var(--muted)] p-1 -m-1" onClick={() => setComposerOpen(false)} aria-label="Close compose">
                 <Icon name="close" size="md" />
               </button>
             </div>
@@ -335,7 +335,7 @@ export default function AthleteNotificationsPage() {
           <div className="flex border-b border-[var(--border-subtle)]">
             <button
               type="button"
-              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              className={cn('px-4 sm:px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
               onClick={() => {
                 setActiveTab('INBOX');
                 setSelectedMessageIds([]);
@@ -345,7 +345,7 @@ export default function AthleteNotificationsPage() {
             </button>
             <button
               type="button"
-              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              className={cn('px-4 sm:px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
               onClick={() => {
                 setActiveTab('SENT');
                 setSelectedMessageIds([]);
@@ -365,7 +365,7 @@ export default function AthleteNotificationsPage() {
             ) : null}
 
             {!mailboxLoading && visibleItems.length > 0 ? (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+              <div className="mb-3 flex flex-col items-start justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
                   <span>Select all</span>
@@ -385,7 +385,7 @@ export default function AthleteNotificationsPage() {
             <div className="flex flex-col gap-3">
               {visibleItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
-                  <div className="mb-1 flex items-center justify-between gap-3">
+                  <div className="mb-1 flex flex-col items-start justify-between gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <input
                         type="checkbox"
@@ -393,11 +393,11 @@ export default function AthleteNotificationsPage() {
                         onChange={() => toggleMessageSelection(item.id)}
                         aria-label="Select message"
                       />
-                      <div className="truncate text-sm font-semibold">
+                      <div className="min-w-0 text-sm font-semibold leading-tight md:truncate">
                         {activeTab === 'INBOX' ? `From ${item.counterpartName}` : `To ${item.counterpartName}`}
                       </div>
                     </div>
-                    <div className="text-xs tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
+                    <div className="text-xs leading-tight tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
                   </div>
                   {item.subject ? <div className="mb-1 text-sm font-medium">{item.subject}</div> : null}
                   <LinkifiedText text={item.body} className="whitespace-pre-wrap text-sm text-[var(--text)]" />

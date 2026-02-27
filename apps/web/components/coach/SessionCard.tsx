@@ -121,11 +121,11 @@ export function SessionCard({ session, onClick, onLocationClick }: SessionCardPr
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-[var(--text)] truncate">{session.title}</h3>
+            <h3 className="font-semibold text-[var(--text)] md:truncate">{session.title}</h3>
             <Icon name="next" size="sm" className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--muted)]" />
           </div>
 
-          <div className="mt-1 text-xs text-[var(--muted)] truncate">
+          <div className="mt-1 text-xs text-[var(--muted)] md:truncate">
             <span className={`font-semibold ${theme.textClass}`}>{session.discipline}</span>
             <span className="text-[var(--muted)]"> • {metaLine}</span>
           </div>

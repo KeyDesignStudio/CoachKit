@@ -45,7 +45,7 @@ export function WorkoutCard({ time, title, discipline, painFlag = false, onClick
         {/* Time + title */}
         <div className="flex-1 min-w-0">
           <p className="text-[10px] leading-none text-[var(--muted)]">{time ?? ''}</p>
-          <p className="text-xs font-normal truncate text-[var(--text)]">{title || disciplineLabel}</p>
+          <p className="text-xs font-normal md:truncate text-[var(--text)]">{title || disciplineLabel}</p>
         </div>
 
         {/* Indicators (right-aligned) */}

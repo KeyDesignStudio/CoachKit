@@ -239,7 +239,7 @@ export async function AppHeader() {
                 )}
               </>
             ) : (
-              <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">
+              <span className="block max-w-[55vw] md:truncate text-xs font-medium text-[var(--muted)]">
                 {headerClubBranding.name}
               </span>
             )}
@@ -311,7 +311,7 @@ export async function AppHeader() {
               </>
             ) : (
               <span
-                className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
+                className="max-w-[240px] md:overflow-hidden md:text-ellipsis md:whitespace-nowrap text-sm font-medium text-[var(--text)] sm:max-w-[320px]"
               >
                 {headerClubBranding.name}
               </span>
@@ -345,7 +345,7 @@ export async function AppHeader() {
             {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2">
                 {desktopTextLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "whitespace-nowrap")}>
+                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "md:whitespace-nowrap")}>
                     {link.label}
                   </Link>
                 ))}

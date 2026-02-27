@@ -494,7 +494,7 @@ export default function AthleteCalendarPage() {
 
   return (
     <>
-    <section className="flex flex-col gap-6">
+    <section className="flex flex-col gap-4 md:gap-6">
       <header className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         <div className="flex flex-col gap-4">
           <div>
@@ -514,13 +514,13 @@ export default function AthleteCalendarPage() {
               )}
             </p>
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-3 text-sm md:min-w-0 md:flex-row md:items-center">
+          <div className="flex flex-col gap-3 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
+            <div className="flex flex-col gap-3 text-sm min-[900px]:min-w-0 min-[900px]:flex-row min-[900px]:items-center">
               {/* View Toggle */}
               <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
                 <button
                   onClick={() => setViewMode('week')}
-                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
+                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 min-[900px]:flex-initial min-h-[44px] ${
                     viewMode === 'week'
                       ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -530,7 +530,7 @@ export default function AthleteCalendarPage() {
                 </button>
                 <button
                   onClick={() => setViewMode('month')}
-                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 md:flex-initial min-h-[44px] ${
+                  className={`rounded-xl px-4 py-2 text-sm ${viewMode === 'month' ? 'font-normal' : 'font-medium'} transition-all flex-1 min-[900px]:flex-initial min-h-[44px] ${
                     viewMode === 'month'
                       ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -539,15 +539,48 @@ export default function AthleteCalendarPage() {
                   Month
                 </button>
               </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 md:flex-initial min-h-[44px]">
-                  <Icon name="prev" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Prev</span>
+              <div className="min-[900px]:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
+                <button
+                  type="button"
+                  onClick={navigatePrev}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Previous"
+                >
+                  <Icon name="prev" size="md" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={goToToday}
+                  className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Go to today"
+                  title="Go to today"
+                >
+                  {mounted
+                    ? viewMode === 'week'
+                      ? formatWeekOfLabel(dateRange.from, athleteTimezone)
+                      : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+                    : formatWeekOfLabel(dateRange.from, athleteTimezone)}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={navigateNext}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Next"
+                >
+                  <Icon name="next" size="md" />
+                </button>
+              </div>
+              <div className="hidden min-[900px]:flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={navigatePrev} className="flex-1 min-[900px]:flex-initial min-h-[44px]">
+                  <Icon name="prev" size="sm" className="min-[900px]:mr-1" /><span className="hidden min-[900px]:inline"> Prev</span>
                 </Button>
-                <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 md:flex-initial min-h-[44px]">
-                  <Icon name="today" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Today</span>
+                <Button type="button" variant="ghost" onClick={goToToday} className="flex-1 min-[900px]:flex-initial min-h-[44px]">
+                  <Icon name="today" size="sm" className="min-[900px]:mr-1" /><span className="hidden min-[900px]:inline"> Today</span>
                 </Button>
-                <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 md:flex-initial min-h-[44px]">
-                  <span className="hidden md:inline">Next </span><Icon name="next" size="sm" className="md:ml-1" />
+                <Button type="button" variant="ghost" onClick={navigateNext} className="flex-1 min-[900px]:flex-initial min-h-[44px]">
+                  <span className="hidden min-[900px]:inline">Next </span><Icon name="next" size="sm" className="min-[900px]:ml-1" />
                 </Button>
               </div>
               <Button
@@ -555,13 +588,13 @@ export default function AthleteCalendarPage() {
                 variant="ghost"
                 onClick={() => loadItems(true)}
                 disabled={loading}
-                className="w-full md:w-auto min-h-[44px]"
+                className="min-h-[44px]"
               >
-                <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
+                <Icon name="refresh" size="sm" className="min-[900px]:mr-1" /><span>Refresh</span>
               </Button>
             </div>
-            <div className="flex min-h-[44px] items-center md:shrink-0 md:justify-end">
-              <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] leading-none text-[var(--muted)]">
+            <div className="flex min-h-[44px] items-center min-[900px]:shrink-0 min-[900px]:justify-end">
+              <div className="flex flex-wrap items-center justify-start min-[900px]:justify-end gap-2 text-xs leading-4 text-[var(--muted)] min-[900px]:gap-3">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
                   Published Plan

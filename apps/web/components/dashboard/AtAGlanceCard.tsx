@@ -59,17 +59,17 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                 <div
                   key={row.label}
                   className={cn(
-                    'min-w-0 flex items-baseline justify-between',
+                    'min-w-0 flex flex-col items-start justify-between gap-1 md:flex-row md:items-baseline',
                     tokens.spacing.elementPadding,
                     tokens.spacing.widgetGap,
                     idx < statsRows.length - 1 ? 'border-b border-[var(--border-subtle)]' : ''
                   )}
                   data-testid={testIds.statRow}
                 >
-                  <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
+                  <div className={cn('min-w-0 uppercase tracking-wide leading-4 md:leading-none md:truncate', tokens.typography.meta)} title={row.label}>
                     {row.label}
                   </div>
-                  <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>{row.value}</div>
+                  <div className={cn('w-full text-left md:w-auto md:text-right flex-shrink-0 leading-[1.2] tabular-nums text-sm font-semibold text-[var(--text)]')}>{row.value}</div>
                 </div>
               ))}
             </div>
@@ -81,7 +81,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                 const theme = getDisciplineTheme(row.discipline);
                 const pct = Math.max(0, Math.min(1, row.totalMinutes / maxMinutes));
                 return (
-                  <div key={row.discipline} className={cn('grid grid-cols-[auto,1fr,auto] items-center min-w-0', tokens.spacing.widgetGap)}>
+                  <div key={row.discipline} className={cn('grid grid-cols-[auto,1fr] md:grid-cols-[auto,1fr,auto] items-center min-w-0', tokens.spacing.widgetGap)}>
                     <div className={cn('flex items-center min-w-[64px]', tokens.spacing.widgetGap)}>
                       <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
                       <span className={cn('font-medium text-[var(--text)]', tokens.typography.meta)}>
@@ -93,7 +93,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                       <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
                     </div>
 
-                    <div className={cn('tabular-nums text-right whitespace-nowrap truncate max-w-[120px]', tokens.typography.meta)} title={row.rightValue}>
+                    <div className={cn('col-span-2 pt-1 text-left md:col-span-1 md:pt-0 tabular-nums md:text-right md:whitespace-nowrap md:truncate max-w-none md:max-w-[120px]', tokens.typography.meta)} title={row.rightValue}>
                       {row.rightValue}
                     </div>
                   </div>

@@ -125,8 +125,8 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           style={{ top: menuPosition.top, left: menuPosition.left, width: menuPosition.width }}
         >
           <div className="px-4 py-3">
-            <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
-            <div className="text-xs text-[var(--muted)] truncate">Account</div>
+            <div className="text-sm font-semibold text-[var(--text)] md:truncate">{displayName}</div>
+            <div className="text-xs text-[var(--muted)] md:truncate">Account</div>
           </div>
           <div className="h-px bg-[var(--border-subtle)]" />
           <div className="p-2">

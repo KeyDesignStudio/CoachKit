@@ -508,7 +508,7 @@ export default function CoachDashboardConsolePage() {
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start md:mt-4 md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
+        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start min-[900px]:mt-4 min-[900px]:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
           {/* Column 1: Needs your attention */}
           <div className="min-w-0 order-2 md:order-2">
             <div ref={needsCardRef}>
@@ -534,7 +534,7 @@ export default function CoachDashboardConsolePage() {
                   />
                 </div>
 
-                <div className={cn("mt-2 grid md:grid-cols-2", tokens.spacing.widgetGap)}>
+                <div className={cn("mt-2 grid min-[900px]:grid-cols-2", tokens.spacing.widgetGap)}>
                   <AlertStripItem
                     label="Missed workouts"
                     count={data?.attention.skippedWorkouts ?? 0}
@@ -561,9 +561,9 @@ export default function CoachDashboardConsolePage() {
               showHeaderDivider={false}
             >
               <div className="-mt-2">
-                <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
+                <div className={cn("grid grid-cols-1 min-[900px]:grid-cols-2 min-[900px]:gap-x-4 min-[900px]:gap-y-6", tokens.spacing.widgetGap)}>
                   {/* Row 1 */}
-                  <div className="md:col-start-1 md:row-start-1">
+                  <div className="min-[900px]:col-start-1 min-[900px]:row-start-1">
                     <FieldLabel className="pl-1">Athlete</FieldLabel>
                     <AthleteSelector
                       athletes={athleteOptions}
@@ -578,7 +578,7 @@ export default function CoachDashboardConsolePage() {
                     />
                   </div>
 
-                  <div className="md:col-start-2 md:row-start-1">
+                  <div className="min-[900px]:col-start-2 min-[900px]:row-start-1">
                     <FieldLabel className="pl-1">Discipline</FieldLabel>
                     <SelectField
                       className="min-h-[44px]"
@@ -595,7 +595,7 @@ export default function CoachDashboardConsolePage() {
                   </div>
 
                   {/* Row 2 */}
-                  <div className="md:col-start-1 md:row-start-2">
+                  <div className="min-[900px]:col-start-1 min-[900px]:row-start-2">
                     <FieldLabel className="pl-1">Time range</FieldLabel>
                     <SelectField
                       className="min-h-[44px]"
@@ -613,7 +613,7 @@ export default function CoachDashboardConsolePage() {
                     </SelectField>
                   </div>
 
-                  <div className="md:col-start-2 md:row-start-2">
+                  <div className="min-[900px]:col-start-2 min-[900px]:row-start-2">
                     {timeRange === 'CUSTOM' ? (
                       <div className={cn("grid grid-cols-2", tokens.spacing.widgetGap)}>
                         <div>
@@ -747,15 +747,15 @@ export default function CoachDashboardConsolePage() {
                           onChange={() => toggleReviewItemSelection(item.id)}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className={cn("truncate font-semibold", tokens.typography.body)} title={String(item.athlete?.name ?? 'Athlete')}>
+                          <div className="flex flex-col items-start gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
+                            <div className={cn("md:truncate font-semibold", tokens.typography.body)} title={String(item.athlete?.name ?? 'Athlete')}>
                               {String(item.athlete?.name ?? 'Athlete')}
                             </div>
-                            <div className={cn("whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
+                            <div className={cn("md:whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
                               {formatReviewInboxDateShort(item.date, coachTimeZone)}
                             </div>
                           </div>
-                          <div className={cn("mt-1 truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>
+                          <div className={cn("mt-1 md:truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>
                             {String(item.title ?? '')}
                           </div>
                           <div className={cn("mt-1 flex items-center gap-2 text-[var(--muted)]", tokens.typography.meta)}>
@@ -786,7 +786,22 @@ export default function CoachDashboardConsolePage() {
               className="border"
               style={{ borderColor: '#cad7eb', backgroundColor: 'rgba(233, 238, 248, 0.85)' }}
             >
-              {visibleGoalCountdowns.length === 0 ? (
+              {loading && !data ? (
+                <div className={cn("space-y-3", tokens.spacing.containerPadding)}>
+                  <div className={cn("text-[var(--muted)]", tokens.typography.body)}>
+                    Loading athlete event countdowns...
+                  </div>
+                  <div className="space-y-2" aria-hidden="true">
+                    {[0, 1].map((index) => (
+                      <div key={`goal-countdown-loading-${index}`} className="space-y-2 rounded-xl bg-[var(--bg-card)]/60 px-3 py-2">
+                        <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                        <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                        <div className="h-1.5 w-full animate-pulse rounded-full bg-[var(--border-subtle)]" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : visibleGoalCountdowns.length === 0 ? (
                 <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
                   No athlete event dates available for this selection.
                 </div>
@@ -814,19 +829,19 @@ export default function CoachDashboardConsolePage() {
                             "space-y-1 px-3 py-2"
                           )}
                         >
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                            <div className={cn("truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
+                          <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                            <div className={cn("md:truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
                               {athleteName}
                             </div>
-                            <div className={cn("whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
+                            <div className={cn("md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
                               {weeksLabel}
                             </div>
                           </div>
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                            <div className={cn("truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
+                          <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                            <div className={cn("md:truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
                               {eventName}
                             </div>
-                            <div className={cn("whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
+                            <div className={cn("md:whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
                             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />

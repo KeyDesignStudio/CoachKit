@@ -45,7 +45,7 @@ export function ReviewChip({
 
         {/* Main: title only (no time in overview) */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-normal truncate text-[var(--text)]">{title || disciplineLabel}</p>
+          <p className="text-xs font-normal md:truncate text-[var(--text)]">{title || disciplineLabel}</p>
         </div>
 
         {/* Right: status icons */}

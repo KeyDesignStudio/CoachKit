@@ -67,7 +67,7 @@ export function AthleteMonthDayCell({
     <div
       data-athlete-month-day-cell="v2"
       className={cn(
-        'flex flex-col gap-1.5 md:gap-2 min-h-[76px] md:min-h-[120px] text-left',
+        'flex flex-col gap-1.5 md:gap-2 min-h-[72px] md:min-h-[120px] text-left',
         mobileDayCellPadding,
         'rounded bg-[var(--bg-card)] border',
         'transition-shadow',
@@ -100,7 +100,7 @@ export function AthleteMonthDayCell({
         <div className="flex items-start justify-between gap-2">
         <div
           className={cn(
-            'h-8 min-w-8 rounded-md text-[11px] inline-flex items-center justify-center',
+            'h-7 min-w-7 max-[360px]:h-[26px] max-[360px]:min-w-[26px] rounded-md text-[11px] max-[360px]:text-[10px] inline-flex items-center justify-center',
             'bg-[var(--bg-structure)] border border-[var(--border-subtle)]',
             !isCurrentMonth ? 'text-[var(--muted)]' : 'text-[var(--text)]'
           )}
@@ -109,20 +109,20 @@ export function AthleteMonthDayCell({
           {dayNumber}
         </div>
         </div>
-        <div className="flex max-w-full items-center gap-1 min-h-[18px] overflow-hidden">
+        <div className="flex max-w-full items-center gap-1 min-h-[16px] overflow-hidden">
         {mobileIconItems.map((item) => {
           const theme = getDisciplineTheme(item.discipline as any);
           return (
             <span
               key={item.id}
-              className={cn('inline-flex items-center justify-center h-5 w-5 rounded-md bg-[var(--bg-structure)]', theme.textClass)}
+              className={cn('inline-flex items-center justify-center h-[18px] w-[18px] max-[360px]:h-4 max-[360px]:w-4 rounded-md bg-[var(--bg-structure)]', theme.textClass)}
             >
               <Icon name={theme.iconName} size="xs" className={cn('leading-none', CALENDAR_ACTION_ICON_CLASS)} />
             </span>
           );
         })}
         {mobileExtraCount > 0 ? (
-          <span className="ml-1 whitespace-nowrap text-[10px] font-medium text-[var(--muted)]">+{mobileExtraCount}</span>
+          <span className="ml-0.5 md:whitespace-nowrap text-[10px] max-[360px]:text-[9px] font-medium text-[var(--muted)]">+{mobileExtraCount}</span>
         ) : null}
         </div>
       </div>
@@ -221,12 +221,12 @@ export function AthleteMonthDayCell({
                 <span className={cn('text-[16px] leading-none flex-shrink-0', visual.iconColor)}>
                   <Icon name={visual.icon} size="sm" className={cn('text-[16px] leading-none', CALENDAR_ACTION_ICON_CLASS)} />
                 </span>
-                <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0 whitespace-nowrap">
+                <span className="text-[10px] leading-none text-[var(--muted)] flex-shrink-0 md:whitespace-nowrap">
                   {item.displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
                 </span>
-                <span className="text-[11px] md:text-xs text-[var(--text)] truncate flex-1 min-w-0 font-normal">{item.title}</span>
+                <span className="text-[11px] md:text-xs text-[var(--text)] md:truncate flex-1 min-w-0 font-normal">{item.title}</span>
                 {statusIcon ? (
-                  <span className="flex-shrink-0 whitespace-nowrap" title={missedTitle}>
+                  <span className="flex-shrink-0 md:whitespace-nowrap" title={missedTitle}>
                     <Icon
                       name={statusIcon}
                       size="xs"
