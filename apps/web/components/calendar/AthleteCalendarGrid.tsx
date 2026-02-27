@@ -115,40 +115,40 @@ export function AthleteCalendarGrid({
             </AthleteWeekDayColumn>
           ))}
 
-          <div className="hidden md:flex flex-col min-w-0 rounded bg-[rgb(209,217,232)] overflow-hidden border-2 border-white">
+          <div className="hidden md:flex min-w-0 flex-col overflow-hidden rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] text-[var(--text)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)] dark:text-slate-100">
             <div className="px-3 py-1.5">
-              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Summary</p>
+              <p className="text-xs uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Summary</p>
               <p className="text-sm font-medium md:truncate">This week</p>
               {goalCountdown?.weeksRemaining ? (
-                <p className="mt-0.5 text-[11px] text-[var(--muted)] tabular-nums">{goalCountdown.weeksRemaining} weeks to event</p>
+                <p className="mt-0.5 text-[11px] text-[var(--muted)] tabular-nums dark:text-slate-400">{goalCountdown.weeksRemaining} weeks to event</p>
               ) : null}
             </div>
             <div className="flex flex-col gap-2 p-2">
               {!weekSummary ? (
-                <div className="text-xs text-[var(--muted)]">No workouts yet</div>
+                <div className="text-xs text-[var(--muted)] dark:text-slate-400">No workouts yet</div>
               ) : (
                 <>
                   <div className="rounded p-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Workouts</div>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Workouts</div>
                     <div className="text-sm font-semibold text-[var(--text)]">{weekSummary.workoutCount}</div>
                   </div>
                   <div className="rounded p-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Totals</div>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Totals</div>
                     <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
                       {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
                     </div>
-                    <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
+                    <div className="text-xs text-[var(--muted)] tabular-nums dark:text-slate-400">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
                   </div>
                   <div className="rounded p-2">
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">By discipline</div>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">By discipline</div>
                     {weekTopDisciplines.length === 0 ? (
-                      <div className="mt-1 text-xs text-[var(--muted)]">No time/distance yet</div>
+                      <div className="mt-1 text-xs text-[var(--muted)] dark:text-slate-400">No time/distance yet</div>
                     ) : (
                       <div className="mt-1 space-y-1">
                         {weekTopDisciplines.map((row) => (
                           <div key={row.discipline} className="flex items-baseline justify-between gap-2">
                             <div className="text-xs font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
-                            <div className="text-xs text-[var(--muted)] tabular-nums md:whitespace-nowrap">
+                            <div className="text-xs text-[var(--muted)] tabular-nums md:whitespace-nowrap dark:text-slate-400">
                               {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                             </div>
                           </div>
@@ -189,8 +189,8 @@ export function AthleteCalendarGrid({
               />
             ))}
 
-            <div className="hidden md:block min-h-[110px] bg-[rgb(209,217,232)] p-2">
-              <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
+            <div className="hidden min-h-[110px] rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] p-2 md:block dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]">
+              <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Week</div>
               <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
                 {weekBlock.weekSummary ? (
                   <>
@@ -202,13 +202,13 @@ export function AthleteCalendarGrid({
               </div>
               {weekBlock.weekSummary ? (
                 <>
-                  <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekBlock.weekSummary.totals.caloriesKcal)}</div>
+                  <div className="text-xs text-[var(--muted)] tabular-nums dark:text-slate-400">Calories: {formatKcal(weekBlock.weekSummary.totals.caloriesKcal)}</div>
                   {weekBlock.weekTopDisciplines.length ? (
                     <div className="mt-1 space-y-0.5">
                       {weekBlock.weekTopDisciplines.map((row) => (
                         <div key={row.discipline} className="flex items-baseline justify-between gap-2">
                           <div className="text-[11px] font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
-                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap">
+                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap dark:text-slate-400">
                             {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                           </div>
                         </div>
@@ -217,7 +217,7 @@ export function AthleteCalendarGrid({
                   ) : null}
                 </>
               ) : (
-                <div className="text-xs text-[var(--muted)]">{weekBlock.weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
+                <div className="text-xs text-[var(--muted)] dark:text-slate-400">{weekBlock.weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
               )}
             </div>
           </div>
