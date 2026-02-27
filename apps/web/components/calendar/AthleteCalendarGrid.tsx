@@ -115,7 +115,7 @@ export function AthleteCalendarGrid({
             </AthleteWeekDayColumn>
           ))}
 
-          <div className="hidden md:flex min-w-0 flex-col overflow-hidden rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] text-[var(--text)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)] dark:text-slate-100">
+          <div className="hidden md:flex min-w-0 flex-col overflow-hidden rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] text-[var(--text)] dark:border-2 dark:border-white dark:bg-[rgba(12,16,30,0.96)] dark:text-slate-100">
             <div className="px-3 py-1.5">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Summary</p>
               <p className="text-sm font-medium md:truncate">This week</p>
@@ -189,7 +189,7 @@ export function AthleteCalendarGrid({
               />
             ))}
 
-            <div className="hidden min-h-[110px] rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] p-2 md:block dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]">
+            <div className="hidden min-h-[110px] rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] p-2 md:block dark:border-2 dark:border-white dark:bg-[rgba(12,16,30,0.96)]">
               <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Week</div>
               <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
                 {weekBlock.weekSummary ? (
