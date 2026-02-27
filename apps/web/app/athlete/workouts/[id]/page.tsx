@@ -599,9 +599,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             ) : null}
             <Button
               type="button"
-              variant="ghost"
+              variant="danger"
               size="sm"
-              className="min-h-[44px] w-full sm:w-auto text-rose-600 hover:bg-rose-500/10"
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={submitting || deleting}
             >
@@ -648,9 +648,8 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
            <div className="flex justify-end gap-2 mt-6">
              <Button
                 type="button"
-                variant="ghost"
+                variant="danger"
                 size="sm"
-                className="text-rose-600 hover:bg-rose-500/10"
                 onClick={() => setConfirmDeleteOpen(true)}
                 disabled={submitting || deleting}
               >

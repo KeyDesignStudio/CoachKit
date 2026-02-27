@@ -58,7 +58,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
           className
         )}
       >
-        <span className="truncate max-w-[140px]">{title}</span>
+        <span className="md:truncate max-w-[140px]">{title}</span>
         <span className="opacity-80">•</span>
         <span>{goal.shortLabel}</span>
       </div>

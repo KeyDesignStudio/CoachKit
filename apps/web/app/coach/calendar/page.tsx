@@ -1475,11 +1475,11 @@ export default function CoachCalendarPage() {
   }, [showSkeleton, selectedAthleteIds, viewMode, weekGridDays, monthWeeks]);
 
   return (
-    <section className="flex flex-col gap-6">
+    <section className="flex flex-col gap-4 md:gap-6">
       {/* Header */}
       <header className="flex flex-col gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 md:px-6 md:py-5">
         {/* Top row: Title and Athlete selector */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between gap-4">
           {/* Left: Title and Date */}
           <div className="flex-shrink-0">
             <p className={uiEyebrow}>Planning</p>
@@ -1499,72 +1499,73 @@ export default function CoachCalendarPage() {
 
           {/* Center: Athletes Selector (single or stacked) */}
           <div className="flex items-center flex-shrink-0">
-            <div className="flex items-center gap-3 text-sm w-full md:w-auto">
-              <span className="text-[var(--muted)] hidden md:inline">Athletes</span>
+            <div className="flex items-center gap-3 text-sm w-full min-[900px]:w-auto">
+              <span className="text-[var(--muted)] hidden min-[900px]:inline">Athletes</span>
               <AthleteSelector athletes={athletes} selectedIds={selectedAthleteIds} onChange={setSelectedAthleteIds} />
             </div>
           </div>
         </div>
 
-        {/* Bottom row: View Toggle, Navigation, Actions */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 text-sm">
-          {/* View Toggle */}
-          <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
-            <button
-              onClick={() => setViewMode('week')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
-                viewMode === 'week'
-                  ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                  : 'text-[var(--muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              Week
-            </button>
-            <button
-              onClick={() => setViewMode('month')}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 md:flex-initial min-h-[44px] ${
-                viewMode === 'month'
-                  ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
-                  : 'text-[var(--muted)] hover:text-[var(--text)]'
-              }`}
-            >
-              Month
-            </button>
-          </div>
-          {/* Mobile: compact date nav: <  January 2026  > */}
-          <div className="md:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
-            <button
-              type="button"
-              onClick={navigatePrev}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Previous"
-            >
-              <Icon name="prev" size="md" />
-            </button>
+        {/* Bottom row: View Toggle, Navigation, Actions, Legend */}
+        <div className="flex flex-col gap-3 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
+          <div className="flex flex-col items-stretch gap-3 text-sm min-[900px]:min-w-0 min-[900px]:flex-row min-[900px]:items-center">
+            {/* View Toggle */}
+            <div className="flex rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)] p-1">
+              <button
+                onClick={() => setViewMode('week')}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 min-[900px]:flex-initial min-h-[44px] ${
+                  viewMode === 'week'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => setViewMode('month')}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all flex-1 min-[900px]:flex-initial min-h-[44px] ${
+                  viewMode === 'month'
+                    ? 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                Month
+              </button>
+            </div>
+            {/* Mobile: compact date nav: <  January 2026  > */}
+            <div className="min-[900px]:hidden flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1">
+              <button
+                type="button"
+                onClick={navigatePrev}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Previous"
+              >
+                <Icon name="prev" size="md" />
+              </button>
 
-            <button
-              type="button"
-              onClick={goToToday}
-              className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] truncate hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Go to today"
-              title="Go to today"
-            >
-              {mounted
-                ? viewMode === 'week'
-                  ? formatWeekOfLabel(dateRange.from, athleteTimezone)
-                  : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
-                : formatWeekOfLabel(dateRange.from, athleteTimezone)}
-            </button>
+              <button
+                type="button"
+                onClick={goToToday}
+                className="min-w-0 flex-1 rounded-xl px-2 py-2 text-sm font-medium text-[var(--text)] min-[900px]:truncate hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Go to today"
+                title="Go to today"
+              >
+                {mounted
+                  ? viewMode === 'week'
+                    ? formatWeekOfLabel(dateRange.from, athleteTimezone)
+                    : new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+                  : formatWeekOfLabel(dateRange.from, athleteTimezone)}
+              </button>
 
-            <button
-              type="button"
-              onClick={navigateNext}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-              aria-label="Next"
-            >
-              <Icon name="next" size="md" />
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={navigateNext}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                aria-label="Next"
+              >
+                <Icon name="next" size="md" />
+              </button>
+            </div>
 
           {/* Desktop: full date nav */}
           <div className="hidden md:flex items-center gap-2">
@@ -1789,7 +1790,7 @@ export default function CoachCalendarPage() {
             <Button type="button" variant="secondary" onClick={handleAddTitle} disabled={!titleInput.trim()}>
               Add title
             </Button>
-            <Button type="button" variant="ghost" onClick={handleDeleteTitle} disabled={!canDeleteTitle()} title="Delete selected title">
+            <Button type="button" variant="danger" onClick={handleDeleteTitle} disabled={!canDeleteTitle()} title="Delete selected title">
               🗑 Remove
             </Button>
           </div>
@@ -2019,22 +2020,22 @@ export default function CoachCalendarPage() {
             role="dialog"
             aria-label="Day workouts"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5 max-[360px]:px-2.5 max-[360px]:py-2">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-[var(--text)]">{mobileDaySheetDateStr || 'Day'}</div>
-                <div className="text-xs text-[var(--muted)]">Workouts</div>
+                <div className="text-sm font-semibold leading-tight text-[var(--text)]">{mobileDaySheetDateStr || 'Day'}</div>
+                <div className="text-xs leading-tight text-[var(--muted)]">Workouts</div>
               </div>
               <button
                 type="button"
                 onClick={closeMobileDaySheet}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                className="inline-flex h-11 w-11 max-[360px]:h-10 max-[360px]:w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                 aria-label="Close"
               >
                 <Icon name="close" size="md" />
               </button>
             </div>
 
-            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-[360px]:px-2.5 max-[360px]:py-2.5">
               {(() => {
                 const day = monthDays.find((d) => d.dateStr === mobileDaySheetDateStr);
                 const dayItems = day?.items ?? [];
@@ -2054,18 +2055,18 @@ export default function CoachCalendarPage() {
                           closeMobileDaySheet();
                           handleSessionClick(item);
                         }}
-                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-left hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                        className="w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 max-[360px]:px-2.5 max-[360px]:py-2 text-left hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--bg-structure)]">
+                        <div className="flex items-center gap-2.5 max-[360px]:gap-2 min-w-0">
+                          <div className="flex h-10 w-10 max-[360px]:h-9 max-[360px]:w-9 items-center justify-center rounded-xl bg-[var(--bg-structure)]">
                             <Icon name={getDisciplineTheme(item.discipline as any).iconName} size="md" aria-hidden />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[11px] text-[var(--muted)] whitespace-nowrap">
+                            <div className="text-[11px] leading-tight text-[var(--muted)] md:whitespace-nowrap">
                               {(item as any).displayTimeLocal ?? item.plannedStartTimeLocal ?? ''}
                             </div>
-                            <div className="text-sm font-medium text-[var(--text)] truncate">{item.title}</div>
-                            <div className="text-[11px] text-[var(--muted)] truncate">{item.athleteName ?? ''}</div>
+                            <div className="text-sm leading-tight font-medium text-[var(--text)] md:truncate break-words">{item.title}</div>
+                            <div className="text-[11px] leading-tight text-[var(--muted)] md:truncate break-words">{item.athleteName ?? ''}</div>
                           </div>
                         </div>
                       </button>

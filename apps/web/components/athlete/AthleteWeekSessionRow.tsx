@@ -186,14 +186,14 @@ export function AthleteWeekSessionRow({
         <div className="flex-1 min-w-0 py-1.5">
           <p
             className={cn(
-              'text-[10px] leading-none text-[var(--muted)] whitespace-nowrap',
+              'text-[10px] leading-tight text-[var(--muted)] md:whitespace-nowrap',
               showTimeOnMobile ? '' : 'hidden md:block'
             )}
           >
             {item.displayTimeLocal ?? ''}
           </p>
-          <p className={cn(isStacked ? 'text-[11px]' : 'text-xs', 'font-normal truncate text-[var(--text)]')}>
-            <span className="truncate">{titleLabel}</span>
+          <p className={cn(isStacked ? 'text-[11px] leading-tight' : 'text-xs leading-tight', 'font-normal md:truncate text-[var(--text)]')}>
+            <span className="md:truncate">{titleLabel}</span>
             {isAiPlanBuilder ? (
               <span
                 className={cn(
@@ -214,13 +214,13 @@ export function AthleteWeekSessionRow({
 
         {/* 4) Indicators (right-aligned; pain stays inline; status may become a full-height bar) */}
         {pain ? (
-          <div className="flex items-center flex-shrink-0 whitespace-nowrap">
+          <div className="flex items-center flex-shrink-0 md:whitespace-nowrap">
             <Icon name="painFlag" size="xs" className={cn('leading-none text-rose-500', CALENDAR_ACTION_ICON_CLASS)} />
           </div>
         ) : null}
 
         {statusIndicatorVariant === 'icon' ? (
-          <div className="flex items-center flex-shrink-0 whitespace-nowrap">
+          <div className="flex items-center flex-shrink-0 md:whitespace-nowrap">
             <span title={statusBar.title ?? undefined}>
               <Icon
                 name={statusBar.iconName}
@@ -254,10 +254,10 @@ export function AthleteWeekSessionRow({
                  <Icon name={icon} size="xs" className="text-[var(--muted)] flex-shrink-0" />
                  <div className="min-w-0 flex-1 flex flex-col">
                    <div className="flex justify-between gap-1">
-                      <span className="text-[10px] font-medium text-[var(--text)] truncate">{label}</span>
-                      {meta && <span className="text-[9px] text-[var(--muted)] tabular-nums truncate flex-shrink-0">{meta}</span>}
+                      <span className="text-[10px] font-medium text-[var(--text)] md:truncate">{label}</span>
+                      {meta && <span className="text-[9px] text-[var(--muted)] tabular-nums md:truncate flex-shrink-0">{meta}</span>}
                    </div>
-                   {notes && <span className="text-[9px] text-[var(--muted)] truncate opacity-80">{notes}</span>}
+                   {notes && <span className="text-[9px] text-[var(--muted)] md:truncate opacity-80">{notes}</span>}
                  </div>
               </div>
             );

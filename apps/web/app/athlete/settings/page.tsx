@@ -425,7 +425,7 @@ export default function AthleteSettingsPage() {
               weatherLocationLabel.trim() ? (
                 <Badge
                   title={weatherLocationLabel}
-                  className="max-w-[40vw] overflow-hidden text-ellipsis whitespace-nowrap md:max-w-[14rem]"
+                  className="max-w-[40vw] md:overflow-hidden md:text-ellipsis md:whitespace-nowrap md:max-w-[14rem]"
                 >
                   {weatherLocationLabel}
                 </Badge>

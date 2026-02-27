@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { Prisma } from '@prisma/client';
 
 import { createAthlete, createCoach, nextTestId, seedDevCoachAndAthlete } from '../modules/ai-plan-builder/tests/seed';
 import { createAthleteIntakeSubmission } from '../modules/ai-plan-builder/server/athlete-intake';
@@ -220,7 +221,7 @@ test.describe('AI Plan Builder v1: coach-first UI smoke (flag ON)', () => {
         season: 'BASE',
         checksumSha256: nextTestId('checksum_ui'),
         rawText: 'Week 1 Bike endurance 60 min',
-        rawJson: null,
+        rawJson: Prisma.JsonNull,
         isActive: true,
       },
     });

@@ -202,11 +202,13 @@ export function AthleteDetailDrawer({
               ) : null}
 
               {athleteId ? (
-                <Link href={`/coach/athletes/${athleteId}/profile`}>
-                  <Button type="button" className="min-h-[44px] w-full">
-                    Open full profile
-                  </Button>
-                </Link>
+                <div className="pt-2">
+                  <Link href={`/coach/athletes/${athleteId}/profile`} className="inline-block w-full md:w-1/4">
+                    <Button type="button" className="min-h-[44px] w-full">
+                      Open full profile
+                    </Button>
+                  </Link>
+                </div>
               ) : null}
             </div>
           )}

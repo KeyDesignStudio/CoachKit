@@ -184,8 +184,8 @@ export function CalendarContextMenu({
                        <Icon name={theme.iconName} size="xs" />
                      </div>
                      <div className="min-w-0 flex-1">
-                       <p className="font-medium truncate text-[var(--text)]">{item.title}</p>
-                       <p className="text-[10px] text-[var(--muted)] truncate">{item.durationMinutes} min</p>
+                       <p className="font-medium md:truncate text-[var(--text)]">{item.title}</p>
+                       <p className="text-[10px] text-[var(--muted)] md:truncate">{item.durationMinutes} min</p>
                      </div>
                    </button>
                  );

@@ -6,20 +6,17 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/components/api-client';
 import { useAuthUser } from '@/components/use-auth-user';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
 import { SelectField } from '@/components/ui/SelectField';
 import { Block } from '@/components/ui/Block';
-import { BlockTitle } from '@/components/ui/BlockTitle';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CoachOnboardingModal } from '@/components/coach/CoachOnboardingModal';
+import { AtAGlanceCard } from '@/components/dashboard/AtAGlanceCard';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
-import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
-import { getWarmWelcomeMessage } from '@/lib/user-greeting';
 import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 
@@ -110,6 +107,17 @@ function formatDistanceKm(km: number): string {
 
 function formatCalendarDayLabel(dateIso: string, timeZone: string): string {
   return formatDisplayInTimeZone(dateIso, timeZone);
+}
+
+function formatReviewInboxDateShort(value: string, timeZone: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value ?? '');
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  }).format(parsed);
 }
 
 function getDateRangeFromPreset(preset: TimeRangePreset, coachTimeZone: string, customFrom: string, customTo: string) {
@@ -216,16 +224,6 @@ export default function CoachDashboardConsolePage() {
   const { request } = useApi();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const fallbackWelcomeMessage = useMemo(
-    () => getWarmWelcomeMessage({ name: user?.name, timeZone: user?.timezone }),
-    [user?.name, user?.timezone]
-  );
-  const [welcomeMessage, setWelcomeMessage] = useState(fallbackWelcomeMessage);
-  const styledWelcome = useMemo(() => {
-    const match = welcomeMessage.match(/^G'day\s+([^.]+)\.\s*(.*)$/i);
-    if (!match) return { name: '', rest: welcomeMessage };
-    return { name: String(match[1] ?? '').trim(), rest: String(match[2] ?? '').trim() };
-  }, [welcomeMessage]);
 
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
@@ -482,38 +480,6 @@ export default function CoachDashboardConsolePage() {
     });
   }, [visibleReviewInbox]);
 
-  const coachGreetingContext = useMemo(() => {
-    const completed = Math.max(0, Number(data?.kpis?.workoutsCompleted ?? 0));
-    const skipped = Math.max(0, Number(data?.kpis?.workoutsSkipped ?? 0));
-    const nextGoal = data?.selectedGoalCountdown?.goalCountdown?.eventName
-      ? String(data.selectedGoalCountdown.goalCountdown.eventName)
-      : '';
-    return [
-      `squad completed workouts: ${completed}`,
-      `squad missed workouts: ${skipped}`,
-      nextGoal ? `nearest athlete event: ${nextGoal}` : '',
-    ]
-      .filter(Boolean)
-      .join('; ');
-  }, [data?.kpis?.workoutsCompleted, data?.kpis?.workoutsSkipped, data?.selectedGoalCountdown?.goalCountdown?.eventName]);
-
-  useEffect(() => {
-    setWelcomeMessage(fallbackWelcomeMessage);
-  }, [fallbackWelcomeMessage]);
-
-  useEffect(() => {
-    if (!user?.userId || user.role !== 'COACH') return;
-    const qs = new URLSearchParams();
-    if (coachGreetingContext) qs.set('context', coachGreetingContext);
-    void request<{ greeting: string }>(`/api/me/greeting?${qs.toString()}`, { cache: 'no-store' })
-      .then((resp) => {
-        if (resp?.greeting) setWelcomeMessage(String(resp.greeting));
-      })
-      .catch(() => {
-        setWelcomeMessage(fallbackWelcomeMessage);
-      });
-  }, [coachGreetingContext, fallbackWelcomeMessage, request, user?.role, user?.userId]);
-
   if (userLoading || (!user && !userError)) {
     return (
       <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
@@ -538,17 +504,11 @@ export default function CoachDashboardConsolePage() {
         <div className={cn("pt-3 md:pt-6")}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
-            <span className="hidden h-5 w-px bg-[var(--border-subtle)] md:inline-block" aria-hidden />
-            <p className="flex items-center gap-1 text-sm font-normal leading-tight text-[var(--fg-muted)] md:text-base">
-              <span className="italic">G&apos;day</span>
-              {styledWelcome.name ? <span className="text-[var(--text)]">{styledWelcome.name}.</span> : null}
-              <span className="font-normal">{styledWelcome.rest || welcomeMessage}</span>
-            </p>
           </div>
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start md:mt-4 md:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
+        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start min-[900px]:mt-4 min-[900px]:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
           {/* Column 1: Needs your attention */}
           <div className="min-w-0 order-2 md:order-2">
             <div ref={needsCardRef}>
@@ -574,7 +534,7 @@ export default function CoachDashboardConsolePage() {
                   />
                 </div>
 
-                <div className={cn("mt-2 grid md:grid-cols-2", tokens.spacing.widgetGap)}>
+                <div className={cn("mt-2 grid min-[900px]:grid-cols-2", tokens.spacing.widgetGap)}>
                   <AlertStripItem
                     label="Missed workouts"
                     count={data?.attention.skippedWorkouts ?? 0}
@@ -596,14 +556,14 @@ export default function CoachDashboardConsolePage() {
           <div className="min-w-0 order-1 md:order-1">
             <Block
               title="Make your selection"
-              className="flex flex-col justify-between"
+              className="flex flex-col"
               style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
               showHeaderDivider={false}
             >
-              <div>
-                <div className={cn("grid grid-cols-1 md:grid-cols-2 md:gap-x-4 md:gap-y-6", tokens.spacing.widgetGap)}>
+              <div className="-mt-2">
+                <div className={cn("grid grid-cols-1 min-[900px]:grid-cols-2 min-[900px]:gap-x-4 min-[900px]:gap-y-6", tokens.spacing.widgetGap)}>
                   {/* Row 1 */}
-                  <div className="md:col-start-1 md:row-start-1">
+                  <div className="min-[900px]:col-start-1 min-[900px]:row-start-1">
                     <FieldLabel className="pl-1">Athlete</FieldLabel>
                     <AthleteSelector
                       athletes={athleteOptions}
@@ -618,7 +578,7 @@ export default function CoachDashboardConsolePage() {
                     />
                   </div>
 
-                  <div className="md:col-start-2 md:row-start-1">
+                  <div className="min-[900px]:col-start-2 min-[900px]:row-start-1">
                     <FieldLabel className="pl-1">Discipline</FieldLabel>
                     <SelectField
                       className="min-h-[44px]"
@@ -635,7 +595,7 @@ export default function CoachDashboardConsolePage() {
                   </div>
 
                   {/* Row 2 */}
-                  <div className="md:col-start-1 md:row-start-2">
+                  <div className="min-[900px]:col-start-1 min-[900px]:row-start-2">
                     <FieldLabel className="pl-1">Time range</FieldLabel>
                     <SelectField
                       className="min-h-[44px]"
@@ -651,9 +611,11 @@ export default function CoachDashboardConsolePage() {
                       <option value="LAST_7">Last 7 days</option>
                       <option value="CUSTOM">Custom</option>
                     </SelectField>
+                  </div>
 
+                  <div className="min-[900px]:col-start-2 min-[900px]:row-start-2">
                     {timeRange === 'CUSTOM' ? (
-                      <div className={cn("mt-2 grid grid-cols-2", tokens.spacing.widgetGap)}>
+                      <div className={cn("grid grid-cols-2", tokens.spacing.widgetGap)}>
                         <div>
                           <FieldLabel className="pl-1">From</FieldLabel>
                           <input
@@ -681,16 +643,16 @@ export default function CoachDashboardConsolePage() {
                           />
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-
-                  <div className="md:col-start-2 md:row-start-2">
-                    <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                    <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
-                      <div className={cn("font-medium text-[var(--muted)] text-xs sm:text-sm", tokens.typography.body)}>
-                        {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <FieldLabel className="pl-1">&nbsp;</FieldLabel>
+                        <div className={cn("min-h-[44px] flex items-center justify-center rounded-2xl bg-[var(--bg-structure)]/75", tokens.spacing.elementPadding)}>
+                          <div className={cn("font-medium text-[var(--muted)] text-xs sm:text-sm", tokens.typography.body)}>
+                            {formatCalendarDayLabel(dateRange.from, coachTimeZone)} → {formatCalendarDayLabel(dateRange.to, coachTimeZone)}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -702,92 +664,28 @@ export default function CoachDashboardConsolePage() {
 
           {/* Column 3: At a glance (stacks vertically); on tablet sits below and spans full width */}
           <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-            <div
-              className={cn("rounded-2xl bg-[var(--bg-card)] min-h-0 flex flex-col", tokens.spacing.containerPadding)}
-              style={xlTopCardHeightPx ? { minHeight: `${xlTopCardHeightPx}px` } : undefined}
-              data-testid="coach-dashboard-at-a-glance"
-            >
-              <div className="flex items-end justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2">
-                  <Icon name="info" size="sm" className="text-[var(--muted)]" aria-hidden />
-                  <BlockTitle>At a glance</BlockTitle>
-                </div>
-              </div>
-
-              <div
-                className={cn("grid grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0", tokens.spacing.widgetGap)}
-                data-testid="coach-dashboard-at-a-glance-grid"
-              >
-                {/* Left: stats */}
-                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-at-a-glance-stats">
-                  <div className={cn("grid", tokens.spacing.widgetGap)}>
-                    {[
-                      { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                      { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                      { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                      { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                    ].map((row, idx) => (
-                      <div
-                        key={row.label}
-                        className={cn(
-                          'min-w-0 flex items-baseline justify-between',
-                          tokens.spacing.elementPadding,
-                          tokens.spacing.widgetGap,
-                          idx < 3 ? 'border-b border-[var(--border-subtle)]' : ''
-                        )}
-                        data-testid="coach-dashboard-at-a-glance-stat-row"
-                      >
-                        <div className={cn('min-w-0 uppercase tracking-wide truncate', tokens.typography.meta)} title={row.label}>
-                          {row.label}
-                        </div>
-                        <div className={cn('flex-shrink-0 leading-[1.05] tabular-nums text-sm font-semibold text-[var(--text)]')}>
-                          {row.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Right: discipline load */}
-                <div className={cn("min-w-0 rounded-2xl bg-[var(--bg-structure)]/40", tokens.spacing.elementPadding)} data-testid="coach-dashboard-discipline-load">
-                  <div className={cn("flex flex-col", tokens.spacing.widgetGap)}>
-                    {(() => {
-                      const rows = data?.disciplineLoad ?? [];
-                      const maxMinutes = Math.max(1, ...rows.map((r) => r.totalMinutes));
-                      return (
-                        <>
-                          {rows.map((r) => {
-                            const theme = getDisciplineTheme(r.discipline);
-                            const pct = Math.max(0, Math.min(1, r.totalMinutes / maxMinutes));
-                            const rightValue = `${formatMinutes(r.totalMinutes)} · ${formatDistanceKm(r.totalDistanceKm)}`;
-                            return (
-                              <div key={r.discipline} className={cn("grid grid-cols-[auto,1fr,auto] items-center min-w-0", tokens.spacing.widgetGap)}>
-                                <div className={cn("flex items-center min-w-[64px]", tokens.spacing.widgetGap)}>
-                                  <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
-                                  <span className={cn("font-medium text-[var(--text)]", tokens.typography.meta)}>{(r.discipline || 'OTHER').toUpperCase()}</span>
-                                </div>
-
-                                <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
-                                  <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
-                                </div>
-
-                                <div
-                                  className={cn("tabular-nums text-right whitespace-nowrap truncate max-w-[120px]", tokens.typography.meta)}
-                                  title={rightValue}
-                                >
-                                  {rightValue}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {rows.length === 0 ? <div className={cn("text-[var(--muted)]", tokens.typography.meta, tokens.spacing.elementPadding)}>No data for this range.</div> : null}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AtAGlanceCard
+              minHeightPx={xlTopCardHeightPx ?? undefined}
+              loading={loading && !data}
+              testIds={{
+                card: 'coach-dashboard-at-a-glance',
+                grid: 'coach-dashboard-at-a-glance-grid',
+                stats: 'coach-dashboard-at-a-glance-stats',
+                statRow: 'coach-dashboard-at-a-glance-stat-row',
+                disciplineLoad: 'coach-dashboard-discipline-load',
+              }}
+              statsRows={[
+                { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
+                { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
+              ]}
+              disciplineRows={(data?.disciplineLoad ?? []).map((row) => ({
+                discipline: row.discipline,
+                totalMinutes: row.totalMinutes,
+                rightValue: `${formatMinutes(row.totalMinutes)} · ${formatDistanceKm(row.totalDistanceKm)}`,
+              }))}
+            />
           </div>
         </div>
 
@@ -849,15 +747,15 @@ export default function CoachDashboardConsolePage() {
                           onChange={() => toggleReviewItemSelection(item.id)}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className={cn("truncate font-semibold", tokens.typography.body)} title={String(item.athlete?.name ?? 'Athlete')}>
+                          <div className="flex flex-col items-start gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
+                            <div className={cn("md:truncate font-semibold", tokens.typography.body)} title={String(item.athlete?.name ?? 'Athlete')}>
                               {String(item.athlete?.name ?? 'Athlete')}
                             </div>
-                            <div className={cn("whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
-                              {formatDayMonthYearInTimeZone(item.date, coachTimeZone)}
+                            <div className={cn("md:whitespace-nowrap text-[var(--muted)]", tokens.typography.meta)}>
+                              {formatReviewInboxDateShort(item.date, coachTimeZone)}
                             </div>
                           </div>
-                          <div className={cn("mt-1 truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>
+                          <div className={cn("mt-1 md:truncate text-[var(--text)]", tokens.typography.body)} title={String(item.title ?? '')}>
                             {String(item.title ?? '')}
                           </div>
                           <div className={cn("mt-1 flex items-center gap-2 text-[var(--muted)]", tokens.typography.meta)}>
@@ -888,7 +786,22 @@ export default function CoachDashboardConsolePage() {
               className="border bg-[rgba(233,238,248,0.85)] dark:bg-[rgba(12,16,30,0.96)] md:dark:bg-[rgba(233,238,248,0.85)]"
               style={{ borderColor: '#cad7eb' }}
             >
-              {visibleGoalCountdowns.length === 0 ? (
+              {loading && !data ? (
+                <div className={cn("space-y-3", tokens.spacing.containerPadding)}>
+                  <div className={cn("text-[var(--muted)]", tokens.typography.body)}>
+                    Loading athlete event countdowns...
+                  </div>
+                  <div className="space-y-2" aria-hidden="true">
+                    {[0, 1].map((index) => (
+                      <div key={`goal-countdown-loading-${index}`} className="space-y-2 rounded-xl bg-[var(--bg-card)]/60 px-3 py-2">
+                        <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                        <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                        <div className="h-1.5 w-full animate-pulse rounded-full bg-[var(--border-subtle)]" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : visibleGoalCountdowns.length === 0 ? (
                 <div className={cn("text-[var(--muted)]", tokens.spacing.containerPadding, tokens.typography.body)}>
                   No athlete event dates available for this selection.
                 </div>
@@ -916,19 +829,19 @@ export default function CoachDashboardConsolePage() {
                             "space-y-1 px-3 py-2"
                           )}
                         >
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                            <div className={cn("truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
+                          <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                            <div className={cn("md:truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
                               {athleteName}
                             </div>
-                            <div className={cn("whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
+                            <div className={cn("md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
                               {weeksLabel}
                             </div>
                           </div>
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                            <div className={cn("truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
+                          <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                            <div className={cn("md:truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
                               {eventName}
                             </div>
-                            <div className={cn("whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
+                            <div className={cn("md:whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
                             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />

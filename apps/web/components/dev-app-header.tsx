@@ -66,8 +66,8 @@ function DevUserMenu({ role }: { role: Role }) {
             className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]"
           >
             <div className="px-4 py-3">
-              <div className="text-sm font-semibold text-[var(--text)] truncate">Account</div>
-              <div className="text-xs text-[var(--muted)] truncate">Dev mode</div>
+              <div className="text-sm font-semibold text-[var(--text)] md:truncate">Account</div>
+              <div className="text-xs text-[var(--muted)] md:truncate">Dev mode</div>
             </div>
             <div className="h-px bg-[var(--border-subtle)]" />
             <div className="p-2">
@@ -141,7 +141,7 @@ export function DevAppHeader() {
       {/* Mobile-only top branding: scrolls away; sticky header remains */}
       <div data-mobile-top-branding="v1" className="md:hidden px-0 pt-0">
         <div className="flex items-center justify-between gap-3">
-          <span className="block max-w-[55vw] truncate text-xs font-medium text-[var(--muted)]">Your Club</span>
+          <span className="block max-w-[55vw] md:truncate text-xs font-medium text-[var(--muted)]">Your Club</span>
           <Link
             href="/"
             className="inline-flex items-center gap-2 rounded-full px-2 py-1 font-display font-semibold tracking-tight text-[var(--text)]"
@@ -176,20 +176,20 @@ export function DevAppHeader() {
           </div>
 
         {/* Desktop: minimal dev header */}
-        <div className="hidden md:flex items-center justify-between gap-4 p-5">
+        <div className="hidden md:flex items-center justify-between gap-4 px-5 py-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)]">
               <Icon name="menu" size="md" className="text-[var(--muted)]" aria-hidden />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-[var(--text)] truncate">CoachKit (dev)</div>
-              <div className="text-xs text-[var(--muted)] truncate">Auth disabled</div>
+              <div className="text-sm font-semibold text-[var(--text)] md:truncate">CoachKit (dev)</div>
+              <div className="text-xs text-[var(--muted)] md:truncate">Auth disabled</div>
             </div>
           </div>
 
           <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
             {desktopTextLinks.map((link) => (
-              <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} whitespace-nowrap`}>
+              <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
                 {link.label}
               </Link>
             ))}

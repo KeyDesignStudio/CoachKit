@@ -208,5 +208,18 @@ a {
 }
 
 @layer utilities {
-  /* Custom utility overrides removed to restore standard Tailwind scale */
+  /* Custom utility overrides */
+  .border-black {
+    --tw-border-opacity: 0.25;
+  }
+
+  .strava-vital-primary {
+    font-size: 0.875rem;
+    line-height: 1;
+  }
+
+  .strava-vital-delta {
+    margin-top: 1px;
+    line-height: 1;
+  }
 }

@@ -195,6 +195,34 @@ function inferProgramPolicy(params: {
   return undefined;
 }
 
+const DAY_TO_INDEX: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
+
+function parseDayIndexList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const out = value
+    .map((v) => DAY_TO_INDEX[String(v ?? '').trim().toLowerCase()])
+    .filter((v): v is number => Number.isInteger(v) && v >= 0 && v <= 6);
+  return Array.from(new Set(out)).sort((a, b) => a - b);
+}
+
 function applyRequestContextToSetup(params: { setup: any }) {
   const setup = { ...(params.setup ?? {}) };
   const requestContext = setup.requestContext && typeof setup.requestContext === 'object' ? setup.requestContext : null;
@@ -250,11 +278,33 @@ function applyRequestContextToSetup(params: { setup: any }) {
   if (constraintsText.includes('travel') || constraintsText.includes('travell')) {
     effects.push('Travel constraints detected: overlapping travel weeks are reduced in volume and doubles blocked.');
   }
+  if (Number.isFinite(Number(requestContext.weeklyMinutes)) && Number(requestContext.weeklyMinutes) > 0) {
+    const requestedWeeklyMinutes = Math.max(60, Math.round(Number(requestContext.weeklyMinutes)));
+    setup.weeklyAvailabilityMinutes = requestedWeeklyMinutes;
+    if (Number.isFinite(Number(setup.weeksToEvent)) && Number(setup.weeksToEvent) > 0) {
+      setup.weeklyMinutesByWeek = Array.from({ length: Math.round(Number(setup.weeksToEvent)) }, () => requestedWeeklyMinutes);
+    }
+    effects.push(`Weekly minutes target locked to athlete request: ${requestedWeeklyMinutes} min/week.`);
+  }
+  const preferredAvailabilityDays = parseDayIndexList(requestContext.availabilityDays);
+  if (preferredAvailabilityDays.length) {
+    setup.weeklyAvailabilityDays = preferredAvailabilityDays;
+    effects.push(`Availability days applied from request: ${preferredAvailabilityDays.join(', ')}.`);
+  }
   if (Array.isArray(requestContext.nonNegotiableDays) && requestContext.nonNegotiableDays.length) {
     effects.push(`Non-negotiable off days set: ${requestContext.nonNegotiableDays.join(', ')}.`);
   }
   if (Array.isArray(requestContext.preferredKeyDays) && requestContext.preferredKeyDays.length) {
     effects.push(`Preferred key-session days set: ${requestContext.preferredKeyDays.join(', ')}.`);
+    const preferredKeyDayIndexes = parseDayIndexList(requestContext.preferredKeyDays);
+    if (preferredKeyDayIndexes.length) {
+      const preferredLongDay = preferredKeyDayIndexes.find((d) =>
+        Array.isArray(setup.weeklyAvailabilityDays) ? setup.weeklyAvailabilityDays.includes(d) : true
+      );
+      if (Number.isInteger(preferredLongDay)) {
+        setup.longSessionDay = preferredLongDay;
+      }
+    }
   }
   if (requestContext.dailyTimeWindows && typeof requestContext.dailyTimeWindows === 'object') {
     const entries = Object.entries(requestContext.dailyTimeWindows as Record<string, string>)
@@ -1019,7 +1069,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
   if (guidanceText.includes('hill') || guidanceText.includes('climb')) environmentTags.push('hills');
   if (guidanceText.includes('wind')) environmentTags.push('wind');
   const contextForDetails = {
-    availableTimeMinutes: Number(requestContext?.weeklyMinutes ?? 0) || undefined,
+    availableTimeMinutes: Number(requestContext?.availableTimeMinutes ?? 0) || undefined,
     equipment: typeof requestContext?.equipment === 'string' ? String(requestContext.equipment) : undefined,
     environmentTags,
     constraintsNotes: typeof requestContext?.constraintsNotes === 'string' ? String(requestContext.constraintsNotes) : undefined,

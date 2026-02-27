@@ -310,7 +310,8 @@ describe('strava sync timezone + matching', () => {
 
       let effectiveStartUtc: Date;
       if (metricsCompletion?.source === 'STRAVA') {
-        const candidate = metricsCompletion.metricsJson?.strava?.startDateUtc ?? null;
+        const metrics = metricsCompletion.metricsJson as { strava?: { startDateUtc?: string | null } } | null;
+        const candidate = metrics?.strava?.startDateUtc ?? null;
         const parsed = candidate ? new Date(candidate) : null;
         const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : metricsCompletion.startTime;
         if (typeof metricsCompletion.matchDayDiff === 'number' && metricsCompletion.matchDayDiff !== 0) {

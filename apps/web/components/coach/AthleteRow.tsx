@@ -17,7 +17,7 @@ export function AthleteRow({ athleteName, children, todayIndex = -1 }: AthleteRo
   return (
     <div className="contents">
       <div className="min-w-0 flex items-center bg-[var(--bg-card)] px-4 py-3">
-        <span className="truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
+        <span className="md:truncate text-sm font-medium text-[var(--text)]">{athleteName}</span>
       </div>
       {children.map((child, index) => {
         const isToday = index === todayIndex;

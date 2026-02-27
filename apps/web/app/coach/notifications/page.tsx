@@ -11,6 +11,7 @@ import { Block } from '@/components/ui/Block';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Icon } from '@/components/ui/Icon';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
 
@@ -266,23 +267,23 @@ export default function CoachNotificationsPage() {
         </div>
 
         {composerOpen ? (
-          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:p-4">
+            <div className="mb-3 flex items-start justify-between gap-2 sm:gap-3">
               <div className="relative min-w-0 flex-1">
                 <button
                   type="button"
-                  className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-[var(--border-subtle)] px-3 text-left text-sm"
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-[var(--border-subtle)] px-2.5 sm:px-3 text-left text-sm"
                   onClick={() => setRecipientDropdownOpen((prev) => !prev)}
                 >
                   <Icon name="search" size="sm" className="text-[var(--muted)]" />
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 leading-tight break-words md:truncate">
                     {selectedRecipients.length
                       ? selectedRecipients.map((r) => r.name).join(', ')
                       : recipientsLoading
                         ? 'Loading recipients...'
                         : 'Search recipients'}
                   </span>
-                  <Icon name="expandMore" size="sm" className="ml-auto text-[var(--muted)]" />
+                  <Icon name="expandMore" size="sm" className="ml-1 shrink-0 text-[var(--muted)]" />
                 </button>
 
                 {recipientDropdownOpen ? (
@@ -311,7 +312,7 @@ export default function CoachNotificationsPage() {
                 ) : null}
               </div>
 
-              <button type="button" className="text-[var(--muted)]" onClick={() => setComposerOpen(false)} aria-label="Close compose">
+              <button type="button" className="text-[var(--muted)] p-1 -m-1" onClick={() => setComposerOpen(false)} aria-label="Close compose">
                 <Icon name="close" size="md" />
               </button>
             </div>
@@ -342,7 +343,7 @@ export default function CoachNotificationsPage() {
           <div className="flex border-b border-[var(--border-subtle)]">
             <button
               type="button"
-              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              className={cn('px-4 sm:px-6 py-3 text-sm font-medium', activeTab === 'INBOX' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
               onClick={() => {
                 setActiveTab('INBOX');
                 setSelectedMessageIds([]);
@@ -352,7 +353,7 @@ export default function CoachNotificationsPage() {
             </button>
             <button
               type="button"
-              className={cn('px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
+              className={cn('px-4 sm:px-6 py-3 text-sm font-medium', activeTab === 'SENT' ? 'bg-[var(--bg-card)] text-[var(--text)]' : 'text-[var(--muted)]')}
               onClick={() => {
                 setActiveTab('SENT');
                 setSelectedMessageIds([]);
@@ -372,7 +373,7 @@ export default function CoachNotificationsPage() {
             ) : null}
 
             {!mailboxLoading && visibleItems.length > 0 ? (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+              <div className="mb-3 flex flex-col items-start justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
                   <span>Select all</span>
@@ -380,7 +381,7 @@ export default function CoachNotificationsPage() {
                 <Button
                   type="button"
                   size="sm"
-                  variant="secondary"
+                  variant="danger"
                   disabled={deleting || selectedVisibleCount === 0}
                   onClick={() => void deleteSelectedMessages()}
                 >
@@ -392,7 +393,7 @@ export default function CoachNotificationsPage() {
             <div className="flex flex-col gap-3">
               {visibleItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
-                  <div className="mb-1 flex items-center justify-between gap-3">
+                  <div className="mb-1 flex flex-col items-start justify-between gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <input
                         type="checkbox"
@@ -400,14 +401,14 @@ export default function CoachNotificationsPage() {
                         onChange={() => toggleMessageSelection(item.id)}
                         aria-label="Select message"
                       />
-                      <div className="truncate text-sm font-semibold">
+                      <div className="min-w-0 text-sm font-semibold leading-tight md:truncate">
                         {activeTab === 'INBOX' ? `From ${item.counterpartName}` : `To ${item.counterpartName}`}
                       </div>
                     </div>
-                    <div className="text-xs tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
+                    <div className="text-xs leading-tight tabular-nums text-[var(--muted)]">{new Date(item.createdAt).toLocaleString()}</div>
                   </div>
                   {item.subject ? <div className="mb-1 text-sm font-medium">{item.subject}</div> : null}
-                  <div className="whitespace-pre-wrap text-sm text-[var(--text)]">{item.body}</div>
+                  <LinkifiedText text={item.body} className="whitespace-pre-wrap text-sm text-[var(--text)]" />
                 </div>
               ))}
             </div>

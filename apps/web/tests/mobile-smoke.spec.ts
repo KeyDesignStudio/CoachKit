@@ -27,14 +27,14 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 async function getCalendarHeaderLines(page: any, testId: string) {
   const header = page.locator(`[data-testid="${testId}"]:visible`).first();
   await expect(header).toBeVisible();
-  const lines = (await header.locator('p').allTextContents()).map((text) => text.trim());
+  const lines = (await header.locator('p').allTextContents()).map((text: string) => text.trim());
   return { weekday: lines[0] ?? '', dateLine: lines[1] ?? '' };
 }
 
 async function getCalendarHeaderHeight(page: any, testId: string) {
   const header = page.locator(`[data-testid="${testId}"]:visible`).first();
   await expect(header).toBeVisible();
-  return header.evaluate((el) => Math.round(el.getBoundingClientRect().height * 10) / 10);
+  return header.evaluate((el: Element) => Math.round(el.getBoundingClientRect().height * 10) / 10);
 }
 
 function assertCalendarHeaderFormat(weekday: string, dateLine: string) {

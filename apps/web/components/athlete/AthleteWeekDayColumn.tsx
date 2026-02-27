@@ -104,12 +104,12 @@ export function AthleteWeekDayColumn({
           {onHeaderClick ? (
             <button type="button" onClick={onHeaderClick} className="min-w-0 text-left">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
-              <p className="text-sm font-medium truncate">{formattedDate}</p>
+              <p className="text-sm font-medium md:truncate">{formattedDate}</p>
             </button>
           ) : (
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{dayName}</p>
-              <p className="text-sm font-medium truncate">{formattedDate}</p>
+              <p className="text-sm font-medium md:truncate">{formattedDate}</p>
             </div>
           )}
 

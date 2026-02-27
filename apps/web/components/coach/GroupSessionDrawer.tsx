@@ -509,7 +509,8 @@ export function GroupSessionDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 hover:bg-[var(--bg-surface)]"
+              className="inline-flex h-9 w-9 items-center justify-center text-[var(--muted)] hover:text-[var(--text)]"
+              aria-label="Close"
             >
               <Icon name="close" size="sm" />
             </button>
@@ -750,7 +751,7 @@ export function GroupSessionDrawer({
               >
                 Duplicate
               </Button>
-              <Button type="button" onClick={handleDelete} disabled={saving || deleting} variant="primary" className="bg-rose-500 hover:bg-rose-600">
+              <Button type="button" onClick={handleDelete} disabled={saving || deleting} variant="danger">
                 {deleting ? 'Deleting...' : 'Delete Session'}
               </Button>
               <Button type="button" onClick={onClose} variant="ghost">

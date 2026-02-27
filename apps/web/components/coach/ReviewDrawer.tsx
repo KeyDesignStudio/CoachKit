@@ -349,7 +349,7 @@ export function ReviewDrawer({ item, onClose, onMarkReviewed, showSessionTimes: 
                         const theme = getDisciplineTheme(detail.discipline);
                         return <Icon name={theme.iconName} size="md" className={theme.textClass} />;
                       })()}
-                      <h3 className="min-w-0 text-xl font-semibold text-[var(--text)] truncate">{detail.title}</h3>
+                      <h3 className="min-w-0 text-xl font-semibold text-[var(--text)] md:truncate">{detail.title}</h3>
                       {statusIndicator ? (
                         <span className="flex-shrink-0" title={statusIndicator.ariaLabel} aria-label={statusIndicator.ariaLabel}>
                           <Icon name={statusIndicator.iconName} size="lg" className={statusIndicator.colorClass} />

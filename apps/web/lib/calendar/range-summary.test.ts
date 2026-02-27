@@ -78,6 +78,8 @@ describe('getAthleteRangeSummary', () => {
 
     expect(summary.byDiscipline).toHaveLength(1);
     const row = summary.byDiscipline[0];
+    expect(row.plannedWorkouts).toBe(summary.totals.workoutsPlanned);
+    expect(row.completedWorkouts).toBe(summary.totals.workoutsCompleted);
     expect(row.plannedMinutes).toBe(summary.totals.plannedMinutes);
     expect(row.completedMinutes).toBe(summary.totals.completedMinutes);
     expect(row.plannedDistanceKm).toBe(summary.totals.plannedDistanceKm);
