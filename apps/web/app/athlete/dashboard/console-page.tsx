@@ -791,13 +791,15 @@ export default function AthleteDashboardConsolePage() {
             })()}
           </Block>
 
-          <StravaVitalsSummaryCard
-            comparison={data?.stravaVitals ?? null}
-            loading={loading && !data}
-            title="Strava Vitals"
-            showLoadPanel={showLoadPanel}
-            onToggleLoadPanel={setShowLoadPanel}
-          />
+          <div className="xl:col-span-1">
+            <StravaVitalsSummaryCard
+              comparison={data?.stravaVitals ?? null}
+              loading={loading && !data}
+              title="Strava Vitals"
+              showLoadPanel={showLoadPanel}
+              onToggleLoadPanel={setShowLoadPanel}
+            />
+          </div>
         </div>
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
