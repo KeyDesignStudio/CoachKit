@@ -783,8 +783,7 @@ export default function CoachDashboardConsolePage() {
               title="Event countdown"
               padding={false}
               showHeaderDivider={false}
-              className="border bg-[rgba(233,238,248,0.85)] dark:bg-[rgba(12,16,30,0.96)] md:dark:bg-[rgba(233,238,248,0.85)]"
-              style={{ borderColor: '#cad7eb' }}
+              className="border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]"
             >
               {loading && !data ? (
                 <div className={cn("space-y-3", tokens.spacing.containerPadding)}>
@@ -833,15 +832,15 @@ export default function CoachDashboardConsolePage() {
                             <div className={cn("md:truncate text-[13px] font-medium", tokens.typography.body)} title={athleteName}>
                               {athleteName}
                             </div>
-                            <div className={cn("md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)]", tokens.typography.meta)}>
+                            <div className={cn("md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)] dark:text-slate-300", tokens.typography.meta)}>
                               {weeksLabel}
                             </div>
                           </div>
                           <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
-                            <div className={cn("md:truncate text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)} title={eventName}>
+                            <div className={cn("md:truncate text-[12px] text-[var(--fg-muted)] dark:text-slate-400", tokens.typography.meta)} title={eventName}>
                               {eventName}
                             </div>
-                            <div className={cn("md:whitespace-nowrap text-[12px] text-[var(--fg-muted)]", tokens.typography.meta)}>{eventDate}</div>
+                            <div className={cn("md:whitespace-nowrap text-[12px] text-[var(--fg-muted)] dark:text-slate-400", tokens.typography.meta)}>{eventDate}</div>
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
                             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />

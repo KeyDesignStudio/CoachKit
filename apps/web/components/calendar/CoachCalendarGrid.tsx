@@ -290,7 +290,7 @@ export function CoachCalendarGrid({
                           {row.athlete.user.name || row.athlete.userId}
                         </div>
                         {goalCountdownByAthlete[row.athlete.userId]?.mode && goalCountdownByAthlete[row.athlete.userId].mode !== 'none' ? (
-                          <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                          <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:border-orange-400/70 dark:bg-orange-500/15 dark:text-orange-200">
                             {goalCountdownByAthlete[row.athlete.userId].shortLabel}
                           </span>
                         ) : null}
@@ -373,8 +373,8 @@ export function CoachCalendarGrid({
               />
             ))}
 
-            <div className="hidden md:block min-h-[110px] bg-[rgb(209,217,232)] p-2">
-              <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Week</div>
+            <div className="hidden min-h-[110px] rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] p-2 md:block dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]">
+              <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] dark:text-slate-400">Week</div>
               <div className="mt-1 text-xs font-semibold text-[var(--text)] tabular-nums">
                 {weekBlock.weekSummary ? (
                   <>
@@ -386,13 +386,13 @@ export function CoachCalendarGrid({
               </div>
               {weekBlock.weekSummary ? (
                 <>
-                  <div className="text-xs text-[var(--muted)] tabular-nums">Calories: {formatKcal(weekBlock.weekSummary.totals.caloriesKcal)}</div>
+                  <div className="text-xs text-[var(--muted)] tabular-nums dark:text-slate-400">Calories: {formatKcal(weekBlock.weekSummary.totals.caloriesKcal)}</div>
                   {weekBlock.weekTopDisciplines.length ? (
                     <div className="mt-1 space-y-0.5">
                       {weekBlock.weekTopDisciplines.map((row) => (
                         <div key={row.discipline} className="flex items-baseline justify-between gap-2">
                           <div className="text-[11px] font-medium text-[var(--text)] md:truncate">{row.discipline}</div>
-                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap">
+                          <div className="text-[11px] text-[var(--muted)] tabular-nums md:whitespace-nowrap dark:text-slate-400">
                             {formatMinutesCompact(row.durationMinutes)} · {formatKmCompact(row.distanceKm)}
                           </div>
                         </div>
@@ -401,7 +401,7 @@ export function CoachCalendarGrid({
                   ) : null}
                 </>
               ) : (
-                <div className="text-xs text-[var(--muted)]">{weekBlock.weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
+                <div className="text-xs text-[var(--muted)] dark:text-slate-400">{weekBlock.weekWorkoutCount === 1 ? 'workout' : 'workouts'}</div>
               )}
             </div>
           </div>
