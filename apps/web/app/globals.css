@@ -140,6 +140,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Reserve vertical scrollbar gutter to avoid layout shift on initial paint. */
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   padding: 0;
