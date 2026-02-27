@@ -1566,6 +1566,7 @@ export default function CoachCalendarPage() {
                 <Icon name="next" size="md" />
               </button>
             </div>
+          </div>
 
           {/* Desktop: full date nav */}
           <div className="hidden md:flex items-center gap-2">
