@@ -34,7 +34,7 @@ export function WeekSummaryColumn({
   return (
      <div 
        className={cn(
-         "hidden md:flex flex-col min-w-0 overflow-hidden rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] text-[var(--text)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)] dark:text-slate-100",
+         "hidden md:flex flex-col min-w-0 overflow-hidden rounded border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] text-[var(--text)] dark:border-2 dark:border-white dark:bg-[rgba(12,16,30,0.96)] dark:text-slate-100",
          className
        )}
        style={style}
