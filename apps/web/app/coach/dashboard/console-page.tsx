@@ -783,8 +783,8 @@ export default function CoachDashboardConsolePage() {
               title="Event countdown"
               padding={false}
               showHeaderDivider={false}
-              className="border"
-              style={{ borderColor: '#cad7eb', backgroundColor: 'rgba(233, 238, 248, 0.85)' }}
+              className="border bg-[rgba(233,238,248,0.85)] dark:bg-[rgba(12,16,30,0.96)] md:dark:bg-[rgba(233,238,248,0.85)]"
+              style={{ borderColor: '#cad7eb' }}
             >
               {loading && !data ? (
                 <div className={cn("space-y-3", tokens.spacing.containerPadding)}>

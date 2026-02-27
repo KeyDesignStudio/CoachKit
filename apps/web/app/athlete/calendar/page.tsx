@@ -593,26 +593,35 @@ export default function AthleteCalendarPage() {
                 <Icon name="refresh" size="sm" className="min-[900px]:mr-1" /><span>Refresh</span>
               </Button>
             </div>
-            <div className="flex min-h-[44px] items-center min-[900px]:shrink-0 min-[900px]:justify-end">
-              <div className="flex flex-wrap items-center justify-start min-[900px]:justify-end gap-2 text-xs leading-4 text-[var(--muted)] min-[900px]:gap-3">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
-                  Published Plan
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
-                  Scheduled
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
-                  Missed or skipped
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
-                  Completed
-                </span>
-              </div>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => loadItems(true)}
+              disabled={loading}
+              className="w-full md:w-auto min-h-[44px]"
+            >
+              <Icon name="refresh" size="sm" className="md:mr-1" /><span className="hidden md:inline"> Refresh</span>
+            </Button>
+          </div>
+        </div>
+        <div className="flex min-h-[44px] items-center justify-center md:justify-end">
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] leading-none text-[var(--muted)] md:justify-end">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm border border-[var(--border-subtle)] bg-transparent" aria-hidden />
+              Published Plan
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-amber-500/70" aria-hidden />
+              Scheduled
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-rose-600/70" aria-hidden />
+              Missed or skipped
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-1 rounded-sm bg-emerald-600/70" aria-hidden />
+              Completed
+            </span>
           </div>
         </div>
         {error ? <p className="mt-3 text-sm text-rose-500">{error}</p> : null}

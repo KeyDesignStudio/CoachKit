@@ -241,14 +241,14 @@ export default function AthleteNotificationsPage() {
   return (
     <section className={cn('mx-auto flex w-full flex-col xl:w-1/2', tokens.spacing.dashboardSectionGap)}>
       <Block>
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start justify-between gap-3 md:items-center">
           <div>
             <p className={tokens.typography.sectionLabel}>Notifications</p>
             <h1 className={tokens.typography.h1}>Mailbox</h1>
           </div>
           <Button
             type="button"
-            className="min-h-[44px] self-stretch sm:self-auto"
+            className="ml-auto h-10 min-h-0 w-1/3 min-w-[132px] max-w-[180px] bg-black px-3 py-1.5 text-sm text-white hover:bg-black/90 dark:bg-black dark:hover:bg-black/90 md:h-auto md:min-h-[44px] md:w-auto md:max-w-none md:px-5 md:py-2"
             onClick={() => {
               setComposerOpen((prev) => !prev);
               setRecipientDropdownOpen(false);
