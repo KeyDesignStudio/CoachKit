@@ -732,16 +732,22 @@ export default function AthleteDashboardConsolePage() {
               const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
               const monthLabel = (dayKey: string) =>
                 new Intl.DateTimeFormat('en-AU', { timeZone: athleteTimeZone, month: 'short' }).format(new Date(`${dayKey}T00:00:00.000Z`));
+              const monthMarkers =
+                points.length <= 31
+                  ? points.reduce<Array<{ idx: number; label: string }>>((acc, point, idx) => {
+                      const currentMonth = point.dayKey.slice(0, 7);
+                      const prevMonth = idx > 0 ? points[idx - 1]?.dayKey.slice(0, 7) : null;
+                      if (idx === 0 || currentMonth !== prevMonth) {
+                        acc.push({ idx, label: monthLabel(point.dayKey) });
+                      }
+                      return acc;
+                    }, [])
+                  : [];
 
               const axisLabelForPoint = (point: (typeof points)[number], idx: number) => {
                 const shouldShow = idx === 0 || idx === points.length - 1 || idx % axisStep === 0;
                 if (!shouldShow) return '';
-                if (points.length <= 31) {
-                  const day = point.dayKey.slice(8);
-                  const prevMonthKey = idx > 0 ? points[idx - 1]?.dayKey.slice(0, 7) : null;
-                  const monthChanged = idx === 0 || point.dayKey.slice(0, 7) !== prevMonthKey;
-                  return monthChanged ? `${day} ${monthLabel(point.dayKey)}` : day;
-                }
+                if (points.length <= 31) return point.dayKey.slice(8);
                 const d = new Date(`${point.dayKey}T00:00:00.000Z`);
                 return new Intl.DateTimeFormat('en-AU', {
                   timeZone: athleteTimeZone,
@@ -799,6 +805,22 @@ export default function AthleteDashboardConsolePage() {
                         );
                       })}
                     </div>
+                    {monthMarkers.length > 0 ? (
+                      <div className="relative mt-2 h-3" aria-hidden>
+                        {monthMarkers.map((marker) => (
+                          <span
+                            key={`${marker.idx}-${marker.label}`}
+                            className="absolute text-[10px] leading-none text-[var(--muted)] whitespace-nowrap"
+                            style={{
+                              left: `${points.length > 1 ? (marker.idx / (points.length - 1)) * 100 : 0}%`,
+                              transform: marker.idx === 0 ? 'none' : marker.idx === points.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+                            }}
+                          >
+                            {marker.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );
