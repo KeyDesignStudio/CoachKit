@@ -757,7 +757,7 @@ export default function AthleteDashboardConsolePage() {
                       maximumFractionDigits: 1,
                     }).format(totalCalories / selectedEquivalent.kcalPerUnit)
                   : '0';
-              const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
+              const axisStep = points.length > 14 ? 7 : 1;
               const monthLabel = (dayKey: string) =>
                 new Intl.DateTimeFormat('en-AU', { timeZone: athleteTimeZone, month: 'short' }).format(new Date(`${dayKey}T00:00:00.000Z`));
               const monthMarkers =
@@ -809,51 +809,49 @@ export default function AthleteDashboardConsolePage() {
               return (
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div>
-                      <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
-                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                        <span className="inline-flex items-center gap-1">
-                          <Icon name={selectedEquivalent.icon} size="sm" className="scale-90 text-[var(--muted)]" aria-hidden />
-                          Approximately {equivalentValue} {selectedEquivalent.label}
-                        </span>
-                        <div className="ml-auto inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
-                          {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
-                            const isActive = option.key === calorieEquivalentKey;
-                            return (
-                              <button
-                                key={option.key}
-                                type="button"
-                                onClick={() => setCalorieEquivalentKey(option.key)}
-                                title={option.label}
-                                className={cn(
-                                  'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                                  isActive
-                                    ? 'bg-[var(--bg-surface)] text-[var(--text)]'
-                                    : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
-                                )}
-                                aria-pressed={isActive}
-                                aria-label={option.label}
-                              >
-                                <Icon name={option.icon} size="sm" className="scale-90" aria-hidden />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                    <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name={selectedEquivalent.icon} size="sm" className="scale-90 text-[var(--muted)]" aria-hidden />
+                      Approximately {equivalentValue} {selectedEquivalent.label}
+                    </span>
+                    <div className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
+                      {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
+                        const isActive = option.key === calorieEquivalentKey;
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setCalorieEquivalentKey(option.key)}
+                            title={option.label}
+                            className={cn(
+                              'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+                              isActive
+                                ? 'bg-[var(--bg-surface)] text-[var(--text)]'
+                                : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
+                            )}
+                            aria-pressed={isActive}
+                            aria-label={option.label}
+                          >
+                            <Icon name={option.icon} size="sm" className="scale-90" aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
-                    <div className="flex h-[150px] items-end gap-1" aria-label="Calories per day">
+                    <div className="flex h-[150px] items-end gap-0.5 sm:gap-1 overflow-hidden" aria-label="Calories per day">
                       {points.map((point, idx) => {
                         const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
                         const axisLabel = axisLabelForPoint(point, idx);
                         return (
-                          <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
+                          <div key={point.dayKey} className="flex-1 min-w-0 flex flex-col items-center gap-2" title={buildTooltip(point)}>
                             <div className="w-full flex items-end justify-center h-[115px]">
                               <div
-                                className="w-3 sm:w-4 rounded-full bg-[var(--bar-fill)]"
+                                className="w-2.5 sm:w-3 md:w-4 rounded-full bg-[var(--bar-fill)]"
                                 style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
                               />
                             </div>
