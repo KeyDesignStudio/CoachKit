@@ -10,13 +10,6 @@ export function isAiPlanBuilderV1EnabledServer(): boolean {
   return parseEnvFlag(process.env.AI_PLAN_BUILDER_V1) || parseEnvFlag(process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1);
 }
 
-export function isFutureSelfV1EnabledServer(): boolean {
-  // Server-side flag. Defaults to false.
-  // Intentionally supports both env names to simplify local/dev.
-  return parseEnvFlag(process.env.FUTURE_SELF_V1) || parseEnvFlag(process.env.NEXT_PUBLIC_FUTURE_SELF_V1);
-}
-
 export const FEATURE_FLAGS_SERVER = {
   AI_PLAN_BUILDER_V1: isAiPlanBuilderV1EnabledServer,
-  FUTURE_SELF_V1: isFutureSelfV1EnabledServer,
 } as const;
