@@ -757,7 +757,7 @@ export default function AthleteDashboardConsolePage() {
                       maximumFractionDigits: 1,
                     }).format(totalCalories / selectedEquivalent.kcalPerUnit)
                   : '0';
-              const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
+              const axisStep = points.length > 14 ? 7 : 1;
               const monthLabel = (dayKey: string) =>
                 new Intl.DateTimeFormat('en-AU', { timeZone: athleteTimeZone, month: 'short' }).format(new Date(`${dayKey}T00:00:00.000Z`));
               const monthMarkers =
@@ -843,15 +843,15 @@ export default function AthleteDashboardConsolePage() {
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
-                    <div className="flex h-[150px] items-end gap-1" aria-label="Calories per day">
+                    <div className="flex h-[150px] items-end gap-0.5 sm:gap-1 overflow-hidden" aria-label="Calories per day">
                       {points.map((point, idx) => {
                         const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
                         const axisLabel = axisLabelForPoint(point, idx);
                         return (
-                          <div key={point.dayKey} className="flex-1 min-w-[8px] flex flex-col items-center gap-2" title={buildTooltip(point)}>
+                          <div key={point.dayKey} className="flex-1 min-w-0 flex flex-col items-center gap-2" title={buildTooltip(point)}>
                             <div className="w-full flex items-end justify-center h-[115px]">
                               <div
-                                className="w-3 sm:w-4 rounded-full bg-[var(--bar-fill)]"
+                                className="w-2.5 sm:w-3 md:w-4 rounded-full bg-[var(--bar-fill)]"
                                 style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
                               />
                             </div>
