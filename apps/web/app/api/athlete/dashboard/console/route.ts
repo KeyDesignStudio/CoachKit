@@ -58,6 +58,23 @@ type AthleteDashboardResponse = {
     completedTitles: string[];
     scheduledTitles: string[];
   };
+  greetingTraining: {
+    yesterday: DayTrainingSnapshot;
+    today: DayTrainingSnapshot;
+    tomorrow: DayTrainingSnapshot;
+  };
+};
+
+type SessionGreetingInfo = {
+  title: string;
+  plannedStartTimeLocal: string | null;
+};
+
+type DayTrainingSnapshot = {
+  completedCount: number;
+  plannedCount: number;
+  completed: SessionGreetingInfo[];
+  planned: SessionGreetingInfo[];
 };
 
 const COMPLETED_STATUSES: CalendarItemStatus[] = [
@@ -243,6 +260,25 @@ async function getAthleteDashboardData(params: {
       })
       .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
 
+    const asGreetingTitle = (item: (typeof items)[number]) => String(item.title ?? item.discipline ?? 'training session').trim();
+    const asGreetingSession = (item: (typeof items)[number]): SessionGreetingInfo => ({
+      title: asGreetingTitle(item),
+      plannedStartTimeLocal: item.plannedStartTimeLocal,
+    });
+    const buildDaySnapshot = (dayKey: string): DayTrainingSnapshot => {
+      const dayItems = items.filter((item) => getLocalDayKey(item.date, params.timezone) === dayKey);
+      const completed = dayItems.filter((item) => COMPLETED_STATUSES.includes(item.status)).map(asGreetingSession);
+      const planned = dayItems.filter((item) => item.status === CalendarItemStatus.PLANNED).map(asGreetingSession);
+      return {
+        completedCount: completed.length,
+        plannedCount: planned.length,
+        completed: completed.slice(0, 3),
+        planned: planned.slice(0, 3),
+      };
+    };
+    const yesterdayKey = addDaysToDayKey(params.todayKey, -1);
+    const tomorrowKey = addDaysToDayKey(params.todayKey, 1);
+
     const rangeSummary = getAthleteRangeSummary({
       items: filteredItems.map(({ item, completion, effectiveStartUtc, stravaMetrics }) => ({
         id: item.id,
@@ -318,6 +354,11 @@ async function getAthleteDashboardData(params: {
         scheduledToday: scheduledTodayItems.length,
         completedTitles: completedTodayItems.map(asTitle).slice(0, 3),
         scheduledTitles: scheduledTodayItems.map(asTitle).slice(0, 3),
+      },
+      greetingTraining: {
+        yesterday: buildDaySnapshot(yesterdayKey),
+        today: buildDaySnapshot(params.todayKey),
+        tomorrow: buildDaySnapshot(tomorrowKey),
       },
     } satisfies AthleteDashboardResponse;
   })();
