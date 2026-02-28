@@ -64,7 +64,6 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
       const athleteOrder: Array<string> = [
         '/athlete/dashboard',
         '/athlete/calendar',
-        '/athlete/future-self',
         '/athlete/notifications',
         '/athlete/settings',
       ];

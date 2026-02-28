@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Route } from 'next';
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 import { prisma } from '@/lib/prisma';
@@ -11,9 +12,8 @@ import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
-import { isFutureSelfV1EnabledServer } from '@/lib/feature-flags';
 
-type NavLink = { href: string; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
+type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
 const DESKTOP_NAV_LINK_CLASS = cn(
   'rounded-full px-3 py-2 min-h-[44px] inline-flex items-center hover:bg-[var(--bg-structure)] active:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]',
@@ -192,13 +192,7 @@ export async function AppHeader() {
 
   // Filter navigation by authenticated role
   const navLinks = userRole
-    ? allNavLinks
-        .filter((link) => link.roles.includes(userRole))
-        .concat(
-          isFutureSelfEnabled && userRole === 'ATHLETE'
-            ? [{ href: '/athlete/future-self', label: 'Future Self', roles: ['ATHLETE'] as const }]
-            : []
-        )
+    ? allNavLinks.filter((link) => link.roles.includes(userRole))
     : [];
 
   const desktopTextLinks = navLinks.filter(
@@ -351,7 +345,7 @@ export async function AppHeader() {
             {navLinks.length > 0 ? (
               <nav className="hidden md:flex flex-wrap gap-2">
                 {desktopTextLinks.map((link) => (
-                  <Link key={link.href} href={link.href as any} className={cn(DESKTOP_NAV_LINK_CLASS, "md:whitespace-nowrap")}>
+                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "md:whitespace-nowrap")}>
                     {link.label}
                   </Link>
                 ))}
@@ -359,7 +353,7 @@ export async function AppHeader() {
                 {desktopNotificationsLink ? (
                   <Link
                     key={desktopNotificationsLink.href}
-                    href={desktopNotificationsLink.href as any}
+                    href={desktopNotificationsLink.href}
                     aria-label="Notifications"
                     className={cn(DESKTOP_NAV_LINK_CLASS, "relative justify-center")}
                   >
@@ -380,7 +374,7 @@ export async function AppHeader() {
                 {desktopSettingsLink ? (
                   <Link
                     key={desktopSettingsLink.href}
-                    href={desktopSettingsLink.href as any}
+                    href={desktopSettingsLink.href}
                     aria-label="Settings"
                     className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
                   >
@@ -399,4 +393,3 @@ export async function AppHeader() {
     </>
   );
 }
-  const isFutureSelfEnabled = isFutureSelfV1EnabledServer();
