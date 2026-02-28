@@ -4,7 +4,6 @@ export function getPageTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/coach/athletes/')) {
     if (pathname.includes('/profile')) return 'Athlete profile';
     if (pathname.includes('/ai-plan-builder')) return 'AI Plan Builder';
-    if (pathname.includes('/future-self')) return 'Future Self';
     return 'Athletes';
   }
 
@@ -17,7 +16,6 @@ export function getPageTitleFromPath(pathname: string): string {
 
   if (pathname.startsWith('/athlete/dashboard')) return 'Dashboard';
   if (pathname.startsWith('/athlete/calendar')) return 'Calendar';
-  if (pathname.startsWith('/athlete/future-self')) return 'Future Self';
   if (pathname.startsWith('/athlete/profile')) return 'Athlete profile';
   if (pathname.startsWith('/athlete/notifications')) return 'Notifications';
   if (pathname.startsWith('/athlete/settings')) return 'Settings';
