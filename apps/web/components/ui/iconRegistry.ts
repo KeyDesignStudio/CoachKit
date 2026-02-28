@@ -130,7 +130,7 @@ export const ICONS: Record<IconName, string> = {
   favorite: 'star',
   nutrition: 'restaurant',
   foodBurger: 'lunch_dining',
-  snickersBar: 'candy',
+  snickersBar: 'chocolate_bar',
   drinkWine: 'wine_bar',
   drinkBeer: 'sports_bar',
   strava: 'link',

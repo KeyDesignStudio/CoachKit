@@ -825,16 +825,17 @@ export default function AthleteDashboardConsolePage() {
                               key={option.key}
                               type="button"
                               onClick={() => setCalorieEquivalentKey(option.key)}
+                              title={option.label}
                               className={cn(
-                                'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] transition-colors',
+                                'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
                                 isActive
                                   ? 'bg-[var(--bg-surface)] text-[var(--text)]'
                                   : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
                               )}
                               aria-pressed={isActive}
+                              aria-label={option.label}
                             >
-                              <Icon name={option.icon} size="xs" aria-hidden />
-                              {option.label}
+                              <Icon name={option.icon} size="sm" className="scale-90" aria-hidden />
                             </button>
                           );
                         })}
