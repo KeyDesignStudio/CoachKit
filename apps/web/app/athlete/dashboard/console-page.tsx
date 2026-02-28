@@ -31,10 +31,10 @@ const CALORIE_EQUIVALENT_OPTIONS: Array<{
   icon: 'foodBurger' | 'snickersBar' | 'drinkWine' | 'drinkBeer';
   kcalPerUnit: number;
 }> = [
-  { key: 'bigMac', label: 'Big Macs', icon: 'foodBurger', kcalPerUnit: 550 },
-  { key: 'snickers', label: 'Snickers bars', icon: 'snickersBar', kcalPerUnit: 250 },
-  { key: 'wine', label: 'Red wine glasses', icon: 'drinkWine', kcalPerUnit: 125 },
-  { key: 'beer', label: 'Beers', icon: 'drinkBeer', kcalPerUnit: 154 },
+  { key: 'bigMac', label: 'hamburgers', icon: 'foodBurger', kcalPerUnit: 550 },
+  { key: 'snickers', label: 'bars of chocolate', icon: 'snickersBar', kcalPerUnit: 250 },
+  { key: 'wine', label: 'glasses of red wine', icon: 'drinkWine', kcalPerUnit: 125 },
+  { key: 'beer', label: 'glasses of beer', icon: 'drinkBeer', kcalPerUnit: 154 },
 ];
 
 type SessionGreetingInfo = {
@@ -811,12 +811,12 @@ export default function AthleteDashboardConsolePage() {
                   <div className="flex items-baseline justify-between gap-2">
                     <div>
                       <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
                         <span className="inline-flex items-center gap-1">
                           <Icon name={selectedEquivalent.icon} size="sm" className="scale-90 text-[var(--muted)]" aria-hidden />
-                          Approx. {equivalentValue} {selectedEquivalent.label}
+                          Approximately {equivalentValue} {selectedEquivalent.label}
                         </span>
-                        <div className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
+                        <div className="ml-auto inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
                           {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
                             const isActive = option.key === calorieEquivalentKey;
                             return (
