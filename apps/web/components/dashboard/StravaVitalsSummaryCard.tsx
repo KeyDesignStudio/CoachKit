@@ -319,7 +319,7 @@ export function StravaVitalsSummaryCard({
       ) : null}
 
       {!loading && vitals && vitals.sampleSize > 0 && comparison ? (
-        <div className={showLoadPanel && comparison.loadModel ? 'space-y-3' : addBottomSpacer ? 'space-y-3 pb-6' : 'space-y-3'}>
+        <div className={showLoadPanel && comparison.loadModel ? 'space-y-3' : addBottomSpacer ? 'space-y-3 pb-12' : 'space-y-3'}>
           <div className="space-y-1">
             <MetricValueWithDelta
               label="Swim avg pace"
