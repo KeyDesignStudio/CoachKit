@@ -231,7 +231,6 @@ export default function CoachDashboardConsolePage() {
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [inboxPreset, setInboxPreset] = useState<InboxPreset>('ALL');
-  const [showLoadPanel, setShowLoadPanel] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [selectedReviewItemIds, setSelectedReviewItemIds] = useState<Set<string>>(() => new Set());
@@ -294,7 +293,7 @@ export default function CoachDashboardConsolePage() {
         qs.set('athleteIds', selectedAthleteIdList.join(','));
       }
       if (discipline) qs.set('discipline', discipline);
-      if (showLoadPanel) qs.set('includeLoadModel', '1');
+      qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
@@ -306,7 +305,7 @@ export default function CoachDashboardConsolePage() {
         setLoading(false);
       }
     },
-    [allAthletesSelected, dateRange.from, dateRange.to, discipline, request, selectedAthleteIdList, showLoadPanel, user?.role, user?.userId]
+    [allAthletesSelected, dateRange.from, dateRange.to, discipline, request, selectedAthleteIdList, user?.role, user?.userId]
   );
 
   useEffect(() => {
@@ -697,8 +696,6 @@ export default function CoachDashboardConsolePage() {
               comparison={data?.stravaVitals ?? null}
               loading={loading && !data}
               title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
-              showLoadPanel={showLoadPanel}
-              onToggleLoadPanel={setShowLoadPanel}
             />
           </div>
 

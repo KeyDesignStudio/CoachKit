@@ -263,8 +263,6 @@ type Props = {
   comparison: StravaVitalsComparison | null;
   loading: boolean;
   title?: string;
-  showLoadPanel?: boolean;
-  onToggleLoadPanel?: (next: boolean) => void;
   addBottomSpacer?: boolean;
 };
 
@@ -272,8 +270,6 @@ export function StravaVitalsSummaryCard({
   comparison,
   loading,
   title = 'Strava Vitals',
-  showLoadPanel = false,
-  onToggleLoadPanel,
   addBottomSpacer = false,
 }: Props) {
   const vitals = comparison?.current ?? null;
@@ -293,18 +289,7 @@ export function StravaVitalsSummaryCard({
           <Icon name="strava" size="sm" className="text-[var(--muted)]" aria-hidden />
           {title}
         </h3>
-        <div className="flex items-center gap-2">
-          {onToggleLoadPanel ? (
-            <button
-              type="button"
-              onClick={() => onToggleLoadPanel(!showLoadPanel)}
-              className="rounded-lg border border-[var(--border-subtle)] px-2 py-1 text-xs"
-            >
-              {showLoadPanel ? 'Hide CTL/ATL/TSB' : 'Show CTL/ATL/TSB'}
-            </button>
-          ) : null}
-          {vitals ? <span className="text-xs text-[var(--muted)]">{vitals.sampleSize} sessions</span> : null}
-        </div>
+        {vitals ? <span className="text-xs text-[var(--muted)]">{vitals.sampleSize} sessions</span> : null}
       </div>
 
       {comparison ? (
@@ -319,7 +304,7 @@ export function StravaVitalsSummaryCard({
       ) : null}
 
       {!loading && vitals && vitals.sampleSize > 0 && comparison ? (
-        <div className={showLoadPanel && comparison.loadModel ? 'space-y-3' : addBottomSpacer ? 'space-y-3 pb-12' : 'space-y-3'}>
+        <div className={comparison.loadModel ? 'space-y-3' : addBottomSpacer ? 'space-y-3 pb-12' : 'space-y-3'}>
           <div className="space-y-1">
             <MetricValueWithDelta
               label="Swim avg pace"
@@ -359,27 +344,24 @@ export function StravaVitalsSummaryCard({
             />
           </div>
 
-          {showLoadPanel && comparison.loadModel ? (
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">
-              <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Load model</p>
-              <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-[var(--muted)]">
-                <div className="flex items-center">
-                  CTL
+          {comparison.loadModel ? (
+            <div className="border-t border-[var(--border-subtle)] pt-3">
+              <div className="grid grid-cols-3 gap-2 text-center text-sm tabular-nums">
+                <div className="inline-flex items-center justify-center gap-1">
+                  <span className="text-[var(--muted)]">CTL</span>
                   <MetricHelpTrigger metricId="ctl" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
+                  <span className="font-medium text-[var(--text)]">{comparison.loadModel.current.ctl.toFixed(1)}</span>
                 </div>
-                <div className="flex items-center">
-                  ATL
+                <div className="inline-flex items-center justify-center gap-1">
+                  <span className="text-[var(--muted)]">ATL</span>
                   <MetricHelpTrigger metricId="atl" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
+                  <span className="font-medium text-[var(--text)]">{comparison.loadModel.current.atl.toFixed(1)}</span>
                 </div>
-                <div className="flex items-center">
-                  TSB
+                <div className="inline-flex items-center justify-center gap-1">
+                  <span className="text-[var(--muted)]">TSB</span>
                   <MetricHelpTrigger metricId="tsb" comparison={comparison} onOpenMobile={setMobileHelpMetricId} />
+                  <span className="font-medium text-[var(--text)]">{comparison.loadModel.current.tsb.toFixed(1)}</span>
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-sm font-medium tabular-nums">
-                <div>{comparison.loadModel.current.ctl.toFixed(1)}</div>
-                <div>{comparison.loadModel.current.atl.toFixed(1)}</div>
-                <div>{comparison.loadModel.current.tsb.toFixed(1)}</div>
               </div>
             </div>
           ) : null}

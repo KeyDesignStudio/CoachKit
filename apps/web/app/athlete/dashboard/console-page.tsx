@@ -20,8 +20,22 @@ import type { StravaVitalsComparison } from '@/lib/strava-vitals';
 import type { GoalCountdown } from '@/lib/goal-countdown';
 import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'LAST_60' | 'LAST_90' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM';
+type CalorieEquivalentKey = 'bigMac' | 'snickers' | 'wine' | 'beer';
+
+const CALORIE_EQUIVALENT_OPTIONS: Array<{
+  key: CalorieEquivalentKey;
+  label: string;
+  icon: 'foodBurger' | 'snickersBar' | 'drinkWine' | 'drinkBeer';
+  kcalPerUnit: number;
+}> = [
+  { key: 'bigMac', label: 'Big Macs', icon: 'foodBurger', kcalPerUnit: 550 },
+  { key: 'snickers', label: 'Snickers bars', icon: 'snickersBar', kcalPerUnit: 250 },
+  { key: 'wine', label: 'Red wine glasses', icon: 'drinkWine', kcalPerUnit: 125 },
+  { key: 'beer', label: 'Beers', icon: 'drinkBeer', kcalPerUnit: 154 },
+];
 
 type SessionGreetingInfo = {
   title: string;
@@ -172,6 +186,11 @@ function formatCalories(kcal: number | null): string {
   return formatKcal(kcal);
 }
 
+function formatKcalWithGrouping(kcal: number): string {
+  if (!Number.isFinite(kcal) || kcal <= 0) return '0 kcal';
+  return `${new Intl.NumberFormat('en-AU').format(Math.round(kcal))} kcal`;
+}
+
 function getDateRangeFromPreset(preset: TimeRangePreset, athleteTimeZone: string, customFrom: string, customTo: string) {
   const todayKey = getZonedDateKeyForNow(athleteTimeZone);
   const todayUtcMidnight = new Date(`${todayKey}T00:00:00.000Z`);
@@ -250,7 +269,7 @@ export default function AthleteDashboardConsolePage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [discipline, setDiscipline] = useState<string | null>(null);
-  const [showLoadPanel, setShowLoadPanel] = useState(false);
+  const [calorieEquivalentKey, setCalorieEquivalentKey] = useState<CalorieEquivalentKey>('bigMac');
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
   const [trainingRequestLifecycle, setTrainingRequestLifecycle] = useState<AthleteIntakeLifecycleResponse | null>(null);
@@ -277,7 +296,7 @@ export default function AthleteDashboardConsolePage() {
       qs.set('from', dateRange.from);
       qs.set('to', dateRange.to);
       if (discipline) qs.set('discipline', discipline);
-      if (showLoadPanel) qs.set('includeLoadModel', '1');
+      qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
@@ -292,7 +311,7 @@ export default function AthleteDashboardConsolePage() {
         setLoading(false);
       }
     },
-    [dateRange.from, dateRange.to, discipline, request, showLoadPanel, user?.role, user?.userId]
+    [dateRange.from, dateRange.to, discipline, request, user?.role, user?.userId]
   );
 
   const reloadTrainingRequestLifecycle = useCallback(async () => {
@@ -729,6 +748,15 @@ export default function AthleteDashboardConsolePage() {
               const points = summary?.caloriesByDay ?? [];
               const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
               const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
+              const selectedEquivalent =
+                CALORIE_EQUIVALENT_OPTIONS.find((option) => option.key === calorieEquivalentKey) ?? CALORIE_EQUIVALENT_OPTIONS[0];
+              const equivalentValue =
+                totalCalories > 0
+                  ? new Intl.NumberFormat('en-AU', {
+                      minimumFractionDigits: totalCalories / selectedEquivalent.kcalPerUnit < 10 ? 1 : 0,
+                      maximumFractionDigits: 1,
+                    }).format(totalCalories / selectedEquivalent.kcalPerUnit)
+                  : '0';
               const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
               const monthLabel = (dayKey: string) =>
                 new Intl.DateTimeFormat('en-AU', { timeZone: athleteTimeZone, month: 'short' }).format(new Date(`${dayKey}T00:00:00.000Z`));
@@ -781,7 +809,37 @@ export default function AthleteDashboardConsolePage() {
               return (
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-sm text-[var(--muted)]">Total {formatKcal(totalCalories)} burned</div>
+                    <div>
+                      <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
+                      <div className="mt-1 text-xs text-[var(--muted)]">
+                        <span className="inline-flex items-center gap-1">
+                          <Icon name={selectedEquivalent.icon} size="xs" className="text-[var(--muted)]" aria-hidden />
+                          Approx. {equivalentValue} {selectedEquivalent.label}
+                        </span>
+                      </div>
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
+                        {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
+                          const isActive = option.key === calorieEquivalentKey;
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              onClick={() => setCalorieEquivalentKey(option.key)}
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] transition-colors',
+                                isActive
+                                  ? 'bg-[var(--bg-surface)] text-[var(--text)]'
+                                  : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
+                              )}
+                              aria-pressed={isActive}
+                            >
+                              <Icon name={option.icon} size="xs" aria-hidden />
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
                   </div>
 
@@ -832,8 +890,6 @@ export default function AthleteDashboardConsolePage() {
               comparison={data?.stravaVitals ?? null}
               loading={loading && !data}
               title="Strava Vitals"
-              showLoadPanel={showLoadPanel}
-              onToggleLoadPanel={setShowLoadPanel}
               addBottomSpacer
             />
           </div>

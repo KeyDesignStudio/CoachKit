@@ -57,6 +57,10 @@ export const ICON_NAMES = [
   // Common UI
   'favorite',
   'nutrition',
+  'foodBurger',
+  'snickersBar',
+  'drinkWine',
+  'drinkBeer',
   'strava',
 
   // Weather
@@ -125,6 +129,10 @@ export const ICONS: Record<IconName, string> = {
   // Common UI
   favorite: 'star',
   nutrition: 'restaurant',
+  foodBurger: 'lunch_dining',
+  snickersBar: 'candy',
+  drinkWine: 'wine_bar',
+  drinkBeer: 'sports_bar',
   strava: 'link',
 
   // Weather
