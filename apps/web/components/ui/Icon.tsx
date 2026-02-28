@@ -47,16 +47,34 @@ export function Icon({
   'aria-hidden': ariaHidden = true,
   'aria-label': ariaLabel,
 }: IconProps) {
-  if (name === 'strava' || name === 'snickersBar') {
-    const src = name === 'strava' ? '/integrations/strava-logo.svg' : '/icons/chocolate-bar.svg';
-    const fallbackLabel = name === 'strava' ? 'Strava' : 'Chocolate bar';
+  if (name === 'strava') {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
-        alt={ariaHidden ? '' : ariaLabel ?? fallbackLabel}
+        src="/integrations/strava-logo.svg"
+        alt={ariaHidden ? '' : ariaLabel ?? 'Strava'}
         aria-hidden={ariaHidden}
         className={cn('inline-block align-middle object-contain', IMAGE_SIZE_CLASSES[size], className)}
+      />
+    );
+  }
+
+  if (name === 'snickersBar') {
+    return (
+      <span
+        className={cn('inline-block align-middle bg-current', IMAGE_SIZE_CLASSES[size], className)}
+        aria-hidden={ariaHidden}
+        aria-label={ariaLabel ?? 'Chocolate bar'}
+        style={{
+          maskImage: "url('/icons/chocolate-bar.svg')",
+          WebkitMaskImage: "url('/icons/chocolate-bar.svg')",
+          maskRepeat: 'no-repeat',
+          WebkitMaskRepeat: 'no-repeat',
+          maskPosition: 'center',
+          WebkitMaskPosition: 'center',
+          maskSize: 'contain',
+          WebkitMaskSize: 'contain',
+        }}
       />
     );
   }
