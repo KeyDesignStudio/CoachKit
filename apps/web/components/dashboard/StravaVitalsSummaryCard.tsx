@@ -265,6 +265,7 @@ type Props = {
   title?: string;
   showLoadPanel?: boolean;
   onToggleLoadPanel?: (next: boolean) => void;
+  addBottomSpacer?: boolean;
 };
 
 export function StravaVitalsSummaryCard({
@@ -273,6 +274,7 @@ export function StravaVitalsSummaryCard({
   title = 'Strava Vitals',
   showLoadPanel = false,
   onToggleLoadPanel,
+  addBottomSpacer = false,
 }: Props) {
   const vitals = comparison?.current ?? null;
   const [mobileHelpMetricId, setMobileHelpMetricId] = useState<string | null>(null);
@@ -317,7 +319,7 @@ export function StravaVitalsSummaryCard({
       ) : null}
 
       {!loading && vitals && vitals.sampleSize > 0 && comparison ? (
-        <div className="space-y-3">
+        <div className={showLoadPanel && comparison.loadModel ? 'space-y-3' : addBottomSpacer ? 'space-y-3 pb-6' : 'space-y-3'}>
           <div className="space-y-1">
             <MetricValueWithDelta
               label="Swim avg pace"

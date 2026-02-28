@@ -23,6 +23,18 @@ import { Button } from '@/components/ui/Button';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'LAST_60' | 'LAST_90' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM';
 
+type SessionGreetingInfo = {
+  title: string;
+  plannedStartTimeLocal: string | null;
+};
+
+type DayTrainingSnapshot = {
+  completedCount: number;
+  plannedCount: number;
+  completed: SessionGreetingInfo[];
+  planned: SessionGreetingInfo[];
+};
+
 type AthleteDashboardResponse = {
   attention: {
     pendingConfirmation: number;
@@ -79,6 +91,11 @@ type AthleteDashboardResponse = {
   }>;
   stravaVitals: StravaVitalsComparison;
   goalCountdown: GoalCountdown | null;
+  greetingTraining?: {
+    yesterday: DayTrainingSnapshot;
+    today: DayTrainingSnapshot;
+    tomorrow: DayTrainingSnapshot;
+  };
 };
 
 type AthleteIntakeLifecycleResponse = {
@@ -204,40 +221,23 @@ function getNowPartsInTimeZone(timeZone: string) {
   };
 }
 
-function getHoursUntilSession(
-  nextSession: AthleteDashboardResponse['nextUp'][number] | null | undefined,
-  timeZone: string
-): number | null {
-  if (!nextSession) return null;
-  const dateMatch = String(nextSession.date ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!dateMatch) return null;
-
-  const year = Number(dateMatch[1]);
-  const month = Number(dateMatch[2]);
-  const day = Number(dateMatch[3]);
-  const timeMatch = String(nextSession.plannedStartTimeLocal ?? '').match(/^(\d{2}):(\d{2})/);
-  const hour = timeMatch ? Number(timeMatch[1]) : 9;
-  const minute = timeMatch ? Number(timeMatch[2]) : 0;
-  const now = getNowPartsInTimeZone(timeZone);
-
-  if (![year, month, day, hour, minute, now.year, now.month, now.day, now.hour, now.minute].every(Number.isFinite)) {
-    return null;
-  }
-
-  const targetMs = Date.UTC(year, month - 1, day, hour, minute);
-  const nowMs = Date.UTC(now.year, now.month - 1, now.day, now.hour, now.minute);
-  const diffMs = targetMs - nowMs;
-  return Math.max(0, Math.ceil(diffMs / (60 * 60 * 1000)));
+function getDayPeriod(hour: number): 'morning' | 'afternoon' | 'evening' {
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
 
-function formatNextSessionLabel(nextSession: AthleteDashboardResponse['nextUp'][number] | null | undefined): string {
-  const fromTitle = String(nextSession?.title ?? '').trim();
-  if (fromTitle) {
-    return /\bsession\b/i.test(fromTitle) ? fromTitle : `${fromTitle} session`;
-  }
+function getSessionPeriod(plannedStartTimeLocal: string | null | undefined): 'morning' | 'afternoon' | 'evening' {
+  const match = String(plannedStartTimeLocal ?? '').match(/^(\d{2}):(\d{2})/);
+  if (!match) return 'morning';
+  const hour = Number(match[1]);
+  if (!Number.isFinite(hour)) return 'morning';
+  return getDayPeriod(hour);
+}
 
-  const discipline = String(nextSession?.discipline ?? '').trim().toLowerCase();
-  if (discipline) return `${discipline} session`;
+function formatGreetingSessionTitle(session: SessionGreetingInfo | null | undefined): string {
+  const raw = String(session?.title ?? '').trim();
+  if (raw) return raw;
   return 'training session';
 }
 
@@ -323,20 +323,53 @@ export default function AthleteDashboardConsolePage() {
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
   const athleteGreeting = useMemo(() => {
     const preferredName = String(user?.name ?? 'Athlete').trim().split(/\s+/)[0] || 'Athlete';
-    const nextSession = data?.nextUp?.[0] ?? null;
+    const now = getNowPartsInTimeZone(athleteTimeZone);
+    const dayPeriod = getDayPeriod(now.hour);
 
-    if (!nextSession) {
-      return `G'day ${preferredName}! No upcoming sessions scheduled.`;
+    const greetingTraining = data?.greetingTraining;
+    const yesterdayCompleted = greetingTraining?.yesterday.completed?.[0] ?? null;
+    const todayCompleted = greetingTraining?.today.completed?.[0] ?? null;
+    const todayPlanned = greetingTraining?.today.planned?.[0] ?? null;
+    const tomorrowPlanned = greetingTraining?.tomorrow.planned?.[0] ?? null;
+
+    const lines: string[] = [];
+
+    if (dayPeriod === 'morning') {
+      if (yesterdayCompleted) {
+        lines.push(
+          `Well done on yesterday ${getSessionPeriod(yesterdayCompleted.plannedStartTimeLocal)}'s ${formatGreetingSessionTitle(yesterdayCompleted)}.`
+        );
+      }
+      if (todayPlanned) {
+        lines.push(`All the best with your ${formatGreetingSessionTitle(todayPlanned)} this ${getSessionPeriod(todayPlanned.plannedStartTimeLocal)}.`);
+      }
+    } else if (dayPeriod === 'afternoon') {
+      if (todayPlanned) {
+        lines.push(`You've got your ${formatGreetingSessionTitle(todayPlanned)} this ${getSessionPeriod(todayPlanned.plannedStartTimeLocal)}.`);
+      } else if (tomorrowPlanned) {
+        lines.push(`You've got your ${formatGreetingSessionTitle(tomorrowPlanned)} tomorrow ${getSessionPeriod(tomorrowPlanned.plannedStartTimeLocal)}.`);
+      }
+    } else {
+      if (todayCompleted) {
+        lines.push(`Well done on today's ${formatGreetingSessionTitle(todayCompleted)}.`);
+      }
+      if (tomorrowPlanned) {
+        lines.push(`You've got your ${formatGreetingSessionTitle(tomorrowPlanned)} tomorrow ${getSessionPeriod(tomorrowPlanned.plannedStartTimeLocal)}.`);
+      }
     }
 
-    const sessionLabel = formatNextSessionLabel(nextSession);
-    const hoursUntil = getHoursUntilSession(nextSession, athleteTimeZone);
-    if (hoursUntil == null) {
-      return `G'day ${preferredName}! You've got your next ${sessionLabel} coming up soon.`;
+    if (lines.length === 0) {
+      const nextSession = data?.nextUp?.[0] ?? null;
+      const nextLabel =
+        String(nextSession?.title ?? '').trim() ||
+        String(nextSession?.discipline ?? '').trim().toLowerCase() ||
+        'training session';
+      if (!nextSession) return `G'day ${preferredName}! No upcoming sessions scheduled.`;
+      return `G'day ${preferredName}! You've got your next ${nextLabel} coming up soon.`;
     }
 
-    return `G'day ${preferredName}! You've got your next ${sessionLabel} in ${hoursUntil} ${hoursUntil === 1 ? 'hour' : 'hours'}.`;
-  }, [athleteTimeZone, data?.nextUp, user?.name]);
+    return `G'day ${preferredName}! ${lines.join(' ')}`;
+  }, [athleteTimeZone, data?.greetingTraining, data?.nextUp, user?.name]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -402,7 +435,7 @@ export default function AthleteDashboardConsolePage() {
             <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
               |
             </span>
-            <p className={cn(tokens.typography.h1, 'text-[var(--muted)]')}>{athleteGreeting}</p>
+            <p className="text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting}</p>
           </div>
         </div>
 
@@ -697,11 +730,18 @@ export default function AthleteDashboardConsolePage() {
               const totalCalories = summary?.totals.completedCaloriesKcal ?? 0;
               const maxCalories = Math.max(1, ...points.map((point) => point.completedCaloriesKcal));
               const axisStep = points.length <= 31 ? 1 : points.length <= 90 ? 7 : 14;
+              const monthLabel = (dayKey: string) =>
+                new Intl.DateTimeFormat('en-AU', { timeZone: athleteTimeZone, month: 'short' }).format(new Date(`${dayKey}T00:00:00.000Z`));
 
               const axisLabelForPoint = (point: (typeof points)[number], idx: number) => {
                 const shouldShow = idx === 0 || idx === points.length - 1 || idx % axisStep === 0;
                 if (!shouldShow) return '';
-                if (points.length <= 31) return point.dayKey.slice(8);
+                if (points.length <= 31) {
+                  const day = point.dayKey.slice(8);
+                  const prevMonthKey = idx > 0 ? points[idx - 1]?.dayKey.slice(0, 7) : null;
+                  const monthChanged = idx === 0 || point.dayKey.slice(0, 7) !== prevMonthKey;
+                  return monthChanged ? `${day} ${monthLabel(point.dayKey)}` : day;
+                }
                 const d = new Date(`${point.dayKey}T00:00:00.000Z`);
                 return new Intl.DateTimeFormat('en-AU', {
                   timeZone: athleteTimeZone,
@@ -772,6 +812,7 @@ export default function AthleteDashboardConsolePage() {
               title="Strava Vitals"
               showLoadPanel={showLoadPanel}
               onToggleLoadPanel={setShowLoadPanel}
+              addBottomSpacer
             />
           </div>
         </div>
