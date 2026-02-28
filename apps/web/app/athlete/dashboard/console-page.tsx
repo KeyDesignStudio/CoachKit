@@ -809,39 +809,37 @@ export default function AthleteDashboardConsolePage() {
               return (
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div>
-                      <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
-                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                        <span className="inline-flex items-center gap-1">
-                          <Icon name={selectedEquivalent.icon} size="sm" className="scale-90 text-[var(--muted)]" aria-hidden />
-                          Approximately {equivalentValue} {selectedEquivalent.label}
-                        </span>
-                        <div className="ml-auto inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
-                          {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
-                            const isActive = option.key === calorieEquivalentKey;
-                            return (
-                              <button
-                                key={option.key}
-                                type="button"
-                                onClick={() => setCalorieEquivalentKey(option.key)}
-                                title={option.label}
-                                className={cn(
-                                  'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                                  isActive
-                                    ? 'bg-[var(--bg-surface)] text-[var(--text)]'
-                                    : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
-                                )}
-                                aria-pressed={isActive}
-                                aria-label={option.label}
-                              >
-                                <Icon name={option.icon} size="sm" className="scale-90" aria-hidden />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                    <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name={selectedEquivalent.icon} size="sm" className="scale-90 text-[var(--muted)]" aria-hidden />
+                      Approximately {equivalentValue} {selectedEquivalent.label}
+                    </span>
+                    <div className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] p-1">
+                      {CALORIE_EQUIVALENT_OPTIONS.map((option) => {
+                        const isActive = option.key === calorieEquivalentKey;
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setCalorieEquivalentKey(option.key)}
+                            title={option.label}
+                            className={cn(
+                              'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+                              isActive
+                                ? 'bg-[var(--bg-surface)] text-[var(--text)]'
+                                : 'text-[var(--muted)] hover:bg-[var(--bg-structure)]/60 hover:text-[var(--text)]'
+                            )}
+                            aria-pressed={isActive}
+                            aria-label={option.label}
+                          >
+                            <Icon name={option.icon} size="sm" className="scale-90" aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
