@@ -490,6 +490,9 @@ model AthleteProfile {
   stravaSyncIntents   StravaSyncIntent[]
   externalConnections ExternalConnection[]
   externalWebhookEvents ExternalWebhookEvent[]
+  athleteTwin        AthleteTwin?
+  projectionSnapshots ProjectionSnapshot[]
+  checkins           AthleteCheckin[]
 
   // AI Plan Builder (v1)
   aiPlanBuilderIntakeResponses    AthleteIntakeResponse[]
@@ -511,6 +514,58 @@ model AthleteProfile {
   aiLlmRateLimitEvents AiLlmRateLimitEvent[] @relation("AiLlmRateLimitEventAthlete")
 
   @@index([coachId])
+}
+
+model AthleteTwin {
+  athleteId        String   @id
+  updatedAt        DateTime @updatedAt
+  sportProfile     Json?
+  baselineMetrics  Json?
+  rollingMetrics   Json?
+  dataQuality      Json?
+  lastInputs       Json?
+  modelVersion     String   @default("future-self-v1")
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model ProjectionSnapshot {
+  id           String   @id @default(cuid())
+  athleteId    String
+  createdAt    DateTime @default(now())
+  createdBy    String?
+  createdByType String  @default("SYSTEM")
+  scenario     Json
+  horizonWeeks Int
+  outputs      Json
+  assumptions  Json
+  confidence   Json
+  visibility   Json
+  modelVersion String   @default("future-self-v1")
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([athleteId, createdAt(sort: Desc)])
+  @@index([createdBy, createdAt(sort: Desc)])
+}
+
+model AthleteCheckin {
+  id              String   @id @default(cuid())
+  athleteId       String
+  date            DateTime
+  weight          Float?
+  waist           Float?
+  sleepHours      Float?
+  perceivedStress Int?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@index([athleteId, date(sort: Desc)])
 }
 
 model Squad {

@@ -15,6 +15,7 @@ import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { StravaVitalsCard } from '@/components/profile/StravaVitalsCard';
 import { uiH1, uiMuted } from '@/components/ui/typography';
 import { cn } from '@/lib/cn';
+import { FUTURE_SELF_V1 } from '@/lib/public-feature-flags';
 import {
   ATHLETE_TRAINING_REQUEST_PATH,
   buildTrainingRequestReminderMessage,
@@ -434,6 +435,14 @@ export default function AthleteProfilePage() {
             <Button type="button" variant="secondary" onClick={() => router.push('/coach/athletes')}>
               Back to athletes
             </Button>
+            {FUTURE_SELF_V1 ? (
+              <Link
+                href={`/coach/athletes/${athleteId}/future-self` as any}
+                className="inline-flex min-h-[40px] items-center rounded-md border border-[var(--border-subtle)] px-3 text-sm"
+              >
+                Future Self
+              </Link>
+            ) : null}
             <Button type="button" onClick={handleSave} disabled={saving || loading}>
               {saving ? 'Saving...' : 'Save changes'}
             </Button>

@@ -11,6 +11,12 @@ const AI_PLAN_BUILDER_V1 =
   process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === '1' ||
   process.env.NEXT_PUBLIC_AI_PLAN_BUILDER_V1 === 'true';
 
+const FUTURE_SELF_V1 =
+  process.env.FUTURE_SELF_V1 === '1' ||
+  process.env.FUTURE_SELF_V1 === 'true' ||
+  process.env.NEXT_PUBLIC_FUTURE_SELF_V1 === '1' ||
+  process.env.NEXT_PUBLIC_FUTURE_SELF_V1 === 'true';
+
 function isAiPlanBuilderPathSegment(pathname: string) {
   // Ensure we only match the real segment name, not a substring.
   // Examples matched: /.../ai-plan-builder, /.../ai-plan-builder/...
@@ -24,6 +30,17 @@ function shouldBlockAiPlanBuilderRoute(pathname: string) {
   // Only block AI Plan Builder module routes (pages + API). Never block anything else.
   if (pathname.startsWith('/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
   if (pathname.startsWith('/api/coach/athletes/') && isAiPlanBuilderPathSegment(pathname)) return true;
+
+  return false;
+}
+
+function shouldBlockFutureSelfRoute(pathname: string) {
+  if (FUTURE_SELF_V1) return false;
+
+  if (pathname === '/athlete/future-self') return true;
+  if (pathname.startsWith('/coach/athletes/') && /(^|\/)(future-self)(\/|$)/.test(pathname)) return true;
+  if (pathname.startsWith('/api/projections/')) return true;
+  if (pathname === '/api/twin/recompute') return true;
 
   return false;
 }
@@ -65,6 +82,7 @@ const authMiddleware = DISABLE_AUTH
       // Feature-flagged module routes must not be reachable when disabled.
       const pathname = new URL(request.url).pathname;
       if (shouldBlockAiPlanBuilderRoute(pathname)) return new NextResponse('Not Found', { status: 404 });
+      if (shouldBlockFutureSelfRoute(pathname)) return new NextResponse('Not Found', { status: 404 });
 
       return NextResponse.next();
     }
@@ -76,6 +94,7 @@ const authMiddleware = DISABLE_AUTH
 
       // Feature-flagged module routes must not be reachable when disabled.
       if (shouldBlockAiPlanBuilderRoute(request.nextUrl.pathname)) return new NextResponse('Not Found', { status: 404 });
+      if (shouldBlockFutureSelfRoute(request.nextUrl.pathname)) return new NextResponse('Not Found', { status: 404 });
 
       const { userId } = await auth();
       const { pathname } = request.nextUrl;
