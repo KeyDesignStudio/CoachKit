@@ -114,6 +114,7 @@ export async function GET(request: NextRequest) {
         title: challenge.title,
         type: challenge.type,
         status: challenge.status,
+        startAt: challenge.startAt,
         dateRangeLabel: mapChallengeWindowLabel(challenge),
         rulesText: challengeRulesText(challenge),
         participantCount: challenge._count.participants,
