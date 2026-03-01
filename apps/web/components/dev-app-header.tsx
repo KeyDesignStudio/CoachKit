@@ -137,15 +137,13 @@ export function DevAppHeader() {
   );
   const desktopSettingsLink = useMemo(() => navLinks.find((link) => link.href.endsWith('/settings')), [navLinks]);
   const isCoachDesktop = role === 'COACH';
-  const coachPrimaryDesktopOrder = ['/coach/dashboard', '/coach/calendar', '/coach/notifications', '/coach/settings'];
+  const coachPrimaryDesktopOrder = ['/coach/dashboard', '/coach/calendar', '/coach/athletes', '/coach/notifications', '/coach/settings'];
   const coachPrimaryDesktopLinks = useMemo(
     () => coachPrimaryDesktopOrder.map((href) => navLinks.find((link) => link.href === href)).filter(Boolean) as NavLink[],
     [navLinks]
   );
-  const coachSecondaryDesktopLinks = [
-    { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
-    { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant', childLabel: 'CK Assist' },
-  ];
+  const coachSessionBuilderLink = useMemo(() => navLinks.find((link) => link.href === '/coach/group-sessions') ?? null, [navLinks]);
+  const coachAssistLink = useMemo(() => navLinks.find((link) => link.href === '/coach/assistant') ?? null, [navLinks]);
 
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
@@ -202,30 +200,35 @@ export function DevAppHeader() {
 
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
-              <nav className="flex items-center gap-2 text-sm font-medium uppercase">
+              <nav className="flex items-center gap-2 text-sm font-medium uppercase relative">
                 {coachPrimaryDesktopLinks.map((link) => (
-                  <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-              <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-              <nav className="flex items-center gap-4">
-                {coachSecondaryDesktopLinks.map((link) => (
-                  <div
-                    key={link.childHref}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide md:whitespace-nowrap"
-                  >
-                    <Link href={link.parentHref as any} className="text-[9px] text-[var(--muted)]/85 hover:text-[var(--text)]">
-                      {link.parentLabel}
+                  link.href === '/coach/calendar' && coachSessionBuilderLink ? (
+                    <details key={link.href} className="relative">
+                      <summary className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden`}>
+                        {link.label}
+                      </summary>
+                      <div className="absolute left-0 top-full z-30 mt-1 min-w-[210px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)]">
+                        <Link href={coachSessionBuilderLink.href as any} className="block rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]">
+                          {coachSessionBuilderLink.label}
+                        </Link>
+                      </div>
+                    </details>
+                  ) : link.href === '/coach/athletes' && coachAssistLink ? (
+                    <details key={link.href} className="relative">
+                      <summary className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden`}>
+                        {link.label}
+                      </summary>
+                      <div className="absolute left-0 top-full z-30 mt-1 min-w-[170px] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.55)]">
+                        <Link href={coachAssistLink.href as any} className="block rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]">
+                          {coachAssistLink.label}
+                        </Link>
+                      </div>
+                    </details>
+                  ) : (
+                    <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
+                      {link.label}
                     </Link>
-                    <span className="text-[var(--muted)]/55" aria-hidden="true">
-                      /
-                    </span>
-                    <Link href={link.childHref as any} className="text-[var(--text)] hover:text-[var(--text)]/90">
-                      {link.childLabel}
-                    </Link>
-                  </div>
+                  )
                 ))}
               </nav>
             </div>
