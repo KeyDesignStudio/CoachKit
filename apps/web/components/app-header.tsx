@@ -22,7 +22,7 @@ const DESKTOP_NAV_LINK_CLASS = cn(
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/assistant' as Route, label: 'Assistant', roles: ['COACH'] },
+  { href: '/coach/assistant' as Route, label: 'CK Assist', roles: ['COACH'] },
   { href: '/coach/challenges', label: 'Challenges', roles: ['COACH'] },
   { href: '/coach/notifications', label: 'Notifications', roles: ['COACH'] },
   { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
@@ -215,9 +215,14 @@ export async function AppHeader() {
     .map((href) => navLinks.find((link) => link.href === href))
     .filter((link): link is NavLink => Boolean(link));
 
-  const coachSecondaryDesktopLinks: Array<{ href: Route; label: string; context: string }> = [
-    { href: '/coach/group-sessions', label: 'Session Builder', context: 'Scheduling' },
-    { href: '/coach/assistant' as Route, label: 'Assistant', context: 'Athletes' },
+  const coachSecondaryDesktopLinks: Array<{
+    parentHref: Route;
+    parentLabel: string;
+    childHref: Route;
+    childLabel: string;
+  }> = [
+    { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
+    { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant' as Route, childLabel: 'CK Assist' },
   ];
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
@@ -375,19 +380,23 @@ export async function AppHeader() {
                     ))}
                   </nav>
                   <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-                  <nav className="flex items-center gap-2">
+                  <nav className="flex items-center gap-3">
                     {coachSecondaryDesktopLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
+                      <div
+                        key={link.childHref}
                         className={cn(
-                          'rounded-full border border-[var(--border-subtle)] px-3 py-1.5 min-h-[36px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-[var(--bg-structure)]',
+                          'rounded-lg border border-[var(--border-subtle)] px-2.5 py-1 min-h-[32px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide',
                           'md:whitespace-nowrap'
                         )}
                       >
-                        <span className="text-[9px] text-[var(--muted)]/80">{link.context}</span>
-                        <span className="text-[var(--text)]">{link.label}</span>
-                      </Link>
+                        <Link href={link.parentHref} className="text-[9px] text-[var(--muted)]/80 hover:text-[var(--text)]">
+                          {link.parentLabel}
+                        </Link>
+                        <span className="h-3 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+                        <Link href={link.childHref} className="text-[var(--text)] hover:text-[var(--text)]/90">
+                          {link.childLabel}
+                        </Link>
+                      </div>
                     ))}
                   </nav>
                 </div>
