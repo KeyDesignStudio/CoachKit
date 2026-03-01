@@ -25,6 +25,7 @@ type AthleteChallengeCard = {
   yourRank: number | null;
   yourScoreLabel: string | null;
   yourSessions: number;
+  previewBadgeImageUrl: string;
   top3: Array<{
     rank: number | null;
     athleteName: string;
@@ -101,6 +102,9 @@ export default function AthleteChallengesPage() {
           <h2 className={cn(tokens.typography.h2, 'text-[var(--text)]')}>Active</h2>
           {active.map((challenge) => (
             <Block key={challenge.id} title={challenge.title}>
+              <div className="mb-3">
+                <img src={challenge.previewBadgeImageUrl} alt={`${challenge.title} badge`} className="h-16 w-16 rounded-lg border border-[var(--border-subtle)] object-cover" loading="lazy" />
+              </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge className={cn('capitalize', statusTone(challenge.status))}>{challenge.status}</Badge>
                 <Badge>{challenge.type}</Badge>

@@ -6,6 +6,7 @@ import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { formatChallengeScore, mapChallengeWindowLabel, challengeRulesText, maybeCompleteChallenge } from '@/lib/challenges/service';
 import { parseParticipationConfig } from '@/lib/challenges/config';
+import { buildChallengeBadgeImageUrl } from '@/lib/challenges/badges';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -129,6 +130,7 @@ export async function GET(request: NextRequest) {
             })
           : null,
         yourSessions: you?.sessionsCount ?? 0,
+        previewBadgeImageUrl: buildChallengeBadgeImageUrl(challenge.id, 'PARTICIPATION'),
         top3: (leadersByChallenge.get(challenge.id) ?? []).map((row) => ({
           rank: row.rank,
           athleteName: toName(row.athlete.user.name),

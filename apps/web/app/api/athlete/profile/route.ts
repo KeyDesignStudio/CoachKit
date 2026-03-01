@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAthlete } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
+import { buildChallengeBadgeImageUrl } from '@/lib/challenges/badges';
 import { normalizeAustralianMobile } from '@/modules/athlete-intake/validation';
 import { ensureAthleteBrief } from '@/modules/ai-plan-builder/server/athlete-brief';
 
@@ -100,16 +101,42 @@ const updateAthleteSchema = z
 export async function GET() {
   try {
     const { user } = await requireAthlete();
-    const athlete = await prisma.athleteProfile.findUnique({
-      where: { userId: user.id },
-      include: { user: true },
-    });
+    const [athlete, badgeAwards] = await Promise.all([
+      prisma.athleteProfile.findUnique({
+        where: { userId: user.id },
+        include: { user: true },
+      }),
+      prisma.badgeAward.findMany({
+        where: { athleteId: user.id },
+        select: {
+          challengeId: true,
+          type: true,
+          awardedAt: true,
+          challenge: {
+            select: {
+              title: true,
+            },
+          },
+        },
+        orderBy: [{ awardedAt: 'desc' }],
+        take: 24,
+      }),
+    ]);
 
     if (!athlete) {
       throw new ApiError(404, 'ATHLETE_PROFILE_REQUIRED', 'Athlete profile not found.');
     }
 
-    return success({ athlete });
+    return success({
+      athlete,
+      badges: badgeAwards.map((award) => ({
+        challengeId: award.challengeId,
+        challengeTitle: award.challenge.title,
+        type: award.type,
+        awardedAt: award.awardedAt,
+        badgeImageUrl: buildChallengeBadgeImageUrl(award.challengeId, award.type),
+      })),
+    });
   } catch (error) {
     return handleError(error);
   }

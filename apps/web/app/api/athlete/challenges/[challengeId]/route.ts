@@ -5,6 +5,7 @@ import { forbidden, notFound } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 import { challengeRulesText, formatChallengeScore, maybeCompleteChallenge } from '@/lib/challenges/service';
 import { parseParticipationConfig, parseScoringConfig } from '@/lib/challenges/config';
+import { buildChallengeBadgeImageUrl } from '@/lib/challenges/badges';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -176,7 +177,10 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
           scoringConfig: challenge.scoringConfig,
         }),
       })),
-      badges: latestBadges,
+      badges: latestBadges.map((badge) => ({
+        ...badge,
+        badgeImageUrl: buildChallengeBadgeImageUrl(challenge.id, badge.type),
+      })),
       canJoin: !participationConfig.autoJoin && !you,
       joined: Boolean(you),
     });
