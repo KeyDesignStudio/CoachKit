@@ -136,6 +136,16 @@ export function DevAppHeader() {
     [navLinks]
   );
   const desktopSettingsLink = useMemo(() => navLinks.find((link) => link.href.endsWith('/settings')), [navLinks]);
+  const isCoachDesktop = role === 'COACH';
+  const coachPrimaryDesktopOrder = ['/coach/dashboard', '/coach/calendar', '/coach/notifications', '/coach/settings'];
+  const coachPrimaryDesktopLinks = useMemo(
+    () => coachPrimaryDesktopOrder.map((href) => navLinks.find((link) => link.href === href)).filter(Boolean) as NavLink[],
+    [navLinks]
+  );
+  const coachSecondaryDesktopLinks = [
+    { href: '/coach/group-sessions', label: 'Session Builder', context: 'Scheduling' },
+    { href: '/coach/assistant', label: 'Assistant', context: 'Athletes' },
+  ];
 
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
@@ -190,37 +200,62 @@ export function DevAppHeader() {
             </div>
           </div>
 
-          <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
-            {desktopTextLinks.map((link) => (
-              <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
-                {link.label}
-              </Link>
-            ))}
+          {isCoachDesktop ? (
+            <div className="hidden md:flex items-center gap-3">
+              <nav className="flex items-center gap-2 text-sm font-medium uppercase">
+                {coachPrimaryDesktopLinks.map((link) => (
+                  <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+              <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+              <nav className="flex items-center gap-2">
+                {coachSecondaryDesktopLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href as any}
+                    className="rounded-full border border-[var(--border-subtle)] px-3 py-1.5 min-h-[36px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-[var(--bg-structure)] md:whitespace-nowrap"
+                  >
+                    <span className="text-[9px] text-[var(--muted)]/80">{link.context}</span>
+                    <span className="text-[var(--text)]">{link.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          ) : (
+            <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
+              {desktopTextLinks.map((link) => (
+                <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
+                  {link.label}
+                </Link>
+              ))}
 
-            {desktopNotificationsLink ? (
-              <Link
-                key={desktopNotificationsLink.href}
-                href={desktopNotificationsLink.href as any}
-                aria-label="Notifications"
-                className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-              >
-                <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
-                <span className="sr-only">Notifications</span>
-              </Link>
-            ) : null}
+              {desktopNotificationsLink ? (
+                <Link
+                  key={desktopNotificationsLink.href}
+                  href={desktopNotificationsLink.href as any}
+                  aria-label="Notifications"
+                  className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                >
+                  <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                  <span className="sr-only">Notifications</span>
+                </Link>
+              ) : null}
 
-            {desktopSettingsLink ? (
-              <Link
-                key={desktopSettingsLink.href}
-                href={desktopSettingsLink.href as any}
-                aria-label="Settings"
-                className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-              >
-                <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
-                <span className="sr-only">Settings</span>
-              </Link>
-            ) : null}
-          </nav>
+              {desktopSettingsLink ? (
+                <Link
+                  key={desktopSettingsLink.href}
+                  href={desktopSettingsLink.href as any}
+                  aria-label="Settings"
+                  className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                >
+                  <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                  <span className="sr-only">Settings</span>
+                </Link>
+              ) : null}
+            </nav>
+          )}
 
           <DevUserMenu role={role} />
         </div>
