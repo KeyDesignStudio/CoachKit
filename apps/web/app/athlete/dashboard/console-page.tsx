@@ -715,7 +715,7 @@ export default function AthleteDashboardConsolePage() {
                           ) : challenge.canJoin ? (
                             <button
                               type="button"
-                              className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/30"
+                              className="inline-flex min-h-[30px] items-center rounded-full border border-white/90 bg-white px-3 text-[10px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
                               onClick={() => router.push(`/challenges/${challenge.id}` as never)}
                             >
                               Join
