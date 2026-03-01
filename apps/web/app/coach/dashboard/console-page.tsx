@@ -700,27 +700,30 @@ export default function CoachDashboardConsolePage() {
           </div>
 
           <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="xl:col-span-1">
-            <Block title="Review inbox" className="h-full">
+            <Block
+              title="Review inbox"
+              className="h-full"
+              rightAction={
+                <Button
+                  size="sm"
+                  onClick={markSelectedReviewed}
+                  disabled={reviewingItems || selectedReviewCount === 0}
+                >
+                  Mark reviewed
+                </Button>
+              }
+            >
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className={cn(tokens.typography.meta, "text-[var(--muted)]")}>Showing {visibleReviewInbox.length}</div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={markSelectedReviewed}
-                      disabled={reviewingItems || selectedReviewCount === 0}
-                    >
-                      Mark reviewed
-                    </Button>
-                    <button
-                      type="button"
-                      className={cn("text-[var(--muted)] hover:text-[var(--text)]", tokens.typography.meta)}
-                      onClick={clearReviewSelection}
-                      disabled={selectedReviewCount === 0}
-                    >
-                      Clear
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={cn("text-[var(--muted)] hover:text-[var(--text)]", tokens.typography.meta)}
+                    onClick={clearReviewSelection}
+                    disabled={selectedReviewCount === 0}
+                  >
+                    Clear
+                  </button>
                 </div>
 
                 <div className="space-y-2">
