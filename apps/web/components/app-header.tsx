@@ -209,6 +209,7 @@ export async function AppHeader() {
     '/coach/dashboard',
     '/coach/calendar',
     '/coach/athletes',
+    '/coach/challenges',
     '/coach/notifications',
     '/coach/settings',
   ];
