@@ -141,6 +141,7 @@ export function DevAppHeader() {
     '/coach/dashboard',
     '/coach/calendar',
     '/coach/athletes',
+    '/coach/challenges',
     '/coach/notifications',
     '/coach/settings',
   ];
