@@ -93,6 +93,7 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
     // - Label: "SESSION BUILDER" -> "Session Builder"
     const coachOrder: Array<string> = [
       '/coach/dashboard',
+      '/coach/assistant',
       '/coach/athletes',
       '/coach/calendar',
       '/coach/group-sessions',

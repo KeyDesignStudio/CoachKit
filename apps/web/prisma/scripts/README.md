@@ -117,3 +117,41 @@ Optional environment variables:
 - `PLAN_LIBRARY_SESSIONS_PATH`
 - `PLAN_LIBRARY_PDFS` (comma-separated absolute PDF paths)
 - `ACTIVATE_IMPORTED` (`true`/`false`, default `true`)
+
+## seed-assistant-pattern-definitions.ts
+
+Seeds/updates the 5 Assistant pattern definitions for Invisible Assistant Coach V1.
+
+What it does:
+- Upserts each pattern by `key`
+- Sets `status=ACTIVE`
+- Updates `logicConfig`, severity, cooldown, and metadata
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/seed-assistant-pattern-definitions.ts
+```
+
+## seed-assistant-sample-detections.ts
+
+DEV helper to create sample Assistant detections/recommendations/LLM outputs for the first coached athlete.
+
+What it does:
+- Reads active Assistant pattern definitions
+- Creates one `AssistantDetection` per definition (if not already present for that athlete)
+- Adds two recommendations and baseline LLM output artifacts per detection
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/seed-assistant-sample-detections.ts
+```

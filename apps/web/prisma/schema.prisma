@@ -276,6 +276,59 @@ enum AiUsageAlertScope {
   COACH
 }
 
+enum AssistantPatternCategory {
+  ADHERENCE
+  READINESS
+  DURABILITY
+  ENVIRONMENT
+  RISK
+}
+
+enum AssistantDefinitionStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+}
+
+enum AssistantSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AssistantDetectionState {
+  NEW
+  VIEWED
+  DISMISSED
+  SNOOZED
+  ACTIONED
+}
+
+enum AssistantRecommendationType {
+  PLAN_ADJUSTMENT
+  SESSION_SWAP
+  INTENSITY_REDUCE
+  SCHEDULE_SHIFT
+  EDUCATION
+  MESSAGE_ONLY
+}
+
+enum AssistantLlmOutputType {
+  COACH_SUMMARY
+  ATHLETE_MESSAGE_DRAFT
+  RATIONALE
+  CHATBOT_CONTEXT_PACK
+}
+
+enum AssistantActionType {
+  APPLY_PLAN_CHANGE
+  SEND_MESSAGE
+  EDIT_MESSAGE
+  DISMISS
+  SNOOZE
+  OPEN_CHAT
+}
+
 enum AdminAuditAction {
   CREATE
   UPDATE
@@ -333,6 +386,8 @@ model User {
   aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
   aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
   adminAuditEvents         AdminAuditEvent[]        @relation("AdminAuditEventActor")
+  assistantDetections      AssistantDetection[]
+  assistantActions         AssistantAction[]
 
   @@index([role])
 }
@@ -502,6 +557,9 @@ model AthleteProfile {
   aiPlanBuilderSessionFeedback    AthleteSessionFeedback[]
   aiPlanBuilderAdaptationTriggers AdaptationTrigger[]
   aiPlanBuilderPublishAcks        AiPlanPublishAck[]
+  assistantDailyMetrics           AssistantDailyMetric[]
+  assistantDetections             AssistantDetection[]
+  assistantActions                AssistantAction[]
 
   intakeSubmissions AthleteIntakeSubmission[]
   athleteBriefs     AthleteBrief[]
@@ -875,6 +933,124 @@ model CompletedActivity {
   @@unique([athleteId, source, externalActivityId])
   @@index([athleteId, startTime])
   @@index([calendarItemId])
+}
+
+model AssistantDailyMetric {
+  id           String   @id @default(cuid())
+  athleteId    String
+  date         DateTime
+  sleepHours   Float?
+  fatigueScore Int?
+  hrv          Float?
+  restingHr    Float?
+  stressScore  Int?
+  moodScore    Int?
+  notes        String?
+  source       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@unique([athleteId, date])
+  @@index([athleteId, date])
+}
+
+model AssistantPatternDefinition {
+  id              String                    @id @default(cuid())
+  key             String                    @unique
+  name            String
+  category        AssistantPatternCategory
+  description     String
+  status          AssistantDefinitionStatus @default(DRAFT)
+  version         Int
+  severityDefault AssistantSeverity         @default(MEDIUM)
+  cooldownDays    Int                       @default(7)
+  logicConfig     Json
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  detections AssistantDetection[]
+
+  @@unique([key, version])
+  @@index([status, category])
+}
+
+model AssistantDetection {
+  id                  String                 @id @default(cuid())
+  athleteId           String
+  coachId             String
+  patternDefinitionId String
+  detectedAt          DateTime               @default(now())
+  periodStart         DateTime
+  periodEnd           DateTime
+  severity            AssistantSeverity
+  confidenceScore     Int
+  evidence            Json
+  state               AssistantDetectionState @default(NEW)
+  dismissReason       String?
+  snoozedUntil        DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  athlete           AthleteProfile           @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  coach             User                     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  patternDefinition AssistantPatternDefinition @relation(fields: [patternDefinitionId], references: [id], onDelete: Restrict)
+
+  recommendations AssistantRecommendation[]
+  llmOutputs       AssistantLlmOutput[]
+  actions          AssistantAction[]
+
+  @@index([coachId, state, detectedAt])
+  @@index([athleteId, detectedAt])
+  @@index([patternDefinitionId, detectedAt])
+}
+
+model AssistantRecommendation {
+  id                 String                      @id @default(cuid())
+  detectionId        String
+  recommendationType AssistantRecommendationType
+  title              String
+  details            Json
+  estimatedImpact    Json?
+  createdAt          DateTime                    @default(now())
+
+  detection AssistantDetection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+
+  @@index([detectionId])
+}
+
+model AssistantLlmOutput {
+  id            String                 @id @default(cuid())
+  detectionId   String
+  outputType    AssistantLlmOutputType
+  content       String
+  model         String?
+  promptVersion String
+  tokenUsage    Json?
+  createdAt     DateTime               @default(now())
+
+  detection AssistantDetection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+
+  @@index([detectionId, outputType, createdAt])
+}
+
+model AssistantAction {
+  id            String              @id @default(cuid())
+  coachId       String
+  athleteId     String
+  detectionId   String
+  actionType    AssistantActionType
+  actionPayload Json?
+  createdAt     DateTime            @default(now())
+
+  coach     User              @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete   AthleteProfile    @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  detection AssistantDetection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+
+  @@index([coachId, createdAt])
+  @@index([athleteId, createdAt])
+  @@index([detectionId, createdAt])
 }
 
 model Comment {

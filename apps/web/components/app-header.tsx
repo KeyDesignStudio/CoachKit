@@ -22,6 +22,7 @@ const DESKTOP_NAV_LINK_CLASS = cn(
 
 const allNavLinks: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
+  { href: '/coach/assistant' as Route, label: 'Assistant', roles: ['COACH'] },
   { href: '/coach/notifications', label: 'Notifications', roles: ['COACH'] },
   { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
   { href: '/coach/calendar', label: 'Scheduling', roles: ['COACH'] },
