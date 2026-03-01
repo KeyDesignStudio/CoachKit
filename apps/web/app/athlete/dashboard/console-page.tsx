@@ -744,7 +744,7 @@ export default function AthleteDashboardConsolePage() {
           <Block
             title="Planned vs Completed"
             showHeaderDivider={false}
-            className="min-h-[280px]"
+            className="min-h-[230px]"
             data-testid="athlete-dashboard-compliance-chart"
           >
             {(() => {
@@ -755,7 +755,7 @@ export default function AthleteDashboardConsolePage() {
               const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedWorkouts > 0 || row.completedWorkouts > 0);
 
               return (
-                <div className="flex h-full flex-col gap-4">
+                <div className="flex h-full flex-col gap-3">
                   <div className="flex flex-col gap-1">
                     {plannedTotal > 0 ? (
                       <>
@@ -811,7 +811,7 @@ export default function AthleteDashboardConsolePage() {
             })()}
           </Block>
 
-          <Block title="Calories" showHeaderDivider={false} className="min-h-[250px]" data-testid="athlete-dashboard-calories-chart">
+          <Block title="Calories" showHeaderDivider={false} className="min-h-[230px]" data-testid="athlete-dashboard-calories-chart">
             {(() => {
               const summary = data?.rangeSummary;
               const points = summary?.caloriesByDay ?? [];
@@ -840,6 +840,24 @@ export default function AthleteDashboardConsolePage() {
                       return acc;
                     }, [])
                   : [];
+              const monthMarkersWithSpacing = monthMarkers.reduce<Array<{ idx: number; label: string; left: number }>>((acc, marker, idx) => {
+                const baseLeft = points.length > 1 ? (marker.idx / (points.length - 1)) * 100 : 0;
+                const prev = acc[acc.length - 1];
+                const minGapPct = 10;
+                const leftFloor = idx === 0 ? 0 : 4;
+                let nextLeft = Math.max(baseLeft, leftFloor);
+
+                if (prev && nextLeft - prev.left < minGapPct) {
+                  nextLeft = prev.left + minGapPct;
+                }
+                if (idx === 1 && nextLeft < 12) {
+                  nextLeft = 12;
+                }
+
+                nextLeft = Math.min(nextLeft, 98);
+                acc.push({ ...marker, left: nextLeft });
+                return acc;
+              }, []);
 
               const axisLabelForPoint = (point: (typeof points)[number], idx: number) => {
                 const shouldShow = idx === 0 || idx === points.length - 1 || idx % axisStep === 0;
@@ -876,7 +894,7 @@ export default function AthleteDashboardConsolePage() {
               };
 
               return (
-                <div className="flex h-full flex-col gap-4">
+                <div className="flex h-full flex-col gap-2">
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="text-sm text-[var(--muted)]">Total {formatKcalWithGrouping(totalCalories)} burned</div>
                     <div className="text-xs text-[var(--muted)]">In this range</div>
@@ -911,14 +929,14 @@ export default function AthleteDashboardConsolePage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-4">
-                    <div className="flex h-[150px] items-end gap-0.5 sm:gap-1 overflow-hidden" aria-label="Calories per day">
+                  <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3">
+                    <div className="flex h-[108px] items-end gap-0.5 sm:gap-1 overflow-hidden" aria-label="Calories per day">
                       {points.map((point, idx) => {
                         const heightPct = maxCalories > 0 ? Math.round((point.completedCaloriesKcal / maxCalories) * 100) : 0;
                         const axisLabel = axisLabelForPoint(point, idx);
                         return (
                           <div key={point.dayKey} className="flex-1 min-w-0 flex flex-col items-center gap-2" title={buildTooltip(point)}>
-                            <div className="w-full flex items-end justify-center h-[115px]">
+                            <div className="w-full flex items-end justify-center h-[78px]">
                               <div
                                 className="w-2.5 sm:w-3 md:w-4 rounded-full bg-[var(--bar-fill)]"
                                 style={{ height: `${heightPct}%`, minHeight: point.completedCaloriesKcal > 0 ? '6px' : '0' }}
@@ -931,15 +949,20 @@ export default function AthleteDashboardConsolePage() {
                         );
                       })}
                     </div>
-                    {monthMarkers.length > 0 ? (
-                      <div className="relative mt-2 h-3" aria-hidden>
-                        {monthMarkers.map((marker) => (
+                    {monthMarkersWithSpacing.length > 0 ? (
+                      <div className="relative mt-1 h-3" aria-hidden>
+                        {monthMarkersWithSpacing.map((marker) => (
                           <span
                             key={`${marker.idx}-${marker.label}`}
-                            className="absolute text-[10px] leading-none text-[var(--muted)] whitespace-nowrap"
+                            className="absolute text-[9px] leading-none text-[var(--muted)] whitespace-nowrap"
                             style={{
-                              left: `${points.length > 1 ? (marker.idx / (points.length - 1)) * 100 : 0}%`,
-                              transform: marker.idx === 0 ? 'none' : marker.idx === points.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+                              left: `${marker.left}%`,
+                              transform:
+                                marker.idx === 0
+                                  ? 'none'
+                                  : marker.idx === points.length - 1
+                                    ? 'translateX(-100%)'
+                                    : 'translateX(-50%)',
                             }}
                           >
                             {marker.label}
