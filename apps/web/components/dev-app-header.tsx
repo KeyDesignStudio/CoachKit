@@ -137,15 +137,25 @@ export function DevAppHeader() {
   );
   const desktopSettingsLink = useMemo(() => navLinks.find((link) => link.href.endsWith('/settings')), [navLinks]);
   const isCoachDesktop = role === 'COACH';
-  const coachPrimaryDesktopOrder = ['/coach/dashboard', '/coach/calendar', '/coach/notifications', '/coach/settings'];
+  const coachPrimaryDesktopOrder = [
+    '/coach/dashboard',
+    '/coach/calendar',
+    '/coach/athletes',
+    '/coach/notifications',
+    '/coach/settings',
+  ];
   const coachPrimaryDesktopLinks = useMemo(
     () => coachPrimaryDesktopOrder.map((href) => navLinks.find((link) => link.href === href)).filter(Boolean) as NavLink[],
     [navLinks]
   );
-  const coachSecondaryDesktopLinks = [
+  const coachDesktopSubmenus = [
     { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
     { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant', childLabel: 'CK Assist' },
   ];
+  const coachDesktopSubmenuByParent = useMemo(
+    () => new Map(coachDesktopSubmenus.map((submenu) => [submenu.parentHref, submenu])),
+    [coachDesktopSubmenus]
+  );
 
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
@@ -202,31 +212,45 @@ export function DevAppHeader() {
 
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
-              <nav className="flex items-center gap-2 text-sm font-medium uppercase">
-                {coachPrimaryDesktopLinks.map((link) => (
-                  <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-              <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-              <nav className="flex items-center gap-4">
-                {coachSecondaryDesktopLinks.map((link) => (
-                  <div
-                    key={link.childHref}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide md:whitespace-nowrap"
-                  >
-                    <Link href={link.parentHref as any} className="text-[9px] text-[var(--muted)]/85 hover:text-[var(--text)]">
-                      {link.parentLabel}
-                    </Link>
-                    <span className="text-[var(--muted)]/55" aria-hidden="true">
-                      /
-                    </span>
-                    <Link href={link.childHref as any} className="text-[var(--text)] hover:text-[var(--text)]/90">
-                      {link.childLabel}
-                    </Link>
-                  </div>
-                ))}
+              <nav className="flex items-center gap-2 text-sm font-medium uppercase relative">
+                {coachPrimaryDesktopLinks.map((link) => {
+                  const submenu = coachDesktopSubmenuByParent.get(link.href);
+
+                  if (!submenu) {
+                    return (
+                      <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
+                        {link.label}
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <details key={link.href} className="group relative">
+                      <summary
+                        className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden`}
+                      >
+                        <span>{link.label}</span>
+                        <span className="ml-2 text-[10px] text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true">
+                          v
+                        </span>
+                      </summary>
+                      <div className="absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1.5 shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]">
+                        <Link
+                          href={submenu.parentHref as any}
+                          className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                        >
+                          {submenu.parentLabel}
+                        </Link>
+                        <Link
+                          href={submenu.childHref as any}
+                          className="mt-1 inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                        >
+                          {submenu.childLabel}
+                        </Link>
+                      </div>
+                    </details>
+                  );
+                })}
               </nav>
             </div>
           ) : (
