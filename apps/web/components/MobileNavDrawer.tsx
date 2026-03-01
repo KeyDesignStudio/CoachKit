@@ -90,15 +90,15 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
     }
 
     // Mobile-only coach menu rules:
-    // - Order: Dashboard, Athletes, Scheduling, Session Builder, Notifications, Settings
-    // - Label: "SESSION BUILDER" -> "Session Builder"
+    // - Keep parent/child flow grouped in order for quick access.
+    // - Label: "SESSION BUILDER" -> "Session Builder", "Assistant" -> "CK Assist"
     const coachOrder: Array<string> = [
       '/coach/dashboard',
-      '/coach/assistant',
-      '/coach/challenges',
       '/coach/athletes',
+      '/coach/assistant',
       '/coach/calendar',
       '/coach/group-sessions',
+      '/coach/challenges',
       '/coach/notifications',
       '/coach/settings',
     ];
@@ -106,7 +106,7 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
 
     const normalized = dedupedWithIndex.map(({ link, index }) => {
       const href = String(link.href);
-      const label = href === '/coach/group-sessions' ? 'Session Builder' : link.label;
+      const label = href === '/coach/group-sessions' ? 'Session Builder' : href === '/coach/assistant' ? 'CK Assist' : link.label;
       return { link: { ...link, label }, href, index };
     });
 
