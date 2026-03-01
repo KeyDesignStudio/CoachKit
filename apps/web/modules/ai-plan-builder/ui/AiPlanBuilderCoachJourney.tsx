@@ -3,6 +3,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiClientError, useApi } from '@/components/api-client';
@@ -119,6 +120,32 @@ type AdaptationTimelineItem = {
   kind: 'feedback' | 'completed';
   at: string;
   summary: string;
+};
+
+type AssistantDetectionLite = {
+  id: string;
+  athleteId: string;
+  athleteName: string;
+  detectedAt: string;
+  title: string;
+  patternKey: string;
+  category: string;
+  summary: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  confidenceScore: number;
+  state: 'NEW' | 'VIEWED' | 'DISMISSED' | 'SNOOZED' | 'ACTIONED' | 'NEEDS_ATTENTION';
+  snoozedUntil: string | null;
+};
+
+type AssistantDetectionDetail = {
+  id: string;
+  athleteId: string;
+  recommendations: Array<{
+    id: string;
+    recommendationType: string;
+    title: string;
+    details: unknown;
+  }>;
 };
 
 type CoachChangeTimelineEntry = {
@@ -611,8 +638,11 @@ function summarizeSessionChanges(params: {
 }
 
 export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { request } = useApi();
   const hasAutoSyncedRequestRef = useRef(false);
+  const assistantProposalHydratedRef = useRef(false);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | 'unpublish' | 'delete'>(null);
@@ -658,6 +688,8 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [latestSignalAt, setLatestSignalAt] = useState<string | null>(null);
   const [hasNewDataSinceLastEval, setHasNewDataSinceLastEval] = useState<boolean>(false);
   const [adaptationSignalTimeline, setAdaptationSignalTimeline] = useState<AdaptationTimelineItem[]>([]);
+  const [assistantDetections, setAssistantDetections] = useState<AssistantDetectionLite[]>([]);
+  const [assistantDetectionsLoading, setAssistantDetectionsLoading] = useState(false);
   const [coachChangeTimeline, setCoachChangeTimeline] = useState<CoachChangeTimelineEntry[]>([]);
   const [timelineDiffPreview, setTimelineDiffPreview] = useState<ProposalDiffPreview | null>(null);
   const [draftReviewTab, setDraftReviewTab] = useState<'share' | 'detail'>('share');
@@ -1203,9 +1235,32 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     [athleteId, draftPlanLatest?.id, request]
   );
 
+  const refreshAssistantDetections = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setAssistantDetectionsLoading(true);
+      try {
+        const data = await request<{ items?: AssistantDetectionLite[] }>(
+          `/api/coach/assistant/detections?state=NEEDS_ATTENTION&athleteId=${encodeURIComponent(athleteId)}&limit=8&offset=0`,
+          { method: 'GET' }
+        );
+        const rows = Array.isArray(data.items) ? data.items : [];
+        setAssistantDetections(rows);
+      } catch {
+        // Non-blocking for APB workflow.
+      } finally {
+        if (!opts?.silent) setAssistantDetectionsLoading(false);
+      }
+    },
+    [athleteId, request]
+  );
+
   useEffect(() => {
     void refreshQueuedRecommendations({ silent: true });
   }, [refreshQueuedRecommendations]);
+
+  useEffect(() => {
+    void refreshAssistantDetections({ silent: true });
+  }, [refreshAssistantDetections]);
 
   const refreshCoachChangeTimeline = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1281,6 +1336,33 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     },
     [athleteId, draftPlanLatest?.id, request]
   );
+
+  useEffect(() => {
+    const focus = String(searchParams.get('focus') ?? '').trim();
+    if (!focus) return;
+    if (focus === 'assistant') {
+      setAdvancedControlsView('assist');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const assistantProposalId = String(searchParams.get('assistantProposalId') ?? '').trim();
+    if (!assistantProposalId) return;
+    if (assistantProposalHydratedRef.current) return;
+    if (!draftPlanLatest?.id) return;
+
+    assistantProposalHydratedRef.current = true;
+    setAdvancedControlsView('history');
+    void loadTimelineProposalPreview(assistantProposalId);
+    setInfo(`Assistant proposal #${assistantProposalId.slice(0, 8)} loaded in timeline preview. Review and apply from here.`);
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('assistantProposalId');
+    next.delete('assistantDetectionId');
+    next.delete('focus');
+    const qs = next.toString();
+    router.replace(qs ? `?${qs}` : '?', { scroll: false });
+  }, [draftPlanLatest?.id, loadTimelineProposalPreview, router, searchParams]);
 
   useEffect(() => {
     void refreshCoachChangeTimeline({ silent: true });
@@ -2006,6 +2088,55 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [agentProposalPreview?.proposalId, athleteId, request, writeAuditEvent]);
 
+  const applyAssistantDetectionRecommendation = useCallback(
+    async (detectionId: string, recommendationId?: string) => {
+      const id = String(detectionId ?? '').trim();
+      if (!id) return;
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!draftPlanId) {
+        setError('Generate a draft plan first so Assistant recommendations can be applied safely.');
+        return;
+      }
+
+      setBusy('assistant-apply');
+      setError(null);
+      setInfo(null);
+      try {
+        const detail = await request<{ detection: AssistantDetectionDetail }>(`/api/coach/assistant/detections/${encodeURIComponent(id)}`, {
+          method: 'GET',
+        });
+        const candidate =
+          (recommendationId ? detail.detection.recommendations.find((row) => row.id === recommendationId) : null) ??
+          detail.detection.recommendations[0] ??
+          null;
+        if (!candidate) {
+          setError('No assistant recommendation found on this detection.');
+          return;
+        }
+
+        const data = await request<{ proposal: { id: string } }>(`/api/coach/assistant/detections/${encodeURIComponent(id)}/apply-plan`, {
+          method: 'POST',
+          data: {
+            recommendationId: candidate.id,
+            aggressiveness: 'standard',
+            aiPlanDraftId: draftPlanId,
+          },
+        });
+
+        setAdvancedControlsView('history');
+        await loadTimelineProposalPreview(String(data.proposal.id));
+        setInfo(`Assistant proposal #${String(data.proposal.id).slice(0, 8)} is ready. Review diff and click Apply.`);
+        await refreshAssistantDetections({ silent: true });
+        await refreshCoachChangeTimeline({ silent: true });
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to apply assistant recommendation.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [draftPlanLatest?.id, loadTimelineProposalPreview, refreshAssistantDetections, refreshCoachChangeTimeline, request]
+  );
+
   const applyAdaptationSuggestion = useCallback(
     async (suggestion: AdaptationSuggestion, weekCount: 1 | 2) => {
       const draftPlanId = String(draftPlanLatest?.id ?? '');
@@ -2384,24 +2515,26 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
         </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-4">
-        <div className={`rounded-md border px-3 py-2 text-xs ${hasSubmittedRequest ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
-          <div className="font-medium">Step 1 Request</div>
-          <div>{hasSubmittedRequest ? 'Complete' : hasOpenRequest ? 'In progress' : 'Not started'}</div>
-        </div>
-        <div className={`rounded-md border px-3 py-2 text-xs ${isBlueprintReady ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
-          <div className="font-medium">Step 2 Blueprint</div>
-          <div>{isBlueprintReady ? 'Ready to generate' : 'Waiting for request submit/sync'}</div>
-        </div>
-        <div className={`rounded-md border px-3 py-2 text-xs ${hasWeeklyDraft ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
-          <div className="font-medium">Step 3 Weekly Draft</div>
-          <div>
-            {hasWeeklyDraft ? 'Generated' : hasDraft ? 'Out of date - regenerate required' : 'Pending generation'}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid w-full gap-2 md:grid-cols-4">
+          <div className={`rounded-md border px-3 py-2 text-xs ${hasSubmittedRequest ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+            <div className="font-medium">Step 1 Request</div>
+            <div>{hasSubmittedRequest ? 'Complete' : hasOpenRequest ? 'In progress' : 'Not started'}</div>
           </div>
-        </div>
-        <div className={`rounded-md border px-3 py-2 text-xs ${isPublished ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
-          <div className="font-medium">Step 4 Publish</div>
-          <div>{isPublished ? 'Published' : 'Not published yet'}</div>
+          <div className={`rounded-md border px-3 py-2 text-xs ${isBlueprintReady ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+            <div className="font-medium">Step 2 Blueprint</div>
+            <div>{isBlueprintReady ? 'Ready to generate' : 'Waiting for request submit/sync'}</div>
+          </div>
+          <div className={`rounded-md border px-3 py-2 text-xs ${hasWeeklyDraft ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+            <div className="font-medium">Step 3 Weekly Draft</div>
+            <div>
+              {hasWeeklyDraft ? 'Generated' : hasDraft ? 'Out of date - regenerate required' : 'Pending generation'}
+            </div>
+          </div>
+          <div className={`rounded-md border px-3 py-2 text-xs ${isPublished ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--fg-muted)]'}`}>
+            <div className="font-medium">Step 4 Publish</div>
+            <div>{isPublished ? 'Published' : 'Not published yet'}</div>
+          </div>
         </div>
       </div>
 
@@ -3060,6 +3193,51 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                             ))}
                           </ul>
                         ) : null}
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Assistant signal detections</div>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="secondary" disabled={busy != null || assistantDetectionsLoading} onClick={() => void refreshAssistantDetections()}>
+                                Refresh detections
+                              </Button>
+                              <Link href={`/coach/assistant`} className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[var(--text)]">
+                                Open inbox
+                              </Link>
+                            </div>
+                          </div>
+                          {assistantDetectionsLoading ? <div className="text-xs text-[var(--fg-muted)]">Loading detections...</div> : null}
+                          {!assistantDetectionsLoading && assistantDetections.length === 0 ? (
+                            <div className="text-xs text-[var(--fg-muted)]">No assistant detections need attention for this athlete.</div>
+                          ) : null}
+                          {assistantDetections.map((det) => (
+                            <div key={det.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)] px-2 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs font-medium">{det.title}</div>
+                                <div className="text-[11px] text-[var(--fg-muted)]">{det.confidenceScore}%</div>
+                              </div>
+                              <div className="mt-1 text-[11px] text-[var(--fg-muted)]">{det.summary}</div>
+                              <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                                Severity: {det.severity} · Detected: {new Date(det.detectedAt).toLocaleDateString()}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy != null || !draftPlanLatest?.id}
+                                  onClick={() => void applyAssistantDetectionRecommendation(det.id)}
+                                >
+                                  Review & apply in timeline
+                                </Button>
+                                <Link
+                                  href={`/coach/assistant`}
+                                  className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[var(--text)]"
+                                >
+                                  Open details
+                                </Link>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                         {queuedRecommendations.length ? (
                           <div className="mt-3 space-y-2">
                             <div className="text-xs font-medium uppercase tracking-wide text-[var(--fg-muted)]">Queued recommendations</div>
