@@ -112,6 +112,15 @@ type AthleteDashboardResponse = {
   };
 };
 
+type ActiveChallengePreview = {
+  id: string;
+  title: string;
+  yourRank: number | null;
+  yourScoreLabel: string | null;
+  canJoin: boolean;
+  joined: boolean;
+};
+
 type AthleteIntakeLifecycleResponse = {
   openDraftIntake?: { id?: string | null; createdAt?: string | null } | null;
   latestSubmittedIntake?: { id?: string | null; createdAt?: string | null } | null;
@@ -272,6 +281,7 @@ export default function AthleteDashboardConsolePage() {
   const [calorieEquivalentKey, setCalorieEquivalentKey] = useState<CalorieEquivalentKey>('bigMac');
 
   const [data, setData] = useState<AthleteDashboardResponse | null>(null);
+  const [activeChallenges, setActiveChallenges] = useState<ActiveChallengePreview[]>([]);
   const [trainingRequestLifecycle, setTrainingRequestLifecycle] = useState<AthleteIntakeLifecycleResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -300,11 +310,15 @@ export default function AthleteDashboardConsolePage() {
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
-        const resp = await request<AthleteDashboardResponse>(
-          `/api/athlete/dashboard/console?${qs.toString()}`,
-          bypassCache ? { cache: 'no-store' } : undefined
-        );
+        const [resp, challengeResp] = await Promise.all([
+          request<AthleteDashboardResponse>(
+            `/api/athlete/dashboard/console?${qs.toString()}`,
+            bypassCache ? { cache: 'no-store' } : undefined
+          ),
+          request<{ challenges: ActiveChallengePreview[] }>('/api/athlete/challenges?status=ACTIVE', { cache: 'no-store' }),
+        ]);
         setData(resp);
+        setActiveChallenges((challengeResp.challenges ?? []).slice(0, 2));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
@@ -670,6 +684,31 @@ export default function AthleteDashboardConsolePage() {
             </div>
           </div>
         </div>
+
+        {activeChallenges.length > 0 ? (
+          <div className="mt-4">
+            <Block title="Active challenges" rightAction={<div className={tokens.typography.meta}>Up to 2 shown</div>} showHeaderDivider={false}>
+              <div className="grid gap-3 md:grid-cols-2">
+                {activeChallenges.map((challenge) => (
+                  <div
+                    key={challenge.id}
+                    className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4"
+                  >
+                    <div className="text-sm font-semibold text-[var(--text)]">{challenge.title}</div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">
+                      {challenge.joined ? `Rank #${challenge.yourRank ?? '—'} • ${challenge.yourScoreLabel ?? '0'}` : 'Not participating'}
+                    </div>
+                    <div className="mt-3">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => router.push(`/challenges/${challenge.id}` as never)}>
+                        {challenge.canJoin && !challenge.joined ? 'Join' : 'View'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Block>
+          </div>
+        ) : null}
 
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="athlete-dashboard-chart-grid">
           <Block

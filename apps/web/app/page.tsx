@@ -13,7 +13,7 @@ export default async function HomePage() {
     (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
   const isRoleRedirectAllowed = (path: string, roleName: string) => {
     if (!path || !path.startsWith('/') || path.startsWith('//')) return false;
-    if (roleName === 'ATHLETE') return path.startsWith('/athlete');
+    if (roleName === 'ATHLETE') return path.startsWith('/athlete') || path.startsWith('/challenges');
     if (roleName === 'COACH') return path.startsWith('/coach');
     if (roleName === 'ADMIN') return path.startsWith('/admin');
     return false;

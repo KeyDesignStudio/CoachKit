@@ -7,6 +7,7 @@ import { requireAthlete } from '@/lib/auth';
 import { handleError, success } from '@/lib/http';
 import { ApiError, notFound } from '@/lib/errors';
 import { getStoredStartUtcFromCalendarItem } from '@/lib/calendar-local-day';
+import { recomputeChallengesForAthleteActivity } from '@/lib/challenges/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,11 @@ export async function POST(
       }
 
       return { updatedItem, completedActivity };
+    });
+
+    await recomputeChallengesForAthleteActivity({
+      athleteId: user.id,
+      activityStartTime: result.completedActivity.startTime,
     });
 
     return success({ item: result.updatedItem, completedActivity: result.completedActivity });

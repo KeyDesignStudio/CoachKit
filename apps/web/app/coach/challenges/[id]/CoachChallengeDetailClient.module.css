@@ -1,0 +1,24 @@
+.rankRow {
+  transition: background-color 220ms ease, transform 220ms ease;
+}
+
+.rankRowChanged {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), transparent 70%);
+  transform: translateX(2px);
+}
+
+.progressBar {
+  transition: width 320ms ease;
+}
+
+.top1 {
+  background: linear-gradient(120deg, rgba(250, 204, 21, 0.22), rgba(250, 204, 21, 0.04));
+}
+
+.top2 {
+  background: linear-gradient(120deg, rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.05));
+}
+
+.top3 {
+  background: linear-gradient(120deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.05));
+}

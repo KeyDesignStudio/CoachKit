@@ -32,6 +32,7 @@ function shouldBlockAiPlanBuilderRoute(pathname: string) {
 const isProtectedRoute = createRouteMatcher([
   '/coach(.*)',
   '/athlete(.*)',
+  '/challenges(.*)',
 ]);
 
 const CLERK_BYPASS_PATHS = new Set([
