@@ -203,6 +203,22 @@ export async function AppHeader() {
   );
   const desktopNotificationsLink = navLinks.find((link) => link.href.endsWith('/notifications'));
   const desktopSettingsLink = navLinks.find((link) => link.href.endsWith('/settings'));
+  const isCoachDesktop = userRole === 'COACH';
+
+  const coachPrimaryDesktopOrder: Route[] = [
+    '/coach/dashboard',
+    '/coach/calendar',
+    '/coach/notifications',
+    '/coach/settings',
+  ];
+  const coachPrimaryDesktopLinks = coachPrimaryDesktopOrder
+    .map((href) => navLinks.find((link) => link.href === href))
+    .filter((link): link is NavLink => Boolean(link));
+
+  const coachSecondaryDesktopLinks: Array<{ href: Route; label: string; context: string }> = [
+    { href: '/coach/group-sessions', label: 'Session Builder', context: 'Scheduling' },
+    { href: '/coach/assistant' as Route, label: 'Assistant', context: 'Athletes' },
+  ];
 
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
@@ -346,46 +362,77 @@ export async function AppHeader() {
           {/* Right block: Nav + user (desktop) (row 1, col 3) */}
           <div className="col-start-3 row-start-1 flex items-center justify-end gap-3 md:gap-4">
             {navLinks.length > 0 ? (
-              <nav className="hidden md:flex flex-wrap gap-2">
-                {desktopTextLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, "md:whitespace-nowrap")}>
-                    {link.label}
-                  </Link>
-                ))}
+              isCoachDesktop ? (
+                <div className="hidden md:flex items-center gap-3">
+                  <nav className="flex items-center gap-2">
+                    {coachPrimaryDesktopLinks.map((link) => (
+                      <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
+                        {link.label}
+                        {link.href === '/coach/notifications' && unreadNotificationsCount > 0 ? (
+                          <span className="ml-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
+                        ) : null}
+                      </Link>
+                    ))}
+                  </nav>
+                  <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+                  <nav className="flex items-center gap-2">
+                    {coachSecondaryDesktopLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={cn(
+                          'rounded-full border border-[var(--border-subtle)] px-3 py-1.5 min-h-[36px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-[var(--bg-structure)]',
+                          'md:whitespace-nowrap'
+                        )}
+                      >
+                        <span className="text-[9px] text-[var(--muted)]/80">{link.context}</span>
+                        <span className="text-[var(--text)]">{link.label}</span>
+                      </Link>
+                    ))}
+                  </nav>
+                </div>
+              ) : (
+                <nav className="hidden md:flex flex-wrap gap-2">
+                  {desktopTextLinks.map((link) => (
+                    <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
+                      {link.label}
+                    </Link>
+                  ))}
 
-                {desktopNotificationsLink ? (
-                  <Link
-                    key={desktopNotificationsLink.href}
-                    href={desktopNotificationsLink.href}
-                    aria-label="Notifications"
-                    className={cn(DESKTOP_NAV_LINK_CLASS, "relative justify-center")}
-                  >
-                    <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
-                    {unreadNotificationsCount > 0 ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
-                      />
-                    ) : null}
-                    {unreadNotificationsCount > 0 ? (
-                      <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
-                    ) : null}
-                    <span className="sr-only">Notifications</span>
-                  </Link>
-                ) : null}
+                  {desktopNotificationsLink ? (
+                    <Link
+                      key={desktopNotificationsLink.href}
+                      href={desktopNotificationsLink.href}
+                      aria-label="Notifications"
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'relative justify-center')}
+                    >
+                      <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
+                      {unreadNotificationsCount > 0 ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
+                        />
+                      ) : null}
+                      {unreadNotificationsCount > 0 ? (
+                        <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
+                      ) : null}
+                      <span className="sr-only">Notifications</span>
+                    </Link>
+                  ) : null}
 
-                {desktopSettingsLink ? (
-                  <Link
-                    key={desktopSettingsLink.href}
-                    href={desktopSettingsLink.href}
-                    aria-label="Settings"
-                    className={cn(DESKTOP_NAV_LINK_CLASS, "justify-center")}
-                  >
-                    <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
-                    <span className="sr-only">Settings</span>
-                  </Link>
-                ) : null}
-              </nav>
+                  {desktopSettingsLink ? (
+                    <Link
+                      key={desktopSettingsLink.href}
+                      href={desktopSettingsLink.href}
+                      aria-label="Settings"
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'justify-center')}
+                    >
+                      <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
+                      <span className="sr-only">Settings</span>
+                    </Link>
+                  ) : null}
+                </nav>
+              )
             ) : null}
 
             {showUserControl && <UserHeaderControl />}

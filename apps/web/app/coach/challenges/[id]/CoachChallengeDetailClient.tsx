@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
+import { formatDisplayInTimeZone } from '@/lib/client-date';
 
 import styles from './CoachChallengeDetailClient.module.css';
 
@@ -180,6 +181,11 @@ export function CoachChallengeDetailClient({ challengeId }: { challengeId: strin
   }
 
   const csvHref = `/api/coach/challenges/${encodeURIComponent(challengeId)}/leaderboard.csv`;
+  const dateRangeLabel = data.challenge.isOngoing
+    ? 'Ongoing'
+    : `${formatDisplayInTimeZone(data.challenge.startAt, 'UTC')} → ${
+        data.challenge.endAt ? formatDisplayInTimeZone(data.challenge.endAt, 'UTC') : 'Ongoing'
+      }`;
 
   return (
     <div className="mx-auto w-full max-w-6xl pb-10">
@@ -188,7 +194,7 @@ export function CoachChallengeDetailClient({ challengeId }: { challengeId: strin
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge className={cn('capitalize', statusTone(data.challenge.status))}>{data.challenge.status}</Badge>
             <Badge>{data.challenge.type}</Badge>
-            <Badge>{data.challenge.isOngoing ? 'Ongoing' : `${data.challenge.startAt.slice(0, 10)} → ${data.challenge.endAt?.slice(0, 10)}`}</Badge>
+            <Badge>{dateRangeLabel}</Badge>
           </div>
           <h1 className={cn(tokens.typography.h1, 'text-[var(--text)]')}>{data.challenge.title}</h1>
           <p className={cn(tokens.typography.bodyMuted, 'mt-1 text-[var(--muted)]')}>{data.challenge.rulesText}</p>
