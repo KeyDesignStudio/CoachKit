@@ -242,7 +242,7 @@ function MetricHelpTrigger({
       </button>
       <div
         role="tooltip"
-        className="pointer-events-none absolute left-0 top-8 z-20 hidden w-72 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-left shadow-lg md:block md:opacity-0 md:transition-opacity md:duration-150 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+        className="pointer-events-none absolute right-0 top-8 z-20 hidden w-72 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-left shadow-lg md:block md:opacity-0 md:transition-opacity md:duration-150 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
       >
         <div className="text-xs font-semibold text-[var(--text)]">{content.title}</div>
         <div className="mt-1 text-xs text-[var(--muted)]">{content.what}</div>
