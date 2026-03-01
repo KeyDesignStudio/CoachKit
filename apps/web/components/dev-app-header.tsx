@@ -18,7 +18,7 @@ const DESKTOP_NAV_LINK_CLASS =
 
 const ALL_NAV_LINKS: NavLink[] = [
   { href: '/coach/dashboard', label: 'Dashboard', roles: ['COACH'] },
-  { href: '/coach/assistant', label: 'Assistant', roles: ['COACH'] },
+  { href: '/coach/assistant', label: 'CK Assist', roles: ['COACH'] },
   { href: '/coach/challenges', label: 'Challenges', roles: ['COACH'] },
   { href: '/coach/notifications', label: 'Notifications', roles: ['COACH'] },
   { href: '/coach/athletes', label: 'Athletes', roles: ['COACH'] },
@@ -143,8 +143,8 @@ export function DevAppHeader() {
     [navLinks]
   );
   const coachSecondaryDesktopLinks = [
-    { href: '/coach/group-sessions', label: 'Session Builder', context: 'Scheduling' },
-    { href: '/coach/assistant', label: 'Assistant', context: 'Athletes' },
+    { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
+    { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant', childLabel: 'CK Assist' },
   ];
 
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
@@ -210,16 +210,20 @@ export function DevAppHeader() {
                 ))}
               </nav>
               <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-              <nav className="flex items-center gap-2">
+              <nav className="flex items-center gap-3">
                 {coachSecondaryDesktopLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href as any}
-                    className="rounded-full border border-[var(--border-subtle)] px-3 py-1.5 min-h-[36px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-[var(--bg-structure)] md:whitespace-nowrap"
+                  <div
+                    key={link.childHref}
+                    className="rounded-lg border border-[var(--border-subtle)] px-2.5 py-1 min-h-[32px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide md:whitespace-nowrap"
                   >
-                    <span className="text-[9px] text-[var(--muted)]/80">{link.context}</span>
-                    <span className="text-[var(--text)]">{link.label}</span>
-                  </Link>
+                    <Link href={link.parentHref as any} className="text-[9px] text-[var(--muted)]/80 hover:text-[var(--text)]">
+                      {link.parentLabel}
+                    </Link>
+                    <span className="h-3 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+                    <Link href={link.childHref as any} className="text-[var(--text)] hover:text-[var(--text)]/90">
+                      {link.childLabel}
+                    </Link>
+                  </div>
                 ))}
               </nav>
             </div>
