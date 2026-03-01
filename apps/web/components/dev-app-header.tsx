@@ -8,6 +8,7 @@ import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { CoachDesktopNav } from '@/components/CoachDesktopNav';
 
 type Role = 'COACH' | 'ATHLETE' | 'ADMIN' | null;
 
@@ -66,6 +67,7 @@ function DevUserMenu({ role }: { role: Role }) {
           <div
             role="menu"
             aria-label="Account menu"
+            onMouseLeave={close}
             className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]"
           >
             <div className="px-4 py-3">
@@ -152,11 +154,6 @@ export function DevAppHeader() {
     { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
     { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant', childLabel: 'CK Assist' },
   ];
-  const coachDesktopSubmenuByParent = useMemo(
-    () => new Map(coachDesktopSubmenus.map((submenu) => [submenu.parentHref, submenu])),
-    [coachDesktopSubmenus]
-  );
-
   const mobileLinks = useMemo(() => navLinks.map((l) => ({ href: l.href, label: l.label })), [navLinks]);
 
   return (
@@ -212,46 +209,11 @@ export function DevAppHeader() {
 
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
-              <nav className="flex items-center gap-2 text-sm font-medium uppercase relative">
-                {coachPrimaryDesktopLinks.map((link) => {
-                  const submenu = coachDesktopSubmenuByParent.get(link.href);
-
-                  if (!submenu) {
-                    return (
-                      <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
-                        {link.label}
-                      </Link>
-                    );
-                  }
-
-                  return (
-                    <details key={link.href} className="group relative">
-                      <summary
-                        className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden`}
-                      >
-                        <span>{link.label}</span>
-                        <span className="ml-2 text-[10px] text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true">
-                          v
-                        </span>
-                      </summary>
-                      <div className="absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1.5 shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]">
-                        <Link
-                          href={submenu.parentHref as any}
-                          className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                        >
-                          {submenu.parentLabel}
-                        </Link>
-                        <Link
-                          href={submenu.childHref as any}
-                          className="mt-1 inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                        >
-                          {submenu.childLabel}
-                        </Link>
-                      </div>
-                    </details>
-                  );
-                })}
-              </nav>
+              <CoachDesktopNav
+                links={coachPrimaryDesktopLinks.map((link) => ({ href: link.href, label: link.label }))}
+                submenus={coachDesktopSubmenus}
+                navLinkClassName={`${DESKTOP_NAV_LINK_CLASS} text-sm font-medium uppercase`}
+              />
             </div>
           ) : (
             <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">

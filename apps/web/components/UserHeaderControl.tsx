@@ -118,6 +118,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
         <div
           role="menu"
           aria-label="Account menu"
+          onMouseLeave={close}
           className={cn(
             'fixed z-[110] overflow-hidden rounded-2xl border border-[var(--border-subtle)]',
             'bg-[var(--bg-surface)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]'

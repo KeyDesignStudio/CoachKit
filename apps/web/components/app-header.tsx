@@ -10,6 +10,7 @@ import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
 import { MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
+import { CoachDesktopNav } from '@/components/CoachDesktopNav';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
 
@@ -225,8 +226,6 @@ export async function AppHeader() {
     { parentHref: '/coach/calendar', parentLabel: 'Scheduling', childHref: '/coach/group-sessions', childLabel: 'Session Builder' },
     { parentHref: '/coach/athletes', parentLabel: 'Athletes', childHref: '/coach/assistant' as Route, childLabel: 'CK Assist' },
   ];
-  const coachDesktopSubmenuByParent = new Map(coachDesktopSubmenus.map((submenu) => [submenu.parentHref, submenu]));
-
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
@@ -371,58 +370,12 @@ export async function AppHeader() {
             {navLinks.length > 0 ? (
               isCoachDesktop ? (
                 <div className="hidden md:flex items-center gap-3">
-                  <nav className="flex items-center gap-2 relative">
-                    {coachPrimaryDesktopLinks.map((link) => {
-                      const submenu = coachDesktopSubmenuByParent.get(link.href);
-
-                      if (!submenu) {
-                        return (
-                          <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
-                            {link.label}
-                            {link.href === '/coach/notifications' && unreadNotificationsCount > 0 ? (
-                              <span className="ml-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
-                            ) : null}
-                          </Link>
-                        );
-                      }
-
-                      return (
-                        <details key={link.href} className="group relative">
-                          <summary
-                            className={cn(
-                              DESKTOP_NAV_LINK_CLASS,
-                              'md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden'
-                            )}
-                          >
-                            <span>{link.label}</span>
-                            <span className="ml-2 text-[10px] text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true">
-                              v
-                            </span>
-                          </summary>
-                          <div
-                            className={cn(
-                              'absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px]',
-                              'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1.5',
-                              'shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]'
-                            )}
-                          >
-                            <Link
-                              href={submenu.parentHref}
-                              className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                            >
-                              {submenu.parentLabel}
-                            </Link>
-                            <Link
-                              href={submenu.childHref}
-                              className="mt-1 inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                            >
-                              {submenu.childLabel}
-                            </Link>
-                          </div>
-                        </details>
-                      );
-                    })}
-                  </nav>
+                  <CoachDesktopNav
+                    links={coachPrimaryDesktopLinks.map((link) => ({ href: link.href, label: link.label }))}
+                    submenus={coachDesktopSubmenus}
+                    unreadNotificationsCount={unreadNotificationsCount}
+                    navLinkClassName={DESKTOP_NAV_LINK_CLASS}
+                  />
                 </div>
               ) : (
                 <nav className="hidden md:flex flex-wrap gap-2">
