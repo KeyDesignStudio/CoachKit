@@ -530,7 +530,7 @@ export default function AthleteDashboardConsolePage() {
         <div className="mt-4">
           <div
             className={cn(
-              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:minmax(0,0.85fr)_minmax(0,0.5fr)_minmax(0,1fr)_minmax(0,0.75fr)]',
+              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:minmax(0,0.85fr)_minmax(0,0.725fr)_minmax(0,1fr)_minmax(0,0.525fr)]',
               tokens.spacing.gridGap
             )}
           >
@@ -698,62 +698,50 @@ export default function AthleteDashboardConsolePage() {
               <Block
                 title="Active challenge"
                 showHeaderDivider={false}
-                className="border-[#5aa7ff]/45 bg-[linear-gradient(145deg,rgba(49,103,255,0.2),rgba(9,26,54,0.9)_58%)]"
+                className="border-[#5aa7ff]/45 bg-[linear-gradient(145deg,rgba(49,103,255,0.2),rgba(9,26,54,0.9)_58%)] [&_h2]:text-[11px]"
                 style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
               >
                 {primaryActiveChallenge ? (
                   <div className="flex h-full flex-col justify-between rounded-2xl border border-[#8fc5ff]/35 bg-[rgba(6,18,41,0.48)] p-3">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <img
-                          src={primaryActiveChallenge.previewBadgeImageUrl}
-                          alt={`${primaryActiveChallenge.title} badge`}
-                          className="h-10 w-10 rounded-lg border border-[#8fc5ff]/40 object-cover"
-                          loading="lazy"
-                        />
-                        <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
-                          {primaryActiveChallenge.status}
-                        </span>
-                        <span className="inline-flex items-center rounded-full border border-[#9ab7ff]/35 bg-[#1d2f66]/65 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#d8e3ff]">
-                          {primaryActiveChallenge.type}
-                        </span>
+                      <p className="text-xs font-semibold text-white">{primaryActiveChallenge.title}</p>
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] text-[#d4e3ff]">
+                          Starts {formatDisplayInTimeZone(primaryActiveChallenge.startAt, athleteTimeZone)}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="inline-flex min-h-[30px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-[10px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                            onClick={() => router.push(`/challenges/${primaryActiveChallenge.id}` as never)}
+                          >
+                            View
+                          </button>
+                          {primaryActiveChallenge.joined ? (
+                            <span className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100">
+                              Joined
+                            </span>
+                          ) : primaryActiveChallenge.canJoin ? (
+                            <button
+                              type="button"
+                              className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/30"
+                              onClick={() => router.push(`/challenges/${primaryActiveChallenge.id}` as never)}
+                            >
+                              Join
+                            </button>
+                          ) : (
+                            <span className="inline-flex min-h-[30px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-[10px] font-semibold text-slate-100">
+                              View only
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-white">{primaryActiveChallenge.title}</p>
-                      <p className="mt-1 text-xs text-[#d4e3ff]">
-                        Starts {formatDisplayInTimeZone(primaryActiveChallenge.startAt, athleteTimeZone)}
-                      </p>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="inline-flex min-h-[34px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-xs font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
-                        onClick={() => router.push(`/challenges/${primaryActiveChallenge.id}` as never)}
-                      >
-                        View
-                      </button>
-                      {primaryActiveChallenge.joined ? (
-                        <span className="inline-flex min-h-[34px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-xs font-semibold text-emerald-100">
-                          Joined
-                        </span>
-                      ) : primaryActiveChallenge.canJoin ? (
-                        <button
-                          type="button"
-                          className="inline-flex min-h-[34px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/30"
-                          onClick={() => router.push(`/challenges/${primaryActiveChallenge.id}` as never)}
-                        >
-                          Join
-                        </button>
-                      ) : (
-                        <span className="inline-flex min-h-[34px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-xs font-semibold text-slate-100">
-                          View only
-                        </span>
-                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-start justify-center rounded-2xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-3">
-                    <p className="text-sm font-semibold text-white">No active challenge</p>
-                    <p className="mt-1 text-xs text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
+                    <p className="text-xs font-semibold text-white">No active challenge</p>
+                    <p className="mt-1 text-[10px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
                   </div>
                 )}
               </Block>
