@@ -529,7 +529,7 @@ export default function AthleteDashboardConsolePage() {
         <div className="mt-4">
           <div
             className={cn(
-              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:4.2fr_1.2fr_3.6fr_2.8fr]',
+              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:minmax(0,0.85fr)_minmax(0,0.5fr)_minmax(0,1fr)_minmax(0,0.75fr)]',
               tokens.spacing.gridGap
             )}
           >
