@@ -380,19 +380,21 @@ export async function AppHeader() {
                     ))}
                   </nav>
                   <div className="h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
-                  <nav className="flex items-center gap-3">
+                  <nav className="flex items-center gap-4">
                     {coachSecondaryDesktopLinks.map((link) => (
                       <div
                         key={link.childHref}
                         className={cn(
-                          'rounded-lg border border-[var(--border-subtle)] px-2.5 py-1 min-h-[32px] inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide',
+                          'inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide',
                           'md:whitespace-nowrap'
                         )}
                       >
-                        <Link href={link.parentHref} className="text-[9px] text-[var(--muted)]/80 hover:text-[var(--text)]">
+                        <Link href={link.parentHref} className="text-[9px] text-[var(--muted)]/85 hover:text-[var(--text)]">
                           {link.parentLabel}
                         </Link>
-                        <span className="h-3 w-px bg-[var(--border-subtle)]" aria-hidden="true" />
+                        <span className="text-[var(--muted)]/55" aria-hidden="true">
+                          /
+                        </span>
                         <Link href={link.childHref} className="text-[var(--text)] hover:text-[var(--text)]/90">
                           {link.childLabel}
                         </Link>
