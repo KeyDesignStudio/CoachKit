@@ -527,39 +527,13 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         <div className="mt-4">
-          <div className={cn('grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-20', tokens.spacing.gridGap)}>
-            <div className="min-w-0 order-2 md:order-2 xl:col-span-3">
-              <div ref={needsCardRef}>
-                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
-                  <div className={cn('grid', tokens.spacing.widgetGap)}>
-                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
-                      <NeedsAttentionItem
-                        label="Workouts with pain flagged"
-                        count={data.attention.painFlagWorkouts}
-                        tone="danger"
-                        onClick={() => (window.location.href = '/athlete/calendar')}
-                      />
-                    ) : null}
-
-                    <NeedsAttentionItem
-                      label="Workouts pending your confirmation"
-                      count={data?.attention.pendingConfirmation ?? 0}
-                      tone="primary"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-
-                    <NeedsAttentionItem
-                      label="Workouts missed"
-                      count={data?.attention.workoutsMissed ?? 0}
-                      tone="neutral"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
-                  </div>
-                </Block>
-              </div>
-            </div>
-
-            <div className="min-w-0 order-1 md:order-1 xl:col-span-6">
+          <div
+            className={cn(
+              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:4.2fr_1.2fr_3.6fr_2.8fr]',
+              tokens.spacing.gridGap
+            )}
+          >
+            <div className="min-w-0 order-1 md:order-1">
               <Block
                 title="Make your selection"
                 className="flex flex-col"
@@ -647,7 +621,38 @@ export default function AthleteDashboardConsolePage() {
               </Block>
             </div>
 
-            <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-6">
+            <div className="min-w-0 order-2 md:order-2">
+              <div ref={needsCardRef}>
+                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
+                  <div className={cn('grid', tokens.spacing.widgetGap)}>
+                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
+                      <NeedsAttentionItem
+                        label="Workouts with pain flagged"
+                        count={data.attention.painFlagWorkouts}
+                        tone="danger"
+                        onClick={() => (window.location.href = '/athlete/calendar')}
+                      />
+                    ) : null}
+
+                    <NeedsAttentionItem
+                      label="Workouts pending your confirmation"
+                      count={data?.attention.pendingConfirmation ?? 0}
+                      tone="primary"
+                      onClick={() => (window.location.href = '/athlete/calendar')}
+                    />
+
+                    <NeedsAttentionItem
+                      label="Workouts missed"
+                      count={data?.attention.workoutsMissed ?? 0}
+                      tone="neutral"
+                      onClick={() => (window.location.href = '/athlete/calendar')}
+                    />
+                  </div>
+                </Block>
+              </div>
+            </div>
+
+            <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
               <AtAGlanceCard
                 minHeightPx={xlTopCardHeightPx ?? undefined}
                 loading={loading && !data}
@@ -688,7 +693,7 @@ export default function AthleteDashboardConsolePage() {
               />
             </div>
 
-            <div className="min-w-0 order-4 md:order-4 md:col-span-2 xl:col-span-5">
+            <div className="min-w-0 order-4 md:order-4 md:col-span-2 xl:col-span-1">
               <Block
                 title="Active challenge"
                 showHeaderDivider={false}
