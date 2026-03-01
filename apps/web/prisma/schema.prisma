@@ -234,6 +234,27 @@ enum AthleteSessionFeedbackFeel {
   TOO_HARD
 }
 
+enum ChallengeStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ChallengeType {
+  VOLUME
+  FREQUENCY
+  PERFORMANCE
+  POINTS
+}
+
+enum ChallengeBadgeType {
+  PARTICIPATION
+  GOLD
+  SILVER
+  BRONZE
+}
+
 enum AdaptationTriggerType {
   MISSED_KEY
   SORENESS
@@ -388,6 +409,8 @@ model User {
   adminAuditEvents         AdminAuditEvent[]        @relation("AdminAuditEventActor")
   assistantDetections      AssistantDetection[]
   assistantActions         AssistantAction[]
+  challenges               Challenge[]
+  challengeSeries          ChallengeSeries[]
 
   @@index([role])
 }
@@ -560,6 +583,8 @@ model AthleteProfile {
   assistantDailyMetrics           AssistantDailyMetric[]
   assistantDetections             AssistantDetection[]
   assistantActions                AssistantAction[]
+  challengeParticipants           ChallengeParticipant[]
+  badgeAwards                     BadgeAward[]
 
   intakeSubmissions AthleteIntakeSubmission[]
   athleteBriefs     AthleteBrief[]
@@ -580,9 +605,94 @@ model Squad {
   coach               User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
   members             SquadMember[]
   groupSessionTargets GroupSessionTarget[]
+  challenges          Challenge[]
+  challengeSeries     ChallengeSeries[]
 
   @@unique([coachId, name])
   @@index([coachId])
+}
+
+model ChallengeSeries {
+  id          String   @id @default(cuid())
+  coachId     String
+  squadId     String
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  coach      User        @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  squad      Squad       @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  challenges Challenge[]
+
+  @@index([coachId, squadId])
+}
+
+model Challenge {
+  id                  String          @id @default(cuid())
+  coachId             String
+  squadId             String
+  seriesId            String?
+  title               String
+  description         String?
+  status              ChallengeStatus @default(DRAFT)
+  startAt             DateTime
+  endAt               DateTime?
+  isOngoing           Boolean         @default(false)
+  disciplineScope     String[]
+  type                ChallengeType
+  scoringConfig       Json
+  participationConfig Json
+  rewardConfig        Json
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  publishedAt         DateTime?
+  completedAt         DateTime?
+
+  coach        User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  squad        Squad                @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  series       ChallengeSeries?     @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  participants ChallengeParticipant[]
+  badgeAwards  BadgeAward[]
+
+  @@index([coachId, status, startAt])
+  @@index([squadId, status, startAt])
+  @@index([status, startAt, endAt])
+}
+
+model ChallengeParticipant {
+  id                         String   @id @default(cuid())
+  challengeId                String
+  athleteId                  String
+  joinedAt                   DateTime @default(now())
+  score                      Float    @default(0)
+  sessionsCount              Int      @default(0)
+  lastContributingActivityAt DateTime?
+  rank                       Int?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  challenge Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+
+  @@unique([challengeId, athleteId])
+  @@index([athleteId, challengeId])
+  @@index([challengeId, rank, score])
+}
+
+model BadgeAward {
+  id          String            @id @default(cuid())
+  athleteId   String
+  challengeId String
+  type        ChallengeBadgeType
+  awardedAt   DateTime          @default(now())
+
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  challenge Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, challengeId, type])
+  @@index([challengeId, type, awardedAt])
+  @@index([athleteId, awardedAt])
 }
 
 model SquadMember {

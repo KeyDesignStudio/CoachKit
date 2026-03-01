@@ -1,0 +1,55 @@
+.rankRow {
+  transition: transform 220ms ease, background-color 220ms ease;
+}
+
+.rankRowChanged {
+  transform: translateX(2px);
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+.progressBar {
+  transition: width 320ms ease;
+}
+
+.badgePulse {
+  animation: badgePulse 420ms ease;
+}
+
+@keyframes badgePulse {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.confettiLayer {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 60;
+}
+
+.confettiPiece {
+  position: absolute;
+  width: 8px;
+  height: 14px;
+  border-radius: 999px;
+  opacity: 0;
+  animation: confettiFall 900ms ease forwards;
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-24px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(74vh) rotate(420deg);
+    opacity: 0;
+  }
+}

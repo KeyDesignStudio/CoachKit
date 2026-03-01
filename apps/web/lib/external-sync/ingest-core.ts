@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { ExternalIngestResult, NormalizedExternalActivity } from '@/lib/external-sync/types';
+import { recomputeChallengesForAthleteActivity } from '@/lib/challenges/service';
 
 type ExistingActivity = {
   id: string;
@@ -69,6 +70,11 @@ export async function upsertExternalCompletedActivity(params: {
         confirmedAt: true,
         matchDayDiff: true,
       },
+    });
+
+    await recomputeChallengesForAthleteActivity({
+      athleteId,
+      activityStartTime: completed.startTime,
     });
 
     return {
@@ -143,6 +149,11 @@ export async function upsertExternalCompletedActivity(params: {
         confirmedAt: true,
         matchDayDiff: true,
       },
+    });
+
+    await recomputeChallengesForAthleteActivity({
+      athleteId,
+      activityStartTime: updated.startTime,
     });
 
     return {

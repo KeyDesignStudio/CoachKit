@@ -63,6 +63,7 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
 
       const athleteOrder: Array<string> = [
         '/athlete/dashboard',
+        '/challenges',
         '/athlete/calendar',
         '/athlete/notifications',
         '/athlete/settings',
@@ -94,6 +95,7 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
     const coachOrder: Array<string> = [
       '/coach/dashboard',
       '/coach/assistant',
+      '/coach/challenges',
       '/coach/athletes',
       '/coach/calendar',
       '/coach/group-sessions',
