@@ -69,6 +69,9 @@ export const rewardConfigSchema = z.object({
   participationBadge: z.boolean().default(true),
   winnerBadges: z.boolean().default(true),
   prizeText: z.string().trim().max(240).optional().nullable(),
+  badgeTemplate: z.enum(['DEFAULT_V1']).default('DEFAULT_V1'),
+  badgeMonthYear: z.string().trim().max(48).optional().nullable(),
+  badgeLogoUrl: z.string().trim().max(2048).optional().nullable(),
 });
 
 export type ChallengeParticipationConfig = z.infer<typeof participationConfigSchema>;

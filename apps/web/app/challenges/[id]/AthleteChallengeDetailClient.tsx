@@ -51,6 +51,7 @@ type DetailResponse = {
   badges: Array<{
     type: 'PARTICIPATION' | 'GOLD' | 'SILVER' | 'BRONZE';
     awardedAt: string;
+    badgeImageUrl: string;
   }>;
   canJoin: boolean;
   joined: boolean;
@@ -240,11 +241,21 @@ export function AthleteChallengeDetailClient({ challengeId }: { challengeId: str
 
         <Block title="Badges">
           {data.badges.length ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {data.badges.map((badge, index) => (
-                <Badge key={`${badge.type}-${index}`} className={cn(badgeTone(badge.type), styles.badgePulse)}>
-                  {badge.type}
-                </Badge>
+                <div
+                  key={`${badge.type}-${index}`}
+                  className={cn(
+                    'overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2',
+                    styles.badgePulse
+                  )}
+                >
+                  <img src={badge.badgeImageUrl} alt={`${badge.type} badge`} className="aspect-square w-full rounded-lg object-cover" loading="lazy" />
+                  <div className="mt-2 flex items-center justify-between">
+                    <Badge className={badgeTone(badge.type)}>{badge.type}</Badge>
+                    <span className="text-xs text-[var(--muted)]">{formatDisplayInTimeZone(badge.awardedAt, timeZone)}</span>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (

@@ -101,6 +101,14 @@ type AthleteProfile = {
   };
 };
 
+type AthleteBadgeAward = {
+  challengeId: string;
+  challengeTitle: string;
+  type: 'PARTICIPATION' | 'GOLD' | 'SILVER' | 'BRONZE';
+  awardedAt: string;
+  badgeImageUrl: string;
+};
+
 const TABS = ['Personal', 'Training Basics', 'Current Training Plan'] as const;
 type TabKey = (typeof TABS)[number];
 
@@ -159,6 +167,7 @@ export default function AthleteProfilePage() {
   const [injuryStatus, setInjuryStatus] = useState('');
   const [constraintsNotes, setConstraintsNotes] = useState('');
   const [intakeLifecycle, setIntakeLifecycle] = useState<IntakeLifecycleSummary | null>(null);
+  const [profileBadges, setProfileBadges] = useState<AthleteBadgeAward[]>([]);
 
   useEffect(() => {
     if (userLoading) return;
@@ -169,11 +178,12 @@ export default function AthleteProfilePage() {
       setError('');
       try {
         const [profileData, intakeData] = await Promise.all([
-          request<{ athlete: AthleteProfile }>('/api/athlete/profile', { cache: 'no-store' }),
+          request<{ athlete: AthleteProfile; badges?: AthleteBadgeAward[] }>('/api/athlete/profile', { cache: 'no-store' }),
           request<IntakeLifecycleSummary>('/api/athlete/ai-plan/intake/latest', { cache: 'no-store' }),
         ]);
         const athlete = profileData.athlete;
         setIntakeLifecycle(intakeData ?? null);
+        setProfileBadges(Array.isArray(profileData.badges) ? profileData.badges : []);
 
         setFirstName(athlete.firstName || '');
         setLastName(athlete.lastName || '');
@@ -403,6 +413,22 @@ export default function AthleteProfilePage() {
       {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="mb-4 text-sm text-emerald-700">{success}</p> : null}
       <StravaVitalsCard endpoint="/api/athlete/strava-vitals" />
+      {profileBadges.length ? (
+        <div className="mb-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Challenge badges</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {profileBadges.slice(0, 8).map((badge) => (
+              <div key={`${badge.challengeId}-${badge.type}-${badge.awardedAt}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                <img src={badge.badgeImageUrl} alt={`${badge.type} badge for ${badge.challengeTitle}`} className="aspect-square w-full rounded-lg object-cover" loading="lazy" />
+                <p className="mt-2 truncate text-xs font-semibold text-[var(--text)]">{badge.challengeTitle}</p>
+                <p className="text-[11px] text-[var(--muted)]">{badge.type}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {loading ? <p className={uiMuted}>Loading profile...</p> : null}
 

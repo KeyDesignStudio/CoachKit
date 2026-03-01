@@ -118,6 +118,7 @@ type ActiveChallengePreview = {
   type: string;
   status: string;
   startAt: string;
+  previewBadgeImageUrl: string;
   yourRank: number | null;
   yourScoreLabel: string | null;
   canJoin: boolean;
@@ -704,6 +705,12 @@ export default function AthleteDashboardConsolePage() {
                   <div className="flex h-full flex-col justify-between rounded-2xl border border-[#8fc5ff]/35 bg-[rgba(6,18,41,0.48)] p-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
+                        <img
+                          src={primaryActiveChallenge.previewBadgeImageUrl}
+                          alt={`${primaryActiveChallenge.title} badge`}
+                          className="h-10 w-10 rounded-lg border border-[#8fc5ff]/40 object-cover"
+                          loading="lazy"
+                        />
                         <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
                           {primaryActiveChallenge.status}
                         </span>

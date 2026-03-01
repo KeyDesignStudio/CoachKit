@@ -12,6 +12,7 @@ import {
   maybeCompleteChallenge,
   recomputeChallengeScores,
 } from '@/lib/challenges/service';
+import { buildChallengeBadgeImageUrl } from '@/lib/challenges/badges';
 import { parseParticipationConfig, parseRewardConfig, parseScoringConfig } from '@/lib/challenges/config';
 import { prisma } from '@/lib/prisma';
 
@@ -198,7 +199,10 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
         avgSessionsPerAthlete,
         previousAvgSessionsPerAthlete,
       },
-      badges,
+      badges: badges.map((badge) => ({
+        ...badge,
+        badgeImageUrl: buildChallengeBadgeImageUrl(challenge.id, badge.type),
+      })),
       featureFlags: {
         canRecalculate: challenge.status === ChallengeStatus.ACTIVE,
         canEdit: challenge.status === ChallengeStatus.DRAFT || challenge.status === ChallengeStatus.ACTIVE,

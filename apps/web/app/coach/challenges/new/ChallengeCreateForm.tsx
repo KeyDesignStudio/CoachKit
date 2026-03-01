@@ -54,6 +54,8 @@ export function ChallengeCreateForm({ squads }: { squads: SquadOption[] }) {
   const [participationBadge, setParticipationBadge] = useState(true);
   const [winnerBadges, setWinnerBadges] = useState(true);
   const [prizeText, setPrizeText] = useState('');
+  const [badgeMonthYear, setBadgeMonthYear] = useState('');
+  const [badgeLogoUrl, setBadgeLogoUrl] = useState('');
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -130,6 +132,9 @@ export function ChallengeCreateForm({ squads }: { squads: SquadOption[] }) {
             participationBadge,
             winnerBadges,
             prizeText: prizeText.trim() || null,
+            badgeTemplate: 'DEFAULT_V1',
+            badgeMonthYear: badgeMonthYear.trim() || null,
+            badgeLogoUrl: badgeLogoUrl.trim() || null,
           },
           status,
           notifySquad: status === 'ACTIVE',
@@ -316,6 +321,22 @@ export function ChallengeCreateForm({ squads }: { squads: SquadOption[] }) {
             <label className="space-y-1 md:col-span-2">
               <span className="text-sm text-[var(--muted)]">Prize text</span>
               <Input value={prizeText} onChange={(event) => setPrizeText(event.target.value)} placeholder="e.g. Team kit voucher" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-sm text-[var(--muted)]">Badge month/year</span>
+              <Input
+                value={badgeMonthYear}
+                onChange={(event) => setBadgeMonthYear(event.target.value)}
+                placeholder="e.g. March 2026 (optional)"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-sm text-[var(--muted)]">Badge logo URL</span>
+              <Input
+                value={badgeLogoUrl}
+                onChange={(event) => setBadgeLogoUrl(event.target.value)}
+                placeholder="Defaults to squad branding logo if empty"
+              />
             </label>
           </div>
         </Block>
