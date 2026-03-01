@@ -296,7 +296,7 @@ export async function AppHeader() {
 
       <header className="sticky top-0 z-50 bg-[var(--bg-page)] px-0 pt-0 md:px-0 md:pt-0">
         {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
-        <Card className="rounded-none bg-[var(--bg-surface)] p-0">
+        <Card className="rounded-none bg-[var(--bg-surface)] p-0 dark:border-x-0">
           {/* Mobile (iOS-first): single row header */}
           <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
@@ -388,39 +388,30 @@ export async function AppHeader() {
                       }
 
                       return (
-                        <details key={link.href} className="group relative">
-                          <summary
-                            className={cn(
-                              DESKTOP_NAV_LINK_CLASS,
-                              'md:whitespace-nowrap list-none cursor-pointer [&::-webkit-details-marker]:hidden'
-                            )}
-                          >
+                        <div key={link.href} className="group relative">
+                          <Link href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
                             <span>{link.label}</span>
-                            <span className="ml-2 text-[10px] text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true">
+                            <span className="ml-2 text-[10px] text-[var(--muted)]" aria-hidden="true">
                               v
                             </span>
-                          </summary>
+                          </Link>
                           <div
                             className={cn(
-                              'absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px]',
+                              'pointer-events-none invisible absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px] opacity-0',
                               'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1.5',
-                              'shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]'
+                              'shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)] transition-opacity duration-150',
+                              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100',
+                              'group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100'
                             )}
                           >
                             <Link
-                              href={submenu.parentHref}
-                              className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                            >
-                              {submenu.parentLabel}
-                            </Link>
-                            <Link
                               href={submenu.childHref}
-                              className="mt-1 inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                              className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
                             >
                               {submenu.childLabel}
                             </Link>
                           </div>
-                        </details>
+                        </div>
                       );
                     })}
                   </nav>
