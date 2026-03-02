@@ -357,8 +357,8 @@ function DashboardFiltersPanel({
   return (
     <div className="space-y-4">
       <div className="min-w-0">
-        <FieldLabel className="pl-1">Discipline</FieldLabel>
-        <SelectField className="min-h-[44px] w-full" value={discipline ?? ''} onChange={(e) => onDisciplineChange(e.target.value ? e.target.value : null)}>
+        <FieldLabel className="pl-1 text-[10px]">Discipline</FieldLabel>
+        <SelectField className="min-h-[44px] w-full text-xs" value={discipline ?? ''} onChange={(e) => onDisciplineChange(e.target.value ? e.target.value : null)}>
           <option value="">All disciplines</option>
           <option value="BIKE">Bike</option>
           <option value="RUN">Run</option>
@@ -368,9 +368,9 @@ function DashboardFiltersPanel({
       </div>
 
       <div className="min-w-0">
-        <FieldLabel className="pl-1">Time range</FieldLabel>
+        <FieldLabel className="pl-1 text-[10px]">Time range</FieldLabel>
         <SelectField
-          className="min-h-[44px] w-full"
+          className="min-h-[44px] w-full text-xs"
           value={timeRange}
           onChange={(e) => onTimeRangeChange(e.target.value as TimeRangePreset)}
           data-testid="athlete-dashboard-time-range"
@@ -410,12 +410,12 @@ function DashboardFiltersPanel({
           </div>
         ) : (
           <>
-            <FieldLabel className="pl-1">Date range</FieldLabel>
+            <FieldLabel className="pl-1 text-[10px]">Date range</FieldLabel>
             <div
               className={cn('min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75')}
               data-testid="athlete-dashboard-range-display"
             >
-              <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
+              <div className={cn('truncate text-xs')}>
                 {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
               </div>
             </div>
@@ -726,12 +726,32 @@ export default function AthleteDashboardConsolePage() {
         <div className={cn('mt-4 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <aside
             className={cn(
-              'hidden md:block fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden',
+              'hidden md:block fixed left-0 top-[88px] z-30 h-[calc(100vh-88px)] shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden',
               sidebarOpen ? 'w-[240px]' : 'w-[60px]'
             )}
             data-testid="athlete-dashboard-sidebar-desktop"
           >
-            <div className="sticky top-0 z-10 flex h-14 items-center justify-end border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2">
+            <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2">
+              <div className={cn('flex items-center gap-1', sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Open notifications"
+                  title="Notifications"
+                  onClick={() => router.push('/athlete/notifications' as never)}
+                >
+                  <Icon name="inbox" size="sm" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Open settings"
+                  title="Settings"
+                  onClick={() => router.push('/athlete/settings' as never)}
+                >
+                  <Icon name="settings" size="sm" aria-hidden />
+                </button>
+              </div>
               <button
                 type="button"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
@@ -746,7 +766,7 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             {sidebarOpen ? (
-              <div className="h-[calc(100vh-128px)] overflow-y-auto px-2.5 py-3 space-y-4">
+              <div className="h-[calc(100vh-144px)] overflow-y-auto px-2.5 py-3 space-y-4">
                 <div ref={sidebarChallengesRef}>
                   <DashboardChallengesPanel
                     activeChallenges={activeChallenges}
@@ -758,7 +778,7 @@ export default function AthleteDashboardConsolePage() {
                 <div ref={sidebarFiltersRef} className="border-t border-[var(--border-subtle)] pt-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <h2 className={tokens.typography.blockTitle}>Make your selection</h2>
+                    <h2 className={cn(tokens.typography.blockTitle, 'text-xs')}>Make your selection</h2>
                   </div>
                   <DashboardFiltersPanel
                     discipline={discipline}
@@ -775,7 +795,7 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
             ) : (
-              <div className="flex h-[calc(100vh-128px)] flex-col items-center gap-2 overflow-y-auto py-3">
+              <div className="flex h-[calc(100vh-144px)] flex-col items-center gap-2 overflow-y-auto py-3">
                 <button
                   type="button"
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
@@ -1147,7 +1167,7 @@ export default function AthleteDashboardConsolePage() {
                 <div className="border-t border-[var(--border-subtle)] pt-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <h2 className={tokens.typography.blockTitle}>Make your selection</h2>
+                    <h2 className={cn(tokens.typography.blockTitle, 'text-xs')}>Make your selection</h2>
                   </div>
                   <DashboardFiltersPanel
                     discipline={discipline}
