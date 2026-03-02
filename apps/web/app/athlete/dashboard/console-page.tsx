@@ -722,7 +722,7 @@ export default function AthleteDashboardConsolePage() {
                             </button>
                           ) : (
                             <span className="inline-flex min-h-[30px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-[10px] font-semibold text-slate-100">
-                              View only
+                              Auto joined
                             </span>
                           )}
                         </div>
