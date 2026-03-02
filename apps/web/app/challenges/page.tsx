@@ -17,6 +17,8 @@ type AthleteChallengeCard = {
   title: string;
   type: string;
   status: 'ACTIVE' | 'COMPLETED' | 'DRAFT' | 'ARCHIVED';
+  startAt: string;
+  endAt: string | null;
   dateRangeLabel: string;
   rulesText: string;
   participantCount: number;
@@ -38,6 +40,12 @@ function statusTone(status: AthleteChallengeCard['status']) {
   if (status === 'COMPLETED') return 'bg-slate-500/10 text-slate-700 border-slate-300';
   if (status === 'DRAFT') return 'bg-amber-500/10 text-amber-700 border-amber-300';
   return 'bg-zinc-500/10 text-zinc-700 border-zinc-300';
+}
+
+function finishTimestamp(challenge: AthleteChallengeCard) {
+  const raw = challenge.endAt ?? challenge.startAt;
+  const value = Date.parse(raw);
+  return Number.isFinite(value) ? value : 0;
 }
 
 export default function AthleteChallengesPage() {
@@ -73,8 +81,20 @@ export default function AthleteChallengesPage() {
     }
   }, [load, router, user?.role, userLoading]);
 
-  const active = useMemo(() => challenges.filter((challenge) => challenge.status === 'ACTIVE'), [challenges]);
-  const completed = useMemo(() => challenges.filter((challenge) => challenge.status === 'COMPLETED'), [challenges]);
+  const active = useMemo(
+    () =>
+      challenges
+        .filter((challenge) => challenge.status === 'ACTIVE')
+        .sort((a, b) => finishTimestamp(b) - finishTimestamp(a)),
+    [challenges]
+  );
+  const completed = useMemo(
+    () =>
+      challenges
+        .filter((challenge) => challenge.status === 'COMPLETED')
+        .sort((a, b) => finishTimestamp(b) - finishTimestamp(a)),
+    [challenges]
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl pb-10">
@@ -100,68 +120,69 @@ export default function AthleteChallengesPage() {
       {active.length > 0 ? (
         <div className="mb-6 space-y-3">
           <h2 className={cn(tokens.typography.h2, 'text-[var(--text)]')}>Active</h2>
-          {active.map((challenge) => (
-            <Block key={challenge.id} title={challenge.title}>
-              <div className="mb-3">
-                <img src={challenge.previewBadgeImageUrl} alt={`${challenge.title} badge`} className="h-16 w-16 rounded-lg border border-[var(--border-subtle)] object-cover" loading="lazy" />
-              </div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className={cn('capitalize', statusTone(challenge.status))}>{challenge.status}</Badge>
-                <Badge>{challenge.type}</Badge>
-                {challenge.joined ? <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-300">Participating</Badge> : null}
-                {!challenge.joined ? <Badge>Not participating</Badge> : null}
-              </div>
-
-              <p className="text-sm text-[var(--muted)]">{challenge.dateRangeLabel}</p>
-              <p className="mt-1 text-sm text-[var(--text)]">{challenge.rulesText}</p>
-
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                  <p className="text-xs uppercase text-[var(--muted)]">Your rank</p>
-                  <p className="text-xl font-semibold">{challenge.joined ? `#${challenge.yourRank ?? '—'}` : '—'}</p>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {active.map((challenge) => (
+              <article key={challenge.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                <h3 className="line-clamp-2 text-sm font-semibold uppercase text-[var(--text)]">{challenge.title}</h3>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge className={cn('capitalize', statusTone(challenge.status))}>{challenge.status}</Badge>
+                  <Badge>{challenge.type}</Badge>
+                  {challenge.joined ? <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-300">Participating</Badge> : <Badge>Not participating</Badge>}
                 </div>
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                  <p className="text-xs uppercase text-[var(--muted)]">Your score</p>
-                  <p className="text-xl font-semibold">{challenge.joined ? challenge.yourScoreLabel ?? '0' : 'Join to start'}</p>
-                </div>
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                  <p className="text-xs uppercase text-[var(--muted)]">Participants</p>
-                  <p className="text-xl font-semibold">{challenge.participantCount}</p>
-                </div>
-              </div>
+                <p className="mt-2 text-xs text-[var(--muted)]">{challenge.dateRangeLabel}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-[var(--text)]">{challenge.rulesText}</p>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/challenges/${encodeURIComponent(challenge.id)}`}>
-                  <Button size="sm">View</Button>
-                </Link>
-                {!challenge.joined && challenge.canJoin ? (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                    <p className="text-[10px] uppercase text-[var(--muted)]">Rank</p>
+                    <p className="text-base font-semibold text-[var(--text)]">{challenge.joined ? `#${challenge.yourRank ?? '—'}` : '—'}</p>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                    <p className="text-[10px] uppercase text-[var(--muted)]">Score</p>
+                    <p className="truncate text-base font-semibold text-[var(--text)]">{challenge.joined ? challenge.yourScoreLabel ?? '0' : 'Join'}</p>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                    <p className="text-[10px] uppercase text-[var(--muted)]">Athletes</p>
+                    <p className="text-base font-semibold text-[var(--text)]">{challenge.participantCount}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Link href={`/challenges/${encodeURIComponent(challenge.id)}`}>
-                    <Button variant="secondary" size="sm">Join</Button>
+                    <Button size="sm">View</Button>
                   </Link>
-                ) : null}
-              </div>
-            </Block>
-          ))}
+                  {!challenge.joined && challenge.canJoin ? (
+                    <Link href={`/challenges/${encodeURIComponent(challenge.id)}`}>
+                      <Button variant="secondary" size="sm">Join</Button>
+                    </Link>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       ) : null}
 
       {completed.length > 0 ? (
         <div className="space-y-3">
           <h2 className={cn(tokens.typography.h2, 'text-[var(--text)]')}>Completed</h2>
-          {completed.map((challenge) => (
-            <Block key={challenge.id} title={challenge.title}>
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <Badge className={cn('capitalize', statusTone(challenge.status))}>{challenge.status}</Badge>
-                {challenge.joined ? <Badge>Final rank #{challenge.yourRank ?? '—'}</Badge> : null}
-              </div>
-              <p className="text-sm text-[var(--muted)]">{challenge.dateRangeLabel}</p>
-              <div className="mt-2">
-                <Link href={`/challenges/${encodeURIComponent(challenge.id)}`}>
-                  <Button variant="secondary" size="sm">View Result</Button>
-                </Link>
-              </div>
-            </Block>
-          ))}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {completed.map((challenge) => (
+              <article key={challenge.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                <h3 className="line-clamp-2 text-sm font-semibold uppercase text-[var(--text)]">{challenge.title}</h3>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge className={cn('capitalize', statusTone(challenge.status))}>{challenge.status}</Badge>
+                  {challenge.joined ? <Badge>Final rank #{challenge.yourRank ?? '—'}</Badge> : <Badge>Not participating</Badge>}
+                </div>
+                <p className="mt-2 text-xs text-[var(--muted)]">{challenge.dateRangeLabel}</p>
+                <div className="mt-3">
+                  <Link href={`/challenges/${encodeURIComponent(challenge.id)}`}>
+                    <Button variant="secondary" size="sm">View Result</Button>
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
