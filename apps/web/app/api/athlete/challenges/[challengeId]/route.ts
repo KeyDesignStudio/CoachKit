@@ -4,7 +4,7 @@ import { requireAthlete } from '@/lib/auth';
 import { forbidden, notFound } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 import { challengeRulesText, formatChallengeScore, maybeCompleteChallenge } from '@/lib/challenges/service';
-import { parseParticipationConfig, parseScoringConfig } from '@/lib/challenges/config';
+import { parseParticipationConfig, parseRewardConfig, parseScoringConfig } from '@/lib/challenges/config';
 import { buildChallengeBadgeImageUrl } from '@/lib/challenges/badges';
 import { prisma } from '@/lib/prisma';
 
@@ -52,6 +52,7 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
     if (!membership) throw forbidden('You cannot view this challenge.');
 
     const participationConfig = parseParticipationConfig(challenge.participationConfig);
+    const rewardConfig = parseRewardConfig(challenge.rewardConfig);
     const you = await prisma.challengeParticipant.findUnique({
       where: {
         challengeId_athleteId: {
@@ -147,6 +148,7 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
         ...challenge,
         rulesText: challengeRulesText(challenge),
         participationConfig,
+        rewardConfig,
       },
       you: you
         ? {
