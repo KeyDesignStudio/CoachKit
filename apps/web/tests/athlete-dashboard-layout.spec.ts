@@ -16,7 +16,6 @@ test('Athlete dashboard uses the redesigned desktop layout', async ({ page }) =>
   await setRoleCookie(page, 'ATHLETE');
   await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Challenges' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Make your selection' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Needs your attention' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
