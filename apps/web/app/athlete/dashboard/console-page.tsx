@@ -285,35 +285,35 @@ function DashboardChallengesPanel({
   onOpenChallenge: (challengeId: string) => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {activeChallenges.length ? (
         activeChallenges.map((challenge) => (
-          <div key={challenge.id} className="rounded-2xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-3">
-            <p className="text-xs font-semibold text-white">{challenge.title}</p>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
-              <div className="flex items-center gap-2">
+          <div key={challenge.id} className="rounded-xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-2">
+            <p className="text-[11px] font-semibold text-white">{challenge.title}</p>
+            <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1.5">
+              <p className="text-[8px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  className="inline-flex min-h-[30px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-[10px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                  className="inline-flex min-h-[22px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-2 text-[8px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
                   onClick={() => onOpenChallenge(challenge.id)}
                 >
                   View
                 </button>
                 {challenge.joined ? (
-                  <span className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100">
+                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-2 text-[8px] font-semibold text-emerald-100">
                     Joined
                   </span>
                 ) : challenge.canJoin ? (
                   <button
                     type="button"
-                    className="inline-flex min-h-[30px] items-center rounded-full border border-white/90 bg-white px-3 text-[10px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
+                    className="inline-flex min-h-[22px] items-center rounded-full border border-white/90 bg-white px-2 text-[8px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
                     onClick={() => onOpenChallenge(challenge.id)}
                   >
                     Join
                   </button>
                 ) : (
-                  <span className="inline-flex min-h-[30px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-[10px] font-semibold text-slate-100">
+                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-2 text-[8px] font-semibold text-slate-100">
                     Auto joined
                   </span>
                 )}
@@ -322,9 +322,9 @@ function DashboardChallengesPanel({
           </div>
         ))
       ) : (
-        <div className="rounded-2xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-3">
-          <p className="text-xs font-semibold text-white">No active challenge</p>
-          <p className="mt-1 text-[10px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
+        <div className="rounded-xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-2">
+          <p className="text-[11px] font-semibold text-white">No active challenge</p>
+          <p className="mt-0.5 text-[8px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
         </div>
       )}
     </div>
@@ -653,8 +653,8 @@ export default function AthleteDashboardConsolePage() {
 
   return (
     <>
-      <section className={cn(tokens.spacing.screenPadding, 'pb-10')}>
-        <div className="pt-3 md:pt-6">
+      <section className="pb-10">
+        <div className={cn('pt-3 md:pt-6 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Athlete Console</h1>
             <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
@@ -675,7 +675,7 @@ export default function AthleteDashboardConsolePage() {
         </div>
 
         {hasOpenTrainingRequest ? (
-          <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <div className={cn('mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 mx-4 md:mr-6 lg:mr-8', sidebarOpen ? 'md:ml-[256px]' : 'md:ml-[76px]')}>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-sm font-semibold text-amber-900">Complete your Training Request</div>
@@ -714,7 +714,7 @@ export default function AthleteDashboardConsolePage() {
         ) : null}
 
         {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className="mt-3 grid grid-cols-1 lg:grid-cols-3">
+          <div className={cn('mt-3 mx-4 md:mr-6 lg:mr-8 grid grid-cols-1 lg:grid-cols-3', sidebarOpen ? 'md:ml-[256px]' : 'md:ml-[76px]')}>
             <GoalCountdownCallout
               goal={data.goalCountdown}
               variant="hero"
@@ -723,11 +723,11 @@ export default function AthleteDashboardConsolePage() {
           </div>
         ) : null}
 
-        <div className="mt-4 flex items-start gap-4 lg:gap-5">
+        <div className={cn('mt-4 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <aside
             className={cn(
-              'hidden md:block sticky top-20 shrink-0 rounded-none border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden',
-              sidebarOpen ? 'w-[min(320px,36vw)]' : 'w-16'
+              'hidden md:block fixed left-0 top-[72px] z-30 h-[calc(100vh-72px)] shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden',
+              sidebarOpen ? 'w-[240px]' : 'w-[60px]'
             )}
             data-testid="athlete-dashboard-sidebar-desktop"
           >
@@ -737,6 +737,7 @@ export default function AthleteDashboardConsolePage() {
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
                 onClick={() => setSidebarOpen((prev) => !prev)}
                 aria-label={sidebarOpen ? 'Collapse dashboard sidebar' : 'Expand dashboard sidebar'}
+                title={sidebarOpen ? 'Collapse navigation' : 'Expand navigation'}
                 aria-expanded={sidebarOpen}
                 data-testid="athlete-dashboard-sidebar-toggle"
               >
@@ -745,7 +746,7 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             {sidebarOpen ? (
-              <div className="max-h-[calc(100vh-10.5rem)] overflow-y-auto px-3 py-3 space-y-4">
+              <div className="h-[calc(100vh-128px)] overflow-y-auto px-2.5 py-3 space-y-4">
                 <div ref={sidebarChallengesRef}>
                   <DashboardChallengesPanel
                     activeChallenges={activeChallenges}
@@ -757,7 +758,7 @@ export default function AthleteDashboardConsolePage() {
                 <div ref={sidebarFiltersRef} className="border-t border-[var(--border-subtle)] pt-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <h2 className={tokens.typography.h2}>Make your selection</h2>
+                    <h2 className={tokens.typography.blockTitle}>Make your selection</h2>
                   </div>
                   <DashboardFiltersPanel
                     discipline={discipline}
@@ -774,7 +775,7 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
             ) : (
-              <div className="flex h-[calc(100vh-10.5rem)] flex-col items-center gap-2 overflow-y-auto py-3">
+              <div className="flex h-[calc(100vh-128px)] flex-col items-center gap-2 overflow-y-auto py-3">
                 <button
                   type="button"
                   className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
@@ -801,7 +802,7 @@ export default function AthleteDashboardConsolePage() {
             )}
           </aside>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]" data-testid="athlete-dashboard-chart-grid">
               <div className="min-w-0 lg:col-span-2">
                 <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
@@ -1146,7 +1147,7 @@ export default function AthleteDashboardConsolePage() {
                 <div className="border-t border-[var(--border-subtle)] pt-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <h2 className={tokens.typography.h2}>Make your selection</h2>
+                    <h2 className={tokens.typography.blockTitle}>Make your selection</h2>
                   </div>
                   <DashboardFiltersPanel
                     discipline={discipline}
@@ -1172,7 +1173,11 @@ export default function AthleteDashboardConsolePage() {
           </>
         ) : null}
 
-        {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
+        {error ? (
+          <div className={cn('mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm mx-4 md:mr-6 lg:mr-8', sidebarOpen ? 'md:ml-[256px]' : 'md:ml-[76px]')}>
+            {error}
+          </div>
+        ) : null}
         {loading && !data ? <FullScreenLogoLoader /> : null}
       </section>
     </>
