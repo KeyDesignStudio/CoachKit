@@ -140,6 +140,8 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
       orderBy: { awardedAt: 'desc' },
     });
 
+    const isJoined = Boolean(you) || participationConfig.autoJoin;
+
     return success({
       challenge: {
         ...challenge,
@@ -182,7 +184,7 @@ export async function GET(_request: NextRequest, context: { params: { challengeI
         badgeImageUrl: buildChallengeBadgeImageUrl(challenge.id, badge.type),
       })),
       canJoin: !participationConfig.autoJoin && !you,
-      joined: Boolean(you),
+      joined: isJoined,
     });
   } catch (error) {
     return handleError(error);

@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
     const data = challenges.map((challenge) => {
       const you = challenge.participants[0] ?? null;
       const participationConfig = parseParticipationConfig(challenge.participationConfig);
+      const isJoined = Boolean(you) || participationConfig.autoJoin;
       return {
         id: challenge.id,
         title: challenge.title,
@@ -119,7 +120,7 @@ export async function GET(request: NextRequest) {
         dateRangeLabel: mapChallengeWindowLabel(challenge),
         rulesText: challengeRulesText(challenge),
         participantCount: challenge._count.participants,
-        joined: Boolean(you),
+        joined: isJoined,
         canJoin: !participationConfig.autoJoin,
         yourRank: you?.rank ?? null,
         yourScoreLabel: you

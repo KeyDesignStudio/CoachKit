@@ -222,7 +222,7 @@ export function AthleteChallengeDetailClient({ challengeId }: { challengeId: str
 
       <div className="grid gap-4 md:grid-cols-2">
         <Block title="Your Rank">
-          {data.joined && data.you ? (
+          {data.you ? (
             <>
               <p className="text-4xl font-semibold text-[var(--text)]">#{data.you.rank ?? '—'}</p>
               <p className="mt-1 text-sm text-[var(--muted)]">{data.you.scoreLabel} • {data.you.sessionsCount} sessions</p>
@@ -230,6 +230,11 @@ export function AthleteChallengeDetailClient({ challengeId }: { challengeId: str
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-structure)]">
                 <div className={cn('h-full rounded-full bg-[var(--text)]', styles.progressBar)} style={{ width: `${Math.max(2, data.you.progressPercent)}%` }} />
               </div>
+            </>
+          ) : data.joined ? (
+            <>
+              <p className="text-sm text-[var(--muted)]">Participating.</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Your rank and score will appear after your first scored activity.</p>
             </>
           ) : (
             <>

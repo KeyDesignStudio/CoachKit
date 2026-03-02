@@ -30,9 +30,9 @@ const allNavLinks: NavLink[] = [
   { href: '/coach/group-sessions', label: 'SESSION BUILDER', roles: ['COACH'] },
   { href: '/coach/settings', label: 'Settings', roles: ['COACH'] },
   { href: '/athlete/dashboard', label: 'Dashboard', roles: ['ATHLETE'] },
-  { href: '/challenges' as Route, label: 'Challenges', roles: ['ATHLETE'] },
   { href: '/athlete/notifications', label: 'Notifications', roles: ['ATHLETE'] },
   { href: '/athlete/calendar', label: 'Workout Schedule', roles: ['ATHLETE'] },
+  { href: '/challenges' as Route, label: 'Challenges', roles: ['ATHLETE'] },
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
 
