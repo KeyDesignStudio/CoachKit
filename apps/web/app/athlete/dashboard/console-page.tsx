@@ -726,15 +726,12 @@ export default function AthleteDashboardConsolePage() {
         <div className="mt-4 flex items-start gap-4 lg:gap-5">
           <aside
             className={cn(
-              'hidden md:block sticky top-20 shrink-0 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden',
+              'hidden md:block sticky top-20 shrink-0 rounded-none border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden',
               sidebarOpen ? 'w-[min(320px,36vw)]' : 'w-16'
             )}
             data-testid="athlete-dashboard-sidebar-desktop"
           >
-            <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2">
-              <span className={cn('text-xs font-semibold tracking-wide text-[var(--muted)] uppercase px-2', sidebarOpen ? 'opacity-100' : 'opacity-0')}>
-                Console Sidebar
-              </span>
+            <div className="sticky top-0 z-10 flex h-14 items-center justify-end border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2">
               <button
                 type="button"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
@@ -750,33 +747,30 @@ export default function AthleteDashboardConsolePage() {
             {sidebarOpen ? (
               <div className="max-h-[calc(100vh-10.5rem)] overflow-y-auto px-3 py-3 space-y-4">
                 <div ref={sidebarChallengesRef}>
-                  <Block title="Challenges" showHeaderDivider={false}>
-                    <DashboardChallengesPanel
-                      activeChallenges={activeChallenges}
-                      athleteTimeZone={athleteTimeZone}
-                      onOpenChallenge={(challengeId) => router.push(`/challenges/${challengeId}` as never)}
-                    />
-                  </Block>
+                  <DashboardChallengesPanel
+                    activeChallenges={activeChallenges}
+                    athleteTimeZone={athleteTimeZone}
+                    onOpenChallenge={(challengeId) => router.push(`/challenges/${challengeId}` as never)}
+                  />
                 </div>
 
-                <div ref={sidebarFiltersRef}>
-                  <Block title="Make your selection" showHeaderDivider={false}>
-                    <DashboardFiltersPanel
-                      discipline={discipline}
-                      onDisciplineChange={setDiscipline}
-                      timeRange={timeRange}
-                      onTimeRangeChange={setTimeRange}
-                      customFrom={customFrom}
-                      customTo={customTo}
-                      onCustomFromChange={setCustomFrom}
-                      onCustomToChange={setCustomTo}
-                      dateRange={dateRange}
-                      athleteTimeZone={athleteTimeZone}
-                    />
-                    <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
-                      <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Future filters</div>
-                    </div>
-                  </Block>
+                <div ref={sidebarFiltersRef} className="border-t border-[var(--border-subtle)] pt-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
+                    <h2 className={tokens.typography.h2}>Make your selection</h2>
+                  </div>
+                  <DashboardFiltersPanel
+                    discipline={discipline}
+                    onDisciplineChange={setDiscipline}
+                    timeRange={timeRange}
+                    onTimeRangeChange={setTimeRange}
+                    customFrom={customFrom}
+                    customTo={customTo}
+                    onCustomFromChange={setCustomFrom}
+                    onCustomToChange={setCustomTo}
+                    dateRange={dateRange}
+                    athleteTimeZone={athleteTimeZone}
+                  />
                 </div>
               </div>
             ) : (
@@ -1141,17 +1135,19 @@ export default function AthleteDashboardConsolePage() {
                 </button>
               </div>
               <div className="space-y-4 p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                <Block title="Challenges" showHeaderDivider={false}>
-                  <DashboardChallengesPanel
-                    activeChallenges={activeChallenges}
-                    athleteTimeZone={athleteTimeZone}
-                    onOpenChallenge={(challengeId) => {
-                      setMobileSidebarOpen(false);
-                      router.push(`/challenges/${challengeId}` as never);
-                    }}
-                  />
-                </Block>
-                <Block title="Make your selection" showHeaderDivider={false}>
+                <DashboardChallengesPanel
+                  activeChallenges={activeChallenges}
+                  athleteTimeZone={athleteTimeZone}
+                  onOpenChallenge={(challengeId) => {
+                    setMobileSidebarOpen(false);
+                    router.push(`/challenges/${challengeId}` as never);
+                  }}
+                />
+                <div className="border-t border-[var(--border-subtle)] pt-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
+                    <h2 className={tokens.typography.h2}>Make your selection</h2>
+                  </div>
                   <DashboardFiltersPanel
                     discipline={discipline}
                     onDisciplineChange={(next) => {
@@ -1170,10 +1166,7 @@ export default function AthleteDashboardConsolePage() {
                     dateRange={dateRange}
                     athleteTimeZone={athleteTimeZone}
                   />
-                  <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
-                    <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Future filters</div>
-                  </div>
-                </Block>
+                </div>
               </div>
             </aside>
           </>
