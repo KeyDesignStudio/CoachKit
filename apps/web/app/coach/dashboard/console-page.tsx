@@ -815,7 +815,9 @@ export default function CoachDashboardConsolePage() {
                         typeof goal.eventDate === 'string' && goal.eventDate
                           ? formatDayMonthYearInTimeZone(goal.eventDate, 'UTC')
                           : 'Date not set';
-                      const progress = Math.max(0, Math.min(100, Number(goal.progressPct ?? 0)));
+                      const progressRaw = Math.max(0, Math.min(100, Number(goal.progressPct ?? 0)));
+                      const progress =
+                        goal.mode !== 'none' && !goal.isPast && !goal.isRaceDay ? Math.max(2, progressRaw) : progressRaw;
                       const weeksLabel =
                         typeof goal.weeksRemaining === 'number' && goal.weeksRemaining >= 0
                           ? `${goal.weeksRemaining} weeks to go`
