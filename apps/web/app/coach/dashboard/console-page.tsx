@@ -90,6 +90,13 @@ type DashboardResponse = {
   };
 };
 
+type CoachActiveChallengePreview = {
+  id: string;
+  title: string;
+  status: string;
+  startAt: string;
+};
+
 function formatMinutes(totalMinutes: number): string {
   const minutes = Math.max(0, Math.round(totalMinutes));
   const h = Math.floor(minutes / 60);
@@ -238,6 +245,7 @@ export default function CoachDashboardConsolePage() {
   const [reviewingItems, setReviewingItems] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [activeChallenges, setActiveChallenges] = useState<CoachActiveChallengePreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -298,8 +306,12 @@ export default function CoachDashboardConsolePage() {
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
-        const resp = await request<DashboardResponse>(`/api/coach/dashboard/console?${qs.toString()}`, bypassCache ? { cache: 'no-store' } : undefined);
+        const [resp, challengeResp] = await Promise.all([
+          request<DashboardResponse>(`/api/coach/dashboard/console?${qs.toString()}`, bypassCache ? { cache: 'no-store' } : undefined),
+          request<{ challenges: CoachActiveChallengePreview[] }>('/api/coach/challenges?status=ACTIVE', { cache: 'no-store' }).catch(() => ({ challenges: [] })),
+        ]);
         setData(resp);
+        setActiveChallenges(challengeResp.challenges ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
@@ -504,7 +516,12 @@ export default function CoachDashboardConsolePage() {
         </div>
 
         {/* Top grid shell: mobile 1 col (Filters → Needs → At a glance), tablet 2 cols (Needs + Filters, then At a glance), desktop 3 cols */}
-        <div className={cn("mt-3 grid grid-cols-1 min-w-0 items-start min-[900px]:mt-4 min-[900px]:grid-cols-2 xl:grid-cols-3", tokens.spacing.gridGap)}>
+        <div
+          className={cn(
+            'mt-3 grid grid-cols-1 min-w-0 items-start min-[900px]:mt-4 min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:minmax(0,0.85fr)_minmax(0,0.725fr)_minmax(0,1fr)_minmax(0,0.525fr)]',
+            tokens.spacing.gridGap
+          )}
+        >
           {/* Column 1: Needs your attention */}
           <div className="min-w-0 order-2 md:order-2">
             <div ref={needsCardRef}>
@@ -682,6 +699,33 @@ export default function CoachDashboardConsolePage() {
                 rightValue: `${formatMinutes(row.totalMinutes)} · ${formatDistanceKm(row.totalDistanceKm)}`,
               }))}
             />
+          </div>
+
+          <div className="min-w-0 order-4 md:order-4 md:col-span-2 xl:col-span-1 xl:flex xl:justify-end">
+            <div className="w-full space-y-2 xl:ml-auto xl:max-w-[360px]">
+              {activeChallenges.length ? (
+                activeChallenges.map((challenge) => (
+                  <div key={challenge.id} className="rounded-2xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-3">
+                    <p className="text-xs font-semibold text-white">{challenge.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, coachTimeZone)}</p>
+                      <button
+                        type="button"
+                        className="inline-flex min-h-[30px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-[10px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                        onClick={() => router.push(`/coach/challenges/${challenge.id}` as never)}
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-3">
+                  <p className="text-xs font-semibold text-white">No active challenge</p>
+                  <p className="mt-1 text-[10px] text-[#d4e3ff]">You haven’t published one yet.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
