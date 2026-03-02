@@ -30,6 +30,9 @@ type DetailResponse = {
       autoJoin: boolean;
       allowLateJoin: boolean;
     };
+    rewardConfig: {
+      prizeText?: string | null;
+    };
   };
   you: {
     rank: number | null;
@@ -200,6 +203,9 @@ export function AthleteChallengeDetailClient({ challengeId }: { challengeId: str
           </div>
           <h1 className={cn(tokens.typography.h1, 'text-[var(--text)]')}>{data.challenge.title}</h1>
           <p className={cn(tokens.typography.bodyMuted, 'mt-1 text-[var(--muted)]')}>{data.challenge.rulesText}</p>
+          {data.challenge.rewardConfig?.prizeText ? (
+            <p className="mt-2 text-sm font-medium text-[var(--text)]">Prize: {data.challenge.rewardConfig.prizeText}</p>
+          ) : null}
         </div>
 
         <div className="flex gap-2">
