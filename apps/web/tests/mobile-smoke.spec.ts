@@ -212,13 +212,30 @@ test.describe('Mobile smoke', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Athlete Console' })).toBeVisible();
 
-    const selectionHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
     const attentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
     const glanceHeading = page.getByRole('heading', { level: 2, name: 'At a glance' });
     const caloriesHeading = page.getByRole('heading', { level: 2, name: 'Calories' });
     const plannedHeading = page.getByRole('heading', { level: 2, name: 'Planned vs Completed' });
 
-    await expect(selectionHeading).toBeVisible();
+    const viewportWidth = page.viewportSize()?.width ?? 0;
+    const isMobileViewport = viewportWidth < 768;
+
+    if (isMobileViewport) {
+      const sidebarToggle = page.getByTestId('athlete-dashboard-mobile-sidebar-toggle');
+      await expect(sidebarToggle).toBeVisible();
+      await sidebarToggle.click();
+      await expect(page.getByTestId('athlete-dashboard-sidebar-mobile')).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'Make your selection' })).toBeVisible();
+      await page.getByRole('button', { name: 'Close dashboard sidebar' }).click();
+    } else {
+      const sidebarToggle = page.getByTestId('athlete-dashboard-sidebar-toggle');
+      await expect(sidebarToggle).toBeVisible();
+      const expanded = await sidebarToggle.getAttribute('aria-expanded');
+      if (expanded === 'false') {
+        await sidebarToggle.click();
+      }
+      await expect(page.getByRole('heading', { level: 2, name: 'Make your selection' })).toBeVisible();
+    }
     await expect(attentionHeading).toBeVisible();
     await expect(glanceHeading).toBeVisible();
     await expect(caloriesHeading).toBeVisible();
@@ -229,25 +246,21 @@ test.describe('Mobile smoke', () => {
     await expect(caloriesChart).toBeVisible();
     await expect(complianceChart).toBeVisible();
 
-    const viewportWidth = page.viewportSize()?.width ?? 0;
     if (viewportWidth > 0 && viewportWidth <= 520) {
-      const selectionBox = await selectionHeading.boundingBox();
       const attentionBox = await attentionHeading.boundingBox();
       const glanceBox = await glanceHeading.boundingBox();
       const caloriesHeadingBox = await caloriesHeading.boundingBox();
       const plannedHeadingBox = await plannedHeading.boundingBox();
 
-      expect(selectionBox, 'Make your selection should have a bounding box').toBeTruthy();
       expect(attentionBox, 'Needs your attention should have a bounding box').toBeTruthy();
       expect(glanceBox, 'At a glance should have a bounding box').toBeTruthy();
       expect(caloriesHeadingBox, 'Calories should have a bounding box').toBeTruthy();
       expect(plannedHeadingBox, 'Planned vs Completed should have a bounding box').toBeTruthy();
 
-      if (selectionBox && attentionBox && glanceBox && caloriesHeadingBox && plannedHeadingBox) {
-        expect(selectionBox.y).toBeLessThan(attentionBox.y);
+      if (attentionBox && glanceBox && caloriesHeadingBox && plannedHeadingBox) {
         expect(attentionBox.y).toBeLessThan(glanceBox.y);
-        expect(glanceBox.y).toBeLessThan(caloriesHeadingBox.y);
-        expect(caloriesHeadingBox.y).toBeLessThan(plannedHeadingBox.y);
+        expect(glanceBox.y).toBeLessThan(plannedHeadingBox.y);
+        expect(plannedHeadingBox.y).toBeLessThan(caloriesHeadingBox.y);
       }
 
       const caloriesBox = await caloriesChart.boundingBox();
@@ -259,14 +272,31 @@ test.describe('Mobile smoke', () => {
       }
     }
 
+    if (isMobileViewport) {
+      await page.getByTestId('athlete-dashboard-mobile-sidebar-toggle').click();
+    } else {
+      const sidebarToggle = page.getByTestId('athlete-dashboard-sidebar-toggle');
+      const expanded = await sidebarToggle.getAttribute('aria-expanded');
+      if (expanded === 'false') {
+        await sidebarToggle.click();
+      }
+    }
     const rangeDisplay = page.getByTestId('athlete-dashboard-range-display');
+    await expect(rangeDisplay).toBeVisible();
     const initialRange = await rangeDisplay.textContent();
     const rangeSelect = page.getByTestId('athlete-dashboard-time-range');
     const rangeResponse = page.waitForResponse((resp) => resp.url().includes('/api/athlete/dashboard/console') && resp.request().method() === 'GET');
     await rangeSelect.selectOption('LAST_14');
     await rangeResponse;
+    if (isMobileViewport) {
+      await page.getByTestId('athlete-dashboard-mobile-sidebar-toggle').click();
+      await expect(rangeDisplay).toBeVisible();
+    }
     const updatedRange = await rangeDisplay.textContent();
     expect(updatedRange).not.toEqual(initialRange);
+    if (isMobileViewport) {
+      await page.getByRole('button', { name: 'Close dashboard sidebar' }).click();
+    }
 
     await assertNoHorizontalScroll(page);
   });

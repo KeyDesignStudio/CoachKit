@@ -140,6 +140,8 @@ type AthleteIntakeLifecycleResponse = {
   } | null;
 };
 
+const DASHBOARD_SIDEBAR_STORAGE_KEY = 'athlete-dashboard-sidebar-open';
+
 function NeedsAttentionItem({
   label,
   count,
@@ -273,6 +275,157 @@ function formatGreetingSessionTitle(session: SessionGreetingInfo | null | undefi
   return 'training session';
 }
 
+function DashboardChallengesPanel({
+  activeChallenges,
+  athleteTimeZone,
+  onOpenChallenge,
+}: {
+  activeChallenges: ActiveChallengePreview[];
+  athleteTimeZone: string;
+  onOpenChallenge: (challengeId: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {activeChallenges.length ? (
+        activeChallenges.map((challenge) => (
+          <div key={challenge.id} className="rounded-2xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-3">
+            <p className="text-xs font-semibold text-white">{challenge.title}</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex min-h-[30px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-[10px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                  onClick={() => onOpenChallenge(challenge.id)}
+                >
+                  View
+                </button>
+                {challenge.joined ? (
+                  <span className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100">
+                    Joined
+                  </span>
+                ) : challenge.canJoin ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-[30px] items-center rounded-full border border-white/90 bg-white px-3 text-[10px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
+                    onClick={() => onOpenChallenge(challenge.id)}
+                  >
+                    Join
+                  </button>
+                ) : (
+                  <span className="inline-flex min-h-[30px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-[10px] font-semibold text-slate-100">
+                    Auto joined
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="rounded-2xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-3">
+          <p className="text-xs font-semibold text-white">No active challenge</p>
+          <p className="mt-1 text-[10px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardFiltersPanel({
+  discipline,
+  onDisciplineChange,
+  timeRange,
+  onTimeRangeChange,
+  customFrom,
+  customTo,
+  onCustomFromChange,
+  onCustomToChange,
+  dateRange,
+  athleteTimeZone,
+}: {
+  discipline: string | null;
+  onDisciplineChange: (next: string | null) => void;
+  timeRange: TimeRangePreset;
+  onTimeRangeChange: (next: TimeRangePreset) => void;
+  customFrom: string;
+  customTo: string;
+  onCustomFromChange: (next: string) => void;
+  onCustomToChange: (next: string) => void;
+  dateRange: { from: string; to: string };
+  athleteTimeZone: string;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="min-w-0">
+        <FieldLabel className="pl-1">Discipline</FieldLabel>
+        <SelectField className="min-h-[44px] w-full" value={discipline ?? ''} onChange={(e) => onDisciplineChange(e.target.value ? e.target.value : null)}>
+          <option value="">All disciplines</option>
+          <option value="BIKE">Bike</option>
+          <option value="RUN">Run</option>
+          <option value="SWIM">Swim</option>
+          <option value="OTHER">Other</option>
+        </SelectField>
+      </div>
+
+      <div className="min-w-0">
+        <FieldLabel className="pl-1">Time range</FieldLabel>
+        <SelectField
+          className="min-h-[44px] w-full"
+          value={timeRange}
+          onChange={(e) => onTimeRangeChange(e.target.value as TimeRangePreset)}
+          data-testid="athlete-dashboard-time-range"
+        >
+          <option value="LAST_30">Last 30 days</option>
+          <option value="LAST_60">Last 60 days</option>
+          <option value="LAST_90">Last 90 days</option>
+          <option value="THIS_MONTH">This month</option>
+          <option value="LAST_MONTH">Last month</option>
+          <option value="LAST_14">Last 14 days</option>
+          <option value="LAST_7">Last 7 days</option>
+          <option value="CUSTOM">Custom</option>
+        </SelectField>
+      </div>
+
+      <div className="min-w-0">
+        {timeRange === 'CUSTOM' ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="text-xs text-[var(--muted)]">
+              From
+              <input
+                type="date"
+                className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                value={customFrom}
+                onChange={(e) => onCustomFromChange(e.target.value)}
+              />
+            </label>
+            <label className="text-xs text-[var(--muted)]">
+              To
+              <input
+                type="date"
+                className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                value={customTo}
+                onChange={(e) => onCustomToChange(e.target.value)}
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            <FieldLabel className="pl-1">Date range</FieldLabel>
+            <div
+              className={cn('min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75')}
+              data-testid="athlete-dashboard-range-display"
+            >
+              <div className={cn('truncate text-xs sm:text-sm', tokens.typography.body)}>
+                {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AthleteDashboardConsolePage() {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
@@ -290,8 +443,13 @@ export default function AthleteDashboardConsolePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const needsCardRef = useRef<HTMLDivElement | null>(null);
-  const [xlTopCardHeightPx, setXlTopCardHeightPx] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarInitialized, setSidebarInitialized] = useState(false);
+  const [pendingSidebarSection, setPendingSidebarSection] = useState<'challenges' | 'filters' | null>(null);
+  const sidebarChallengesRef = useRef<HTMLDivElement | null>(null);
+  const sidebarFiltersRef = useRef<HTMLDivElement | null>(null);
+  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
 
   const athleteTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(
@@ -416,37 +574,67 @@ export default function AthleteDashboardConsolePage() {
     }
   }, [router, user?.role]);
 
-  // Keep the three top cards the same height at desktop (xl), using the Needs card as the baseline.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (userLoading) return;
-    if (!user || user.role !== 'ATHLETE') return;
+    if (sidebarInitialized) return;
+    const saved = window.localStorage.getItem(DASHBOARD_SIDEBAR_STORAGE_KEY);
+    if (saved === 'true' || saved === 'false') {
+      setSidebarOpen(saved === 'true');
+    } else {
+      setSidebarOpen(window.matchMedia('(min-width: 1024px)').matches);
+    }
+    setSidebarInitialized(true);
+  }, [sidebarInitialized]);
 
-    const mql = window.matchMedia('(min-width: 1280px)');
-    const compute = () => {
-      if (!mql.matches) {
-        setXlTopCardHeightPx(null);
+  useEffect(() => {
+    if (!sidebarInitialized || typeof window === 'undefined') return;
+    window.localStorage.setItem(DASHBOARD_SIDEBAR_STORAGE_KEY, sidebarOpen ? 'true' : 'false');
+  }, [sidebarInitialized, sidebarOpen]);
+
+  useEffect(() => {
+    if (!sidebarOpen || !pendingSidebarSection) return;
+    const target = pendingSidebarSection === 'challenges' ? sidebarChallengesRef.current : sidebarFiltersRef.current;
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setPendingSidebarSection(null);
+  }, [pendingSidebarSection, sidebarOpen]);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileSidebarOpen(false);
         return;
       }
-      const h = needsCardRef.current?.getBoundingClientRect().height;
-      if (!h || !Number.isFinite(h) || h <= 0) return;
-      setXlTopCardHeightPx(Math.round(h));
+      if (event.key !== 'Tab' || !mobileSidebarRef.current) return;
+      const focusable = mobileSidebarRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      }
     };
 
-    compute();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const initialTarget = mobileSidebarRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    initialTarget?.focus();
 
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => compute()) : null;
-    if (ro && needsCardRef.current) ro.observe(needsCardRef.current);
-    const onChange = () => compute();
-    mql.addEventListener('change', onChange);
-    window.addEventListener('resize', onChange);
-
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      ro?.disconnect();
-      mql.removeEventListener('change', onChange);
-      window.removeEventListener('resize', onChange);
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKeyDown);
     };
-  }, [user, userLoading]);
+  }, [mobileSidebarOpen]);
 
   // Keep loading/access gates consistent with the coach dashboard styling.
   if (userLoading || (!user && !userError)) {
@@ -473,6 +661,16 @@ export default function AthleteDashboardConsolePage() {
               |
             </span>
             <p className="text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting}</p>
+            <button
+              type="button"
+              className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)] md:hidden"
+              aria-label="Open dashboard sidebar"
+              aria-expanded={mobileSidebarOpen}
+              onClick={() => setMobileSidebarOpen(true)}
+              data-testid="athlete-dashboard-mobile-sidebar-toggle"
+            >
+              <Icon name="menu" size="md" aria-hidden />
+            </button>
           </div>
         </div>
 
@@ -525,103 +723,93 @@ export default function AthleteDashboardConsolePage() {
           </div>
         ) : null}
 
-        <div className="mt-4">
-          <div
+        <div className="mt-4 flex items-start gap-4 lg:gap-5">
+          <aside
             className={cn(
-              'grid grid-cols-1 min-w-0 items-start min-[900px]:grid-cols-2 xl:grid-cols-none xl:[grid-template-columns:minmax(0,0.85fr)_minmax(0,0.725fr)_minmax(0,1fr)_minmax(0,0.525fr)]',
-              tokens.spacing.gridGap
+              'hidden md:block sticky top-20 shrink-0 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden',
+              sidebarOpen ? 'w-[min(320px,36vw)]' : 'w-16'
             )}
+            data-testid="athlete-dashboard-sidebar-desktop"
           >
-            <div className="min-w-0 order-1 md:order-1">
-              <Block
-                title="Make your selection"
-                className="flex flex-col"
-                style={xlTopCardHeightPx ? { height: `${xlTopCardHeightPx}px` } : undefined}
-                showHeaderDivider={false}
+            <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2">
+              <span className={cn('text-xs font-semibold tracking-wide text-[var(--muted)] uppercase px-2', sidebarOpen ? 'opacity-100' : 'opacity-0')}>
+                Console Sidebar
+              </span>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+                aria-label={sidebarOpen ? 'Collapse dashboard sidebar' : 'Expand dashboard sidebar'}
+                aria-expanded={sidebarOpen}
+                data-testid="athlete-dashboard-sidebar-toggle"
               >
-                <div className="-mt-2">
-                  <div className={cn('grid grid-cols-1 gap-y-4 min-w-0 min-[900px]:grid-cols-2 min-[900px]:gap-y-6 min-[900px]:gap-x-4', tokens.spacing.gridGap)}>
-                    <div className="min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-1">
-                      <FieldLabel className="pl-1">Discipline</FieldLabel>
-                      <SelectField
-                        className="min-h-[44px] w-full"
-                        value={discipline ?? ''}
-                        onChange={(e) => setDiscipline(e.target.value ? e.target.value : null)}
-                      >
-                        <option value="">All disciplines</option>
-                        <option value="BIKE">Bike</option>
-                        <option value="RUN">Run</option>
-                        <option value="SWIM">Swim</option>
-                        <option value="OTHER">Other</option>
-                      </SelectField>
-                    </div>
-                    <div className="hidden min-w-0 min-[900px]:block min-[900px]:col-start-2 min-[900px]:row-start-1" aria-hidden="true" />
-
-                    <div className="min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-2">
-                      <FieldLabel className="pl-1">Time range</FieldLabel>
-                      <SelectField
-                        className="min-h-[44px] w-full"
-                        value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value as TimeRangePreset)}
-                        data-testid="athlete-dashboard-time-range"
-                      >
-                        <option value="LAST_30">Last 30 days</option>
-                        <option value="LAST_60">Last 60 days</option>
-                        <option value="LAST_90">Last 90 days</option>
-                        <option value="THIS_MONTH">This month</option>
-                        <option value="LAST_MONTH">Last month</option>
-                        <option value="LAST_14">Last 14 days</option>
-                        <option value="LAST_7">Last 7 days</option>
-                        <option value="CUSTOM">Custom</option>
-                      </SelectField>
-                    </div>
-
-                    <div className="min-w-0 min-[900px]:col-start-2 min-[900px]:row-start-2">
-                      {timeRange === 'CUSTOM' ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="text-xs text-[var(--muted)]">
-                            From
-                            <input
-                              type="date"
-                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
-                              value={customFrom}
-                              onChange={(e) => setCustomFrom(e.target.value)}
-                            />
-                          </label>
-                          <label className="text-xs text-[var(--muted)]">
-                            To
-                            <input
-                              type="date"
-                              className="mt-1 w-full min-h-[44px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
-                              value={customTo}
-                              onChange={(e) => setCustomTo(e.target.value)}
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <>
-                          <FieldLabel className="pl-1">&nbsp;</FieldLabel>
-                          <div
-                            className={cn(
-                              'min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75'
-                            )}
-                            data-testid="athlete-dashboard-range-display"
-                          >
-                            <div className={cn('md:truncate text-xs sm:text-sm', tokens.typography.body)}>
-                              {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} →{' '}
-                              {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Block>
+                <Icon name={sidebarOpen ? 'prev' : 'next'} size="md" aria-hidden />
+              </button>
             </div>
 
-            <div className="min-w-0 order-2 md:order-2">
-              <div ref={needsCardRef}>
+            {sidebarOpen ? (
+              <div className="max-h-[calc(100vh-10.5rem)] overflow-y-auto px-3 py-3 space-y-4">
+                <div ref={sidebarChallengesRef}>
+                  <Block title="Challenges" showHeaderDivider={false}>
+                    <DashboardChallengesPanel
+                      activeChallenges={activeChallenges}
+                      athleteTimeZone={athleteTimeZone}
+                      onOpenChallenge={(challengeId) => router.push(`/challenges/${challengeId}` as never)}
+                    />
+                  </Block>
+                </div>
+
+                <div ref={sidebarFiltersRef}>
+                  <Block title="Make your selection" showHeaderDivider={false}>
+                    <DashboardFiltersPanel
+                      discipline={discipline}
+                      onDisciplineChange={setDiscipline}
+                      timeRange={timeRange}
+                      onTimeRangeChange={setTimeRange}
+                      customFrom={customFrom}
+                      customTo={customTo}
+                      onCustomFromChange={setCustomFrom}
+                      onCustomToChange={setCustomTo}
+                      dateRange={dateRange}
+                      athleteTimeZone={athleteTimeZone}
+                    />
+                    <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
+                      <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Future filters</div>
+                    </div>
+                  </Block>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-[calc(100vh-10.5rem)] flex-col items-center gap-2 overflow-y-auto py-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Open challenges section"
+                  onClick={() => {
+                    setSidebarOpen(true);
+                    setPendingSidebarSection('challenges');
+                  }}
+                >
+                  <Icon name="favorite" size="md" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Open filters section"
+                  onClick={() => {
+                    setSidebarOpen(true);
+                    setPendingSidebarSection('filters');
+                  }}
+                >
+                  <Icon name="filter" size="md" aria-hidden />
+                </button>
+              </div>
+            )}
+          </aside>
+
+          <div className="min-w-0 flex-1">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]" data-testid="athlete-dashboard-chart-grid">
+              <div className="min-w-0 lg:col-span-2">
                 <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
                   <div className={cn('grid', tokens.spacing.widgetGap)}>
                     {typeof data?.attention.painFlagWorkouts === 'number' ? (
@@ -649,104 +837,53 @@ export default function AthleteDashboardConsolePage() {
                   </div>
                 </Block>
               </div>
-            </div>
 
-            <div className="min-w-0 order-3 md:order-3 md:col-span-2 xl:col-span-1">
-              <AtAGlanceCard
-                minHeightPx={xlTopCardHeightPx ?? undefined}
-                loading={loading && !data}
-                testIds={{
-                  card: 'athlete-dashboard-at-a-glance',
-                  grid: 'athlete-dashboard-at-a-glance-grid',
-                  stats: 'athlete-dashboard-at-a-glance-stats',
-                  statRow: 'athlete-dashboard-at-a-glance-stat-row',
-                  disciplineLoad: 'athlete-dashboard-discipline-load',
-                }}
-                statsRows={[
-                  { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
-                  { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
-                  { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
-                  { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
-                ]}
-                disciplineRows={(() => {
-                  const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
-                  const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-                  for (const row of data?.rangeSummary?.byDiscipline ?? []) {
-                    byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
-                      totalMinutes: Number(row.completedMinutes ?? 0),
-                      totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+              <div className="min-w-0 lg:col-span-2">
+                <AtAGlanceCard
+                  loading={loading && !data}
+                  testIds={{
+                    card: 'athlete-dashboard-at-a-glance',
+                    grid: 'athlete-dashboard-at-a-glance-grid',
+                    stats: 'athlete-dashboard-at-a-glance-stats',
+                    statRow: 'athlete-dashboard-at-a-glance-stat-row',
+                    disciplineLoad: 'athlete-dashboard-discipline-load',
+                  }}
+                  statsRows={[
+                    { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
+                    { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
+                    { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
+                    { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
+                  ]}
+                  disciplineRows={(() => {
+                    const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+                    const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+                    for (const row of data?.rangeSummary?.byDiscipline ?? []) {
+                      byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                        totalMinutes: Number(row.completedMinutes ?? 0),
+                        totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+                      });
+                    }
+
+                    return seedOrder.map((discipline) => {
+                      const existing = byDiscipline.get(discipline);
+                      const totalMinutes = existing?.totalMinutes ?? 0;
+                      const totalDistanceKm = existing?.totalDistanceKm ?? 0;
+                      return {
+                        discipline,
+                        totalMinutes,
+                        rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
+                      };
                     });
-                  }
-
-                  return seedOrder.map((discipline) => {
-                    const existing = byDiscipline.get(discipline);
-                    const totalMinutes = existing?.totalMinutes ?? 0;
-                    const totalDistanceKm = existing?.totalDistanceKm ?? 0;
-                    return {
-                      discipline,
-                      totalMinutes,
-                      rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
-                    };
-                  });
-                })()}
-              />
-            </div>
-
-            <div className="min-w-0 order-4 md:order-4 md:col-span-2 xl:col-span-1 xl:flex xl:justify-end">
-              <div className="w-full space-y-2 xl:ml-auto xl:max-w-[360px]">
-                {activeChallenges.length ? (
-                  activeChallenges.map((challenge) => (
-                    <div key={challenge.id} className="rounded-2xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-3">
-                      <p className="text-xs font-semibold text-white">{challenge.title}</p>
-                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[10px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="inline-flex min-h-[30px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-3 text-[10px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
-                            onClick={() => router.push(`/challenges/${challenge.id}` as never)}
-                          >
-                            View
-                          </button>
-                          {challenge.joined ? (
-                            <span className="inline-flex min-h-[30px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-3 text-[10px] font-semibold text-emerald-100">
-                              Joined
-                            </span>
-                          ) : challenge.canJoin ? (
-                            <button
-                              type="button"
-                              className="inline-flex min-h-[30px] items-center rounded-full border border-white/90 bg-white px-3 text-[10px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
-                              onClick={() => router.push(`/challenges/${challenge.id}` as never)}
-                            >
-                              Join
-                            </button>
-                          ) : (
-                            <span className="inline-flex min-h-[30px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-3 text-[10px] font-semibold text-slate-100">
-                              Auto joined
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-3">
-                    <p className="text-xs font-semibold text-white">No active challenge</p>
-                    <p className="mt-1 text-[10px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
-                  </div>
-                )}
+                  })()}
+                />
               </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3" data-testid="athlete-dashboard-chart-grid">
-          <Block
-            title="Planned vs Completed"
-            showHeaderDivider={false}
-            className="min-h-[230px]"
-            data-testid="athlete-dashboard-compliance-chart"
-          >
+              <Block
+                title="Planned vs Completed"
+                showHeaderDivider={false}
+                className="min-h-[230px] lg:col-span-2"
+                data-testid="athlete-dashboard-compliance-chart"
+              >
             {(() => {
               const summary = data?.rangeSummary;
               const plannedTotal = summary?.totals.workoutsPlanned ?? 0;
@@ -811,7 +948,7 @@ export default function AthleteDashboardConsolePage() {
             })()}
           </Block>
 
-          <Block title="Calories" showHeaderDivider={false} className="min-h-[230px]" data-testid="athlete-dashboard-calories-chart">
+              <Block title="Calories" showHeaderDivider={false} className="min-h-[230px] lg:col-span-3" data-testid="athlete-dashboard-calories-chart">
             {(() => {
               const summary = data?.rangeSummary;
               const points = summary?.caloriesByDay ?? [];
@@ -974,17 +1111,73 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               );
             })()}
-          </Block>
+              </Block>
 
-          <div className="xl:col-span-1">
-            <StravaVitalsSummaryCard
-              comparison={data?.stravaVitals ?? null}
-              loading={loading && !data}
-              title="Strava Vitals"
-              addBottomSpacer
-            />
+              <div className="lg:col-span-3">
+                <StravaVitalsSummaryCard comparison={data?.stravaVitals ?? null} loading={loading && !data} title="Strava Vitals" addBottomSpacer />
+              </div>
+            </div>
           </div>
         </div>
+
+        {mobileSidebarOpen ? (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/35 md:hidden" onClick={() => setMobileSidebarOpen(false)} />
+            <aside
+              ref={mobileSidebarRef}
+              className="fixed left-0 top-0 z-50 h-full w-[min(88vw,360px)] overflow-y-auto border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] md:hidden"
+              aria-label="Dashboard sidebar"
+              data-testid="athlete-dashboard-sidebar-mobile"
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-3">
+                <div className="text-sm font-semibold text-[var(--text)]">Dashboard sidebar</div>
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
+                  aria-label="Close dashboard sidebar"
+                >
+                  <Icon name="close" size="md" aria-hidden />
+                </button>
+              </div>
+              <div className="space-y-4 p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                <Block title="Challenges" showHeaderDivider={false}>
+                  <DashboardChallengesPanel
+                    activeChallenges={activeChallenges}
+                    athleteTimeZone={athleteTimeZone}
+                    onOpenChallenge={(challengeId) => {
+                      setMobileSidebarOpen(false);
+                      router.push(`/challenges/${challengeId}` as never);
+                    }}
+                  />
+                </Block>
+                <Block title="Make your selection" showHeaderDivider={false}>
+                  <DashboardFiltersPanel
+                    discipline={discipline}
+                    onDisciplineChange={(next) => {
+                      setDiscipline(next);
+                      setMobileSidebarOpen(false);
+                    }}
+                    timeRange={timeRange}
+                    onTimeRangeChange={(next) => {
+                      setTimeRange(next);
+                      if (next !== 'CUSTOM') setMobileSidebarOpen(false);
+                    }}
+                    customFrom={customFrom}
+                    customTo={customTo}
+                    onCustomFromChange={setCustomFrom}
+                    onCustomToChange={setCustomTo}
+                    dateRange={dateRange}
+                    athleteTimeZone={athleteTimeZone}
+                  />
+                  <div className="mt-4 border-t border-[var(--border-subtle)] pt-3">
+                    <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Future filters</div>
+                  </div>
+                </Block>
+              </div>
+            </aside>
+          </>
+        ) : null}
 
         {error ? <div className="mt-4 rounded-2xl bg-rose-500/10 text-rose-700 p-4 text-sm">{error}</div> : null}
         {loading && !data ? <FullScreenLogoLoader /> : null}
