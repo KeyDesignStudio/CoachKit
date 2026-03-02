@@ -210,8 +210,6 @@ export async function AppHeader() {
     '/coach/calendar',
     '/coach/athletes',
     '/coach/challenges',
-    '/coach/notifications',
-    '/coach/settings',
   ];
   const coachPrimaryDesktopLinks = coachPrimaryDesktopOrder
     .map((href) => navLinks.find((link) => link.href === href))
@@ -415,6 +413,39 @@ export async function AppHeader() {
                       );
                     })}
                   </nav>
+
+                  {desktopNotificationsLink ? (
+                    <Link
+                      key={desktopNotificationsLink.href}
+                      href={desktopNotificationsLink.href}
+                      aria-label="Notifications"
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'relative justify-center')}
+                    >
+                      <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
+                      {unreadNotificationsCount > 0 ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
+                        />
+                      ) : null}
+                      {unreadNotificationsCount > 0 ? (
+                        <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
+                      ) : null}
+                      <span className="sr-only">Notifications</span>
+                    </Link>
+                  ) : null}
+
+                  {desktopSettingsLink ? (
+                    <Link
+                      key={desktopSettingsLink.href}
+                      href={desktopSettingsLink.href}
+                      aria-label="Settings"
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'justify-center')}
+                    >
+                      <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
+                      <span className="sr-only">Settings</span>
+                    </Link>
+                  ) : null}
                 </div>
               ) : (
                 <nav className="hidden md:flex flex-wrap gap-2">
