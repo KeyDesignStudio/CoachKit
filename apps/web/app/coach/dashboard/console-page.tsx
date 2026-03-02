@@ -13,6 +13,7 @@ import { AthleteSelector } from '@/components/coach/AthleteSelector';
 import { CoachOnboardingModal } from '@/components/coach/CoachOnboardingModal';
 import { AtAGlanceCard } from '@/components/dashboard/AtAGlanceCard';
 import { StravaVitalsSummaryCard } from '@/components/dashboard/StravaVitalsSummaryCard';
+import { FullScreenLogoLoader } from '@/components/FullScreenLogoLoader';
 import { addDays, formatDayMonthYearInTimeZone, formatDisplayInTimeZone, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 import { tokens } from '@/components/ui/tokens';
@@ -237,7 +238,7 @@ export default function CoachDashboardConsolePage() {
   const [reviewingItems, setReviewingItems] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
@@ -479,13 +480,7 @@ export default function CoachDashboardConsolePage() {
     });
   }, [visibleReviewInbox]);
 
-  if (userLoading || (!user && !userError)) {
-    return (
-      <div className={cn(tokens.spacing.screenPadding, "pt-6")}>
-        <p className={cn(tokens.typography.bodyMuted)}>Loading...</p>
-      </div>
-    );
-  }
+  if (userLoading || (!user && !userError)) return <FullScreenLogoLoader />;
 
   if (!user || user.role !== 'COACH') {
     return (
@@ -496,6 +491,8 @@ export default function CoachDashboardConsolePage() {
       </div>
     );
   }
+
+  if (loading && !data) return <FullScreenLogoLoader />;
 
   return (
     <>
