@@ -9,6 +9,8 @@ import {
   isTrainingRequestStartMessage,
 } from '@/modules/ai-plan-builder/shared/training-request';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const { user } = await requireAthlete();
