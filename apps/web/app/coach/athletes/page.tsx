@@ -408,7 +408,7 @@ export default function CoachAthletesPage() {
                       >
                         <Icon name="chat" size="sm" />
                       </a>
-                      <label className="inline-flex items-center justify-center cursor-pointer" title="Select athlete for bulk invite">
+                      <label className="inline-flex items-center justify-center self-start mt-[2px] cursor-pointer" title="Select athlete for bulk invite">
                         <input
                           type="checkbox"
                           checked={selectedInviteAthleteIds.has(athlete.userId)}
