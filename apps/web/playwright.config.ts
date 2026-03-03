@@ -47,21 +47,28 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'iphone16pro',
-      use: {
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
-      },
+      name: 'iPhone SE (3rd gen)',
+      use: { ...devices['iPhone SE (3rd gen)'] },
     },
     {
-      name: 'iPhone 14',
-      use: { ...devices['iPhone 14'] },
+      name: 'iPhone 15 Pro Max',
+      use: { ...devices['iPhone 15 Pro Max'] },
     },
     {
-      name: 'iPad (gen 7)',
-      use: { ...devices['iPad (gen 7)'] },
+      name: 'Galaxy A55',
+      use: { ...devices['Galaxy A55'] },
+    },
+    {
+      name: 'Galaxy S24',
+      use: { ...devices['Galaxy S24'] },
+    },
+    {
+      name: 'iPad (gen 11)',
+      use: { ...devices['iPad (gen 11)'] },
+    },
+    {
+      name: 'Galaxy Tab S9',
+      use: { ...devices['Galaxy Tab S9'] },
     },
   ],
 });

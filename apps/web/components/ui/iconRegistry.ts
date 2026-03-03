@@ -31,6 +31,7 @@ export const ICON_NAMES = [
   
   // Navigation / actions
   'menu',
+  'sidebar',
   'prev',
   'next',
   'today',
@@ -104,6 +105,7 @@ export const ICONS: Record<IconName, string> = {
   
   // Navigation / actions
   menu: 'menu',
+  sidebar: 'dock_to_left',
   prev: 'chevron_left',
   next: 'chevron_right',
   today: 'today',
