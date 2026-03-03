@@ -382,8 +382,8 @@ export default function CoachAthletesPage() {
               >
                 {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
+                  <div className="relative min-h-8">
+                    <div className="flex min-w-0 items-center gap-2 pr-16">
                       <p className="font-medium md:truncate text-left">
                         {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
                       </p>
@@ -399,7 +399,15 @@ export default function CoachAthletesPage() {
                         {athlete.onboardingStatus === 'ACTIVE' ? 'ACTIVE' : 'DRAFT'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 pr-1">
+                    <div className="absolute right-0 top-0 flex items-center gap-2">
+                      <a
+                        href={`/coach/notifications?athleteId=${athlete.userId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                        title="Send Message"
+                      >
+                        <Icon name="chat" size="sm" />
+                      </a>
                       <label className="inline-flex items-center justify-center cursor-pointer" title="Select athlete for bulk invite">
                         <input
                           type="checkbox"
@@ -411,14 +419,6 @@ export default function CoachAthletesPage() {
                           className="h-2.5 w-2.5 cursor-pointer accent-[var(--ring)]"
                         />
                       </label>
-                      <a
-                        href={`/coach/notifications?athleteId=${athlete.userId}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
-                        title="Send Message"
-                      >
-                        <Icon name="chat" size="sm" />
-                      </a>
                     </div>
                   </div>
                   <button

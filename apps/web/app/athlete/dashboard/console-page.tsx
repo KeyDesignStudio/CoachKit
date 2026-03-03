@@ -795,7 +795,7 @@ export default function AthleteDashboardConsolePage() {
                           goal={data.goalCountdown}
                           variant="hero"
                           showShortLabel={false}
-                          className="ring-0 border border-[var(--border-subtle)] bg-[var(--bg-card)] min-h-[124px]"
+                          className="ring-0 border border-[var(--border-subtle)] bg-[var(--bg-card)] dark:border-slate-700/70 dark:bg-slate-900/90 min-h-[124px]"
                         />
                       </div>
                     </div>
@@ -1203,7 +1203,7 @@ export default function AthleteDashboardConsolePage() {
                         goal={data.goalCountdown}
                         variant="hero"
                         showShortLabel={false}
-                        className="ring-0 border border-[var(--border-subtle)] bg-[var(--bg-card)] min-h-[124px]"
+                        className="ring-0 border border-[var(--border-subtle)] bg-[var(--bg-card)] dark:border-slate-700/70 dark:bg-slate-900/90 min-h-[124px]"
                       />
                     </div>
                   </div>

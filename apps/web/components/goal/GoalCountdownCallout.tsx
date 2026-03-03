@@ -10,10 +10,10 @@ type GoalCountdownCalloutProps = {
 };
 
 function getTone(goal: GoalCountdown) {
-  if (goal.mode === 'race-day') return 'ring-2 ring-amber-500/70 bg-gradient-to-r from-amber-100 via-orange-50 to-emerald-50';
-  if (goal.mode === 'daily') return 'ring-1 ring-orange-300/70 bg-gradient-to-r from-orange-50 via-amber-50 to-teal-50';
-  if (goal.mode === 'weekly') return 'ring-1 ring-teal-300/70 bg-gradient-to-r from-teal-50 via-sky-50 to-emerald-50';
-  if (goal.mode === 'past') return 'ring-1 ring-slate-300/80 bg-gradient-to-r from-slate-100 via-slate-50 to-zinc-100';
+  if (goal.mode === 'race-day') return 'ring-2 ring-amber-500/70 bg-gradient-to-r from-amber-100 via-orange-50 to-emerald-50 dark:ring-amber-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-emerald-950';
+  if (goal.mode === 'daily') return 'ring-1 ring-orange-300/70 bg-gradient-to-r from-orange-50 via-amber-50 to-teal-50 dark:ring-orange-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-teal-950';
+  if (goal.mode === 'weekly') return 'ring-1 ring-teal-300/70 bg-gradient-to-r from-teal-50 via-sky-50 to-emerald-50 dark:ring-teal-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-emerald-950';
+  if (goal.mode === 'past') return 'ring-1 ring-slate-300/80 bg-gradient-to-r from-slate-100 via-slate-50 to-zinc-100 dark:ring-slate-600/80 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-zinc-900';
   return 'ring-1 ring-[var(--border-subtle)] bg-[var(--bg-surface)]';
 }
 
@@ -92,7 +92,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-wide text-[var(--fg-muted)] dark:text-slate-300/90">{who}goal focus</div>
-          <div className="mt-1 inline-flex rounded-md bg-teal-100 px-2 py-0.5 text-base font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</div>
+          <div className="mt-1 inline-flex rounded-md bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</div>
           <div className="mt-1 text-xs text-[var(--fg-muted)] dark:text-slate-300/85">{eventDateLabel}</div>
         </div>
         <div className="text-right">
@@ -105,7 +105,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
       {showProgress ? (
         <div className="mt-3">
           <div className="mb-1 text-[11px] text-[var(--fg-muted)] dark:text-slate-300/85">Progress</div>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)]">
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)] dark:bg-white/20">
             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
