@@ -2,12 +2,13 @@ import { ChallengeType } from '@prisma/client';
 import { z } from 'zod';
 
 const requiredString = z.string().trim().min(1);
+const CHALLENGE_TITLE_MAX_LENGTH = 25;
 
 export const challengeTypeSchema = z.nativeEnum(ChallengeType);
 
 export const challengeCreateSchema = z
   .object({
-    title: requiredString.max(120),
+    title: requiredString.max(CHALLENGE_TITLE_MAX_LENGTH),
     description: z.string().trim().max(4000).optional().nullable(),
     squadId: z.string().cuid().or(z.string().cuid2()),
     type: challengeTypeSchema,

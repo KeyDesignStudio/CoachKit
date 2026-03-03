@@ -285,7 +285,7 @@ function DashboardChallengesPanel({
   onOpenChallenge: (challengeId: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 px-1.5">
       {activeChallenges.length ? (
         activeChallenges.map((challenge) => (
           <div key={challenge.id} className="rounded-xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-2">
@@ -412,10 +412,10 @@ function DashboardFiltersPanel({
           <>
             <FieldLabel className="pl-1 text-[10px]">Date range</FieldLabel>
             <div
-              className={cn('min-h-[44px] flex items-center justify-center rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75')}
+              className={cn('min-h-[44px] flex items-center justify-start rounded-2xl px-3 min-w-0 bg-[var(--bg-structure)]/75')}
               data-testid="athlete-dashboard-range-display"
             >
-              <div className={cn('truncate text-xs')}>
+              <div className={cn('w-full truncate text-left text-xs')}>
                 {formatDisplayInTimeZone(dateRange.from, athleteTimeZone)} → {formatDisplayInTimeZone(dateRange.to, athleteTimeZone)}
               </div>
             </div>
