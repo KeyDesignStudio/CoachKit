@@ -21,9 +21,21 @@ type MobileNavDrawerProps = {
 export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const isCoachDashboardPath = pathname === '/coach/dashboard' || pathname.startsWith('/coach/dashboard/');
+  const isAthleteDashboardPath = pathname === '/athlete/dashboard' || pathname.startsWith('/athlete/dashboard/');
+  const isDashboardPath = isCoachDashboardPath || isAthleteDashboardPath;
+  const dashboardToggleTestId =
+    isCoachDashboardPath
+      ? 'coach-dashboard-mobile-sidebar-toggle'
+      : isAthleteDashboardPath
+        ? 'athlete-dashboard-mobile-sidebar-toggle'
+        : undefined;
 
   const close = useCallback(() => setOpen(false), []);
   const toggle = useCallback(() => setOpen((v) => !v), []);
+  const openDashboardSidebar = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('coachkit:open-dashboard-sidebar'));
+  }, []);
 
   useEffect(() => {
     // Close drawer on navigation.
@@ -126,19 +138,37 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={toggle}
-        className={cn(
-          'inline-flex h-11 w-11 items-center justify-center rounded-full',
-          'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
-          'text-[var(--text)]',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
-        )}
-        aria-label={open ? 'Close menu' : 'Open menu'}
-      >
-        <Icon name={open ? 'close' : 'menu'} size="md" className="text-[var(--text)]" aria-hidden />
-      </button>
+      <div className="inline-flex items-center gap-2">
+        {isDashboardPath ? (
+          <button
+            type="button"
+            onClick={openDashboardSidebar}
+            className={cn(
+              'inline-flex h-11 w-11 items-center justify-center rounded-full',
+              'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+              'text-[var(--text)]',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+            )}
+            aria-label="Open dashboard sidebar"
+            data-testid={dashboardToggleTestId}
+          >
+            <Icon name="sidebar" size="md" className="text-[var(--text)]" aria-hidden />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={toggle}
+          className={cn(
+            'inline-flex h-11 w-11 items-center justify-center rounded-full',
+            'border border-[var(--border-subtle)] bg-[var(--bg-card)]',
+            'text-[var(--text)]',
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]'
+          )}
+          aria-label={open ? 'Close menu' : 'Open menu'}
+        >
+          <Icon name={open ? 'close' : 'menu'} size="md" className="text-[var(--text)]" aria-hidden />
+        </button>
+      </div>
 
       {open ? (
         <>

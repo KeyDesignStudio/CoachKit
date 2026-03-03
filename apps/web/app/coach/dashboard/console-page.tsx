@@ -384,6 +384,7 @@ export default function CoachDashboardConsolePage() {
   const [sidebarInitialized, setSidebarInitialized] = useState(false);
   const [pendingSidebarSection, setPendingSidebarSection] = useState<'challenges' | 'filters' | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileSidebarMounted, setMobileSidebarMounted] = useState(false);
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [activeChallenges, setActiveChallenges] = useState<CoachActiveChallengePreview[]>([]);
@@ -394,6 +395,7 @@ export default function CoachDashboardConsolePage() {
   const sidebarChallengesRef = useRef<HTMLDivElement | null>(null);
   const sidebarFiltersRef = useRef<HTMLDivElement | null>(null);
   const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
+  const mobileSidebarCloseTimerRef = useRef<number | null>(null);
 
   const coachTimeZone = user?.timezone ?? 'UTC';
   const athleteOptions = useMemo(
@@ -532,13 +534,28 @@ export default function CoachDashboardConsolePage() {
     setPendingSidebarSection(null);
   }, [pendingSidebarSection, sidebarOpen]);
 
+  const openMobileSidebar = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (mobileSidebarCloseTimerRef.current !== null) {
+      window.clearTimeout(mobileSidebarCloseTimerRef.current);
+      mobileSidebarCloseTimerRef.current = null;
+    }
+    setMobileSidebarMounted(true);
+    window.requestAnimationFrame(() => setMobileSidebarOpen(true));
+  }, []);
+
+  const closeMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(false);
+  }, []);
+
   useEffect(() => {
-    if (!mobileSidebarOpen) return;
+    if (!mobileSidebarMounted || typeof window === 'undefined') return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setMobileSidebarOpen(false);
+        closeMobileSidebar();
         return;
       }
+      if (!mobileSidebarOpen) return;
       if (event.key !== 'Tab' || !mobileSidebarRef.current) return;
       const focusable = mobileSidebarRef.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -558,17 +575,41 @@ export default function CoachDashboardConsolePage() {
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const initialTarget = mobileSidebarRef.current?.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    initialTarget?.focus();
+    if (mobileSidebarOpen) {
+      const initialTarget = mobileSidebarRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      initialTarget?.focus();
+    }
 
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [mobileSidebarOpen]);
+  }, [closeMobileSidebar, mobileSidebarMounted, mobileSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => openMobileSidebar();
+    window.addEventListener('coachkit:open-dashboard-sidebar', onOpen);
+    return () => window.removeEventListener('coachkit:open-dashboard-sidebar', onOpen);
+  }, [openMobileSidebar]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!mobileSidebarMounted || mobileSidebarOpen) return;
+    mobileSidebarCloseTimerRef.current = window.setTimeout(() => {
+      setMobileSidebarMounted(false);
+      mobileSidebarCloseTimerRef.current = null;
+    }, 220);
+    return () => {
+      if (mobileSidebarCloseTimerRef.current !== null) {
+        window.clearTimeout(mobileSidebarCloseTimerRef.current);
+        mobileSidebarCloseTimerRef.current = null;
+      }
+    };
+  }, [mobileSidebarMounted, mobileSidebarOpen]);
 
   // If the global filters change, clear any inbox shortcut filter.
   useEffect(() => {
@@ -682,16 +723,6 @@ export default function CoachDashboardConsolePage() {
         <div className={cn('pt-3 md:pt-6 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className={tokens.typography.h1}>Coach Console</h1>
-            <button
-              type="button"
-              className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)] md:hidden"
-              aria-label="Open dashboard sidebar"
-              aria-expanded={mobileSidebarOpen}
-              onClick={() => setMobileSidebarOpen(true)}
-              data-testid="coach-dashboard-mobile-sidebar-toggle"
-            >
-              <Icon name="menu" size="md" aria-hidden />
-            </button>
           </div>
         </div>
 
@@ -1024,17 +1055,20 @@ export default function CoachDashboardConsolePage() {
           </div>
         </div>
 
-        {mobileSidebarOpen ? (
+        {mobileSidebarMounted ? (
           <div className="md:hidden fixed inset-0 z-50">
             <button
               type="button"
-              className="absolute inset-0 bg-black/35"
+              className={cn('absolute inset-0 bg-black transition-opacity duration-200', mobileSidebarOpen ? 'opacity-100' : 'opacity-0')}
               aria-label="Close dashboard sidebar"
-              onClick={() => setMobileSidebarOpen(false)}
+              onClick={closeMobileSidebar}
             />
             <aside
               ref={mobileSidebarRef}
-              className="absolute left-0 top-0 h-full w-[min(90vw,320px)] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xl"
+              className={cn(
+                'absolute left-0 top-0 h-full w-[min(90vw,320px)] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xl transition-transform duration-220 ease-out',
+                mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              )}
               role="dialog"
               aria-modal="true"
               aria-label="Dashboard sidebar"
@@ -1045,7 +1079,7 @@ export default function CoachDashboardConsolePage() {
                 <button
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--text)] hover:bg-[var(--bg-structure)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-subtle)]"
-                  onClick={() => setMobileSidebarOpen(false)}
+                  onClick={closeMobileSidebar}
                   aria-label="Close dashboard sidebar"
                 >
                   <Icon name="close" size="md" aria-hidden />
@@ -1058,7 +1092,7 @@ export default function CoachDashboardConsolePage() {
                     activeChallenges={activeChallenges}
                     coachTimeZone={coachTimeZone}
                     onOpenChallenge={(challengeId) => {
-                      setMobileSidebarOpen(false);
+                      closeMobileSidebar();
                       router.push(`/coach/challenges/${challengeId}` as never);
                     }}
                   />

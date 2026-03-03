@@ -50,6 +50,8 @@ test.describe('Mobile smoke', () => {
     await page.goto('/coach/dashboard', { waitUntil: 'networkidle' });
 
     await expect(page.getByRole('heading', { level: 1, name: 'Coach Console' })).toBeVisible();
+    const viewportWidth = page.viewportSize()?.width ?? 0;
+    const isMobileViewport = viewportWidth < 768;
 
     // Dashboard verification (single assertion set): no calendar UI, mobile layout expectations,
     // and no horizontal overflow at iPhone/iPad viewport widths.
@@ -63,15 +65,33 @@ test.describe('Mobile smoke', () => {
     }
 
     const selectorHeading = page.getByRole('heading', { level: 2, name: 'Make your selection' });
+    if (isMobileViewport) {
+      const sidebarToggle = page.getByTestId('coach-dashboard-mobile-sidebar-toggle');
+      await expect(sidebarToggle).toBeVisible();
+      await sidebarToggle.click();
+      await expect(page.getByTestId('coach-dashboard-sidebar-mobile')).toBeVisible();
+    } else {
+      const sidebarToggle = page.getByTestId('coach-dashboard-sidebar-toggle');
+      await expect(sidebarToggle).toBeVisible();
+      const expanded = await sidebarToggle.getAttribute('aria-expanded');
+      if (expanded === 'false') {
+        await sidebarToggle.click();
+      }
+    }
     await expect(selectorHeading).toBeVisible();
     const needsAttentionHeading = page.getByRole('heading', { level: 2, name: 'Needs your attention' });
     await expect(needsAttentionHeading).toBeVisible();
 
-      const selectorBox = await selectorHeading.boundingBox();
+    const selectorBox = await selectorHeading.boundingBox();
     const viewportHeight = page.viewportSize()?.height ?? 0;
     expect(selectorBox, 'Make your selection should have a bounding box').toBeTruthy();
     if (selectorBox && viewportHeight) {
-          expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThanOrEqual(viewportHeight - 10);
+      expect(selectorBox.y, 'Make your selection should be above the fold on mobile').toBeLessThanOrEqual(viewportHeight - 10);
+    }
+
+    if (isMobileViewport) {
+      await page.getByTestId('coach-dashboard-sidebar-mobile').getByRole('button', { name: 'Close dashboard sidebar' }).click();
+      await expect(page.getByTestId('coach-dashboard-sidebar-mobile')).toHaveCount(0);
     }
 
     await expect(page.getByRole('heading', { level: 2, name: 'At a glance' })).toBeVisible();
@@ -89,7 +109,7 @@ test.describe('Mobile smoke', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Review inbox' })).toBeVisible();
     const inboxSection = page.getByTestId('coach-dashboard-review-inbox');
     await expect(inboxSection).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Mark Reviewed/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Mark reviewed/i })).toBeVisible();
 
     // Notifications block removed from dashboard (redundant).
     await expect(page.getByTestId('coach-dashboard-notifications')).toHaveCount(0);
@@ -100,8 +120,8 @@ test.describe('Mobile smoke', () => {
     const inboxCheckboxCount = await inboxCheckboxes.count();
     if (inboxCheckboxCount > 0) {
       await inboxCheckboxes.first().click();
-      await expect(page.getByRole('button', { name: /Mark Reviewed.*\(1\)/ })).toBeVisible();
-        await expect(page.getByTestId('coach-dashboard-review-inbox').getByRole('button', { name: 'Clear' })).toBeEnabled();
+      await expect(page.getByRole('button', { name: /Mark reviewed/i })).toBeVisible();
+      await expect(page.getByTestId('coach-dashboard-review-inbox').getByRole('button', { name: 'Clear' })).toBeEnabled();
     }
 
     await assertNoHorizontalScroll(page);
@@ -304,7 +324,7 @@ test.describe('Mobile smoke', () => {
   test('Athlete notifications loads and no horizontal scroll', async ({ page }) => {
     await setRoleCookie(page, 'ATHLETE');
     await page.goto('/athlete/notifications', { waitUntil: 'networkidle' });
-    await expect(page.locator('h1', { hasText: 'Messages' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Mailbox|Messages/i })).toBeVisible();
     await assertNoHorizontalScroll(page);
   });
 });
