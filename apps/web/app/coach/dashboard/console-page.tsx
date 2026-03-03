@@ -295,7 +295,7 @@ function CoachDashboardFiltersPanel({
   coachTimeZone: string;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-1.5">
       <div className="min-w-0">
         <FieldLabel className="pl-1 text-[10px]">Athlete</FieldLabel>
         <AthleteSelector athletes={athleteOptions} selectedIds={selectedAthleteIds} onChange={onAthleteIdsChange} />
@@ -809,7 +809,7 @@ export default function CoachDashboardConsolePage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]">
               <div className="min-w-0 lg:col-span-2">
-                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>} showHeaderDivider={false}>
+                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>} showHeaderDivider={false} className="h-full">
                   <div className={cn('grid', tokens.spacing.widgetGap)}>
                     <AttentionItem
                       label="Workouts with pain flags"
@@ -868,78 +868,6 @@ export default function CoachDashboardConsolePage() {
               </div>
 
               <div className="min-w-0 lg:col-span-2">
-                <Block
-                  title="Event countdown"
-                  padding={false}
-                  showHeaderDivider={false}
-                  className="border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]"
-                >
-                  {loading && !data ? (
-                    <div className={cn('space-y-3', tokens.spacing.containerPadding)}>
-                      <div className={cn('text-[var(--muted)]', tokens.typography.body)}>
-                        Loading athlete event countdowns...
-                      </div>
-                      <div className="space-y-2" aria-hidden="true">
-                        {[0, 1].map((index) => (
-                          <div key={`goal-countdown-loading-${index}`} className="space-y-2 rounded-xl bg-[var(--bg-card)]/60 px-3 py-2">
-                            <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--border-subtle)]" />
-                            <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--border-subtle)]" />
-                            <div className="h-1.5 w-full animate-pulse rounded-full bg-[var(--border-subtle)]" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : visibleGoalCountdowns.length === 0 ? (
-                    <div className={cn('text-[var(--muted)]', tokens.spacing.containerPadding, tokens.typography.body)}>
-                      No athlete event dates available for this selection.
-                    </div>
-                  ) : (
-                    <div className="max-h-[420px] overflow-y-auto">
-                      <div className="divide-y divide-[var(--border-subtle)]">
-                        {visibleGoalCountdowns.map((entry) => {
-                          const goal = entry.goalCountdown;
-                          const athleteName = String(entry.athleteName ?? 'Athlete');
-                          const eventName = String(goal.eventName ?? 'Goal event');
-                          const eventDate =
-                            typeof goal.eventDate === 'string' && goal.eventDate
-                              ? formatDayMonthYearInTimeZone(goal.eventDate, 'UTC')
-                              : 'Date not set';
-                          const progressRaw = Math.max(0, Math.min(100, Number(goal.progressPct ?? 0)));
-                          const progress = goal.mode !== 'none' && !goal.isPast && !goal.isRaceDay ? Math.max(2, progressRaw) : progressRaw;
-                          const weeksLabel =
-                            typeof goal.weeksRemaining === 'number' && goal.weeksRemaining >= 0
-                              ? `${goal.weeksRemaining} weeks to go`
-                              : String(goal.label || 'Goal status');
-
-                          return (
-                            <div key={entry.athleteId} className={cn('space-y-1 px-3 py-2')}>
-                              <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
-                                <div className={cn('md:truncate text-[13px] font-medium', tokens.typography.body)} title={athleteName}>
-                                  {athleteName}
-                                </div>
-                                <div className={cn('md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)] dark:text-slate-300', tokens.typography.meta)}>
-                                  {weeksLabel}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
-                                <div className={cn('md:truncate text-[12px] text-[var(--fg-muted)] dark:text-slate-400', tokens.typography.meta)} title={eventName}>
-                                  {eventName}
-                                </div>
-                                <div className={cn('md:whitespace-nowrap text-[12px] text-[var(--fg-muted)] dark:text-slate-400', tokens.typography.meta)}>{eventDate}</div>
-                              </div>
-                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
-                                <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </Block>
-              </div>
-
-              <div className="min-w-0 lg:col-span-3">
                 <StravaVitalsSummaryCard
                   comparison={data?.stravaVitals ?? null}
                   loading={loading && !data}
@@ -1018,6 +946,78 @@ export default function CoachDashboardConsolePage() {
                       )}
                     </div>
                   </div>
+                </Block>
+              </div>
+
+              <div className="min-w-0 lg:col-span-3">
+                <Block
+                  title="Event countdown"
+                  padding={false}
+                  showHeaderDivider={false}
+                  className="border border-[#cad7eb] bg-[rgba(233,238,248,0.85)] dark:border-[#243047] dark:bg-[rgba(12,16,30,0.96)]"
+                >
+                  {loading && !data ? (
+                    <div className={cn('space-y-3', tokens.spacing.containerPadding)}>
+                      <div className={cn('text-[var(--muted)]', tokens.typography.body)}>
+                        Loading athlete event countdowns...
+                      </div>
+                      <div className="space-y-2" aria-hidden="true">
+                        {[0, 1].map((index) => (
+                          <div key={`goal-countdown-loading-${index}`} className="space-y-2 rounded-xl bg-[var(--bg-card)]/60 px-3 py-2">
+                            <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                            <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--border-subtle)]" />
+                            <div className="h-1.5 w-full animate-pulse rounded-full bg-[var(--border-subtle)]" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : visibleGoalCountdowns.length === 0 ? (
+                    <div className={cn('text-[var(--muted)]', tokens.spacing.containerPadding, tokens.typography.body)}>
+                      No athlete event dates available for this selection.
+                    </div>
+                  ) : (
+                    <div className="max-h-[420px] overflow-y-auto">
+                      <div className="divide-y divide-[var(--border-subtle)]">
+                        {visibleGoalCountdowns.map((entry) => {
+                          const goal = entry.goalCountdown;
+                          const athleteName = String(entry.athleteName ?? 'Athlete');
+                          const eventName = String(goal.eventName ?? 'Goal event');
+                          const eventDate =
+                            typeof goal.eventDate === 'string' && goal.eventDate
+                              ? formatDayMonthYearInTimeZone(goal.eventDate, 'UTC')
+                              : 'Date not set';
+                          const progressRaw = Math.max(0, Math.min(100, Number(goal.progressPct ?? 0)));
+                          const progress = goal.mode !== 'none' && !goal.isPast && !goal.isRaceDay ? Math.max(2, progressRaw) : progressRaw;
+                          const weeksLabel =
+                            typeof goal.weeksRemaining === 'number' && goal.weeksRemaining >= 0
+                              ? `${goal.weeksRemaining} weeks to go`
+                              : String(goal.label || 'Goal status');
+
+                          return (
+                            <div key={entry.athleteId} className={cn('space-y-1 px-3 py-2')}>
+                              <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                                <div className={cn('md:truncate text-[13px] font-medium', tokens.typography.body)} title={athleteName}>
+                                  {athleteName}
+                                </div>
+                                <div className={cn('md:whitespace-nowrap text-right text-[12px] tabular-nums text-[var(--fg-muted)] dark:text-slate-300', tokens.typography.meta)}>
+                                  {weeksLabel}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 items-start gap-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-2">
+                                <div className={cn('md:truncate text-[12px] text-[var(--fg-muted)] dark:text-slate-400', tokens.typography.meta)} title={eventName}>
+                                  {eventName}
+                                </div>
+                                <div className={cn('md:whitespace-nowrap text-[12px] text-[var(--fg-muted)] dark:text-slate-400', tokens.typography.meta)}>{eventDate}</div>
+                              </div>
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bar-track)]">
+                                <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progress}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </Block>
               </div>
             </div>

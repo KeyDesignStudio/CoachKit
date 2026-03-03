@@ -34,7 +34,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
 
   return (
     <div
-      className={cn('rounded-2xl bg-[var(--bg-card)] min-h-0 flex flex-col', tokens.spacing.containerPadding)}
+      className={cn('rounded-2xl bg-[var(--bg-card)] min-h-0 h-full flex flex-col', tokens.spacing.containerPadding)}
       style={minHeightPx ? { minHeight: `${minHeightPx}px` } : undefined}
       data-testid={testIds.card}
     >
