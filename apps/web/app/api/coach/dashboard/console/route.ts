@@ -52,6 +52,14 @@ function distanceOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+function readDraftText(draft: unknown, key: string): string | null {
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null;
+  const value = (draft as Record<string, unknown>)[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 type ReviewItem = {
   id: string;
   title: string;
@@ -247,6 +255,28 @@ async function getDashboardAggregates(params: {
         latestPublishedSetupByAthlete.set(row.athleteId, ((row.setupJson as any) ?? {}) as Record<string, unknown>);
       }
     }
+    const latestSubmittedIntakes = athleteIds.length
+      ? await prisma.athleteIntakeResponse.findMany({
+          where: {
+            athleteId: { in: athleteIds },
+            coachId: params.coachId,
+            submittedAt: { not: null },
+          },
+          select: {
+            athleteId: true,
+            draftJson: true,
+            submittedAt: true,
+            createdAt: true,
+          },
+          orderBy: [{ athleteId: 'asc' }, { submittedAt: 'desc' }, { createdAt: 'desc' }],
+        })
+      : [];
+    const latestSubmittedIntakeDraftByAthlete = new Map<string, Record<string, unknown>>();
+    for (const row of latestSubmittedIntakes) {
+      if (!latestSubmittedIntakeDraftByAthlete.has(row.athleteId)) {
+        latestSubmittedIntakeDraftByAthlete.set(row.athleteId, ((row.draftJson as any) ?? {}) as Record<string, unknown>);
+      }
+    }
 
     const athleteRows = athletes.map((a) => ({
       id: a.userId,
@@ -260,6 +290,7 @@ async function getDashboardAggregates(params: {
       .filter((athlete) => targetAthleteIdsForGoals.has(athlete.userId))
       .map((athlete) => {
         const setupJson = latestPublishedSetupByAthlete.get(athlete.userId) ?? {};
+        const intakeDraftJson = latestSubmittedIntakeDraftByAthlete.get(athlete.userId) ?? {};
         const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
         const fallbackEventName =
           (typeof requestContext?.eventName === 'string' && requestContext.eventName.trim()) ||
@@ -269,6 +300,8 @@ async function getDashboardAggregates(params: {
           (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
           (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
           null;
+        const fallbackEventNameFromIntake = readDraftText(intakeDraftJson, 'event_name');
+        const fallbackEventDateFromIntake = readDraftText(intakeDraftJson, 'event_date') ?? readDraftText(intakeDraftJson, 'completion_date');
         const fallbackStartDate =
           (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
           (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
@@ -280,8 +313,8 @@ async function getDashboardAggregates(params: {
           athleteId: athlete.userId,
           athleteName: athlete.user.name,
           goalCountdown: getGoalCountdown({
-            eventName: profileEventName || fallbackEventName || 'Goal event',
-            eventDate: athlete.eventDate ?? fallbackEventDate,
+            eventName: profileEventName || fallbackEventNameFromIntake || fallbackEventName || 'Goal event',
+            eventDate: athlete.eventDate ?? fallbackEventDateFromIntake ?? fallbackEventDate,
             blockStartDate: fallbackStartDate,
             timelineWeeks:
               athlete.timelineWeeks ??

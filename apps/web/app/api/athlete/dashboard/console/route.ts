@@ -93,6 +93,14 @@ const athleteDashboardCache = new Map<
 >();
 const athleteDashboardInFlight = new Map<string, Promise<AthleteDashboardResponse>>();
 
+function readDraftText(draft: unknown, key: string): string | null {
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null;
+  const value = (draft as Record<string, unknown>)[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 function buildAthleteDashboardCacheKey(params: {
   athleteId: string;
   fromKey: string;
@@ -161,7 +169,7 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const [athleteProfile, latestPublishedDraft, items, stravaVitals] = await Promise.all([
+    const [athleteProfile, latestPublishedDraft, latestSubmittedIntake, items, stravaVitals] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: params.athleteId },
         select: {
@@ -179,6 +187,17 @@ async function getAthleteDashboardData(params: {
         select: {
           setupJson: true,
           publishedAt: true,
+        },
+      }),
+      prisma.athleteIntakeResponse.findFirst({
+        where: {
+          athleteId: params.athleteId,
+          submittedAt: { not: null },
+        },
+        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          draftJson: true,
+          submittedAt: true,
         },
       }),
       prisma.calendarItem.findMany({
@@ -220,10 +239,13 @@ async function getAthleteDashboardData(params: {
       }),
     ]);
     const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+    const intakeDraftJson = ((latestSubmittedIntake?.draftJson as any) ?? {}) as Record<string, unknown>;
     const fallbackEventDate =
       (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
       (typeof setupJson.eventDate === 'string' && setupJson.eventDate.trim()) ||
       null;
+    const fallbackEventNameFromIntake = readDraftText(intakeDraftJson, 'event_name');
+    const fallbackEventDateFromIntake = readDraftText(intakeDraftJson, 'event_date') ?? readDraftText(intakeDraftJson, 'completion_date');
     const fallbackStartDate =
       (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
       (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
@@ -231,8 +253,8 @@ async function getAthleteDashboardData(params: {
     const fallbackWeeksToEvent = Number(setupJson.weeksToEvent);
 
     const goalCountdown = getGoalCountdown({
-      eventName: athleteProfile?.eventName ?? 'Goal event',
-      eventDate: athleteProfile?.eventDate ?? fallbackEventDate,
+      eventName: athleteProfile?.eventName ?? fallbackEventNameFromIntake ?? 'Goal event',
+      eventDate: athleteProfile?.eventDate ?? fallbackEventDateFromIntake ?? fallbackEventDate,
       blockStartDate: fallbackStartDate,
       timelineWeeks:
         athleteProfile?.timelineWeeks ??

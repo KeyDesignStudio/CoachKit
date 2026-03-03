@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 
 const payloadSchema = z.object({
   athleteIds: z.array(z.string().min(1)).min(1).max(200),
+  redirectPath: z.enum(['/athlete/training-request', '/athlete/intake']).optional(),
 });
 
 function buildOrigin(request: NextRequest): string {
@@ -33,8 +34,8 @@ function buildOrigin(request: NextRequest): string {
   return fallback.startsWith('http') ? fallback : `https://${fallback}`;
 }
 
-function buildInviteLink(origin: string, email: string): string {
-  const redirect = encodeURIComponent('/athlete/training-request');
+function buildInviteLink(origin: string, email: string, redirectPath: '/athlete/training-request' | '/athlete/intake'): string {
+  const redirect = encodeURIComponent(redirectPath);
   return `${origin}/sign-up?redirect_url=${redirect}&email_address=${encodeURIComponent(email)}`;
 }
 
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user } = await requireCoach();
     const payload = payloadSchema.parse(await request.json());
+    const redirectPath = payload.redirectPath ?? '/athlete/training-request';
 
     const uniqueAthleteIds = Array.from(new Set(payload.athleteIds.map((id) => String(id).trim()).filter(Boolean)));
     if (!uniqueAthleteIds.length) {
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
     for (const athlete of athletes) {
       const email = String(athlete.email || athlete.user.email || '').trim().toLowerCase();
       const name = String(athlete.firstName || athlete.user.name || 'Athlete');
-      const inviteLink = buildInviteLink(origin, email);
+      const inviteLink = buildInviteLink(origin, email, redirectPath);
       if (!email) {
         results.push({
           athleteId: athlete.userId,
@@ -150,4 +152,3 @@ export async function POST(request: NextRequest) {
     return handleError(error);
   }
 }
-

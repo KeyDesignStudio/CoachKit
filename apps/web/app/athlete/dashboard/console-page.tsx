@@ -468,19 +468,22 @@ export default function AthleteDashboardConsolePage() {
       qs.set('from', dateRange.from);
       qs.set('to', dateRange.to);
       if (discipline) qs.set('discipline', discipline);
-      qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
-        const [resp, challengeResp] = await Promise.all([
-          request<AthleteDashboardResponse>(
-            `/api/athlete/dashboard/console?${qs.toString()}`,
-            bypassCache ? { cache: 'no-store' } : undefined
-          ),
-          request<{ challenges: ActiveChallengePreview[] }>('/api/athlete/challenges?status=ACTIVE', { cache: 'no-store' }),
-        ]);
+        const resp = await request<AthleteDashboardResponse>(
+          `/api/athlete/dashboard/console?${qs.toString()}`,
+          bypassCache ? { cache: 'no-store' } : undefined
+        );
         setData(resp);
-        setActiveChallenges(challengeResp.challenges ?? []);
+
+        void request<{ challenges: ActiveChallengePreview[] }>('/api/athlete/challenges?status=ACTIVE', { cache: 'no-store' })
+          .then((challengeResp) => {
+            setActiveChallenges(challengeResp.challenges ?? []);
+          })
+          .catch(() => {
+            setActiveChallenges([]);
+          });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {

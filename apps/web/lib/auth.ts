@@ -6,6 +6,8 @@ import { setAuditActor } from '@/lib/audit-context';
 import { prisma } from '@/lib/prisma';
 import { ApiError, forbidden, notFound, unauthorized } from '@/lib/errors';
 
+const AUTH_USER_CACHE_TTL_MS = 30_000;
+
 type AuthenticatedContext = {
   user: {
     id: string;
@@ -16,6 +18,18 @@ type AuthenticatedContext = {
     authProviderId: string;
   };
 };
+
+type DbUserRecord = {
+  id: string;
+  role: UserRole;
+  email: string;
+  name: string | null;
+  timezone: string;
+  authProviderId: string | null;
+};
+
+const authUserCache = new Map<string, { user: DbUserRecord; expiresAtMs: number }>();
+const authUserInFlight = new Map<string, Promise<DbUserRecord | null>>();
 
 function isAuthDisabled() {
   return (
@@ -159,18 +173,8 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
     throw unauthorized('Authentication required.');
   }
 
-  // Look up user by Clerk ID first
-  let user = await prisma.user.findUnique({
-    where: { authProviderId: clerkUserId },
-    select: {
-      id: true,
-      role: true,
-      email: true,
-      name: true,
-      timezone: true,
-      authProviderId: true,
-    },
-  });
+  // Look up user by Clerk ID first (short in-memory cache to avoid repeated DB round-trips).
+  let user = await getCachedUserByClerkId(clerkUserId);
 
   // If not found by authProviderId, try to link by email (first-time login)
   if (!user) {
@@ -217,6 +221,10 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
         authProviderId: true,
       },
     });
+    authUserCache.set(clerkUserId, {
+      user,
+      expiresAtMs: Date.now() + AUTH_USER_CACHE_TTL_MS,
+    });
 
     console.log(`[Auth] Linked Clerk user ${clerkUserId} to DB user ${user.email}`);
   }
@@ -242,6 +250,45 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
     role: context.user.role,
   });
   return context;
+}
+
+async function getCachedUserByClerkId(clerkUserId: string): Promise<DbUserRecord | null> {
+  const now = Date.now();
+  const cached = authUserCache.get(clerkUserId);
+  if (cached && cached.expiresAtMs > now) {
+    return cached.user;
+  }
+
+  const existing = authUserInFlight.get(clerkUserId);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = prisma.user.findUnique({
+    where: { authProviderId: clerkUserId },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      name: true,
+      timezone: true,
+      authProviderId: true,
+    },
+  });
+  authUserInFlight.set(clerkUserId, promise);
+
+  try {
+    const user = await promise;
+    if (user) {
+      authUserCache.set(clerkUserId, {
+        user,
+        expiresAtMs: now + AUTH_USER_CACHE_TTL_MS,
+      });
+    }
+    return user;
+  } finally {
+    authUserInFlight.delete(clerkUserId);
+  }
 }
 
 /**
