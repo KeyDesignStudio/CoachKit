@@ -399,8 +399,8 @@ export default function CoachAthletesPage() {
                         {athlete.onboardingStatus === 'ACTIVE' ? 'ACTIVE' : 'DRAFT'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <label className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] transition-colors cursor-pointer" title="Select athlete for bulk invite">
+                    <div className="flex items-center gap-1.5 pr-1">
+                      <label className="inline-flex items-center justify-center cursor-pointer" title="Select athlete for bulk invite">
                         <input
                           type="checkbox"
                           checked={selectedInviteAthleteIds.has(athlete.userId)}
@@ -408,7 +408,7 @@ export default function CoachAthletesPage() {
                             event.stopPropagation();
                             toggleAthleteSelection(athlete.userId);
                           }}
-                          className="h-4 w-4 cursor-pointer accent-[var(--ring)]"
+                          className="h-2.5 w-2.5 cursor-pointer accent-[var(--ring)]"
                         />
                       </label>
                       <a
