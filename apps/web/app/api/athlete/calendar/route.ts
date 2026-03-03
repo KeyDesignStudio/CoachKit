@@ -29,6 +29,7 @@ const querySchema = z.object({
 
 const LEAN_CALENDAR_ITEMS = new Set(['1', 'true', 'yes']);
 const ATHLETE_CALENDAR_CACHE_TTL_MS = 30_000;
+const WEATHER_FETCH_BUDGET_MS = 700;
 
 type AthleteCalendarResponse = {
   items: any[];
@@ -122,6 +123,28 @@ function buildAthleteCalendarCacheKey(params: {
   ].join('|');
 }
 
+async function getWeatherSummariesForRangeWithBudget(params: {
+  lat: number;
+  lon: number;
+  from: string;
+  to: string;
+  timezone: string;
+}): Promise<Record<string, any> | undefined> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      timeoutId = setTimeout(() => resolve(null), WEATHER_FETCH_BUDGET_MS);
+    });
+    const result = await Promise.race([getWeatherSummariesForRange(params), timeout]);
+    if (!result || Object.keys(result).length === 0) return undefined;
+    return result;
+  } catch {
+    return undefined;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const prof = createServerProfiler('athlete/calendar');
@@ -185,34 +208,50 @@ export async function GET(request: NextRequest) {
       const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
       const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
 
-      const [athleteProfile, latestPublishedDraft, items] = await Promise.all([
-        prisma.athleteProfile.findUnique({
-          where: { userId: user.id },
-          select: { coachId: true, defaultLat: true, defaultLon: true, eventName: true, eventDate: true, timelineWeeks: true },
-        }),
-        prisma.aiPlanDraft.findFirst({
-          where: {
-            athleteId: user.id,
-            visibilityStatus: 'PUBLISHED',
+      const athleteProfilePromise = prisma.athleteProfile.findUnique({
+        where: { userId: user.id },
+        select: { coachId: true, defaultLat: true, defaultLon: true, eventName: true, eventDate: true, timelineWeeks: true },
+      });
+      const latestPublishedDraftPromise = prisma.aiPlanDraft.findFirst({
+        where: {
+          athleteId: user.id,
+          visibilityStatus: 'PUBLISHED',
+        },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          setupJson: true,
+          publishedAt: true,
+        },
+      });
+      const itemsPromise = prisma.calendarItem.findMany({
+        where: {
+          athleteId: user.id,
+          deletedAt: null,
+          date: {
+            gte: candidateFromDate,
+            lte: candidateToDate,
           },
-          orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            setupJson: true,
-            publishedAt: true,
-          },
-        }),
-        prisma.calendarItem.findMany({
-          where: {
-            athleteId: user.id,
-            deletedAt: null,
-            date: {
-              gte: candidateFromDate,
-              lte: candidateToDate,
-            },
-          },
-          orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-          select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
-        }),
+        },
+        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+        select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
+      });
+
+      const athleteProfile = await athleteProfilePromise;
+      const dayWeatherPromise =
+        athleteProfile?.defaultLat != null && athleteProfile.defaultLon != null
+          ? getWeatherSummariesForRangeWithBudget({
+              lat: athleteProfile.defaultLat,
+              lon: athleteProfile.defaultLon,
+              from: params.from,
+              to: params.to,
+              timezone: athleteTimezone,
+            })
+          : Promise.resolve(undefined);
+
+      const [latestPublishedDraft, items, dayWeather] = await Promise.all([
+        latestPublishedDraftPromise,
+        itemsPromise,
+        dayWeatherPromise,
       ]);
 
       if (!athleteProfile) {
@@ -336,25 +375,6 @@ export async function GET(request: NextRequest) {
           completedActivities: undefined,
         };
       });
-
-      let dayWeather: Record<string, any> | undefined;
-      if (athleteProfile.defaultLat != null && athleteProfile.defaultLon != null) {
-        try {
-          const map = await getWeatherSummariesForRange({
-            lat: athleteProfile.defaultLat,
-            lon: athleteProfile.defaultLon,
-            from: params.from,
-            to: params.to,
-            timezone: athleteTimezone,
-          });
-
-          if (Object.keys(map).length > 0) {
-            dayWeather = map;
-          }
-        } catch {
-          // Best-effort: calendar should still load.
-        }
-      }
 
       const goalCountdown = getGoalCountdown({
         eventName: profileEventName || fallbackEventName || 'Goal event',
