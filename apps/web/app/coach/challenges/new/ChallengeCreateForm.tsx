@@ -20,6 +20,7 @@ type SquadOption = {
 type ChallengeTypeValue = 'VOLUME' | 'FREQUENCY' | 'PERFORMANCE' | 'POINTS';
 
 const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'BRICK', 'OTHER'] as const;
+const CHALLENGE_TITLE_MAX_LENGTH = 25;
 
 function toIsoDate(value: string) {
   return value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null;
@@ -90,6 +91,11 @@ export function ChallengeCreateForm({ squads }: { squads: SquadOption[] }) {
   async function submit(status: 'DRAFT' | 'ACTIVE') {
     if (!title.trim()) {
       setError('Title is required.');
+      return;
+    }
+
+    if (title.trim().length > CHALLENGE_TITLE_MAX_LENGTH) {
+      setError(`Title must be ${CHALLENGE_TITLE_MAX_LENGTH} characters or fewer.`);
       return;
     }
 
@@ -168,7 +174,15 @@ export function ChallengeCreateForm({ squads }: { squads: SquadOption[] }) {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 md:col-span-2">
               <span className="text-sm text-[var(--muted)]">Title *</span>
-              <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="March Squad Volume Push" />
+              <Input
+                value={title}
+                maxLength={CHALLENGE_TITLE_MAX_LENGTH}
+                onChange={(event) => setTitle(event.target.value.slice(0, CHALLENGE_TITLE_MAX_LENGTH))}
+                placeholder="March Squad Volume Push"
+              />
+              <p className="text-xs text-[var(--muted)]">
+                {title.length}/{CHALLENGE_TITLE_MAX_LENGTH}
+              </p>
             </label>
             <label className="space-y-1 md:col-span-2">
               <span className="text-sm text-[var(--muted)]">Description</span>

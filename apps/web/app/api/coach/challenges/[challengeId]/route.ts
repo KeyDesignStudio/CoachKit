@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
 
 const updateSchema = z
   .object({
-    title: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().min(1).max(25).optional(),
     description: z.string().trim().max(4000).optional().nullable(),
     startAt: z.coerce.date().optional(),
     endAt: z.coerce.date().optional().nullable(),
