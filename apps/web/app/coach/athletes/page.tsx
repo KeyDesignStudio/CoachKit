@@ -12,6 +12,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { AthleteDetailDrawer } from '@/components/coach/AthleteDetailDrawer';
 import { CreateAthleteModal } from '@/components/coach/CreateAthleteModal';
 import { formatDateShortAu } from '@/lib/client-date';
+import { cn } from '@/lib/cn';
 
 interface AthleteRecord {
   userId: string;
@@ -27,6 +28,7 @@ interface AthleteRecord {
   primaryGoal?: string | null;
   dateOfBirth?: string | null;
   coachNotes?: string | null;
+  onboardingStatus?: 'DRAFT' | 'ACTIVE';
   user: {
     id: string;
     name: string | null;
@@ -84,8 +86,8 @@ export default function CoachAthletesPage() {
   const [toolsBusy, setToolsBusy] = useState(false);
   const [toolError, setToolError] = useState('');
   const [toolSuccess, setToolSuccess] = useState('');
-  const [inviteBusyAthleteId, setInviteBusyAthleteId] = useState<string | null>(null);
-  const [inviteAllBusy, setInviteAllBusy] = useState(false);
+  const [inviteSelectedBusy, setInviteSelectedBusy] = useState(false);
+  const [selectedInviteAthleteIds, setSelectedInviteAthleteIds] = useState<Set<string>>(() => new Set());
 
   const loadAthletes = () => {
     if (user?.role !== 'COACH' || !user.userId) {
@@ -146,32 +148,23 @@ export default function CoachAthletesPage() {
     return summary;
   };
 
-  const handleSendSingleInvite = async (athleteId: string) => {
-    setInviteBusyAthleteId(athleteId);
-    setToolError('');
-    setToolSuccess('');
-    try {
-      const summary = await sendIntakeInvites([athleteId]);
-      setToolSuccess(summary);
-    } catch (err) {
-      setToolError(err instanceof Error ? err.message : 'Failed to send intake invite.');
-    } finally {
-      setInviteBusyAthleteId(null);
+  const handleSendSelectedInvites = async () => {
+    const selectedIds = Array.from(selectedInviteAthleteIds);
+    if (!selectedIds.length) {
+      setToolError('Select at least one athlete card to send intake invites.');
+      return;
     }
-  };
-
-  const handleSendAllInvites = async () => {
-    if (!athletes.length) return;
-    setInviteAllBusy(true);
+    setInviteSelectedBusy(true);
     setToolError('');
     setToolSuccess('');
     try {
-      const summary = await sendIntakeInvites(athletes.map((athlete) => athlete.userId));
+      const summary = await sendIntakeInvites(selectedIds);
       setToolSuccess(summary);
+      setSelectedInviteAthleteIds(new Set());
     } catch (err) {
       setToolError(err instanceof Error ? err.message : 'Failed to send intake invites.');
     } finally {
-      setInviteAllBusy(false);
+      setInviteSelectedBusy(false);
     }
   };
 
@@ -216,8 +209,12 @@ export default function CoachAthletesPage() {
         }
       }
 
-      const inviteSummary = await sendIntakeInvites(createdAthleteIds);
-      setToolSuccess(`Added ${createdAthleteIds.length} athlete${createdAthleteIds.length === 1 ? '' : 's'}. ${inviteSummary}`);
+      setToolSuccess(`Added ${createdAthleteIds.length} athlete${createdAthleteIds.length === 1 ? '' : 's'}.`);
+      setSelectedInviteAthleteIds((prev) => {
+        const next = new Set(prev);
+        createdAthleteIds.forEach((id) => next.add(id));
+        return next;
+      });
       setCsvFile(null);
       loadAthletes();
     } catch (err) {
@@ -235,6 +232,15 @@ export default function CoachAthletesPage() {
   const handleDrawerClose = () => {
     setDrawerOpen(false);
     setSelectedAthleteId(null);
+  };
+
+  const toggleAthleteSelection = (athleteId: string) => {
+    setSelectedInviteAthleteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(athleteId)) next.delete(athleteId);
+      else next.add(athleteId);
+      return next;
+    });
   };
 
   const formatDateOfBirth = (dob: string | null | undefined) => {
@@ -299,7 +305,7 @@ export default function CoachAthletesPage() {
             </div>
             <Button
               onClick={() => setModalOpen(true)}
-              className="ml-auto h-10 min-h-0 w-1/3 min-w-[132px] max-w-[180px] bg-black px-3 py-1.5 text-sm text-white hover:bg-black/90 dark:bg-black dark:hover:bg-black/90 md:h-auto md:min-h-[44px] md:w-auto md:max-w-none md:px-5 md:py-2"
+              className="ml-auto h-10 min-h-0 w-1/3 min-w-[132px] max-w-[180px] px-3 py-1.5 text-sm md:h-auto md:min-h-[44px] md:w-auto md:max-w-none md:px-5 md:py-2"
             >
               <Icon name="add" size="sm" />
               <span className="ml-2">New Athlete</span>
@@ -310,11 +316,11 @@ export default function CoachAthletesPage() {
         <Block title="Athlete Onboarding Tools">
           <div className="space-y-4">
             <p className="text-sm text-[var(--muted)]">
-              Add athletes anytime and send each athlete a personalized sign-up link to complete their intake form.
+              Add athletes anytime, then select one or more athlete cards below to send personalized intake invites.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="secondary" onClick={handleSendAllInvites} disabled={!athletes.length || inviteAllBusy || toolsBusy}>
-                {inviteAllBusy ? 'Sending invites…' : 'Send Intake Invites To All Athletes'}
+              <Button type="button" variant="secondary" onClick={handleSendSelectedInvites} disabled={selectedInviteAthleteIds.size === 0 || inviteSelectedBusy || toolsBusy}>
+                {inviteSelectedBusy ? 'Sending invites…' : `Send Intake Invites To Selected (${selectedInviteAthleteIds.size})`}
               </Button>
             </div>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
@@ -327,8 +333,8 @@ export default function CoachAthletesPage() {
                   className="block w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--bg-structure)] file:px-3 file:py-1.5 file:text-sm"
                 />
               </label>
-              <Button type="button" onClick={handleBulkUpload} disabled={!csvFile || toolsBusy || inviteAllBusy}>
-                {toolsBusy ? 'Uploading…' : 'Add Athletes From CSV + Send Intake Invites'}
+              <Button type="button" onClick={handleBulkUpload} disabled={!csvFile || toolsBusy || inviteSelectedBusy}>
+                {toolsBusy ? 'Uploading…' : 'Add Athletes From CSV'}
               </Button>
             </div>
             <p className="text-xs text-[var(--muted)]">
@@ -369,27 +375,42 @@ export default function CoachAthletesPage() {
             {athletes.map((athlete) => (
               <Block
                 key={athlete.userId}
-                className="h-full flex flex-col relative group transition-colors hover:border-[var(--ring)]"
+                className={cn(
+                  'h-full flex flex-col relative group transition-colors hover:border-[var(--ring)]',
+                  selectedInviteAthleteIds.has(athlete.userId) ? 'border-[var(--ring)] ring-1 ring-[var(--ring)]' : ''
+                )}
               >
                 {/* Top: Send Message + Name + email (+ optional DOB) */}
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium md:truncate text-left">
-                      {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleSendSingleInvite(athlete.userId);
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
-                        title="Send intake invite"
-                        disabled={inviteBusyAthleteId === athlete.userId || toolsBusy || inviteAllBusy}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="font-medium md:truncate text-left">
+                        {[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || athlete.user.name || 'Unnamed Athlete'}
+                      </p>
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide',
+                          athlete.onboardingStatus === 'ACTIVE'
+                            ? 'border-emerald-300 bg-emerald-500/12 text-emerald-700 dark:border-emerald-700/70 dark:bg-emerald-500/15 dark:text-emerald-200'
+                            : 'border-amber-300 bg-amber-500/12 text-amber-700 dark:border-amber-700/70 dark:bg-amber-500/15 dark:text-amber-200'
+                        )}
+                        title={athlete.onboardingStatus === 'ACTIVE' ? 'Intake/profile is complete' : 'Intake/profile is still draft'}
                       >
-                        <Icon name="inbox" size="sm" />
-                      </button>
+                        {athlete.onboardingStatus === 'ACTIVE' ? 'ACTIVE' : 'DRAFT'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-structure)] hover:bg-[var(--bg-element-hover)] transition-colors cursor-pointer" title="Select athlete for bulk invite">
+                        <input
+                          type="checkbox"
+                          checked={selectedInviteAthleteIds.has(athlete.userId)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            toggleAthleteSelection(athlete.userId);
+                          }}
+                          className="h-4 w-4 cursor-pointer accent-[var(--ring)]"
+                        />
+                      </label>
                       <a
                         href={`/coach/notifications?athleteId=${athlete.userId}`}
                         onClick={(event) => event.stopPropagation()}
