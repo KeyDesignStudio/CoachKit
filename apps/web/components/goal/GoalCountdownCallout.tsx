@@ -6,6 +6,7 @@ type GoalCountdownCalloutProps = {
   variant?: 'hero' | 'ribbon' | 'chip';
   athleteName?: string | null;
   className?: string;
+  showShortLabel?: boolean;
 };
 
 function getTone(goal: GoalCountdown) {
@@ -40,7 +41,7 @@ function formatEventDate(value: string): string {
   }).format(asDate);
 }
 
-export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, className }: GoalCountdownCalloutProps) {
+export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, className, showShortLabel = true }: GoalCountdownCalloutProps) {
   if (!goal || goal.mode === 'none' || !goal.eventDate) return null;
 
   const title = goal.eventName || 'Goal event';
@@ -95,8 +96,10 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
           <div className="mt-1 text-xs text-[var(--muted)]">{eventDateLabel}</div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-semibold leading-none tabular-nums">{goal.shortLabel}</div>
-          <div className="mt-1 text-xs text-[var(--muted)]">{goal.label}</div>
+          {showShortLabel ? <div className="text-lg font-semibold leading-none tabular-nums">{goal.shortLabel}</div> : null}
+          <div className={cn('text-xs text-[var(--muted)]', showShortLabel ? 'mt-1' : 'text-sm font-semibold tabular-nums text-[var(--text)]')}>
+            {goal.label}
+          </div>
         </div>
       </div>
       {showProgress ? (

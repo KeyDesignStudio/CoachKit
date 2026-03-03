@@ -716,16 +716,6 @@ export default function AthleteDashboardConsolePage() {
           </div>
         ) : null}
 
-        {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
-          <div className={cn('mt-3 mx-4 md:mr-6 lg:mr-8 grid grid-cols-1 lg:grid-cols-3', sidebarOpen ? 'md:ml-[256px]' : 'md:ml-[76px]')}>
-            <GoalCountdownCallout
-              goal={data.goalCountdown}
-              variant="hero"
-              className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 lg:col-start-3 lg:w-full"
-            />
-          </div>
-        ) : null}
-
         <div className={cn('mt-4 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <aside
             className={cn(
@@ -769,32 +759,47 @@ export default function AthleteDashboardConsolePage() {
             </div>
 
             {sidebarOpen ? (
-              <div className="h-[calc(100vh-144px)] overflow-y-auto px-2.5 py-3 space-y-4">
-                <div ref={sidebarChallengesRef}>
-                  <DashboardChallengesPanel
-                    activeChallenges={activeChallenges}
-                    athleteTimeZone={athleteTimeZone}
-                    onOpenChallenge={(challengeId) => router.push(`/challenges/${challengeId}` as never)}
-                  />
-                </div>
-
-                <div ref={sidebarFiltersRef} className="border-t border-[var(--border-subtle)] pt-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
-                    <h2 className={cn(tokens.typography.blockTitle, 'text-xs')}>Make your selection</h2>
+              <div className="h-[calc(100vh-144px)] overflow-y-auto px-2.5 py-3">
+                <div className="flex min-h-full flex-col gap-4">
+                  <div ref={sidebarChallengesRef}>
+                    <DashboardChallengesPanel
+                      activeChallenges={activeChallenges}
+                      athleteTimeZone={athleteTimeZone}
+                      onOpenChallenge={(challengeId) => router.push(`/challenges/${challengeId}` as never)}
+                    />
                   </div>
-                  <DashboardFiltersPanel
-                    discipline={discipline}
-                    onDisciplineChange={setDiscipline}
-                    timeRange={timeRange}
-                    onTimeRangeChange={setTimeRange}
-                    customFrom={customFrom}
-                    customTo={customTo}
-                    onCustomFromChange={setCustomFrom}
-                    onCustomToChange={setCustomTo}
-                    dateRange={dateRange}
-                    athleteTimeZone={athleteTimeZone}
-                  />
+
+                  <div ref={sidebarFiltersRef} className="border-t border-[var(--border-subtle)] pt-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Icon name="filter" size="sm" className="text-[var(--muted)]" aria-hidden />
+                      <h2 className={cn(tokens.typography.blockTitle, 'text-xs')}>Make your selection</h2>
+                    </div>
+                    <DashboardFiltersPanel
+                      discipline={discipline}
+                      onDisciplineChange={setDiscipline}
+                      timeRange={timeRange}
+                      onTimeRangeChange={setTimeRange}
+                      customFrom={customFrom}
+                      customTo={customTo}
+                      onCustomFromChange={setCustomFrom}
+                      onCustomToChange={setCustomTo}
+                      dateRange={dateRange}
+                      athleteTimeZone={athleteTimeZone}
+                    />
+                  </div>
+
+                  {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
+                    <div className="mt-auto border-t border-[var(--border-subtle)] pt-4">
+                      <div className="px-1.5">
+                        <GoalCountdownCallout
+                          goal={data.goalCountdown}
+                          variant="hero"
+                          showShortLabel={false}
+                          className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 min-h-[124px]"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -1191,6 +1196,18 @@ export default function AthleteDashboardConsolePage() {
                     athleteTimeZone={athleteTimeZone}
                   />
                 </div>
+                {data?.goalCountdown?.mode && data.goalCountdown.mode !== 'none' ? (
+                  <div className="border-t border-[var(--border-subtle)] pt-4">
+                    <div className="px-1.5">
+                      <GoalCountdownCallout
+                        goal={data.goalCountdown}
+                        variant="hero"
+                        showShortLabel={false}
+                        className="ring-0 border border-[#cad7eb] bg-[#e9eef8]/85 min-h-[124px]"
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </aside>
           </>
