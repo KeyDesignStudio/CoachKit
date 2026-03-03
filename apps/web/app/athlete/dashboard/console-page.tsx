@@ -355,7 +355,7 @@ function DashboardFiltersPanel({
   athleteTimeZone: string;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-1.5">
       <div className="min-w-0">
         <FieldLabel className="pl-1 text-[10px]">Discipline</FieldLabel>
         <SelectField className="min-h-[44px] w-full text-xs" value={discipline ?? ''} onChange={(e) => onDisciplineChange(e.target.value ? e.target.value : null)}>
