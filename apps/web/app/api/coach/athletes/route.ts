@@ -9,6 +9,25 @@ import { ApiError } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
 
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasNumber(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function hasNonEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasDate(value: unknown): boolean {
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (!value) return false;
+  const parsed = new Date(String(value));
+  return !Number.isNaN(parsed.getTime());
+}
+
 const createAthleteSchema = z
   .object({
     email: z.string().email(),
@@ -70,10 +89,46 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await requireCoach();
 
-    const athletes = await prisma.athleteProfile.findMany({
+    const athletesRaw = await prisma.athleteProfile.findMany({
       where: { coachId: user.id },
-      include: { user: true },
+      include: {
+        user: true,
+        aiPlanBuilderIntakeResponses: {
+          select: {
+            submittedAt: true,
+            status: true,
+          },
+          orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
+      },
       orderBy: { user: { createdAt: 'asc' } },
+    });
+    const athletes = athletesRaw.map((athlete) => {
+      const { aiPlanBuilderIntakeResponses, ...athleteBase } = athlete;
+      const hasSubmittedIntake = aiPlanBuilderIntakeResponses.some((row) => row.submittedAt != null || row.status === 'SUBMITTED');
+      const hasManualProfileCompletion =
+        hasText(athlete.firstName) &&
+        hasText(athlete.lastName) &&
+        hasText(athlete.gender) &&
+        hasDate(athlete.dateOfBirth) &&
+        hasText(athlete.mobilePhone) &&
+        hasText(athlete.trainingSuburb) &&
+        hasNonEmptyArray(athlete.disciplines) &&
+        hasText(athlete.primaryGoal) &&
+        hasText(athlete.focus) &&
+        hasText(athlete.eventName) &&
+        hasDate(athlete.eventDate) &&
+        hasNumber(athlete.timelineWeeks) &&
+        hasText(athlete.experienceLevel) &&
+        hasNumber(athlete.weeklyMinutesTarget) &&
+        hasNonEmptyArray(athlete.availableDays);
+
+      const onboardingStatus: 'DRAFT' | 'ACTIVE' = hasSubmittedIntake || hasManualProfileCompletion ? 'ACTIVE' : 'DRAFT';
+      return {
+        ...athleteBase,
+        onboardingStatus,
+      };
     });
 
     return success(

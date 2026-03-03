@@ -70,15 +70,15 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
     return (
       <div className={cn('rounded-2xl px-4 py-3 text-[var(--text)]', getTone(goal), className)}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{who}goal focus</span>
-          <span className="rounded-md bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-900">{title}</span>
-          <span className="text-xs text-[var(--muted)]">{eventDateLabel}</span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-muted)] dark:text-slate-300/90">{who}goal focus</span>
+          <span className="rounded-md bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</span>
+          <span className="text-xs text-[var(--fg-muted)] dark:text-slate-300/85">{eventDateLabel}</span>
           <span className="ml-auto text-sm font-semibold tabular-nums">{goal.label}</span>
         </div>
         {showProgress ? (
           <div className="mt-2">
-            <div className="mb-1 text-[11px] text-[var(--muted)]">Progress</div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-black/10">
+            <div className="mb-1 text-[11px] text-[var(--fg-muted)] dark:text-slate-300/85">Progress</div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bar-track)]">
               <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
@@ -91,9 +91,9 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
     <div className={cn('rounded-2xl px-4 py-4 text-[var(--text)]', getTone(goal), className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{who}goal focus</div>
-          <div className="mt-1 inline-flex rounded-md bg-teal-100 px-2 py-0.5 text-base font-semibold text-teal-900">{title}</div>
-          <div className="mt-1 text-xs text-[var(--muted)]">{eventDateLabel}</div>
+          <div className="text-[11px] uppercase tracking-wide text-[var(--fg-muted)] dark:text-slate-300/90">{who}goal focus</div>
+          <div className="mt-1 inline-flex rounded-md bg-teal-100 px-2 py-0.5 text-base font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</div>
+          <div className="mt-1 text-xs text-[var(--fg-muted)] dark:text-slate-300/85">{eventDateLabel}</div>
         </div>
         <div className="text-right">
           {showShortLabel ? <div className="text-lg font-semibold leading-none tabular-nums">{goal.shortLabel}</div> : null}
@@ -104,8 +104,8 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
       </div>
       {showProgress ? (
         <div className="mt-3">
-          <div className="mb-1 text-[11px] text-[var(--muted)]">Progress</div>
-          <div className="h-2 overflow-hidden rounded-full bg-black/10">
+          <div className="mb-1 text-[11px] text-[var(--fg-muted)] dark:text-slate-300/85">Progress</div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)]">
             <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
