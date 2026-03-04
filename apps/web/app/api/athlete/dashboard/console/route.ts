@@ -15,6 +15,7 @@ import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getStravaVitalsComparisonForAthlete, type StravaVitalsComparison } from '@/lib/strava-vitals';
 import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
+import { computePercentDelta } from '@/lib/trend-delta';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,18 @@ type AthleteDashboardResponse = {
     painFlagWorkouts: number;
   };
   rangeSummary: ReturnType<typeof getAthleteRangeSummary>;
+  rangeSummaryComparison: {
+    previousFromDayKey: string;
+    previousToDayKey: string;
+    totals: {
+      completedMinutes: number;
+      completedDistanceKm: number;
+    };
+    deltas: {
+      completedMinutesPct: number | null;
+      completedDistanceKmPct: number | null;
+    };
+  } | null;
   nextUp: Array<{
     id: string;
     date: string;
@@ -121,6 +134,16 @@ function buildAthleteDashboardCacheKey(params: {
   ].join('|');
 }
 
+function dayDiffInclusive(fromDayKey: string, toDayKey: string): number {
+  const from = parseDateOnly(fromDayKey, 'from').getTime();
+  const to = parseDateOnly(toDayKey, 'to').getTime();
+  return Math.max(1, Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1);
+}
+
+function shiftDayKey(dayKey: string, days: number): string {
+  return addDaysToDayKey(dayKey, days);
+}
+
 async function getAthleteDashboardData(params: {
   athleteId: string;
   timezone: string;
@@ -159,13 +182,21 @@ async function getAthleteDashboardData(params: {
 
   params.profiler?.mark('dashboard:cache-miss');
   const promise = (async () => {
-    const candidateFromDate = parseDateOnly(addDaysToDayKey(params.fromKey, -1), 'from');
+    const comparisonWindowDays = dayDiffInclusive(params.fromKey, params.toKey);
+    const previousToKey = shiftDayKey(params.fromKey, -1);
+    const previousFromKey = shiftDayKey(previousToKey, -(comparisonWindowDays - 1));
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(previousFromKey, -1), 'from');
     const candidateToDate = parseDateOnly(addDaysToDayKey(params.toKey, 1), 'to');
     const rangeFilter = { date: { gte: candidateFromDate, lte: candidateToDate } };
     const disciplineFilter = params.discipline ? { discipline: params.discipline } : {};
     const utcRange = getUtcRangeForLocalDayKeyRange({
       fromDayKey: params.fromKey,
       toDayKey: params.toKey,
+      timeZone: params.timezone,
+    });
+    const previousUtcRange = getUtcRangeForLocalDayKeyRange({
+      fromDayKey: previousFromKey,
+      toDayKey: previousToKey,
       timeZone: params.timezone,
     });
 
@@ -262,25 +293,25 @@ async function getAthleteDashboardData(params: {
       todayDayKey: params.todayKey,
     });
 
-    const filteredItems = items
-      .map((item) => {
-        const completion = item.completedActivities?.[0] ?? null;
-        const stravaMetrics = (completion?.metricsJson as any)?.strava ?? null;
-        const completionStartUtc = completion
-          ? (() => {
-              const raw = stravaMetrics?.startDateUtc ?? null;
-              const parsed = raw ? new Date(raw) : null;
-              const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
-              if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
-                return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
-              }
-              return base;
-            })()
-          : null;
-        const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, params.timezone ?? 'UTC');
-        return { item, completion, effectiveStartUtc, stravaMetrics };
-      })
-      .filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
+    const mappedItems = items.map((item) => {
+      const completion = item.completedActivities?.[0] ?? null;
+      const stravaMetrics = (completion?.metricsJson as any)?.strava ?? null;
+      const completionStartUtc = completion
+        ? (() => {
+            const raw = stravaMetrics?.startDateUtc ?? null;
+            const parsed = raw ? new Date(raw) : null;
+            const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
+            if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
+              return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
+            }
+            return base;
+          })()
+        : null;
+      const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, params.timezone ?? 'UTC');
+      return { item, completion, effectiveStartUtc, stravaMetrics };
+    });
+    const filteredItems = mappedItems.filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
+    const previousFilteredItems = mappedItems.filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, previousUtcRange));
 
     const asGreetingTitle = (item: (typeof items)[number]) => String(item.title ?? item.discipline ?? 'training session').trim();
     const asGreetingSession = (item: (typeof items)[number]): SessionGreetingInfo => ({
@@ -301,28 +332,37 @@ async function getAthleteDashboardData(params: {
     const yesterdayKey = addDaysToDayKey(params.todayKey, -1);
     const tomorrowKey = addDaysToDayKey(params.todayKey, 1);
 
+    const asSummaryItem = ({ item, completion, effectiveStartUtc, stravaMetrics }: (typeof filteredItems)[number]) => ({
+      id: item.id,
+      date: effectiveStartUtc.toISOString(),
+      discipline: item.discipline,
+      status: item.status,
+      title: item.title,
+      plannedDurationMinutes: item.plannedDurationMinutes,
+      plannedDistanceKm: item.plannedDistanceKm,
+      latestCompletedActivity: completion
+        ? {
+            durationMinutes: completion.durationMinutes,
+            distanceKm: completion.distanceKm,
+            caloriesKcal: getStravaCaloriesKcal(stravaMetrics),
+            kilojoules: getStravaKilojoules(stravaMetrics),
+            confirmedAt: completion.confirmedAt ? completion.confirmedAt.toISOString() : null,
+          }
+        : null,
+    });
     const rangeSummary = getAthleteRangeSummary({
-      items: filteredItems.map(({ item, completion, effectiveStartUtc, stravaMetrics }) => ({
-        id: item.id,
-        date: effectiveStartUtc.toISOString(),
-        discipline: item.discipline,
-        status: item.status,
-        title: item.title,
-        plannedDurationMinutes: item.plannedDurationMinutes,
-        plannedDistanceKm: item.plannedDistanceKm,
-        latestCompletedActivity: completion
-          ? {
-              durationMinutes: completion.durationMinutes,
-              distanceKm: completion.distanceKm,
-              caloriesKcal: getStravaCaloriesKcal(stravaMetrics),
-              kilojoules: getStravaKilojoules(stravaMetrics),
-              confirmedAt: completion.confirmedAt ? completion.confirmedAt.toISOString() : null,
-            }
-          : null,
-      })),
+      items: filteredItems.map((item) => asSummaryItem(item)),
       timeZone: params.timezone,
       fromDayKey: params.fromKey,
       toDayKey: params.toKey,
+      todayDayKey: params.todayKey,
+      weightKg: null,
+    });
+    const previousRangeSummary = getAthleteRangeSummary({
+      items: previousFilteredItems.map((item) => asSummaryItem(item)),
+      timeZone: params.timezone,
+      fromDayKey: previousFromKey,
+      toDayKey: previousToKey,
       todayDayKey: params.todayKey,
       weightKg: null,
     });
@@ -368,6 +408,24 @@ async function getAthleteDashboardData(params: {
         painFlagWorkouts,
       },
       rangeSummary,
+      rangeSummaryComparison: {
+        previousFromDayKey: previousFromKey,
+        previousToDayKey: previousToKey,
+        totals: {
+          completedMinutes: previousRangeSummary.totals.completedMinutes,
+          completedDistanceKm: previousRangeSummary.totals.completedDistanceKm,
+        },
+        deltas: {
+          completedMinutesPct: computePercentDelta(
+            rangeSummary.totals.completedMinutes,
+            previousRangeSummary.totals.completedMinutes
+          ),
+          completedDistanceKmPct: computePercentDelta(
+            rangeSummary.totals.completedDistanceKm,
+            previousRangeSummary.totals.completedDistanceKm
+          ),
+        },
+      },
       nextUp,
       stravaVitals,
       goalCountdown,

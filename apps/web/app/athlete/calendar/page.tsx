@@ -23,6 +23,7 @@ import { logCalendarPerfOnce, markCalendarPerf, resetCalendarPerfMarks } from '@
 import type { WeatherSummary } from '@/lib/weather-model';
 import { buildAiPlanBuilderSessionTitle } from '@/modules/ai-plan-builder/lib/session-title';
 import type { GoalCountdown } from '@/lib/goal-countdown';
+import { computePercentDelta } from '@/lib/trend-delta';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -261,6 +262,16 @@ export default function AthleteCalendarPage() {
       const weekTopDisciplines = weekSummary
         ? weekSummary.byDiscipline.filter((d) => d.durationMinutes > 0 || d.distanceKm > 0).slice(0, 2)
         : [];
+      const previousWeekStart = weekStart ? addDaysToDayKey(weekStart, -7) : '';
+      const previousWeekEnd = weekStart ? addDaysToDayKey(weekStart, -1) : '';
+      const previousWeekSummary = previousWeekStart && previousWeekEnd
+        ? getRangeCompletionSummary({
+            items,
+            timeZone: athleteTimezone,
+            fromDayKey: previousWeekStart,
+            toDayKey: previousWeekEnd,
+          })
+        : null;
 
       return {
         weekIndex,
@@ -268,9 +279,30 @@ export default function AthleteCalendarPage() {
         weekSummary,
         weekTopDisciplines,
         weekWorkoutCount,
+        deltas: weekSummary && previousWeekSummary
+          ? {
+              durationMinutesPct: computePercentDelta(weekSummary.totals.durationMinutes, previousWeekSummary.totals.durationMinutes),
+              distanceKmPct: computePercentDelta(weekSummary.totals.distanceKm, previousWeekSummary.totals.distanceKm),
+            }
+          : null,
       };
     });
   }, [viewMode, monthDays, items, athleteTimezone]);
+
+  const weekTotalsDeltas = useMemo(() => {
+    const previousFrom = addDaysToDayKey(weekStartKey, -7);
+    const previousTo = addDaysToDayKey(weekStartKey, -1);
+    const previousWeekSummary = getRangeCompletionSummary({
+      items,
+      timeZone: athleteTimezone,
+      fromDayKey: previousFrom,
+      toDayKey: previousTo,
+    });
+    return {
+      durationMinutesPct: computePercentDelta(weekSummary.totals.durationMinutes, previousWeekSummary.totals.durationMinutes),
+      distanceKmPct: computePercentDelta(weekSummary.totals.distanceKm, previousWeekSummary.totals.distanceKm),
+    };
+  }, [athleteTimezone, items, weekStartKey, weekSummary.totals.distanceKm, weekSummary.totals.durationMinutes]);
 
   const loadItems = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
@@ -284,8 +316,8 @@ export default function AthleteCalendarPage() {
 
     try {
       const url = bypassCache
-        ? `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1&t=${Date.now()}`
-        : `/api/athlete/calendar?from=${dateRange.from}&to=${dateRange.to}&lean=1`;
+        ? `/api/athlete/calendar?from=${addDaysToDayKey(dateRange.from, -7)}&to=${dateRange.to}&lean=1&t=${Date.now()}`
+        : `/api/athlete/calendar?from=${addDaysToDayKey(dateRange.from, -7)}&to=${dateRange.to}&lean=1`;
 
       const data = await request<{ items: CalendarItem[]; dayWeather?: Record<string, WeatherSummary>; goalCountdown?: GoalCountdown | null }>(
         url,
@@ -638,6 +670,7 @@ export default function AthleteCalendarPage() {
         weekDays={weekDays}
         weekSummary={weekSummary}
         weekTopDisciplines={weekTopDisciplines}
+        weekTotalsDeltas={weekTotalsDeltas}
         monthWeeks={monthWeeks}
         todayKey={todayKey}
         athleteTimezone={athleteTimezone}

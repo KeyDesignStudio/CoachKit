@@ -21,6 +21,7 @@ import type { GoalCountdown } from '@/lib/goal-countdown';
 import { GoalCountdownCallout } from '@/components/goal/GoalCountdownCallout';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import styles from './console-page.module.css';
 
 type TimeRangePreset = 'LAST_7' | 'LAST_14' | 'LAST_30' | 'LAST_60' | 'LAST_90' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM';
 type CalorieEquivalentKey = 'bigMac' | 'snickers' | 'wine' | 'beer';
@@ -96,6 +97,18 @@ type AthleteDashboardResponse = {
       }>;
     }>;
   };
+  rangeSummaryComparison: {
+    previousFromDayKey: string;
+    previousToDayKey: string;
+    totals: {
+      completedMinutes: number;
+      completedDistanceKm: number;
+    };
+    deltas: {
+      completedMinutesPct: number | null;
+      completedDistanceKmPct: number | null;
+    };
+  } | null;
   nextUp: Array<{
     id: string;
     date: string;
@@ -323,8 +336,8 @@ function DashboardChallengesPanel({
         ))
       ) : (
         <div className="rounded-xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-2">
-          <p className="text-[11px] font-semibold text-white">No active challenge</p>
-          <p className="mt-0.5 text-[8px] text-[#d4e3ff]">Your coach hasn’t published one yet.</p>
+          <p className="text-[11px] font-semibold text-white">Loading challenge</p>
+          <p className="mt-0.5 text-[8px] text-[#d4e3ff]">Fetching the latest challenge details.</p>
         </div>
       )}
     </div>
@@ -446,6 +459,7 @@ export default function AthleteDashboardConsolePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSidebarMounted, setMobileSidebarMounted] = useState(false);
+  const [showGreetingCelebration, setShowGreetingCelebration] = useState(false);
   const [sidebarInitialized, setSidebarInitialized] = useState(false);
   const [pendingSidebarSection, setPendingSidebarSection] = useState<'challenges' | 'filters' | null>(null);
   const sidebarChallengesRef = useRef<HTMLDivElement | null>(null);
@@ -533,12 +547,14 @@ export default function AthleteDashboardConsolePage() {
     const tomorrowPlanned = greetingTraining?.tomorrow.planned?.[0] ?? null;
 
     const lines: string[] = [];
+    let hasCongratulatoryLine = false;
 
     if (dayPeriod === 'morning') {
       if (yesterdayCompleted) {
         lines.push(
           `Well done on yesterday ${getSessionPeriod(yesterdayCompleted.plannedStartTimeLocal)}'s ${formatGreetingSessionTitle(yesterdayCompleted)}.`
         );
+        hasCongratulatoryLine = true;
       }
       if (todayPlanned) {
         lines.push(`All the best with your ${formatGreetingSessionTitle(todayPlanned)} this ${getSessionPeriod(todayPlanned.plannedStartTimeLocal)}.`);
@@ -552,6 +568,7 @@ export default function AthleteDashboardConsolePage() {
     } else {
       if (todayCompleted) {
         lines.push(`Well done on today's ${formatGreetingSessionTitle(todayCompleted)}.`);
+        hasCongratulatoryLine = true;
       }
       if (tomorrowPlanned) {
         lines.push(`You've got your ${formatGreetingSessionTitle(tomorrowPlanned)} tomorrow ${getSessionPeriod(tomorrowPlanned.plannedStartTimeLocal)}.`);
@@ -564,12 +581,19 @@ export default function AthleteDashboardConsolePage() {
         String(nextSession?.title ?? '').trim() ||
         String(nextSession?.discipline ?? '').trim().toLowerCase() ||
         'training session';
-      if (!nextSession) return `G'day ${preferredName}! No upcoming sessions scheduled.`;
-      return `G'day ${preferredName}! You've got your next ${nextLabel} coming up soon.`;
+      if (!nextSession) return { message: `G'day ${preferredName}! No upcoming sessions scheduled.`, shouldCelebrate: false };
+      return { message: `G'day ${preferredName}! You've got your next ${nextLabel} coming up soon.`, shouldCelebrate: false };
     }
 
-    return `G'day ${preferredName}! ${lines.join(' ')}`;
+    return { message: `G'day ${preferredName}! ${lines.join(' ')}`, shouldCelebrate: hasCongratulatoryLine };
   }, [athleteTimeZone, data?.greetingTraining, data?.nextUp, user?.name]);
+
+  useEffect(() => {
+    if (!athleteGreeting.shouldCelebrate) return;
+    setShowGreetingCelebration(true);
+    const timer = window.setTimeout(() => setShowGreetingCelebration(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [athleteGreeting.message, athleteGreeting.shouldCelebrate]);
 
   useEffect(() => {
     if (user?.role === 'COACH') {
@@ -704,7 +728,24 @@ export default function AthleteDashboardConsolePage() {
             <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
               |
             </span>
-            <p className="text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting}</p>
+            <div className="relative">
+              {showGreetingCelebration ? (
+                <div className={styles.confettiLayer} aria-hidden>
+                  {Array.from({ length: 16 }, (_, index) => (
+                    <span
+                      key={`greeting-confetti-${index}`}
+                      className={styles.confettiPiece}
+                      style={{
+                        left: `${5 + ((index * 11) % 90)}%`,
+                        animationDelay: `${(index % 6) * 35}ms`,
+                        backgroundColor: index % 3 === 0 ? '#facc15' : index % 3 === 1 ? '#94a3b8' : '#f97316',
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting.message}</p>
+            </div>
           </div>
         </div>
 
@@ -863,86 +904,97 @@ export default function AthleteDashboardConsolePage() {
 
           <div className="min-w-0">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]" data-testid="athlete-dashboard-chart-grid">
-              <div className="min-w-0 lg:col-span-2">
-                <Block
-                  title="Needs your attention"
-                  rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
-                  showHeaderDivider={false}
-                  className="h-full"
-                >
-                  <div className={cn('grid pb-5', tokens.spacing.widgetGap)}>
-                    {typeof data?.attention.painFlagWorkouts === 'number' ? (
-                      <NeedsAttentionItem
-                        label="Workouts with pain flagged"
-                        count={data.attention.painFlagWorkouts}
-                        tone="danger"
-                        onClick={() => (window.location.href = '/athlete/calendar')}
-                      />
-                    ) : null}
+              <div className="min-w-0 md:col-span-2 lg:col-span-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:5fr_6fr_4fr]">
+                  <div className="min-w-0">
+                    <Block
+                      title="Needs your attention"
+                      rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
+                      showHeaderDivider={false}
+                      className="h-full"
+                    >
+                      <div className={cn('grid pb-5', tokens.spacing.widgetGap)}>
+                        {typeof data?.attention.painFlagWorkouts === 'number' ? (
+                          <NeedsAttentionItem
+                            label="Workouts with pain flagged"
+                            count={data.attention.painFlagWorkouts}
+                            tone="danger"
+                            onClick={() => (window.location.href = '/athlete/calendar')}
+                          />
+                        ) : null}
 
-                    <NeedsAttentionItem
-                      label="Workouts pending your confirmation"
-                      count={data?.attention.pendingConfirmation ?? 0}
-                      tone="primary"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
-                    />
+                        <NeedsAttentionItem
+                          label="Workouts pending your confirmation"
+                          count={data?.attention.pendingConfirmation ?? 0}
+                          tone="primary"
+                          onClick={() => (window.location.href = '/athlete/calendar')}
+                        />
 
-                    <NeedsAttentionItem
-                      label="Workouts missed"
-                      count={data?.attention.workoutsMissed ?? 0}
-                      tone="neutral"
-                      onClick={() => (window.location.href = '/athlete/calendar')}
+                        <NeedsAttentionItem
+                          label="Workouts missed"
+                          count={data?.attention.workoutsMissed ?? 0}
+                          tone="neutral"
+                          onClick={() => (window.location.href = '/athlete/calendar')}
+                        />
+                      </div>
+                    </Block>
+                  </div>
+
+                  <div className="min-w-0">
+                    <AtAGlanceCard
+                      loading={loading && !data}
+                      testIds={{
+                        card: 'athlete-dashboard-at-a-glance',
+                        grid: 'athlete-dashboard-at-a-glance-grid',
+                        stats: 'athlete-dashboard-at-a-glance-stats',
+                        statRow: 'athlete-dashboard-at-a-glance-stat-row',
+                        disciplineLoad: 'athlete-dashboard-discipline-load',
+                      }}
+                      statsRows={[
+                        { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
+                        { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
+                        {
+                          label: 'TOTAL TRAINING TIME',
+                          value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0),
+                          deltaPercent: data?.rangeSummaryComparison?.deltas.completedMinutesPct ?? null,
+                        },
+                        {
+                          label: 'TOTAL DISTANCE',
+                          value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0),
+                          deltaPercent: data?.rangeSummaryComparison?.deltas.completedDistanceKmPct ?? null,
+                        },
+                      ]}
+                      disciplineRows={(() => {
+                        const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
+                        const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+                        for (const row of data?.rangeSummary?.byDiscipline ?? []) {
+                          byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                            totalMinutes: Number(row.completedMinutes ?? 0),
+                            totalDistanceKm: Number(row.completedDistanceKm ?? 0),
+                          });
+                        }
+
+                        return seedOrder.map((discipline) => {
+                          const existing = byDiscipline.get(discipline);
+                          const totalMinutes = existing?.totalMinutes ?? 0;
+                          const totalDistanceKm = existing?.totalDistanceKm ?? 0;
+                          return {
+                            discipline,
+                            totalMinutes,
+                            rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
+                          };
+                        });
+                      })()}
                     />
                   </div>
-                </Block>
-              </div>
 
-              <div className="min-w-0 lg:col-span-2">
-                <AtAGlanceCard
-                  loading={loading && !data}
-                  testIds={{
-                    card: 'athlete-dashboard-at-a-glance',
-                    grid: 'athlete-dashboard-at-a-glance-grid',
-                    stats: 'athlete-dashboard-at-a-glance-stats',
-                    statRow: 'athlete-dashboard-at-a-glance-stat-row',
-                    disciplineLoad: 'athlete-dashboard-discipline-load',
-                  }}
-                  statsRows={[
-                    { label: 'WORKOUTS COMPLETED', value: String(data?.rangeSummary?.totals.workoutsCompleted ?? 0) },
-                    { label: 'WORKOUTS MISSED', value: String(data?.rangeSummary?.totals.workoutsMissed ?? 0) },
-                    { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.rangeSummary?.totals.completedMinutes ?? 0) },
-                    { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.rangeSummary?.totals.completedDistanceKm ?? 0) },
-                  ]}
-                  disciplineRows={(() => {
-                    const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
-                    const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
-                    for (const row of data?.rangeSummary?.byDiscipline ?? []) {
-                      byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
-                        totalMinutes: Number(row.completedMinutes ?? 0),
-                        totalDistanceKm: Number(row.completedDistanceKm ?? 0),
-                      });
-                    }
-
-                    return seedOrder.map((discipline) => {
-                      const existing = byDiscipline.get(discipline);
-                      const totalMinutes = existing?.totalMinutes ?? 0;
-                      const totalDistanceKm = existing?.totalDistanceKm ?? 0;
-                      return {
-                        discipline,
-                        totalMinutes,
-                        rightValue: `${formatMinutes(totalMinutes)} · ${formatDistanceKm(totalDistanceKm)}`,
-                      };
-                    });
-                  })()}
-                />
-              </div>
-
-              <Block
-                title="Planned vs Completed"
-                showHeaderDivider={false}
-                className="min-h-[230px] lg:col-span-2"
-                data-testid="athlete-dashboard-compliance-chart"
-              >
+                  <div className="min-w-0">
+                    <Block
+                      title="Planned vs Completed"
+                      showHeaderDivider={false}
+                      className="min-h-[230px]"
+                      data-testid="athlete-dashboard-compliance-chart"
+                    >
             {(() => {
               const summary = data?.rangeSummary;
               const plannedTotal = summary?.totals.workoutsPlanned ?? 0;
@@ -1005,7 +1057,10 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               );
             })()}
-          </Block>
+                    </Block>
+                  </div>
+                </div>
+              </div>
 
               <Block title="Calories" showHeaderDivider={false} className="min-h-[230px] lg:col-span-3" data-testid="athlete-dashboard-calories-chart">
             {(() => {

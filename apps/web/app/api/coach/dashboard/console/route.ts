@@ -11,6 +11,7 @@ import { createServerProfiler } from '@/lib/server-profiler';
 import { getStravaVitalsComparisonForAthletes, type StravaVitalsComparison } from '@/lib/strava-vitals';
 import { getTodayDayKey } from '@/lib/day-key';
 import { getGoalCountdown, type GoalCountdown } from '@/lib/goal-countdown';
+import { computePercentDelta } from '@/lib/trend-delta';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,6 +107,18 @@ type DashboardAggregates = {
     totalTrainingMinutes: number;
     totalDistanceKm: number;
   };
+  kpiComparison: {
+    previousFromDayKey: string;
+    previousToDayKey: string;
+    totals: {
+      totalTrainingMinutes: number;
+      totalDistanceKm: number;
+    };
+    deltas: {
+      totalTrainingMinutesPct: number | null;
+      totalDistanceKmPct: number | null;
+    };
+  } | null;
   attention: {
     painFlagWorkouts: number;
     athleteCommentWorkouts: number;
@@ -199,6 +212,9 @@ async function getDashboardAggregates(params: {
   fromDate: Date | null;
   toDate: Date | null;
   disciplineFilter: Record<string, unknown>;
+  previousRangeFilter: Record<string, unknown> | null;
+  previousFromDayKey: string | null;
+  previousToDayKey: string | null;
   includeLoadModel: boolean;
   cacheKey: string;
   bypassCache: boolean;
@@ -337,6 +353,7 @@ async function getDashboardAggregates(params: {
       completedCount,
       skippedCount,
       completedItems,
+      previousCompletedItems,
       attentionPainFlagCount,
       attentionAthleteCommentWorkoutCount,
       attentionSkippedCount,
@@ -382,6 +399,25 @@ async function getDashboardAggregates(params: {
             },
           },
         }),
+        params.previousRangeFilter
+          ? prisma.calendarItem.findMany({
+              where: {
+                coachId: params.coachId,
+                deletedAt: null,
+                ...params.previousRangeFilter,
+                ...params.athleteFilter,
+                ...params.disciplineFilter,
+                status: { in: COMPLETED_STATUSES },
+              },
+              select: {
+                completedActivities: {
+                  orderBy: [{ startTime: 'desc' as const }],
+                  take: 1,
+                  select: { durationMinutes: true, distanceKm: true },
+                },
+              },
+            })
+          : Promise.resolve([] as Array<{ completedActivities: Array<{ durationMinutes: number | null; distanceKm: number | null }> }>),
         prisma.calendarItem.count({
           where: {
             coachId: params.coachId,
@@ -438,6 +474,8 @@ async function getDashboardAggregates(params: {
 
     let totalMinutes = 0;
     let totalDistanceKm = 0;
+    let previousTotalMinutes = 0;
+    let previousTotalDistanceKm = 0;
     const disciplineTotals = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
 
     completedItems.forEach((item) => {
@@ -454,6 +492,11 @@ async function getDashboardAggregates(params: {
       prev.totalDistanceKm += d;
       disciplineTotals.set(key, prev);
     });
+    previousCompletedItems.forEach((item) => {
+      const latest = item.completedActivities?.[0];
+      previousTotalMinutes += minutesOrZero(latest?.durationMinutes);
+      previousTotalDistanceKm += distanceOrZero(latest?.distanceKm);
+    });
 
     const disciplines = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
     const disciplineLoad = disciplines.map((disc) => {
@@ -469,6 +512,20 @@ async function getDashboardAggregates(params: {
         totalTrainingMinutes: totalMinutes,
         totalDistanceKm,
       },
+      kpiComparison: params.previousRangeFilter
+        ? {
+            previousFromDayKey: params.previousFromDayKey ?? '',
+            previousToDayKey: params.previousToDayKey ?? '',
+            totals: {
+              totalTrainingMinutes: previousTotalMinutes,
+              totalDistanceKm: previousTotalDistanceKm,
+            },
+            deltas: {
+              totalTrainingMinutesPct: computePercentDelta(totalMinutes, previousTotalMinutes),
+              totalDistanceKmPct: computePercentDelta(totalDistanceKm, previousTotalDistanceKm),
+            },
+          }
+        : null,
       attention: {
         painFlagWorkouts: attentionPainFlagCount,
         athleteCommentWorkouts: attentionAthleteCommentWorkoutCount,
@@ -695,6 +752,19 @@ export async function GET(request: NextRequest) {
       : 25;
 
     const rangeFilter = fromDate && toDate ? { date: { gte: fromDate, lte: toDate } } : {};
+    const previousRange =
+      fromDate && toDate
+        ? (() => {
+            const windowDays = Math.max(1, Math.floor((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+            const prevTo = new Date(fromDate.getTime() - 24 * 60 * 60 * 1000);
+            const prevFrom = new Date(prevTo.getTime() - (windowDays - 1) * 24 * 60 * 60 * 1000);
+            return {
+              filter: { date: { gte: prevFrom, lte: prevTo } },
+              fromDayKey: prevFrom.toISOString().slice(0, 10),
+              toDayKey: prevTo.toISOString().slice(0, 10),
+            };
+          })()
+        : null;
     const athleteFilter =
       selectedAthleteIds.length > 0 ? { athleteId: { in: selectedAthleteIds } } : {};
     const disciplineFilter = discipline ? { discipline } : {};
@@ -726,6 +796,9 @@ export async function GET(request: NextRequest) {
       fromDate,
       toDate,
       disciplineFilter,
+      previousRangeFilter: previousRange?.filter ?? null,
+      previousFromDayKey: previousRange?.fromDayKey ?? null,
+      previousToDayKey: previousRange?.toDayKey ?? null,
       includeLoadModel,
       cacheKey: aggregateCacheKey,
       bypassCache: bypassCaches,
