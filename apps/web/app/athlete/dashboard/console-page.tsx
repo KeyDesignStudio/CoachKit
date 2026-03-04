@@ -671,7 +671,7 @@ export default function AthleteDashboardConsolePage() {
     mobileSidebarCloseTimerRef.current = window.setTimeout(() => {
       setMobileSidebarMounted(false);
       mobileSidebarCloseTimerRef.current = null;
-    }, 320);
+    }, 720);
     return () => {
       if (mobileSidebarCloseTimerRef.current !== null) {
         window.clearTimeout(mobileSidebarCloseTimerRef.current);
@@ -1177,13 +1177,13 @@ export default function AthleteDashboardConsolePage() {
         {mobileSidebarMounted ? (
           <>
             <div
-              className={cn('fixed inset-0 z-40 bg-black transition-opacity duration-300 md:hidden', mobileSidebarOpen ? 'opacity-100' : 'opacity-0')}
+              className={cn('fixed inset-0 z-40 bg-black transition-opacity duration-500 md:hidden', mobileSidebarOpen ? 'opacity-100' : 'opacity-0')}
               onClick={closeMobileSidebar}
             />
             <aside
               ref={mobileSidebarRef}
               className={cn(
-                'fixed left-0 top-0 z-50 h-full w-[min(88vw,360px)] overflow-y-auto border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] transition-transform duration-320 ease-out md:hidden',
+                'fixed left-0 top-0 z-50 h-full w-[min(88vw,360px)] overflow-y-auto border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] transition-transform duration-700 ease-in-out md:hidden',
                 mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
               )}
               aria-label="Dashboard sidebar"
