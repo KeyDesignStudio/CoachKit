@@ -602,7 +602,7 @@ export default function CoachDashboardConsolePage() {
     mobileSidebarCloseTimerRef.current = window.setTimeout(() => {
       setMobileSidebarMounted(false);
       mobileSidebarCloseTimerRef.current = null;
-    }, 320);
+    }, 720);
     return () => {
       if (mobileSidebarCloseTimerRef.current !== null) {
         window.clearTimeout(mobileSidebarCloseTimerRef.current);
@@ -1059,14 +1059,14 @@ export default function CoachDashboardConsolePage() {
           <div className="md:hidden fixed inset-0 z-50">
             <button
               type="button"
-              className={cn('absolute inset-0 bg-black transition-opacity duration-300', mobileSidebarOpen ? 'opacity-100' : 'opacity-0')}
+              className={cn('absolute inset-0 bg-black transition-opacity duration-500', mobileSidebarOpen ? 'opacity-100' : 'opacity-0')}
               aria-label="Close dashboard sidebar"
               onClick={closeMobileSidebar}
             />
             <aside
               ref={mobileSidebarRef}
               className={cn(
-                'absolute left-0 top-0 h-full w-[min(90vw,320px)] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xl transition-transform duration-320 ease-out',
+                'absolute left-0 top-0 h-full w-[min(90vw,320px)] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xl transition-transform duration-700 ease-in-out',
                 mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
               )}
               role="dialog"
