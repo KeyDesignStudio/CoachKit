@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
 
@@ -27,6 +27,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PolylineRouteMap } from '@/components/workouts/PolylineRouteMap';
 import { getStravaCaloriesKcal } from '@/lib/strava-metrics';
 import { WorkoutDetail } from '@/components/workouts/WorkoutDetail';
+import styles from './page.module.css';
 
 type CompletedActivity = {
   id: string;
@@ -90,6 +91,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ message: string; kind: 'success' | 'error' } | null>(null);
+  const [showCompleteCelebration, setShowCompleteCelebration] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
     durationMinutes: 60,
@@ -104,6 +106,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [weatherError, setWeatherError] = useState('');
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
+  const completeCelebrationTimerRef = useRef<number | null>(null);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
   const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
@@ -328,6 +331,37 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     }, 3000);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (completeCelebrationTimerRef.current !== null) {
+        window.clearTimeout(completeCelebrationTimerRef.current);
+        completeCelebrationTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const triggerCompleteCelebration = useCallback(() => {
+    if (completeCelebrationTimerRef.current !== null) {
+      window.clearTimeout(completeCelebrationTimerRef.current);
+      completeCelebrationTimerRef.current = null;
+    }
+    setShowCompleteCelebration(true);
+    completeCelebrationTimerRef.current = window.setTimeout(() => {
+      setShowCompleteCelebration(false);
+      completeCelebrationTimerRef.current = null;
+    }, 1200);
+  }, []);
+
+  const completeButtonConfetti = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, index) => ({
+        left: `${10 + ((index * 17) % 80)}%`,
+        delay: `${(index % 7) * 30}ms`,
+        color: index % 3 === 0 ? '#facc15' : index % 3 === 1 ? '#94a3b8' : '#f97316',
+      })),
+    []
+  );
+
   const navigateToCalendar = useCallback(() => {
     router.push(`/athlete/calendar?refresh=${Date.now()}`);
   }, [router]);
@@ -448,6 +482,9 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         });
       }
       setCommentDraft('');
+      if (!isDraftStrava) {
+        triggerCompleteCelebration();
+      }
       await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
@@ -617,9 +654,22 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             >
               Close
             </Button>
-            <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
-              {isDraftStrava ? 'Confirm' : 'Complete'}
-            </Button>
+            <div className="relative w-full sm:w-auto">
+              {showCompleteCelebration && !isDraftStrava ? (
+                <div className={styles.completeConfettiLayer} aria-hidden>
+                  {completeButtonConfetti.map((piece, index) => (
+                    <span
+                      key={`complete-confetti-${index}`}
+                      className={styles.completeConfettiPiece}
+                      style={{ left: piece.left, animationDelay: piece.delay, backgroundColor: piece.color }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
+                {isDraftStrava ? 'Confirm' : 'Complete'}
+              </Button>
+            </div>
           </div>
         </form>
       </Block>
