@@ -864,8 +864,13 @@ export default function AthleteDashboardConsolePage() {
           <div className="min-w-0">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]" data-testid="athlete-dashboard-chart-grid">
               <div className="min-w-0 lg:col-span-2">
-                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>} showHeaderDivider={false}>
-                  <div className={cn('grid', tokens.spacing.widgetGap)}>
+                <Block
+                  title="Needs your attention"
+                  rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
+                  showHeaderDivider={false}
+                  className="h-full"
+                >
+                  <div className={cn('grid pb-5', tokens.spacing.widgetGap)}>
                     {typeof data?.attention.painFlagWorkouts === 'number' ? (
                       <NeedsAttentionItem
                         label="Workouts with pain flagged"
