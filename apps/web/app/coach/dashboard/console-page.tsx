@@ -65,6 +65,18 @@ type DashboardResponse = {
     totalTrainingMinutes: number;
     totalDistanceKm: number;
   };
+  kpiComparison: {
+    previousFromDayKey: string;
+    previousToDayKey: string;
+    totals: {
+      totalTrainingMinutes: number;
+      totalDistanceKm: number;
+    };
+    deltas: {
+      totalTrainingMinutesPct: number | null;
+      totalDistanceKmPct: number | null;
+    };
+  } | null;
   attention: {
     painFlagWorkouts: number;
     athleteCommentWorkouts: number;
@@ -839,71 +851,83 @@ export default function CoachDashboardConsolePage() {
             {error ? <div className={cn('mb-4 rounded-2xl bg-rose-500/10 text-rose-700', tokens.spacing.containerPadding, tokens.typography.body)}>{error}</div> : null}
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]">
-              <div className="min-w-0 lg:col-span-2">
-                <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>} showHeaderDivider={false} className="h-full">
-                  <div className={cn('grid', tokens.spacing.widgetGap)}>
-                    <AttentionItem
-                      label="Workouts with pain flags"
-                      count={data?.attention.painFlagWorkouts ?? 0}
-                      tone="danger"
-                      active={inboxPreset === 'PAIN'}
-                      onClick={() => toggleInboxPreset('PAIN')}
-                    />
-                    <AttentionItem
-                      label="Workouts with athlete comments"
-                      count={data?.attention.athleteCommentWorkouts ?? 0}
-                      tone="primary"
-                      active={inboxPreset === 'COMMENTS'}
-                      onClick={() => toggleInboxPreset('COMMENTS')}
+              <div className="min-w-0 md:col-span-2 lg:col-span-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:5fr_6fr_4fr]">
+                  <div className="min-w-0">
+                    <Block title="Needs your attention" rightAction={<div className={tokens.typography.meta}>Tap to focus inbox</div>} showHeaderDivider={false} className="h-full">
+                      <div className={cn('grid', tokens.spacing.widgetGap)}>
+                        <AttentionItem
+                          label="Workouts with pain flags"
+                          count={data?.attention.painFlagWorkouts ?? 0}
+                          tone="danger"
+                          active={inboxPreset === 'PAIN'}
+                          onClick={() => toggleInboxPreset('PAIN')}
+                        />
+                        <AttentionItem
+                          label="Workouts with athlete comments"
+                          count={data?.attention.athleteCommentWorkouts ?? 0}
+                          tone="primary"
+                          active={inboxPreset === 'COMMENTS'}
+                          onClick={() => toggleInboxPreset('COMMENTS')}
+                        />
+                      </div>
+                      <div className={cn('mt-2 grid min-[900px]:grid-cols-2', tokens.spacing.widgetGap)}>
+                        <AlertStripItem
+                          label="Missed workouts"
+                          count={data?.attention.skippedWorkouts ?? 0}
+                          active={inboxPreset === 'SKIPPED'}
+                          onClick={() => toggleInboxPreset('SKIPPED')}
+                        />
+                        <AlertStripItem
+                          label="Awaiting coach review"
+                          count={data?.attention.awaitingCoachReview ?? 0}
+                          active={inboxPreset === 'AWAITING_REVIEW'}
+                          onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
+                        />
+                      </div>
+                    </Block>
+                  </div>
+
+                  <div className="min-w-0">
+                    <AtAGlanceCard
+                      loading={loading && !data}
+                      testIds={{
+                        card: 'coach-dashboard-at-a-glance',
+                        grid: 'coach-dashboard-at-a-glance-grid',
+                        stats: 'coach-dashboard-at-a-glance-stats',
+                        statRow: 'coach-dashboard-at-a-glance-stat-row',
+                        disciplineLoad: 'coach-dashboard-discipline-load',
+                      }}
+                      statsRows={[
+                        { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
+                        { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
+                        {
+                          label: 'TOTAL TRAINING TIME',
+                          value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0),
+                          deltaPercent: data?.kpiComparison?.deltas.totalTrainingMinutesPct ?? null,
+                        },
+                        {
+                          label: 'TOTAL DISTANCE',
+                          value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0),
+                          deltaPercent: data?.kpiComparison?.deltas.totalDistanceKmPct ?? null,
+                        },
+                      ]}
+                      disciplineRows={(data?.disciplineLoad ?? []).map((row) => ({
+                        discipline: row.discipline,
+                        totalMinutes: row.totalMinutes,
+                        rightValue: `${formatMinutes(row.totalMinutes)} · ${formatDistanceKm(row.totalDistanceKm)}`,
+                      }))}
                     />
                   </div>
-                  <div className={cn('mt-2 grid min-[900px]:grid-cols-2', tokens.spacing.widgetGap)}>
-                    <AlertStripItem
-                      label="Missed workouts"
-                      count={data?.attention.skippedWorkouts ?? 0}
-                      active={inboxPreset === 'SKIPPED'}
-                      onClick={() => toggleInboxPreset('SKIPPED')}
-                    />
-                    <AlertStripItem
-                      label="Awaiting coach review"
-                      count={data?.attention.awaitingCoachReview ?? 0}
-                      active={inboxPreset === 'AWAITING_REVIEW'}
-                      onClick={() => toggleInboxPreset('AWAITING_REVIEW')}
+
+                  <div className="min-w-0">
+                    <StravaVitalsSummaryCard
+                      comparison={data?.stravaVitals ?? null}
+                      loading={loading && !data}
+                      title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
                     />
                   </div>
-                </Block>
-              </div>
-
-              <div className="min-w-0 lg:col-span-2">
-                <AtAGlanceCard
-                  loading={loading && !data}
-                  testIds={{
-                    card: 'coach-dashboard-at-a-glance',
-                    grid: 'coach-dashboard-at-a-glance-grid',
-                    stats: 'coach-dashboard-at-a-glance-stats',
-                    statRow: 'coach-dashboard-at-a-glance-stat-row',
-                    disciplineLoad: 'coach-dashboard-discipline-load',
-                  }}
-                  statsRows={[
-                    { label: 'WORKOUTS COMPLETED', value: String(data?.kpis.workoutsCompleted ?? 0) },
-                    { label: 'WORKOUTS MISSED', value: String(data?.kpis.workoutsSkipped ?? 0) },
-                    { label: 'TOTAL TRAINING TIME', value: formatMinutes(data?.kpis.totalTrainingMinutes ?? 0) },
-                    { label: 'TOTAL DISTANCE', value: formatDistanceKm(data?.kpis.totalDistanceKm ?? 0) },
-                  ]}
-                  disciplineRows={(data?.disciplineLoad ?? []).map((row) => ({
-                    discipline: row.discipline,
-                    totalMinutes: row.totalMinutes,
-                    rightValue: `${formatMinutes(row.totalMinutes)} · ${formatDistanceKm(row.totalDistanceKm)}`,
-                  }))}
-                />
-              </div>
-
-              <div className="min-w-0 lg:col-span-2">
-                <StravaVitalsSummaryCard
-                  comparison={data?.stravaVitals ?? null}
-                  loading={loading && !data}
-                  title={singleSelectedAthleteId ? 'Athlete Strava Vitals' : 'Squad Strava Vitals'}
-                />
+                </div>
               </div>
 
               <div ref={reviewInboxRef} id="review-inbox" data-testid="coach-dashboard-review-inbox" className="min-w-0 lg:col-span-3">

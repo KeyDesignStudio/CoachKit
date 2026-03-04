@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { Icon } from '@/components/ui/Icon';
+import { trendArrow, trendClass } from '@/components/dashboard/TrendDelta';
 import type { StravaVitalsComparison, StravaVitalsMetricDelta } from '@/lib/strava-vitals';
 
 function formatNumber(value: number | null, suffix = '') {
@@ -19,25 +20,13 @@ function formatPace(seconds: number | null, unit: string) {
   return `${mins}:${secs}${unit}`;
 }
 
-function metricArrow(delta: StravaVitalsMetricDelta) {
-  if (delta.trend === 'up') return '▲';
-  if (delta.trend === 'down') return '▼';
-  return '•';
-}
-
-function metricClass(delta: StravaVitalsMetricDelta) {
-  if (delta.trend === 'up') return 'text-emerald-600';
-  if (delta.trend === 'down') return 'text-rose-600';
-  return 'text-[var(--muted)]';
-}
-
 function DeltaInline({ delta, formatter }: { delta: StravaVitalsMetricDelta; formatter: (value: number) => string }) {
   if (delta.delta == null) {
     return <span className="strava-vital-delta text-xs text-[var(--muted)]">No prior baseline</span>;
   }
   return (
-    <span className={`strava-vital-delta text-xs ${metricClass(delta)}`}>
-      {metricArrow(delta)} {formatter(Math.abs(delta.delta))}
+    <span className={`strava-vital-delta text-xs ${trendClass(delta.trend)}`}>
+      {trendArrow(delta.trend)} {formatter(Math.abs(delta.delta))}
     </span>
   );
 }

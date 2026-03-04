@@ -1,12 +1,14 @@
 import { BlockTitle } from '@/components/ui/BlockTitle';
 import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
+import { TrendDelta } from '@/components/dashboard/TrendDelta';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
 
 type AtAGlanceStatRow = {
   label: string;
   value: string;
+  deltaPercent?: number | null;
 };
 
 type AtAGlanceDisciplineRow = {
@@ -69,7 +71,12 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                   <div className={cn('min-w-0 uppercase tracking-wide leading-4 md:leading-none md:truncate', tokens.typography.meta)} title={row.label}>
                     {row.label}
                   </div>
-                  <div className={cn('w-full text-left md:w-auto md:text-right flex-shrink-0 leading-[1.2] tabular-nums text-sm font-semibold text-[var(--text)]')}>{row.value}</div>
+                  <div className="w-full text-left md:w-auto md:text-right flex-shrink-0">
+                    <div className={cn('leading-[1.2] tabular-nums text-sm font-semibold text-[var(--text)]')}>{row.value}</div>
+                    {row.deltaPercent !== undefined ? (
+                      <TrendDelta delta={row.deltaPercent} className="mt-0.5 inline-flex tabular-nums" />
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

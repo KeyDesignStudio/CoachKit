@@ -8,6 +8,7 @@ import { AthleteWeekDayColumn } from '@/components/athlete/AthleteWeekDayColumn'
 import { AthleteWeekSessionRow, AthleteWeekSessionRowItem } from '@/components/athlete/AthleteWeekSessionRow';
 import { MonthGrid } from '@/components/coach/MonthGrid';
 import { AthleteMonthDayCell, MonthSession } from '@/components/athlete/AthleteMonthDayCell';
+import { TrendDelta } from '@/components/dashboard/TrendDelta';
 import { formatKmCompact, formatKcal, formatMinutesCompact } from '@/lib/calendar/discipline-summary';
 import type { WeatherSummary } from '@/lib/weather-model';
 import type { GoalCountdown } from '@/lib/goal-countdown';
@@ -38,6 +39,10 @@ export type AthleteMonthWeek = {
   } | null;
   weekTopDisciplines: Array<{ discipline: string; durationMinutes: number; distanceKm: number }>;
   weekWorkoutCount: number;
+  deltas: {
+    durationMinutesPct: number | null;
+    distanceKmPct: number | null;
+  } | null;
 };
 
 type AthleteCalendarGridProps = {
@@ -50,6 +55,10 @@ type AthleteCalendarGridProps = {
     workoutCount: number;
   } | null;
   weekTopDisciplines: Array<{ discipline: string; durationMinutes: number; distanceKm: number }>;
+  weekTotalsDeltas: {
+    durationMinutesPct: number | null;
+    distanceKmPct: number | null;
+  } | null;
   monthWeeks: AthleteMonthWeek[];
   todayKey: string;
   athleteTimezone: string;
@@ -67,6 +76,7 @@ export function AthleteCalendarGrid({
   weekDays,
   weekSummary,
   weekTopDisciplines,
+  weekTotalsDeltas,
   monthWeeks,
   todayKey,
   athleteTimezone,
@@ -137,6 +147,16 @@ export function AthleteCalendarGrid({
                     <div className="mt-1 text-sm font-semibold text-[var(--text)] tabular-nums">
                       {formatMinutesCompact(weekSummary.totals.durationMinutes)} · {formatKmCompact(weekSummary.totals.distanceKm)}
                     </div>
+                    {weekTotalsDeltas ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                          Time <TrendDelta delta={weekTotalsDeltas.durationMinutesPct} className="tabular-nums" />
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                          Distance <TrendDelta delta={weekTotalsDeltas.distanceKmPct} className="tabular-nums" />
+                        </span>
+                      </div>
+                    ) : null}
                     <div className="text-xs text-[var(--muted)] tabular-nums dark:text-slate-400">Calories: {formatKcal(weekSummary.totals.caloriesKcal)}</div>
                   </div>
                   <div className="rounded p-2">
@@ -202,6 +222,16 @@ export function AthleteCalendarGrid({
               </div>
               {weekBlock.weekSummary ? (
                 <>
+                  {weekBlock.deltas ? (
+                    <div className="mt-1 flex flex-col gap-0.5 text-[11px] tabular-nums">
+                      <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                        Time <TrendDelta delta={weekBlock.deltas.durationMinutesPct} className="tabular-nums" />
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                        Distance <TrendDelta delta={weekBlock.deltas.distanceKmPct} className="tabular-nums" />
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="text-xs text-[var(--muted)] tabular-nums dark:text-slate-400">Calories: {formatKcal(weekBlock.weekSummary.totals.caloriesKcal)}</div>
                   {weekBlock.weekTopDisciplines.length ? (
                     <div className="mt-1 space-y-0.5">
