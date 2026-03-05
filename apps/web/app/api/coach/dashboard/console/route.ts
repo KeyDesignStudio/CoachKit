@@ -833,6 +833,7 @@ export async function GET(request: NextRequest) {
       {
         athletes: aggregates.value.athletes,
         kpis: aggregates.value.kpis,
+        kpiComparison: aggregates.value.kpiComparison,
         attention: aggregates.value.attention,
         disciplineLoad: aggregates.value.disciplineLoad,
         stravaVitals: aggregates.value.stravaVitals,

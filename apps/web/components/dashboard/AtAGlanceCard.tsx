@@ -50,7 +50,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
       <div className="flex flex-1 items-center">
         <div
           className={cn(
-            'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] min-[520px]:items-center min-w-0',
+            'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,9fr)_minmax(0,8fr)] min-[520px]:items-center min-w-0',
             tokens.spacing.widgetGap
           )}
           data-testid={testIds.grid}
@@ -68,7 +68,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                   )}
                   data-testid={testIds.statRow}
                 >
-                  <div className={cn('min-w-0 uppercase tracking-wide leading-4 md:leading-none md:truncate', tokens.typography.meta)} title={row.label}>
+                  <div className={cn('min-w-0 whitespace-normal uppercase tracking-wide leading-4 md:leading-none', tokens.typography.meta)} title={row.label}>
                     {row.label}
                   </div>
                   <div className="w-full text-left md:w-auto md:text-right flex-shrink-0">
