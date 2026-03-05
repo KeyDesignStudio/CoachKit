@@ -19,7 +19,7 @@ export function getPageTitleFromPath(pathname: string): string {
   if (pathname.startsWith('/athlete/dashboard')) return 'Dashboard';
   if (pathname.startsWith('/challenges')) return 'Challenges';
   if (pathname.startsWith('/athlete/challenges')) return 'Challenges';
-  if (pathname.startsWith('/athlete/calendar')) return 'Calendar';
+  if (pathname.startsWith('/athlete/calendar')) return 'Workout Schedule';
   if (pathname.startsWith('/athlete/profile')) return 'Athlete profile';
   if (pathname.startsWith('/athlete/notifications')) return 'Notifications';
   if (pathname.startsWith('/athlete/settings')) return 'Settings';
