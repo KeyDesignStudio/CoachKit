@@ -758,7 +758,7 @@ export default function AthleteDashboardConsolePage() {
       <section className="pb-10">
         <div className={cn('pt-3 md:pt-6 px-4 md:pr-6 lg:pr-8', sidebarOpen ? 'md:pl-[256px]' : 'md:pl-[76px]')}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className={tokens.typography.h1}>Athlete Console</h1>
+            <h1 className={cn(tokens.typography.h1, 'text-[22px] md:text-2xl')}>Athlete Console</h1>
             <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
               |
             </span>
@@ -784,7 +784,7 @@ export default function AthleteDashboardConsolePage() {
                   ))}
                 </div>
               ) : null}
-              <p className="text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting.message}</p>
+              <p className="text-[20px] md:text-[22px] font-bold tracking-tight text-[var(--muted)]">{athleteGreeting.message}</p>
             </div>
           </div>
         </div>
@@ -944,9 +944,9 @@ export default function AthleteDashboardConsolePage() {
 
           <div className="min-w-0">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:repeat(6,minmax(0,1fr))]" data-testid="athlete-dashboard-chart-grid">
-              <div className="min-w-0 md:col-span-2 lg:col-span-6">
+              <div className="min-w-0 order-1 md:order-none md:col-span-2 lg:col-span-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:[grid-template-columns:5fr_6fr_4fr]">
-                  <div className="min-w-0">
+                  <div className="hidden md:block min-w-0">
                     <Block
                       title="Needs your attention"
                       rightAction={<div className={tokens.typography.meta}>Tap to open calendar</div>}
@@ -1028,7 +1028,7 @@ export default function AthleteDashboardConsolePage() {
                     />
                   </div>
 
-                  <div className="min-w-0">
+                  <div className="hidden md:block min-w-0">
                     <Block
                       title="Planned vs Completed"
                       showHeaderDivider={false}
@@ -1102,7 +1102,12 @@ export default function AthleteDashboardConsolePage() {
                 </div>
               </div>
 
-              <Block title="Calories" showHeaderDivider={false} className="min-h-[230px] lg:col-span-3" data-testid="athlete-dashboard-calories-chart">
+              <Block
+                title="Calories"
+                showHeaderDivider={false}
+                className="order-3 md:order-none min-h-[230px] lg:col-span-3"
+                data-testid="athlete-dashboard-calories-chart"
+              >
             {(() => {
               const summary = data?.rangeSummary;
               const points = summary?.caloriesByDay ?? [];
@@ -1267,8 +1272,80 @@ export default function AthleteDashboardConsolePage() {
             })()}
               </Block>
 
-              <div className="lg:col-span-3">
+              <div className="order-2 md:order-none lg:col-span-3">
                 <StravaVitalsSummaryCard comparison={data?.stravaVitals ?? null} loading={loading && !data} title="Strava Vitals" addBottomSpacer />
+              </div>
+
+              <div className="md:hidden order-4 min-w-0">
+                <Block
+                  title="Planned vs Completed"
+                  showHeaderDivider={false}
+                  className="min-h-[230px]"
+                  data-testid="athlete-dashboard-compliance-chart-mobile"
+                >
+                  {(() => {
+                    const summary = data?.rangeSummary;
+                    const plannedTotal = summary?.totals.workoutsPlanned ?? 0;
+                    const completedTotal = summary?.totals.workoutsCompleted ?? 0;
+                    const percent = plannedTotal > 0 ? Math.min(100, Math.round((completedTotal / plannedTotal) * 100)) : 0;
+                    const rows = (summary?.byDiscipline ?? []).filter((row) => row.plannedWorkouts > 0 || row.completedWorkouts > 0);
+
+                    return (
+                      <div className="flex h-full flex-col gap-3">
+                        <div className="flex flex-col gap-1">
+                          {plannedTotal > 0 ? (
+                            <>
+                              <div className="text-lg font-semibold text-[var(--text)]">{percent}% complete</div>
+                              <div className="text-sm text-[var(--muted)]">
+                                Completed {completedTotal} of {plannedTotal} planned sessions
+                              </div>
+                            </>
+                          ) : completedTotal > 0 ? (
+                            <>
+                              <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
+                              <div className="text-sm text-[var(--muted)]">Completed {completedTotal} sessions</div>
+                            </>
+                          ) : (
+                            <div className="text-lg font-semibold text-[var(--text)]">No planned sessions in this range</div>
+                          )}
+                        </div>
+
+                        <div className="h-3 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[var(--bar-fill)] transition-[width] duration-200"
+                            style={{ width: plannedTotal > 0 ? `${percent}%` : completedTotal > 0 ? '100%' : '0%' }}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                          {rows.length === 0 ? (
+                            <div className="text-xs text-[var(--muted)]">No sessions logged for this range.</div>
+                          ) : (
+                            rows.map((row) => {
+                              const planned = row.plannedWorkouts;
+                              const completed = row.completedWorkouts;
+                              const denom = planned > 0 ? planned : completed > 0 ? completed : 1;
+                              const pct = Math.max(0, Math.min(100, Math.round((completed / denom) * 100)));
+                              const label = row.discipline.toUpperCase();
+                              const detail = planned > 0 ? `${completed} / ${planned}` : `${completed}`;
+                              return (
+                                <div key={row.discipline} className="flex flex-col gap-2">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="font-medium text-[var(--text)] md:truncate">{label}</span>
+                                    <span className="tabular-nums text-[var(--muted)]">{detail}</span>
+                                  </div>
+                                  <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
+                                    <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </Block>
               </div>
             </div>
           </div>

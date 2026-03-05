@@ -35,7 +35,7 @@ export function MobileHeaderTitle({ defaultTitle }: MobileHeaderTitleProps) {
   }, []);
 
   return (
-    <div className="min-w-0 flex-1 text-center" data-testid="mobile-header-title">
+    <div className="w-full min-w-0 text-center" data-testid="mobile-header-title">
       <div className="md:truncate text-sm font-semibold text-[var(--text)]">{title}</div>
     </div>
   );

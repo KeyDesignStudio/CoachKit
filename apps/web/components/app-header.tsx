@@ -296,10 +296,12 @@ export async function AppHeader() {
         {/* NOTE (dev-only): Keep shared wrapper surfaces token-only; avoid translucent white overlays, gradients, and backdrop blur (they cause coach/athlete surface drift). */}
         <Card className="rounded-none bg-[var(--bg-surface)] p-0 dark:border-x-0">
           {/* Mobile (iOS-first): single row header */}
-          <div data-mobile-header="v1" className="md:hidden flex h-14 items-center gap-2 px-3">
+          <div data-mobile-header="v1" className="md:hidden relative flex h-14 items-center justify-between gap-2 px-3">
             {navLinks.length > 0 ? <MobileNavDrawer links={mobileLinks} /> : <div className="h-11 w-11" />}
-            <MobileHeaderTitle />
-            <div className="flex min-w-0 max-w-[40vw] justify-end">
+            <div className="pointer-events-none absolute left-1/2 top-1/2 w-[60%] -translate-x-1/2 -translate-y-1/2">
+              <MobileHeaderTitle />
+            </div>
+            <div className="flex min-w-[44px] max-w-[40vw] justify-end">
               {showUserControl && <UserHeaderControl />}
             </div>
           </div>
