@@ -60,7 +60,7 @@ export async function extractAiProfileFromIntake(params: {
     return { profile: existing, evidenceHash, wasCreated: false };
   }
 
-  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
+  const ai = await getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const extracted = await ai.summarizeIntake({
     evidence: evidence.map((e) => ({ questionKey: e.questionKey, answerJson: e.answerJson as any })),
   });

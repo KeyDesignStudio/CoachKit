@@ -1,4 +1,5 @@
 import type { AiJsonValue } from '../types';
+import { getAiPlanBuilderRuntimeOverrides } from '../runtime-overrides';
 
 import { AiPlanBuilderLlmError } from './errors';
 
@@ -13,6 +14,8 @@ export type AiPlanBuilderLlmConfig = {
 };
 
 export function getAiPlanBuilderLlmProviderFromEnv(env: NodeJS.ProcessEnv = process.env): AiPlanBuilderLlmProvider {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  if (runtime?.llmProvider === 'mock' || runtime?.llmProvider === 'openai') return runtime.llmProvider;
   const raw = String(env.AI_PLAN_BUILDER_LLM_PROVIDER ?? 'openai').trim().toLowerCase();
   return raw === 'mock' ? 'mock' : 'openai';
 }
@@ -41,15 +44,16 @@ export function shouldForceMockTransport(env: NodeJS.ProcessEnv = process.env): 
 }
 
 export function getAiPlanBuilderLlmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AiPlanBuilderLlmConfig {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
   const provider = shouldForceMockTransport(env) ? 'mock' : getAiPlanBuilderLlmProviderFromEnv(env);
 
-  const timeoutMsRaw = Number(env.AI_PLAN_BUILDER_LLM_TIMEOUT_MS ?? 20000);
+  const timeoutMsRaw = Number(runtime?.llmTimeoutMs ?? env.AI_PLAN_BUILDER_LLM_TIMEOUT_MS ?? 20000);
   const timeoutMs = Number.isFinite(timeoutMsRaw) ? Math.max(1000, Math.round(timeoutMsRaw)) : 20000;
 
-  const maxTokensRaw = Number(env.AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS ?? 1200);
+  const maxTokensRaw = Number(runtime?.llmMaxOutputTokens ?? env.AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS ?? 1200);
   const maxOutputTokens = Number.isFinite(maxTokensRaw) ? Math.max(128, Math.round(maxTokensRaw)) : 1200;
 
-  const model = String(env.AI_PLAN_BUILDER_LLM_MODEL ?? '').trim();
+  const model = String(runtime?.llmModel ?? env.AI_PLAN_BUILDER_LLM_MODEL ?? '').trim();
   const openAiApiKey = String(env.OPENAI_API_KEY ?? '').trim();
 
   return {

@@ -32,7 +32,7 @@ export default async function HomePage() {
     const roleRedirect = isRoleRedirectAllowed(redirectCookie, role) ? redirectCookie : null;
 
     if (role === 'ADMIN') {
-      redirect('/admin/ai-usage');
+      redirect('/admin');
     }
     if (role === 'COACH') {
       redirect(roleRedirect || '/coach/dashboard');
@@ -69,8 +69,8 @@ export default async function HomePage() {
 
   // Redirect based on role
   if (user.role === 'ADMIN') {
-    console.info('[Authz] Root redirect', { role: user.role, userId, target: '/admin/ai-usage' });
-    redirect('/admin/ai-usage');
+    console.info('[Authz] Root redirect', { role: user.role, userId, target: '/admin' });
+    redirect('/admin');
   }
 
   if (user.role === 'COACH') {
