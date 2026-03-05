@@ -356,12 +356,33 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
   const completeButtonConfetti = useMemo(
     () =>
-      Array.from({ length: 14 }, (_, index) => ({
-        left: `${10 + ((index * 17) % 80)}%`,
-        delay: `${(index % 7) * 30}ms`,
-        color: index % 3 === 0 ? '#facc15' : index % 3 === 1 ? '#94a3b8' : '#f97316',
-      })),
+      Array.from({ length: 22 }, (_, index) => {
+        const angle = (Math.PI * 2 * index) / 22;
+        const distance = 30 + (index % 5) * 12;
+        return {
+          left: '50%',
+          delay: `${(index % 6) * 18}ms`,
+          color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
+          dx: Math.round(Math.cos(angle) * distance),
+          dy: Math.round(Math.sin(angle) * distance) - 26,
+          rot: `${80 + index * 14}deg`,
+        };
+      }),
     []
+  );
+  const onCompleteButtonClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (isDraftStrava) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      setCompleteConfettiAnchor({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+      triggerCompleteCelebration();
+    },
+    [isDraftStrava, triggerCompleteCelebration]
   );
 
   const navigateToCalendar = useCallback(() => {
@@ -471,15 +492,6 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           },
         });
       } else {
-        const buttonRect = completeButtonRef.current?.getBoundingClientRect() ?? null;
-        if (buttonRect) {
-          setCompleteConfettiAnchor({
-            left: buttonRect.left,
-            top: buttonRect.top,
-            width: buttonRect.width,
-            height: buttonRect.height,
-          });
-        }
         await request(`/api/athlete/calendar-items/${workoutId}/complete`, {
           method: 'POST',
           data: {
@@ -666,7 +678,14 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               Close
             </Button>
             <div className="relative w-full sm:w-auto">
-              <Button ref={completeButtonRef} type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
+              <Button
+                ref={completeButtonRef}
+                type="submit"
+                size="sm"
+                className="min-h-[44px] w-full sm:w-auto"
+                disabled={submitting}
+                onClick={onCompleteButtonClick}
+              >
                 {isDraftStrava ? 'Confirm' : 'Complete'}
               </Button>
             </div>
@@ -763,7 +782,14 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
             <span
               key={`complete-confetti-${index}`}
               className={styles.completeConfettiPiece}
-              style={{ left: piece.left, animationDelay: piece.delay, backgroundColor: piece.color }}
+              style={{
+                left: piece.left,
+                animationDelay: piece.delay,
+                backgroundColor: piece.color,
+                ['--dx' as any]: `${piece.dx}px`,
+                ['--dy' as any]: `${piece.dy}px`,
+                ['--rot' as any]: piece.rot,
+              }}
             />
           ))}
         </div>
