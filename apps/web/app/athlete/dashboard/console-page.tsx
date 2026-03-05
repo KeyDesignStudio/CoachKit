@@ -541,11 +541,11 @@ export default function AthleteDashboardConsolePage() {
         const x = Math.sin(seed * 12.9898) * 43758.5453;
         return x - Math.floor(x);
       };
-      return Array.from({ length: 28 }, (_, index) => {
+      return Array.from({ length: 64 }, (_, index) => {
         const angle = rand(index + 1) * Math.PI * 2;
-        const distance = 80 * (0.35 + rand(index + 21) * 0.85);
+        const distance = 160 * (0.35 + rand(index + 21) * 0.85);
         const dx = Math.round(Math.cos(angle) * distance);
-        const dy = Math.round(Math.sin(angle) * distance - 36);
+        const dy = Math.round(Math.sin(angle) * distance - 90);
         const gravityDrop = 18 + Math.round(rand(index + 31) * 18);
         return {
           delay: `${Math.round(rand(index + 11) * 42)}ms`,
@@ -622,7 +622,7 @@ export default function AthleteDashboardConsolePage() {
     const shouldCelebrate = athleteGreeting.shouldCelebrate || /well done/i.test(athleteGreeting.message);
     if (!shouldCelebrate) return;
     setShowGreetingCelebration(true);
-    const timer = window.setTimeout(() => setShowGreetingCelebration(false), 1400);
+    const timer = window.setTimeout(() => setShowGreetingCelebration(false), 2100);
     return () => window.clearTimeout(timer);
   }, [athleteGreeting.message, athleteGreeting.shouldCelebrate]);
 

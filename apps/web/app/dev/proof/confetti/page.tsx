@@ -8,10 +8,16 @@ import styles from './page.module.css';
 type Piece = {
   delay: string;
   color: string;
-  dx: number;
-  dy: number;
-  dxEnd: number;
-  dyEnd: number;
+  xBurst: number;
+  yBurst: number;
+  xGlide1: number;
+  yGlide1: number;
+  xGlide2: number;
+  yGlide2: number;
+  xFall: number;
+  yFall: number;
+  xEnd: number;
+  yEnd: number;
   rot: string;
   size: number;
 };
@@ -35,18 +41,34 @@ function buildPieces(count: number, spread: number, lift: number): Piece[] {
   };
   return Array.from({ length: count }, (_, index) => {
     const angle = rand(index + 1) * Math.PI * 2;
-    const distance = spread * (0.35 + rand(index + 21) * 0.85);
-    const dx = Math.round(Math.cos(angle) * distance);
-    const dy = Math.round(Math.sin(angle) * distance - lift);
-    const gravityDrop = 18 + Math.round(rand(index + 31) * 18);
+    const distance = spread * (0.45 + rand(index + 21) * 0.8);
+    const xBurst = Math.cos(angle) * distance;
+    const yBurst = Math.sin(angle) * distance - lift * 1.15;
+    const driftX = (rand(index + 27) - 0.5) * 36;
+    const glideDrop1 = 10 + rand(index + 29) * 12;
+    const glideDrop2 = 20 + rand(index + 31) * 18;
+    const fallDrop = 30 + rand(index + 37) * 24;
+    const settleDrop = 34 + rand(index + 41) * 28;
+    const xGlide1 = xBurst * 1.08 + driftX * 0.18;
+    const yGlide1 = yBurst + glideDrop1;
+    const xGlide2 = xGlide1 + driftX * 0.26;
+    const yGlide2 = yGlide1 + glideDrop2;
+    const xFall = xGlide2 + driftX * 0.3;
+    const yFall = yGlide2 + fallDrop;
     return {
-      delay: `${Math.round(rand(index + 11) * 42)}ms`,
+      delay: `${Math.round(rand(index + 11) * 24)}ms`,
       color: COLORS[index % COLORS.length],
-      dx,
-      dy,
-      dxEnd: Math.round(dx * 1.08),
-      dyEnd: dy + gravityDrop,
-      rot: `${Math.round(rand(index + 41) * 420 - 210)}deg`,
+      xBurst,
+      yBurst,
+      xGlide1,
+      yGlide1,
+      xGlide2,
+      yGlide2,
+      xFall,
+      yFall,
+      xEnd: xFall + driftX * 0.26,
+      yEnd: yFall + settleDrop,
+      rot: `${Math.round(rand(index + 51) * 520 - 260)}deg`,
       size: 6 + Math.round(rand(index + 51) * 4),
     };
   });
@@ -58,7 +80,7 @@ export default function DevProofConfettiPage() {
   const [lift, setLift] = useState(42);
   const [centerBurst, setCenterBurst] = useState(0);
   const [buttonBurst, setButtonBurst] = useState(0);
-  const [durationMs, setDurationMs] = useState(1050);
+  const [durationMs, setDurationMs] = useState(1500);
   const [presets, setPresets] = useState<ConfettiPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [presetsLoaded, setPresetsLoaded] = useState(false);
@@ -82,7 +104,7 @@ export default function DevProofConfettiPage() {
             pieces: Number((p as any).pieces ?? 28),
             spread: Number((p as any).spread ?? 90),
             lift: Number((p as any).lift ?? 42),
-            durationMs: Number((p as any).durationMs ?? 1050),
+            durationMs: Number((p as any).durationMs ?? 1500),
           }))
           .filter((p) => p.id && p.name);
         setPresets(safePresets);
@@ -250,10 +272,16 @@ export default function DevProofConfettiPage() {
                   backgroundColor: piece.color,
                   width: `${piece.size}px`,
                   height: `${Math.round(piece.size * 1.8)}px`,
-                  ['--dx' as any]: `${piece.dx}px`,
-                  ['--dy' as any]: `${piece.dy}px`,
-                  ['--dx-end' as any]: `${piece.dxEnd}px`,
-                  ['--dy-end' as any]: `${piece.dyEnd}px`,
+                  ['--x-burst' as any]: `${piece.xBurst}px`,
+                  ['--y-burst' as any]: `${piece.yBurst}px`,
+                  ['--x-glide-1' as any]: `${piece.xGlide1}px`,
+                  ['--y-glide-1' as any]: `${piece.yGlide1}px`,
+                  ['--x-glide-2' as any]: `${piece.xGlide2}px`,
+                  ['--y-glide-2' as any]: `${piece.yGlide2}px`,
+                  ['--x-fall' as any]: `${piece.xFall}px`,
+                  ['--y-fall' as any]: `${piece.yFall}px`,
+                  ['--x-end' as any]: `${piece.xEnd}px`,
+                  ['--y-end' as any]: `${piece.yEnd}px`,
                   ['--rot' as any]: piece.rot,
                 }}
               />
@@ -279,10 +307,16 @@ export default function DevProofConfettiPage() {
                     backgroundColor: piece.color,
                     width: `${piece.size}px`,
                     height: `${Math.round(piece.size * 1.8)}px`,
-                    ['--dx' as any]: `${piece.dx}px`,
-                    ['--dy' as any]: `${piece.dy}px`,
-                    ['--dx-end' as any]: `${piece.dxEnd}px`,
-                    ['--dy-end' as any]: `${piece.dyEnd}px`,
+                    ['--x-burst' as any]: `${piece.xBurst}px`,
+                    ['--y-burst' as any]: `${piece.yBurst}px`,
+                    ['--x-glide-1' as any]: `${piece.xGlide1}px`,
+                    ['--y-glide-1' as any]: `${piece.yGlide1}px`,
+                    ['--x-glide-2' as any]: `${piece.xGlide2}px`,
+                    ['--y-glide-2' as any]: `${piece.yGlide2}px`,
+                    ['--x-fall' as any]: `${piece.xFall}px`,
+                    ['--y-fall' as any]: `${piece.yFall}px`,
+                    ['--x-end' as any]: `${piece.xEnd}px`,
+                    ['--y-end' as any]: `${piece.yEnd}px`,
                     ['--rot' as any]: piece.rot,
                   }}
                 />
