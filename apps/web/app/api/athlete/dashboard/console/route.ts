@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CalendarItemStatus } from '@prisma/client';
+import { CalendarItemStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -10,7 +10,7 @@ import { privateCacheHeaders } from '@/lib/cache';
 import { getZonedDateKeyForNow } from '@/components/calendar/getCalendarDisplayTime';
 import { addDaysToDayKey, getLocalDayKey } from '@/lib/day-key';
 import { getAthleteRangeSummary } from '@/lib/calendar/range-summary';
-import { getStoredStartUtcFromCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
+import { getEffectiveStartUtcForCalendarItem, getUtcRangeForLocalDayKeyRange, isStoredStartInUtcRange } from '@/lib/calendar-local-day';
 import { getStravaCaloriesKcal, getStravaKilojoules } from '@/lib/strava-metrics';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getStravaVitalsComparisonForAthlete, type StravaVitalsComparison } from '@/lib/strava-vitals';
@@ -96,6 +96,11 @@ const COMPLETED_STATUSES: CalendarItemStatus[] = [
   CalendarItemStatus.COMPLETED_SYNCED_DRAFT,
 ];
 
+const SUMMARY_COMPLETED_STATUS_SQL = Prisma.join([
+  Prisma.sql`${CalendarItemStatus.COMPLETED_MANUAL}::"CalendarItemStatus"`,
+  Prisma.sql`${CalendarItemStatus.COMPLETED_SYNCED}::"CalendarItemStatus"`,
+]);
+
 const ATHLETE_DASHBOARD_CACHE_TTL_MS = 30_000;
 const athleteDashboardCache = new Map<
   string,
@@ -144,6 +149,68 @@ function shiftDayKey(dayKey: string, days: number): string {
   return addDaysToDayKey(dayKey, days);
 }
 
+type AthleteCompletedTotalsRow = {
+  completedMinutes: number | null;
+  completedDistanceKm: number | null;
+};
+
+function toFiniteNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+async function getAthleteCompletedComparisonTotals(params: {
+  athleteId: string;
+  timezone: string;
+  fromUtc: Date;
+  toUtcExclusive: Date;
+  discipline: string | null;
+}) {
+  const rows = await prisma.$queryRaw<AthleteCompletedTotalsRow[]>(Prisma.sql`
+    WITH latest_completion AS (
+      SELECT DISTINCT ON (ca."calendarItemId")
+        ca."calendarItemId",
+        ca."startTime",
+        ca."durationMinutes",
+        ca."distanceKm",
+        ca."metricsJson",
+        ca."matchDayDiff",
+        ca."createdAt"
+      FROM "CompletedActivity" ca
+      WHERE ca."calendarItemId" IS NOT NULL
+      ORDER BY ca."calendarItemId", ca."startTime" DESC, ca."createdAt" DESC
+    ),
+    scoped_items AS (
+      SELECT
+        COALESCE(
+          CASE
+            WHEN lc."startTime" IS NULL THEN NULL
+            ELSE COALESCE(
+              NULLIF(lc."metricsJson"->'strava'->>'startDateUtc', '')::timestamptz,
+              lc."startTime"
+            ) + COALESCE(lc."matchDayDiff", 0) * INTERVAL '1 day'
+          END,
+          ((to_char(ci."date" AT TIME ZONE 'UTC', 'YYYY-MM-DD') || ' ' || COALESCE(NULLIF(ci."plannedStartTimeLocal", ''), '00:00'))::timestamp AT TIME ZONE ${params.timezone})
+        ) AS "effectiveStartUtc",
+        COALESCE(NULLIF(lc."durationMinutes", 0), NULLIF(ci."plannedDurationMinutes", 0), 0) AS "completedMinutes",
+        COALESCE(NULLIF(lc."distanceKm", 0), NULLIF(ci."plannedDistanceKm", 0), 0) AS "completedDistanceKm"
+      FROM "CalendarItem" ci
+      LEFT JOIN latest_completion lc ON lc."calendarItemId" = ci."id"
+      WHERE ci."athleteId" = ${params.athleteId}
+        AND ci."deletedAt" IS NULL
+        ${params.discipline ? Prisma.sql`AND ci."discipline" = ${params.discipline}` : Prisma.empty}
+        AND ci."status" IN (${SUMMARY_COMPLETED_STATUS_SQL})
+    )
+    SELECT
+      COALESCE(SUM("completedMinutes"), 0)::int AS "completedMinutes",
+      COALESCE(SUM("completedDistanceKm"), 0)::double precision AS "completedDistanceKm"
+    FROM scoped_items
+    WHERE "effectiveStartUtc" >= ${params.fromUtc}
+      AND "effectiveStartUtc" < ${params.toUtcExclusive}
+  `);
+
+  return rows[0] ?? { completedMinutes: 0, completedDistanceKm: 0 };
+}
+
 async function getAthleteDashboardData(params: {
   athleteId: string;
   timezone: string;
@@ -185,8 +252,12 @@ async function getAthleteDashboardData(params: {
     const comparisonWindowDays = dayDiffInclusive(params.fromKey, params.toKey);
     const previousToKey = shiftDayKey(params.fromKey, -1);
     const previousFromKey = shiftDayKey(previousToKey, -(comparisonWindowDays - 1));
-    const candidateFromDate = parseDateOnly(addDaysToDayKey(previousFromKey, -1), 'from');
-    const candidateToDate = parseDateOnly(addDaysToDayKey(params.toKey, 1), 'to');
+    const yesterdayKey = addDaysToDayKey(params.todayKey, -1);
+    const tomorrowKey = addDaysToDayKey(params.todayKey, 1);
+    const earliestRelevantKey = params.fromKey < yesterdayKey ? params.fromKey : yesterdayKey;
+    const latestRelevantKey = params.toKey > tomorrowKey ? params.toKey : tomorrowKey;
+    const candidateFromDate = parseDateOnly(addDaysToDayKey(earliestRelevantKey, -1), 'from');
+    const candidateToDate = parseDateOnly(addDaysToDayKey(latestRelevantKey, 1), 'to');
     const rangeFilter = { date: { gte: candidateFromDate, lte: candidateToDate } };
     const disciplineFilter = params.discipline ? { discipline: params.discipline } : {};
     const utcRange = getUtcRangeForLocalDayKeyRange({
@@ -200,7 +271,7 @@ async function getAthleteDashboardData(params: {
       timeZone: params.timezone,
     });
 
-    const [athleteProfile, latestPublishedDraft, latestSubmittedIntake, items, stravaVitals] = await Promise.all([
+    const [athleteProfile, latestPublishedDraft, latestSubmittedIntake, items, previousComparisonTotals, stravaVitals] = await Promise.all([
       prisma.athleteProfile.findUnique({
         where: { userId: params.athleteId },
         select: {
@@ -251,6 +322,7 @@ async function getAthleteDashboardData(params: {
             orderBy: [{ startTime: 'desc' as const }],
             take: 1,
             select: {
+              source: true,
               startTime: true,
               durationMinutes: true,
               distanceKm: true,
@@ -262,6 +334,13 @@ async function getAthleteDashboardData(params: {
           },
         },
         orderBy: [{ date: 'asc' as const }],
+      }),
+      getAthleteCompletedComparisonTotals({
+        athleteId: params.athleteId,
+        timezone: params.timezone,
+        fromUtc: previousUtcRange.startUtc,
+        toUtcExclusive: previousUtcRange.endUtc,
+        discipline: params.discipline,
       }),
       getStravaVitalsComparisonForAthlete(params.athleteId, {
         from: parseDateOnly(params.fromKey, 'from'),
@@ -299,30 +378,30 @@ async function getAthleteDashboardData(params: {
     const mappedItems = items.map((item) => {
       const completion = item.completedActivities?.[0] ?? null;
       const stravaMetrics = (completion?.metricsJson as any)?.strava ?? null;
-      const completionStartUtc = completion
-        ? (() => {
-            const raw = stravaMetrics?.startDateUtc ?? null;
-            const parsed = raw ? new Date(raw) : null;
-            const base = parsed && !Number.isNaN(parsed.getTime()) ? parsed : completion.startTime;
-            if (typeof completion.matchDayDiff === 'number' && completion.matchDayDiff !== 0) {
-              return new Date(base.getTime() + completion.matchDayDiff * 24 * 60 * 60 * 1000);
-            }
-            return base;
-          })()
-        : null;
-      const effectiveStartUtc = completionStartUtc ?? getStoredStartUtcFromCalendarItem(item, params.timezone ?? 'UTC');
+      const effectiveStartUtc = getEffectiveStartUtcForCalendarItem({
+        item,
+        completion,
+        timeZone: params.timezone ?? 'UTC',
+      });
       return { item, completion, effectiveStartUtc, stravaMetrics };
     });
     const filteredItems = mappedItems.filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, utcRange));
-    const previousFilteredItems = mappedItems.filter(({ effectiveStartUtc }) => isStoredStartInUtcRange(effectiveStartUtc, previousUtcRange));
+    const currentItems = filteredItems.map(({ item }) => item);
 
     const asGreetingTitle = (item: (typeof items)[number]) => String(item.title ?? item.discipline ?? 'training session').trim();
     const asGreetingSession = (item: (typeof items)[number]): SessionGreetingInfo => ({
       title: asGreetingTitle(item),
       plannedStartTimeLocal: item.plannedStartTimeLocal,
     });
+    const itemsByLocalDayKey = new Map<string, Array<(typeof items)[number]>>();
+    for (const item of items) {
+      const dayKey = getLocalDayKey(item.date, params.timezone);
+      const existing = itemsByLocalDayKey.get(dayKey) ?? [];
+      existing.push(item);
+      itemsByLocalDayKey.set(dayKey, existing);
+    }
     const buildDaySnapshot = (dayKey: string): DayTrainingSnapshot => {
-      const dayItems = items.filter((item) => getLocalDayKey(item.date, params.timezone) === dayKey);
+      const dayItems = itemsByLocalDayKey.get(dayKey) ?? [];
       const completed = dayItems.filter((item) => COMPLETED_STATUSES.includes(item.status)).map(asGreetingSession);
       const planned = dayItems.filter((item) => item.status === CalendarItemStatus.PLANNED).map(asGreetingSession);
       return {
@@ -332,8 +411,6 @@ async function getAthleteDashboardData(params: {
         planned: planned.slice(0, 3),
       };
     };
-    const yesterdayKey = addDaysToDayKey(params.todayKey, -1);
-    const tomorrowKey = addDaysToDayKey(params.todayKey, 1);
 
     const asSummaryItem = ({ item, completion, effectiveStartUtc, stravaMetrics }: (typeof filteredItems)[number]) => ({
       id: item.id,
@@ -361,23 +438,12 @@ async function getAthleteDashboardData(params: {
       todayDayKey: params.todayKey,
       weightKg: null,
     });
-    const previousRangeSummary = getAthleteRangeSummary({
-      items: previousFilteredItems.map((item) => asSummaryItem(item)),
-      timeZone: params.timezone,
-      fromDayKey: previousFromKey,
-      toDayKey: previousToKey,
-      todayDayKey: params.todayKey,
-      weightKg: null,
-    });
 
-    const pendingConfirmationCount = filteredItems
-      .map(({ item }) => item)
-      .filter((item) => item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT).length;
+    const pendingConfirmationCount = currentItems.filter((item) => item.status === CalendarItemStatus.COMPLETED_SYNCED_DRAFT).length;
 
-    const painFlagWorkouts = filteredItems.map(({ item }) => item).filter((item) => item.completedActivities?.[0]?.painFlag).length;
+    const painFlagWorkouts = currentItems.filter((item) => item.completedActivities?.[0]?.painFlag).length;
 
-    const nextUp = filteredItems
-      .map(({ item }) => item)
+    const nextUp = currentItems
       .filter((item) => item.status === CalendarItemStatus.PLANNED)
       .filter((item) => getLocalDayKey(item.date, params.timezone) >= params.todayKey)
       .sort((a, b) => {
@@ -397,9 +463,7 @@ async function getAthleteDashboardData(params: {
         plannedStartTimeLocal: item.plannedStartTimeLocal,
       }));
 
-    const todayItems = filteredItems
-      .map(({ item }) => item)
-      .filter((item) => getLocalDayKey(item.date, params.timezone) === params.todayKey);
+    const todayItems = currentItems.filter((item) => getLocalDayKey(item.date, params.timezone) === params.todayKey);
     const completedTodayItems = todayItems.filter((item) => COMPLETED_STATUSES.includes(item.status));
     const scheduledTodayItems = todayItems.filter((item) => item.status === CalendarItemStatus.PLANNED);
     const asTitle = (item: (typeof todayItems)[number]) => String(item.title ?? item.discipline ?? 'session').trim();
@@ -415,17 +479,17 @@ async function getAthleteDashboardData(params: {
         previousFromDayKey: previousFromKey,
         previousToDayKey: previousToKey,
         totals: {
-          completedMinutes: previousRangeSummary.totals.completedMinutes,
-          completedDistanceKm: previousRangeSummary.totals.completedDistanceKm,
+          completedMinutes: toFiniteNumber(previousComparisonTotals.completedMinutes),
+          completedDistanceKm: toFiniteNumber(previousComparisonTotals.completedDistanceKm),
         },
         deltas: {
           completedMinutesPct: computePercentDelta(
             rangeSummary.totals.completedMinutes,
-            previousRangeSummary.totals.completedMinutes
+            toFiniteNumber(previousComparisonTotals.completedMinutes)
           ),
           completedDistanceKmPct: computePercentDelta(
             rangeSummary.totals.completedDistanceKm,
-            previousRangeSummary.totals.completedDistanceKm
+            toFiniteNumber(previousComparisonTotals.completedDistanceKm)
           ),
         },
       },
@@ -514,7 +578,7 @@ export async function GET(request: NextRequest) {
     return success(
       dashboard.value,
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       }
     );
   } catch (error) {

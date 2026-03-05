@@ -1,4 +1,5 @@
 import { requireAthlete } from '@/lib/auth';
+import { privateCacheHeaders } from '@/lib/cache';
 import { handleError, success } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
 
@@ -20,16 +21,19 @@ export async function GET() {
     });
 
     if (!profile?.coachId) {
-      return success({
-        intakeResponse: null,
-        latestSubmittedIntake: null,
-        openDraftIntake: null,
-        lifecycle: {
-          hasOpenRequest: false,
-          canOpenNewRequest: false,
+      return success(
+        {
+          intakeResponse: null,
+          latestSubmittedIntake: null,
+          openDraftIntake: null,
+          lifecycle: {
+            hasOpenRequest: false,
+            canOpenNewRequest: false,
+          },
+          reminderTracking: null,
         },
-        reminderTracking: null,
-      });
+        { headers: privateCacheHeaders({ maxAgeSeconds: 15, staleWhileRevalidateSeconds: 30 }) }
+      );
     }
 
     const [latestSubmittedIntake, openDraftIntake] = await Promise.all([
@@ -85,16 +89,19 @@ export async function GET() {
       };
     }
 
-    return success({
-      intakeResponse: latestSubmittedIntake,
-      latestSubmittedIntake,
-      openDraftIntake,
-      lifecycle: {
-        hasOpenRequest: Boolean(openDraftIntake),
-        canOpenNewRequest: !openDraftIntake,
+    return success(
+      {
+        intakeResponse: latestSubmittedIntake,
+        latestSubmittedIntake,
+        openDraftIntake,
+        lifecycle: {
+          hasOpenRequest: Boolean(openDraftIntake),
+          canOpenNewRequest: !openDraftIntake,
+        },
+        reminderTracking,
       },
-      reminderTracking,
-    });
+      { headers: privateCacheHeaders({ maxAgeSeconds: 15, staleWhileRevalidateSeconds: 30 }) }
+    );
   } catch (error) {
     return handleError(error);
   }

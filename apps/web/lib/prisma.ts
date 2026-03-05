@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 import { getAuditActor } from '@/lib/audit-context';
 import { getDatabaseUrl } from '@/lib/db-connection';
@@ -27,15 +27,6 @@ const basePrisma =
       : undefined
   );
 
-function toSafeJsonText(value: unknown): string | null {
-  if (value === undefined) return null;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return null;
-  }
-}
-
 function changedFieldNames(data: unknown): string[] {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
   return Object.keys(data as Record<string, unknown>);
@@ -49,9 +40,113 @@ function inferRecordId(result: unknown, fallback: string): string {
   return fallback;
 }
 
+type PendingAuditRow = {
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  tableName: string;
+  fieldName: string;
+  recordId: string;
+  changeText: string;
+  beforeValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined;
+  afterValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined;
+  actorUserId: string | null;
+  actorEmail: string | null;
+  actorRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null;
+};
+
+const AUDIT_FLUSH_DELAY_MS = 25;
+const AUDIT_BATCH_SIZE = 100;
+
+const globalForAuditQueue = globalThis as unknown as {
+  __coachkitAuditQueue?: {
+    rows: PendingAuditRow[];
+    timer: ReturnType<typeof setTimeout> | null;
+    flushing: Promise<void> | null;
+  };
+};
+
+const auditQueue =
+  globalForAuditQueue.__coachkitAuditQueue ??
+  {
+    rows: [] as PendingAuditRow[],
+    timer: null as ReturnType<typeof setTimeout> | null,
+    flushing: null as Promise<void> | null,
+  };
+
+globalForAuditQueue.__coachkitAuditQueue = auditQueue;
+
+function toSafeJsonValue(value: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.JsonNull;
+  try {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  } catch {
+    return undefined;
+  }
+}
+
+async function flushAuditQueue(): Promise<void> {
+  if (auditQueue.flushing) {
+    return auditQueue.flushing;
+  }
+
+  auditQueue.flushing = (async () => {
+    while (auditQueue.rows.length > 0) {
+      const batch = auditQueue.rows.splice(0, AUDIT_BATCH_SIZE);
+      try {
+        await basePrisma.adminAuditEvent.createMany({
+          data: batch.map((row) => ({
+            action: row.action,
+            tableName: row.tableName,
+            fieldName: row.fieldName,
+            recordId: row.recordId,
+            changeText: row.changeText,
+            beforeValue: row.beforeValue,
+            afterValue: row.afterValue,
+            actorUserId: row.actorUserId,
+            actorEmail: row.actorEmail,
+            actorRole: row.actorRole,
+          })),
+        });
+      } catch {
+        // Audit logging must never block the main write path.
+      }
+    }
+  })().finally(() => {
+    auditQueue.flushing = null;
+    if (auditQueue.rows.length > 0) {
+      scheduleAuditFlush();
+    }
+  });
+
+  return auditQueue.flushing;
+}
+
+function scheduleAuditFlush() {
+  if (auditQueue.flushing || auditQueue.timer) return;
+  auditQueue.timer = setTimeout(() => {
+    auditQueue.timer = null;
+    void flushAuditQueue();
+  }, AUDIT_FLUSH_DELAY_MS);
+}
+
+function enqueueAuditRows(rows: PendingAuditRow[]) {
+  if (rows.length === 0) return;
+  auditQueue.rows.push(...rows);
+
+  if (auditQueue.rows.length >= AUDIT_BATCH_SIZE) {
+    if (auditQueue.timer) {
+      clearTimeout(auditQueue.timer);
+      auditQueue.timer = null;
+    }
+    void flushAuditQueue();
+    return;
+  }
+
+  scheduleAuditFlush();
+}
+
 const prismaMiddlewareClient = basePrisma as unknown as {
   $use?: (fn: (params: any, next: (params: any) => Promise<any>) => Promise<any>) => void;
-  $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<number>;
 };
 
 const registerAuditMiddleware = prismaMiddlewareClient.$use;
@@ -79,24 +174,13 @@ if (typeof registerAuditMiddleware === 'function') {
   const whereRaw = (params.args as Record<string, unknown> | undefined)?.where;
   const whereText = whereRaw ? JSON.stringify(whereRaw) : '*';
   const dataRaw = (params.args as Record<string, unknown> | undefined)?.data;
-  const fields = changedFieldNames(dataRaw);
+  const isBulkAction = action === 'createMany' || action === 'updateMany' || action === 'deleteMany';
+  const fields = isBulkAction ? [] : changedFieldNames(dataRaw);
   const fieldNames = fields.length ? fields : ['*'];
 
   // Avoid cross-transaction drift. If operation runs inside an explicit DB transaction,
   // skip audit write from middleware to prevent writing an audit row outside that transaction boundary.
   const skipWrite = Boolean(params.runInTransaction);
-
-  let beforeRow: Record<string, unknown> | null = null;
-  if (!skipWrite && (action === 'update' || action === 'delete') && whereRaw) {
-    try {
-      const delegate = (basePrisma as unknown as Record<string, any>)[modelName];
-      if (delegate && typeof delegate.findUnique === 'function') {
-        beforeRow = (await delegate.findUnique({ where: whereRaw })) as Record<string, unknown> | null;
-      }
-    } catch {
-      beforeRow = null;
-    }
-  }
 
   const result = await next(params);
 
@@ -104,16 +188,12 @@ if (typeof registerAuditMiddleware === 'function') {
 
   const recordId = inferRecordId(result, whereText);
   const rows = fieldNames.map((fieldName) => {
-    const beforeValue = fieldName === '*' ? beforeRow : beforeRow?.[fieldName];
-    const afterValue =
+    const fieldValue =
       fieldName === '*'
         ? result
         : result && typeof result === 'object'
           ? (result as Record<string, unknown>)[fieldName]
           : undefined;
-
-    const beforeJsonText = toSafeJsonText(beforeValue);
-    const afterJsonText = toSafeJsonText(afterValue);
 
     return {
       action: auditedAction,
@@ -126,42 +206,15 @@ if (typeof registerAuditMiddleware === 'function') {
           : auditedAction === 'DELETE'
             ? 'Record deleted.'
             : 'Field updated.',
-      beforeValueText: beforeJsonText,
-      afterValueText: afterJsonText,
+      beforeValue: auditedAction === 'DELETE' ? toSafeJsonValue(fieldValue) : undefined,
+      afterValue: auditedAction === 'DELETE' ? undefined : toSafeJsonValue(fieldValue),
       actorUserId: actor?.userId ?? null,
       actorEmail: actor?.email ?? null,
       actorRole: actor?.role ?? null,
-    };
+    } satisfies PendingAuditRow;
   });
 
-  try {
-    for (const row of rows) {
-      const auditId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `audit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      if (!prismaMiddlewareClient.$executeRawUnsafe) continue;
-      await prismaMiddlewareClient.$executeRawUnsafe(
-        `INSERT INTO "AdminAuditEvent"
-          ("id","createdAt","action","tableName","fieldName","recordId","changeText","beforeValue","afterValue","actorUserId","actorEmail","actorRole")
-         VALUES
-          ($1, NOW(), $2::"AdminAuditAction", $3, $4, $5, $6, CAST($7 AS jsonb), CAST($8 AS jsonb), $9, $10, CAST($11 AS "UserRole"))`,
-        auditId,
-        row.action,
-        row.tableName,
-        row.fieldName,
-        row.recordId,
-        row.changeText,
-        row.beforeValueText,
-        row.afterValueText,
-        row.actorUserId,
-        row.actorEmail,
-        row.actorRole
-      );
-    }
-  } catch {
-    // Audit logging must never block the main write path.
-  }
+  enqueueAuditRows(rows);
 
   return result;
   });

@@ -57,7 +57,7 @@ type ReviewItem = {
   commentCount: number;
 };
 
-type DashboardResponse = {
+export type CoachDashboardResponse = {
   athletes: DashboardAthlete[];
   kpis: {
     workoutsCompleted: number;
@@ -103,7 +103,7 @@ type DashboardResponse = {
   };
 };
 
-type CoachActiveChallengePreview = {
+export type CoachActiveChallengePreview = {
   id: string;
   title: string;
   status: string;
@@ -379,7 +379,23 @@ function CoachDashboardFiltersPanel({
   );
 }
 
-export default function CoachDashboardConsolePage() {
+type CoachDashboardConsolePageProps = {
+  initialData?: CoachDashboardResponse | null;
+  initialChallenges?: CoachActiveChallengePreview[];
+  initialSelectedAthleteIds?: string[];
+  initialQueryKey?: string | null;
+};
+
+function buildCoachDashboardQueryKey(params: {
+  from: string;
+  to: string;
+  discipline: string | null;
+  athleteScope: string;
+}) {
+  return [params.from, params.to, params.discipline ?? '', params.athleteScope].join('|');
+}
+
+export default function CoachDashboardConsolePage(props: CoachDashboardConsolePageProps = {}) {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
@@ -388,7 +404,9 @@ export default function CoachDashboardConsolePage() {
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('LAST_30');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(() => new Set());
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<Set<string>>(
+    () => new Set(props.initialSelectedAthleteIds ?? [])
+  );
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [inboxPreset, setInboxPreset] = useState<InboxPreset>('ALL');
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
@@ -401,9 +419,9 @@ export default function CoachDashboardConsolePage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSidebarMounted, setMobileSidebarMounted] = useState(false);
 
-  const [data, setData] = useState<DashboardResponse | null>(null);
-  const [activeChallenges, setActiveChallenges] = useState<CoachActiveChallengePreview[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<CoachDashboardResponse | null>(props.initialData ?? null);
+  const [activeChallenges, setActiveChallenges] = useState<CoachActiveChallengePreview[]>(props.initialChallenges ?? []);
+  const [loading, setLoading] = useState(() => !props.initialData);
   const [error, setError] = useState('');
 
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
@@ -411,6 +429,8 @@ export default function CoachDashboardConsolePage() {
   const sidebarFiltersRef = useRef<HTMLDivElement | null>(null);
   const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
   const mobileSidebarCloseTimerRef = useRef<number | null>(null);
+  const initialLoadSkippedRef = useRef(false);
+  const initialChallengesLoadSkippedRef = useRef(false);
 
   const coachTimeZone = user?.timezone ?? 'UTC';
   const athleteOptions = useMemo(
@@ -464,12 +484,11 @@ export default function CoachDashboardConsolePage() {
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
-        const [resp, challengeResp] = await Promise.all([
-          request<DashboardResponse>(`/api/coach/dashboard/console?${qs.toString()}`, bypassCache ? { cache: 'no-store' } : undefined),
-          request<{ challenges: CoachActiveChallengePreview[] }>('/api/coach/challenges?status=ACTIVE', { cache: 'no-store' }).catch(() => ({ challenges: [] })),
-        ]);
+        const resp = await request<CoachDashboardResponse>(
+          `/api/coach/dashboard/console?${qs.toString()}`,
+          bypassCache ? { cache: 'no-store' } : undefined
+        );
         setData(resp);
-        setActiveChallenges(challengeResp.challenges ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
@@ -481,9 +500,53 @@ export default function CoachDashboardConsolePage() {
 
   useEffect(() => {
     if (user?.role === 'COACH') {
+      const athleteScope =
+        selectedAthleteIdList.length === 0 || allAthletesSelected ? 'ALL' : selectedAthleteIdList.slice().sort().join(',');
+      const currentQueryKey = buildCoachDashboardQueryKey({
+        from: dateRange.from,
+        to: dateRange.to,
+        discipline,
+        athleteScope,
+      });
+
+      if (!initialLoadSkippedRef.current && props.initialData && props.initialQueryKey === currentQueryKey) {
+        initialLoadSkippedRef.current = true;
+        return;
+      }
+
       reload();
     }
-  }, [reload, user?.role]);
+  }, [
+    allAthletesSelected,
+    athleteOptions.length,
+    dateRange.from,
+    dateRange.to,
+    discipline,
+    props.initialData,
+    props.initialQueryKey,
+    reload,
+    selectedAthleteIdList,
+    user?.role,
+  ]);
+
+  const reloadChallenges = useCallback(async () => {
+    if (!user?.userId || user.role !== 'COACH') return;
+    try {
+      const challengeResp = await request<{ challenges: CoachActiveChallengePreview[] }>('/api/coach/challenges?status=ACTIVE');
+      setActiveChallenges(challengeResp.challenges ?? []);
+    } catch {
+      setActiveChallenges([]);
+    }
+  }, [request, user?.role, user?.userId]);
+
+  useEffect(() => {
+    if (user?.role !== 'COACH') return;
+    if (!initialChallengesLoadSkippedRef.current && props.initialData) {
+      initialChallengesLoadSkippedRef.current = true;
+      return;
+    }
+    void reloadChallenges();
+  }, [props.initialData, reloadChallenges, user?.role]);
 
   useEffect(() => {
     if (user?.role === 'COACH' && forceOnboardingModal) {

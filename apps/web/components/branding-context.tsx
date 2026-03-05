@@ -20,9 +20,16 @@ const BrandingContext = createContext<BrandingContextValue | undefined>(undefine
  * Note: This is primarily for client components that need branding.
  * Server components should fetch branding directly from the database.
  */
-export function BrandingProvider({ children }: { children: React.ReactNode }) {
+export function BrandingProvider({
+  children,
+  initialBranding,
+}: {
+  children: React.ReactNode;
+  initialBranding?: BrandingPayload;
+}) {
   const { request } = useApi();
-  const [branding, setBranding] = useState<BrandingPayload>(DEFAULT_BRANDING);
+  const hasInitialBranding = initialBranding !== undefined;
+  const [branding, setBranding] = useState<BrandingPayload>(initialBranding ?? DEFAULT_BRANDING);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,8 +49,9 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   }, [request]);
 
   useEffect(() => {
+    if (hasInitialBranding) return;
     loadBranding();
-  }, [loadBranding]);
+  }, [hasInitialBranding, loadBranding]);
 
   const value = useMemo<BrandingContextValue>(
     () => ({

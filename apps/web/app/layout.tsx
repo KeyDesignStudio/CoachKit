@@ -7,6 +7,8 @@ import '@/app/globals.css';
 import { AppHeader } from '@/components/app-header';
 import { BrandingProvider } from '@/components/branding-context';
 import { DevAppHeader } from '@/components/dev-app-header';
+import { AuthUserProvider } from '@/components/use-auth-user';
+import { getAppShellBootstrap } from '@/lib/app-shell';
 
 export const metadata: Metadata = {
   title: 'CoachKit',
@@ -22,10 +24,11 @@ export const metadata: Metadata = {
 // Auth-gated app: render on-demand.
 export const dynamic = 'force-dynamic';
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
   const disableAuth =
     process.env.NODE_ENV === 'development' &&
     (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true');
+  const appShell = await getAppShellBootstrap();
 
   const gitSha = process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown';
   const vercelEnv = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'unknown';
@@ -104,19 +107,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             )}, builtAt: new Date().toISOString() };`,
           }}
         />
-        {disableAuth ? (
-          <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
-            <DevAppHeader />
-            <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:px-6">{children}</main>
-          </div>
-        ) : (
-          <BrandingProvider>
+        <AuthUserProvider initialUser={appShell.authUser} initialClerkUserId={appShell.clerkUserId}>
+          <BrandingProvider initialBranding={appShell.branding}>
             <div className="flex min-h-screen flex-col gap-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
-              <AppHeader />
+              {disableAuth ? <DevAppHeader /> : <AppHeader />}
               <main className="px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:px-6">{children}</main>
             </div>
           </BrandingProvider>
-        )}
+        </AuthUserProvider>
       </body>
     </html>
   );

@@ -3,6 +3,7 @@ import { ChallengeStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireCoach } from '@/lib/auth';
+import { privateCacheHeaders } from '@/lib/cache';
 import { handleError, success } from '@/lib/http';
 import { createChallenge, challengeRulesText, formatChallengeScore, mapChallengeWindowLabel } from '@/lib/challenges/service';
 import { prisma } from '@/lib/prisma';
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
       participationCount: challenge._count.participants,
     }));
 
-    return success({ challenges: data });
+    return success({ challenges: data }, { headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }) });
   } catch (error) {
     return handleError(error);
   }
