@@ -41,7 +41,7 @@ export type AthleteMonthWeek = {
   weekWorkoutCount: number;
   deltas: {
     durationMinutesPct: number | null;
-    distanceKmPct: number | null;
+    caloriesKcalPct: number | null;
   } | null;
 };
 
@@ -57,7 +57,7 @@ type AthleteCalendarGridProps = {
   weekTopDisciplines: Array<{ discipline: string; durationMinutes: number; distanceKm: number }>;
   weekTotalsDeltas: {
     durationMinutesPct: number | null;
-    distanceKmPct: number | null;
+    caloriesKcalPct: number | null;
   } | null;
   monthWeeks: AthleteMonthWeek[];
   todayKey: string;
@@ -153,7 +153,7 @@ export function AthleteCalendarGrid({
                           Time <TrendDelta delta={weekTotalsDeltas.durationMinutesPct} className="tabular-nums" />
                         </span>
                         <span className="inline-flex items-center gap-1 text-[var(--muted)]">
-                          Distance <TrendDelta delta={weekTotalsDeltas.distanceKmPct} className="tabular-nums" />
+                          Calories <TrendDelta delta={weekTotalsDeltas.caloriesKcalPct} className="tabular-nums" />
                         </span>
                       </div>
                     ) : null}
@@ -228,7 +228,7 @@ export function AthleteCalendarGrid({
                         Time <TrendDelta delta={weekBlock.deltas.durationMinutesPct} className="tabular-nums" />
                       </span>
                       <span className="inline-flex items-center gap-1 text-[var(--muted)]">
-                        Distance <TrendDelta delta={weekBlock.deltas.distanceKmPct} className="tabular-nums" />
+                        Calories <TrendDelta delta={weekBlock.deltas.caloriesKcalPct} className="tabular-nums" />
                       </span>
                     </div>
                   ) : null}

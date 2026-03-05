@@ -560,6 +560,10 @@ export default function AthleteDashboardConsolePage() {
         lines.push(`All the best with your ${formatGreetingSessionTitle(todayPlanned)} this ${getSessionPeriod(todayPlanned.plannedStartTimeLocal)}.`);
       }
     } else if (dayPeriod === 'afternoon') {
+      if (todayCompleted) {
+        lines.push(`Well done on today's ${formatGreetingSessionTitle(todayCompleted)}.`);
+        hasCongratulatoryLine = true;
+      }
       if (todayPlanned) {
         lines.push(`You've got your ${formatGreetingSessionTitle(todayPlanned)} this ${getSessionPeriod(todayPlanned.plannedStartTimeLocal)}.`);
       } else if (tomorrowPlanned) {
@@ -589,7 +593,8 @@ export default function AthleteDashboardConsolePage() {
   }, [athleteTimeZone, data?.greetingTraining, data?.nextUp, user?.name]);
 
   useEffect(() => {
-    if (!athleteGreeting.shouldCelebrate) return;
+    const shouldCelebrate = athleteGreeting.shouldCelebrate || /well done/i.test(athleteGreeting.message);
+    if (!shouldCelebrate) return;
     setShowGreetingCelebration(true);
     const timer = window.setTimeout(() => setShowGreetingCelebration(false), 1400);
     return () => window.clearTimeout(timer);
@@ -728,9 +733,9 @@ export default function AthleteDashboardConsolePage() {
             <span className={cn(tokens.typography.h1, 'text-[var(--muted)]')} aria-hidden>
               |
             </span>
-            <div className="relative">
+            <div className="relative overflow-visible">
               {showGreetingCelebration ? (
-                <div className={styles.confettiLayer} aria-hidden>
+                <div className={styles.confettiLayer} aria-hidden data-testid="athlete-dashboard-greeting-confetti">
                   {Array.from({ length: 16 }, (_, index) => (
                     <span
                       key={`greeting-confetti-${index}`}

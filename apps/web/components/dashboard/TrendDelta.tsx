@@ -23,12 +23,15 @@ export function TrendDelta({
   delta,
   className,
   emptyLabel = 'No prior baseline',
+  hideWhenEmpty = false,
 }: {
   delta: number | null | undefined;
   className?: string;
   emptyLabel?: string;
+  hideWhenEmpty?: boolean;
 }) {
   if (delta == null || !Number.isFinite(delta)) {
+    if (hideWhenEmpty) return null;
     return <span className={cn('text-xs text-[var(--muted)]', className)}>{emptyLabel}</span>;
   }
 
@@ -39,4 +42,3 @@ export function TrendDelta({
     </span>
   );
 }
-

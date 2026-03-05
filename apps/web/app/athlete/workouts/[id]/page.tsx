@@ -92,6 +92,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ message: string; kind: 'success' | 'error' } | null>(null);
   const [showCompleteCelebration, setShowCompleteCelebration] = useState(false);
+  const [completeConfettiAnchor, setCompleteConfettiAnchor] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
     durationMinutes: 60,
@@ -107,6 +108,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const perfFrameMarked = useRef(false);
   const perfDataMarked = useRef(false);
   const completeCelebrationTimerRef = useRef<number | null>(null);
+  const completeButtonRef = useRef<HTMLButtonElement | null>(null);
   const isDraftSynced = item?.status === 'COMPLETED_SYNCED_DRAFT';
   const latestCompletion = item?.completedActivities?.[0];
   const hasStravaMetrics = Boolean(latestCompletion?.metricsJson?.strava);
@@ -459,7 +461,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
 
     try {
       if (isDraftStrava) {
-        await request(`/api/athlete/calendar-items/${workoutId}/confirm-synced`, {
+      await request(`/api/athlete/calendar-items/${workoutId}/confirm-synced`, {
           method: 'POST',
           data: {
             notesToSelf: completionForm.notes,
@@ -469,6 +471,15 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           },
         });
       } else {
+        const buttonRect = completeButtonRef.current?.getBoundingClientRect() ?? null;
+        if (buttonRect) {
+          setCompleteConfettiAnchor({
+            left: buttonRect.left,
+            top: buttonRect.top,
+            width: buttonRect.width,
+            height: buttonRect.height,
+          });
+        }
         await request(`/api/athlete/calendar-items/${workoutId}/complete`, {
           method: 'POST',
           data: {
@@ -482,10 +493,10 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         });
       }
       setCommentDraft('');
+      await loadData(true);
       if (!isDraftStrava) {
         triggerCompleteCelebration();
       }
-      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
     } finally {
@@ -655,18 +666,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
               Close
             </Button>
             <div className="relative w-full sm:w-auto">
-              {showCompleteCelebration && !isDraftStrava ? (
-                <div className={styles.completeConfettiLayer} aria-hidden>
-                  {completeButtonConfetti.map((piece, index) => (
-                    <span
-                      key={`complete-confetti-${index}`}
-                      className={styles.completeConfettiPiece}
-                      style={{ left: piece.left, animationDelay: piece.delay, backgroundColor: piece.color }}
-                    />
-                  ))}
-                </div>
-              ) : null}
-              <Button type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
+              <Button ref={completeButtonRef} type="submit" size="sm" className="min-h-[44px] w-full sm:w-auto" disabled={submitting}>
                 {isDraftStrava ? 'Confirm' : 'Complete'}
               </Button>
             </div>
@@ -745,6 +745,27 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
           }
         >
           {toast.message}
+        </div>
+      ) : null}
+      {showCompleteCelebration && completeConfettiAnchor ? (
+        <div
+          className={styles.completeConfettiViewportLayer}
+          style={{
+            left: completeConfettiAnchor.left,
+            top: completeConfettiAnchor.top,
+            width: completeConfettiAnchor.width,
+            height: completeConfettiAnchor.height,
+          }}
+          aria-hidden
+          data-testid="athlete-workout-complete-confetti"
+        >
+          {completeButtonConfetti.map((piece, index) => (
+            <span
+              key={`complete-confetti-${index}`}
+              className={styles.completeConfettiPiece}
+              style={{ left: piece.left, animationDelay: piece.delay, backgroundColor: piece.color }}
+            />
+          ))}
         </div>
       ) : null}
     </section>

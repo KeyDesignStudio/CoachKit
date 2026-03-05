@@ -244,6 +244,8 @@ export default function AthleteCalendarPage() {
 
   const monthWeeks = useMemo(() => {
     if (viewMode !== 'month') return [];
+    const todayWeekStart = startOfWeekDayKey(getTodayDayKey(athleteTimezone));
+    const previousWeekStartKey = addDaysToDayKey(todayWeekStart, -7);
 
     return Array.from({ length: 6 }, (_, weekIndex) => {
       const start = weekIndex * 7;
@@ -279,10 +281,10 @@ export default function AthleteCalendarPage() {
         weekSummary,
         weekTopDisciplines,
         weekWorkoutCount,
-        deltas: weekSummary && previousWeekSummary
+        deltas: weekSummary && previousWeekSummary && (weekStart === todayWeekStart || weekStart === previousWeekStartKey)
           ? {
               durationMinutesPct: computePercentDelta(weekSummary.totals.durationMinutes, previousWeekSummary.totals.durationMinutes),
-              distanceKmPct: computePercentDelta(weekSummary.totals.distanceKm, previousWeekSummary.totals.distanceKm),
+              caloriesKcalPct: computePercentDelta(weekSummary.totals.caloriesKcal, previousWeekSummary.totals.caloriesKcal),
             }
           : null,
       };
@@ -300,9 +302,9 @@ export default function AthleteCalendarPage() {
     });
     return {
       durationMinutesPct: computePercentDelta(weekSummary.totals.durationMinutes, previousWeekSummary.totals.durationMinutes),
-      distanceKmPct: computePercentDelta(weekSummary.totals.distanceKm, previousWeekSummary.totals.distanceKm),
+      caloriesKcalPct: computePercentDelta(weekSummary.totals.caloriesKcal, previousWeekSummary.totals.caloriesKcal),
     };
-  }, [athleteTimezone, items, weekStartKey, weekSummary.totals.distanceKm, weekSummary.totals.durationMinutes]);
+  }, [athleteTimezone, items, weekStartKey, weekSummary.totals.caloriesKcal, weekSummary.totals.durationMinutes]);
 
   const loadItems = useCallback(async (bypassCache = false) => {
     if (user?.role !== 'ATHLETE' || !user.userId) {
