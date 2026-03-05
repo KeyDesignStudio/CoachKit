@@ -634,7 +634,7 @@ export async function generateAiDraftPlanV1(params: {
     },
   });
 
-  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
+  const ai = await getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const ensured = await ensureAthleteBrief({ coachId: params.coachId, athleteId: params.athleteId });
   const effectiveInput = await buildEffectivePlanInputContext({
     coachId: params.coachId,
@@ -1081,7 +1081,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
           : 'normal',
   };
 
-  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
+  const ai = await getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const effectiveMode = getAiPlanBuilderEffectiveMode('generateSessionDetail');
   const now = new Date();
 

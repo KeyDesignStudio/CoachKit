@@ -1,5 +1,6 @@
 import type { AiCapabilityName } from './audit';
 import type { AiPlanBuilderAIMode } from './types';
+import { getAiPlanBuilderRuntimeOverrides } from './runtime-overrides';
 
 export type AiPlanBuilderCapabilityMode = 'inherit' | 'deterministic' | 'llm';
 
@@ -11,6 +12,8 @@ function normalizeMode(raw: unknown): AiPlanBuilderCapabilityMode {
 }
 
 export function getAiPlanBuilderAIModeFromEnv(env: NodeJS.ProcessEnv = process.env): AiPlanBuilderAIMode {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  if (runtime?.aiMode === 'llm' || runtime?.aiMode === 'deterministic') return runtime.aiMode;
   const raw = String(env.AI_PLAN_BUILDER_AI_MODE ?? '').trim().toLowerCase();
   return raw === 'llm' ? 'llm' : 'deterministic';
 }
@@ -36,6 +39,9 @@ export function getAiPlanBuilderCapabilityModeFromEnv(
   capability: AiCapabilityName,
   env: NodeJS.ProcessEnv = process.env
 ): AiPlanBuilderCapabilityMode {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  const override = runtime?.capabilities?.[capability]?.mode;
+  if (override === 'llm' || override === 'deterministic' || override === 'inherit') return override;
   const key = getCapabilityModeEnvVar(capability);
   return normalizeMode(env[key]);
 }
@@ -96,6 +102,13 @@ export function getAiPlanBuilderLlmMaxOutputTokensFromEnv(
   options?: { fallback?: number }
 ): number {
   const fallback = Math.max(1, options?.fallback ?? 1200);
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+
+  const runtimePerCap = Number(runtime?.capabilities?.[capability]?.maxOutputTokens ?? NaN);
+  if (Number.isFinite(runtimePerCap) && runtimePerCap > 0) return Math.round(runtimePerCap);
+
+  const runtimeGlobal = Number(runtime?.llmMaxOutputTokens ?? NaN);
+  if (Number.isFinite(runtimeGlobal) && runtimeGlobal > 0) return Math.round(runtimeGlobal);
 
   const perCapKey = `AI_PLAN_BUILDER_LLM_MAX_OUTPUT_TOKENS_${getCapabilitySuffix(capability)}`;
 
@@ -109,12 +122,18 @@ export function getAiPlanBuilderLlmMaxOutputTokensFromEnv(
 }
 
 export function getAiPlanBuilderLlmRetryCountFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  const runtimeValue = Number(runtime?.llmRetryCount ?? NaN);
+  if (Number.isFinite(runtimeValue)) return Math.max(0, Math.min(2, Math.round(runtimeValue)));
   const raw = Number.parseInt(String(env.AI_PLAN_BUILDER_LLM_RETRY_COUNT ?? ''), 10);
   if (!Number.isFinite(raw)) return 1;
   return Math.max(0, Math.min(2, raw));
 }
 
 export function getAiPlanBuilderLlmRateLimitPerHourFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  const runtimeValue = Number(runtime?.llmRateLimitPerHour ?? NaN);
+  if (Number.isFinite(runtimeValue) && runtimeValue > 0) return Math.max(1, Math.round(runtimeValue));
   const raw = Number.parseInt(String(env.AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR ?? ''), 10);
   if (!Number.isFinite(raw)) return 20;
   return Math.max(1, raw);
@@ -124,6 +143,10 @@ export function getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv(
   capability: AiCapabilityName,
   env: NodeJS.ProcessEnv = process.env
 ): number {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  const runtimePerCap = Number(runtime?.capabilities?.[capability]?.rateLimitPerHour ?? NaN);
+  if (Number.isFinite(runtimePerCap) && runtimePerCap > 0) return Math.max(1, Math.round(runtimePerCap));
+
   const key = `AI_PLAN_BUILDER_LLM_RATE_LIMIT_PER_HOUR_${getCapabilitySuffix(capability)}`;
   const perCap = Number.parseInt(String(env[key] ?? ''), 10);
   if (Number.isFinite(perCap) && perCap > 0) return perCap;
@@ -135,6 +158,12 @@ export function getAiPlanBuilderLlmModelForCapabilityFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   options?: { fallback?: string }
 ): string {
+  const runtime = getAiPlanBuilderRuntimeOverrides();
+  const runtimePerCap = String(runtime?.capabilities?.[capability]?.model ?? '').trim();
+  if (runtimePerCap) return runtimePerCap;
+  const runtimeGlobal = String(runtime?.llmModel ?? '').trim();
+  if (runtimeGlobal) return runtimeGlobal;
+
   const key = `AI_PLAN_BUILDER_LLM_MODEL_${getCapabilitySuffix(capability)}`;
   const perCap = String(env[key] ?? '').trim();
   if (perCap) return perCap;
