@@ -57,8 +57,7 @@ test('Athlete dashboard uses the redesigned desktop layout', async ({ page }) =>
   }
 });
 
-test('Athlete dashboard sidebar collapse state persists on desktop', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === 'iPad (gen 11)', 'Desktop sidebar persistence is not applicable on tablet-touch projects.');
+test('Athlete dashboard sidebar collapse state persists on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await setRoleCookie(page, 'ATHLETE');
   await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });

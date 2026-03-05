@@ -41,7 +41,7 @@ async function assertNoHorizontalScroll(page: any) {
   expect(hasOverflow, 'Page should not have horizontal overflow at tablet sizes').toBeFalsy();
 }
 
-test('Coach header navigation uses the drawer menu across major tablet sizes', async ({ page }, testInfo) => {
+test('Coach header navigation uses the drawer menu within the desktop shell across major tablet sizes', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iPad (gen 11)', 'Tablet matrix runs once with explicit viewports.');
   await setRoleCookie(page, 'COACH');
 
@@ -51,6 +51,11 @@ test('Coach header navigation uses the drawer menu across major tablet sizes', a
       await page.goto('/coach/dashboard', { waitUntil: 'networkidle' });
       await expect(page.getByRole('heading', { level: 1, name: 'Coach Console' })).toBeVisible();
       await assertNoHorizontalScroll(page);
+
+      if (profile.width >= 768) {
+        await expect(page.locator('[data-desktop-header="v1"]')).toBeVisible();
+        await expect(page.locator('[data-mobile-header="v1"]:visible')).toHaveCount(0);
+      }
 
       const openMenuButton = page.locator('header button[aria-label="Open menu"]:visible').first();
       await expect(openMenuButton, `Tablet header should use drawer navigation for ${profile.name}`).toHaveCount(1);

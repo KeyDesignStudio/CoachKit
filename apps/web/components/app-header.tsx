@@ -375,11 +375,11 @@ export async function AppHeader() {
             {navLinks.length > 0 ? (
               isCoachDesktop ? (
                 <div className="hidden md:flex items-center gap-3">
-                  <div className="xl:hidden">
+                  <div data-tablet-nav-drawer="v1" className="xl:hidden">
                     <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
                   </div>
 
-                  <nav className="hidden xl:flex items-center gap-2 relative">
+                  <nav data-desktop-nav-links="v1" className="hidden xl:flex items-center gap-2 relative">
                     {coachPrimaryDesktopLinks.map((link) => {
                       const submenu = coachDesktopSubmenuByParent.get(link.href);
 
@@ -425,6 +425,7 @@ export async function AppHeader() {
 
                   {desktopNotificationsLink ? (
                     <Link
+                      data-desktop-nav-actions="v1"
                       key={desktopNotificationsLink.href}
                       href={desktopNotificationsLink.href}
                       aria-label="Notifications"
@@ -446,6 +447,7 @@ export async function AppHeader() {
 
                   {desktopSettingsLink ? (
                     <Link
+                      data-desktop-nav-actions="v1"
                       key={desktopSettingsLink.href}
                       href={desktopSettingsLink.href}
                       aria-label="Settings"
@@ -458,10 +460,10 @@ export async function AppHeader() {
                 </div>
               ) : (
                 <>
-                  <div className="xl:hidden">
+                  <div data-tablet-nav-drawer="v1" className="xl:hidden">
                     <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
                   </div>
-                  <nav className="hidden xl:flex flex-wrap gap-2">
+                  <nav data-desktop-nav-links="v1" className="hidden xl:flex flex-wrap gap-2">
                     {desktopTextLinks.map((link) => (
                       <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
                         {link.label}
