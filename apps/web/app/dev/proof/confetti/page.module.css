@@ -22,32 +22,37 @@
   height: 13px;
   border-radius: 999px;
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
-  animation: burst 1350ms cubic-bezier(0.16, 0.8, 0.28, 1) forwards;
+  transform: translate(-50%, -50%) scale(0.68) rotate(0deg);
+  animation: burst 1550ms linear forwards;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2);
 }
 
 @keyframes burst {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
+    transform: translate(-50%, -50%) scale(0.72) rotate(0deg);
   }
-  10% {
+  4% {
     opacity: 1;
   }
-  40% {
+  20% {
     opacity: 1;
-    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -56px))) scale(1) rotate(calc(var(--rot, 230deg) * 0.72));
+    transform: translate(calc(-50% + var(--x-burst, 0px)), calc(-50% + var(--y-burst, -56px))) scale(1) rotate(calc(var(--rot, 230deg) * 0.45));
   }
-  72% {
-    opacity: 0.86;
-    transform: translate(
-      calc(-50% + ((var(--dx, 0px) * 0.34) + (var(--dx-end, 0px) * 0.66))),
-      calc(-50% + ((var(--dy, -56px) * 0.34) + (var(--dy-end, -40px) * 0.66)))
-    ) scale(0.98) rotate(calc(var(--rot, 230deg) * 0.9));
+  36% {
+    opacity: 0.98;
+    transform: translate(calc(-50% + var(--x-glide-1, 0px)), calc(-50% + var(--y-glide-1, -30px))) scale(0.99) rotate(calc(var(--rot, 230deg) * 0.62));
+  }
+  54% {
+    opacity: 0.92;
+    transform: translate(calc(-50% + var(--x-glide-2, 0px)), calc(-50% + var(--y-glide-2, 0px))) scale(0.97) rotate(calc(var(--rot, 230deg) * 0.78));
+  }
+  74% {
+    opacity: 0.82;
+    transform: translate(calc(-50% + var(--x-fall, 0px)), calc(-50% + var(--y-fall, 46px))) scale(0.95) rotate(calc(var(--rot, 230deg) * 0.9));
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--dx-end, 0px)), calc(-50% + var(--dy-end, -40px))) scale(0.94) rotate(var(--rot, 230deg));
+    transform: translate(calc(-50% + var(--x-end, 0px)), calc(-50% + var(--y-end, 92px))) scale(0.92) rotate(var(--rot, 230deg));
   }
 }

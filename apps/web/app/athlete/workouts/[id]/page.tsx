@@ -351,7 +351,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     completeCelebrationTimerRef.current = window.setTimeout(() => {
       setShowCompleteCelebration(false);
       completeCelebrationTimerRef.current = null;
-    }, 1200);
+    }, 2100);
   }, []);
 
   const completeButtonConfetti = useMemo(
@@ -360,11 +360,11 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         const x = Math.sin(seed * 12.9898) * 43758.5453;
         return x - Math.floor(x);
       };
-      return Array.from({ length: 22 }, (_, index) => {
+      return Array.from({ length: 34 }, (_, index) => {
         const angle = rand(index + 1) * Math.PI * 2;
-        const distance = 64 * (0.35 + rand(index + 21) * 0.85);
+        const distance = 74 * (0.35 + rand(index + 21) * 0.85);
         const dx = Math.round(Math.cos(angle) * distance);
-        const dy = Math.round(Math.sin(angle) * distance - 28);
+        const dy = Math.round(Math.sin(angle) * distance - 71);
         const gravityDrop = 16 + Math.round(rand(index + 31) * 16);
         return {
           left: '50%',
