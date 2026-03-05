@@ -270,6 +270,7 @@ async function getAthleteDashboardData(params: {
       }),
     ]);
     const setupJson = ((latestPublishedDraft?.setupJson as any) ?? {}) as Record<string, unknown>;
+    const requestContext = (setupJson.requestContext as Record<string, unknown> | null) ?? null;
     const intakeDraftJson = ((latestSubmittedIntake?.draftJson as any) ?? {}) as Record<string, unknown>;
     const fallbackEventDate =
       (typeof setupJson.completionDate === 'string' && setupJson.completionDate.trim()) ||
@@ -278,6 +279,8 @@ async function getAthleteDashboardData(params: {
     const fallbackEventNameFromIntake = readDraftText(intakeDraftJson, 'event_name');
     const fallbackEventDateFromIntake = readDraftText(intakeDraftJson, 'event_date') ?? readDraftText(intakeDraftJson, 'completion_date');
     const fallbackStartDate =
+      (typeof requestContext?.blockStartDate === 'string' && requestContext.blockStartDate.trim()) ||
+      (typeof requestContext?.startDate === 'string' && requestContext.startDate.trim()) ||
       (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
       (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
       null;

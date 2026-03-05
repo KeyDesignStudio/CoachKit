@@ -319,6 +319,8 @@ async function getDashboardAggregates(params: {
         const fallbackEventNameFromIntake = readDraftText(intakeDraftJson, 'event_name');
         const fallbackEventDateFromIntake = readDraftText(intakeDraftJson, 'event_date') ?? readDraftText(intakeDraftJson, 'completion_date');
         const fallbackStartDate =
+          (typeof requestContext?.blockStartDate === 'string' && requestContext.blockStartDate.trim()) ||
+          (typeof requestContext?.startDate === 'string' && requestContext.startDate.trim()) ||
           (typeof setupJson.startDate === 'string' && setupJson.startDate.trim()) ||
           (typeof setupJson.blockStartDate === 'string' && setupJson.blockStartDate.trim()) ||
           null;

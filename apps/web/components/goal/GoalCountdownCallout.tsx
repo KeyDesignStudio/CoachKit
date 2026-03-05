@@ -78,16 +78,12 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
 
   if (variant === 'ribbon') {
     return (
-      <div className={cn('rounded-2xl border border-l-4 border-l-[var(--feature-accent)] px-4 py-3 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]', getTone(goal), className)}>
+      <div className={cn('rounded-2xl border px-4 py-3 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]', getTone(goal), className)}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[11px] uppercase tracking-wide text-[var(--feature-muted)]">{who}goal focus</span>
-          <span className="rounded-md border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-sm font-semibold text-[var(--feature-pill-text)]">
-            {title}
-          </span>
+          <span className="text-sm font-semibold text-[var(--feature-title)]">{title}</span>
           <span className="text-xs text-[var(--feature-muted)]">{eventDateLabel}</span>
-          <span className="ml-auto inline-flex rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-sm font-semibold tabular-nums text-[var(--feature-pill-text)]">
-            {goal.label}
-          </span>
+          <span className="ml-auto text-sm font-semibold tabular-nums text-[var(--feature-title)]">{goal.label}</span>
         </div>
         {showProgress ? (
           <div className="mt-2">
@@ -107,7 +103,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
   return (
     <div
       className={cn(
-        'rounded-2xl border border-l-4 border-l-[var(--feature-accent)] px-4 py-4 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]',
+        'rounded-2xl border px-4 py-4 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]',
         getTone(goal),
         className
       )}
@@ -115,19 +111,12 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-wide text-[var(--feature-muted)]">{who}goal focus</div>
-          <div className="mt-1 inline-flex rounded-md border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2.5 py-1 text-base font-semibold text-[var(--feature-pill-text)]">
-            {title}
-          </div>
+          <div className="mt-1 text-xl leading-tight font-semibold text-[var(--feature-title)]">{title}</div>
           <div className="mt-1 text-xs text-[var(--feature-muted)]">{eventDateLabel}</div>
         </div>
         <div className="text-right">
           {showShortLabel ? <div className="text-lg font-semibold leading-none tabular-nums">{goal.shortLabel}</div> : null}
-          <div
-            className={cn(
-              'inline-flex rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[var(--feature-pill-text)]',
-              showShortLabel ? 'mt-1' : 'text-sm'
-            )}
-          >
+          <div className={cn('text-xs font-semibold tabular-nums text-[var(--feature-title)]', showShortLabel ? 'mt-1' : 'text-sm')}>
             {goal.label}
           </div>
         </div>
