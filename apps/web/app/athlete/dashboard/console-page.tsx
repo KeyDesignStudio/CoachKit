@@ -303,7 +303,7 @@ function DashboardChallengesPanel({
         activeChallenges.map((challenge) => (
           <div
             key={challenge.id}
-            className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]"
+            className="rounded-xl border border-[var(--feature-border)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]"
           >
             <p className="text-[11px] font-semibold text-[var(--text)]">{challenge.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1.5">
@@ -338,7 +338,7 @@ function DashboardChallengesPanel({
           </div>
         ))
       ) : (
-        <div className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]">
+        <div className="rounded-xl border border-[var(--feature-border)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]">
           <p className="text-[11px] font-semibold text-[var(--text)]">Loading challenge</p>
           <p className="mt-0.5 text-[8px] text-[var(--feature-muted)]">Fetching the latest challenge details.</p>
         </div>
