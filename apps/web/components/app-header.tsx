@@ -376,7 +376,7 @@ export async function AppHeader() {
               isCoachDesktop ? (
                 <div className="hidden md:flex items-center gap-3">
                   <div data-tablet-nav-drawer="v1" className="xl:hidden">
-                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} closedTriggerIcon="sidebar" />
                   </div>
 
                   <nav data-desktop-nav-links="v1" className="hidden xl:flex items-center gap-2 relative">
@@ -461,7 +461,7 @@ export async function AppHeader() {
               ) : (
                 <>
                   <div data-tablet-nav-drawer="v1" className="xl:hidden">
-                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} closedTriggerIcon="sidebar" />
                   </div>
                   <nav data-desktop-nav-links="v1" className="hidden xl:flex flex-wrap gap-2">
                     {desktopTextLinks.map((link) => (
