@@ -58,13 +58,15 @@ export type CalendarItem = {
 export type WeatherResponse =
   | {
       enabled: true;
-      source: 'open-meteo';
+      source: 'strava' | 'open-meteo';
+      mode: 'observed' | 'forecast';
       date: string;
       timezone: string;
       icon: 'sunny' | 'partly_cloudy' | 'cloudy' | 'rain' | 'storm' | 'fog' | 'snow' | 'wind';
       maxTempC: number;
       sunriseLocal: string;
       sunsetLocal: string;
+      observedAtLocal?: string;
     }
   | {
       enabled: false;
@@ -371,7 +373,11 @@ export function WorkoutDetail({
                    <Icon name={WEATHER_ICON_NAME[weather.icon] || 'sunny'} size="lg" className={tokens.colors.text.main} />
                    <div>
                       <div className={tokens.typography.h1}>{Math.round(weather.maxTempC)}°C</div>
-                      <div className={tokens.typography.meta}>Forecast for {formatDisplay(weather.date)}</div>
+                      <div className={tokens.typography.meta}>
+                        {weather.mode === 'observed'
+                          ? `Observed${weather.observedAtLocal ? ` at ${weather.observedAtLocal}` : ''} on ${formatDisplay(weather.date)}`
+                          : `Forecast for ${formatDisplay(weather.date)}`}
+                      </div>
                    </div>
                    <div className={cn('ml-auto text-right', tokens.typography.meta)}>
                      <div>Sunrise: {weather.sunriseLocal}</div>
