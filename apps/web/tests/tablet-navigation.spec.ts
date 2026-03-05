@@ -41,7 +41,7 @@ async function assertNoHorizontalScroll(page: any) {
   expect(hasOverflow, 'Page should not have horizontal overflow at tablet sizes').toBeFalsy();
 }
 
-test('Coach header navigation works across major tablet sizes', async ({ page }, testInfo) => {
+test('Coach header navigation uses the drawer menu across major tablet sizes', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iPad (gen 11)', 'Tablet matrix runs once with explicit viewports.');
   await setRoleCookie(page, 'COACH');
 
@@ -53,25 +53,22 @@ test('Coach header navigation works across major tablet sizes', async ({ page },
       await assertNoHorizontalScroll(page);
 
       const openMenuButton = page.locator('header button[aria-label="Open menu"]:visible').first();
-      const hasDrawerMenu = (await openMenuButton.count()) > 0;
+      await expect(openMenuButton, `Tablet header should use drawer navigation for ${profile.name}`).toHaveCount(1);
 
-      if (hasDrawerMenu) {
-        await openMenuButton.click();
-        const drawer = page.getByRole('navigation', { name: 'Mobile navigation' });
-        await expect(drawer).toBeVisible();
-        await expect(drawer.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-        await expect(drawer.getByRole('link', { name: 'Athletes' })).toBeVisible();
-        await expect(drawer.getByRole('link', { name: 'Scheduling' })).toBeVisible();
-        await expect(drawer.getByRole('link', { name: 'Challenges' })).toBeVisible();
-        await drawer.getByRole('button', { name: 'Close menu' }).click();
-        await expect(drawer).toHaveCount(0);
-        return;
-      }
+      await openMenuButton.click();
+      const drawer = page.getByRole('navigation', { name: 'Mobile navigation' });
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+      await expect(drawer.getByRole('link', { name: 'Athletes' })).toBeVisible();
+      await expect(drawer.getByRole('link', { name: 'Scheduling' })).toBeVisible();
+      await expect(drawer.getByRole('link', { name: 'Challenges' })).toBeVisible();
+      await drawer.getByRole('button', { name: 'Close menu' }).click();
+      await expect(drawer).toHaveCount(0);
 
-      await expect(page.locator('header a[href="/coach/dashboard"]:visible')).toHaveCount(1);
-      await expect(page.locator('header a[href="/coach/calendar"]:visible')).toHaveCount(1);
-      await expect(page.locator('header a[href="/coach/athletes"]:visible')).toHaveCount(1);
-      await expect(page.locator('header a[href="/coach/challenges"]:visible')).toHaveCount(1);
+      await expect(page.locator('header a[href="/coach/dashboard"]:visible')).toHaveCount(0);
+      await expect(page.locator('header a[href="/coach/calendar"]:visible')).toHaveCount(0);
+      await expect(page.locator('header a[href="/coach/athletes"]:visible')).toHaveCount(0);
+      await expect(page.locator('header a[href="/coach/challenges"]:visible')).toHaveCount(0);
     });
   }
 });
