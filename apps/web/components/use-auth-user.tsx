@@ -1,16 +1,9 @@
 'use client';
 
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { useEffect, useState } from 'react';
-import { UserRole } from '@prisma/client';
 
-export type AuthUser = {
-  userId: string;
-  role: UserRole;
-  email: string;
-  name: string | null;
-  timezone: string;
-};
+import type { AuthUser } from '@/lib/auth-user';
 
 type AuthState = {
   user: AuthUser | null;
@@ -31,8 +24,24 @@ let cachedClerkUserId: string | null = null;
 let inFlightUserRequest: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
+type AuthUserBootstrapValue = {
+  initialUser: AuthUser | null;
+  initialClerkUserId: string | null;
+  resolved: boolean;
+};
+
+const AuthUserBootstrapContext = createContext<AuthUserBootstrapValue | null>(null);
+
 function notifyListeners() {
   listeners.forEach((listener) => listener());
+}
+
+function primeAuthState(params: { user: AuthUser | null; clerkUserId: string | null; resolved: boolean }) {
+  authState.user = params.user;
+  authState.error = null;
+  authState.loading = !params.resolved;
+  authFetchedAt = params.user ? Date.now() : 0;
+  cachedClerkUserId = params.clerkUserId;
 }
 
 async function fetchAuthUserShared(): Promise<void> {
@@ -81,11 +90,30 @@ function resetCachedAuthState() {
   inFlightUserRequest = null;
 }
 
+export function AuthUserProvider(props: {
+  children: ReactNode;
+  initialUser: AuthUser | null;
+  initialClerkUserId: string | null;
+  resolved?: boolean;
+}) {
+  const value = useMemo<AuthUserBootstrapValue>(
+    () => ({
+      initialUser: props.initialUser,
+      initialClerkUserId: props.initialClerkUserId,
+      resolved: props.resolved ?? true,
+    }),
+    [props.initialClerkUserId, props.initialUser, props.resolved]
+  );
+
+  return <AuthUserBootstrapContext.Provider value={value}>{props.children}</AuthUserBootstrapContext.Provider>;
+}
+
 /**
  * Client-side hook to fetch the authenticated user from /api/me
  * This replaces the legacy useUser hook from user-context
  */
 export function useAuthUser() {
+  const bootstrap = useContext(AuthUserBootstrapContext);
   const disableAuth =
     process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true' ||
     process.env.DISABLE_AUTH === 'true';
@@ -102,20 +130,43 @@ export function useAuthUser() {
     clerkUser = null;
     clerkLoaded = true;
   }
-  const [state, setState] = useState<AuthState>(() => ({ ...authState }));
+  const [state, setState] = useState<AuthState>(() => {
+    if (bootstrap?.resolved) {
+      return {
+        user: bootstrap.initialUser,
+        error: null,
+        loading: false,
+      };
+    }
+
+    return { ...authState };
+  });
 
   useEffect(() => {
     const sync = () => setState({ ...authState });
+
+    if (bootstrap?.resolved) {
+      primeAuthState({
+        user: bootstrap.initialUser,
+        clerkUserId: bootstrap.initialClerkUserId,
+        resolved: bootstrap.resolved,
+      });
+    }
+
     listeners.add(sync);
     sync();
-    void fetchAuthUserShared();
+
+    if (!bootstrap?.resolved) {
+      void fetchAuthUserShared();
+    }
 
     return () => {
       listeners.delete(sync);
     };
-  }, []);
+  }, [bootstrap]);
 
   useEffect(() => {
+    if (disableAuth) return;
     if (!clerkLoaded) return;
 
     const nextClerkUserId = clerkUser?.id ?? null;

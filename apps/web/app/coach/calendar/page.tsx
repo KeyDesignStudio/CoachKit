@@ -73,6 +73,11 @@ type CopyMode = 'skipExisting' | 'overwrite';
 type ViewMode = 'week' | 'month';
 type PublicationStatus = 'DRAFT' | 'PUBLISHED';
 type GoalCountdownByAthlete = Record<string, GoalCountdown>;
+type PublicationWeek = {
+  athleteId: string;
+  weekStart: string;
+  status: PublicationStatus;
+};
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -665,26 +670,23 @@ export default function CoachCalendarPage() {
     setError('');
 
     try {
+      const buildPublicationByWeek = (publicationWeeks: PublicationWeek[] | undefined) =>
+        new Map<string, PublicationStatus>(
+          (publicationWeeks ?? []).map((week) => [toAthleteWeekKey(week.athleteId, week.weekStart), week.status] as const)
+        );
+
       if (selectedAthleteIds.size === 1) {
         const athleteId = Array.from(selectedAthleteIds)[0];
-        const itemsPromise = request<{ items: CalendarItem[]; athleteTimezone: string; dayWeather?: Record<string, WeatherSummary>; goalCountdownByAthlete?: GoalCountdownByAthlete }>(
+        const itemsData = await request<{
+          items: CalendarItem[];
+          athleteTimezone: string;
+          dayWeather?: Record<string, WeatherSummary>;
+          goalCountdownByAthlete?: GoalCountdownByAthlete;
+          publicationWeeks?: PublicationWeek[];
+        }>(
           `/api/coach/calendar?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
-
-        const planWeeksPromise = request<{ weeks: Array<{ weekStart: string; status: PublicationStatus }> }>(
-          `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
-        );
-
-        const [itemsResult, weekResult] = await Promise.allSettled([itemsPromise, planWeeksPromise]);
-        if (itemsResult.status !== 'fulfilled') {
-          throw itemsResult.reason;
-        }
-
-        const itemsData = itemsResult.value;
-        const weekData = weekResult.status === 'fulfilled' ? weekResult.value : { weeks: [] as Array<{ weekStart: string; status: PublicationStatus }> };
-        const publicationByWeek = new Map<string, PublicationStatus>(
-          weekData.weeks.map((week) => [toAthleteWeekKey(athleteId, week.weekStart), week.status] as const)
-        );
+        const publicationByWeek = buildPublicationByWeek(itemsData.publicationWeeks);
 
         const athleteName = athletes.find((a) => a.userId === athleteId)?.user.name ?? null;
         setItems(
@@ -715,22 +717,15 @@ export default function CoachCalendarPage() {
         // Stacked mode: load all selected athletes in a single API request.
         const selected = Array.from(selectedAthleteIds);
         setDayWeatherByDate({});
-        const itemsData = await request<{ items: CalendarItem[]; athleteTimezone: string; goalCountdownByAthlete?: GoalCountdownByAthlete }>(
+        const itemsData = await request<{
+          items: CalendarItem[];
+          athleteTimezone: string;
+          goalCountdownByAthlete?: GoalCountdownByAthlete;
+          publicationWeeks?: PublicationWeek[];
+        }>(
           `/api/coach/calendar?athleteIds=${encodeURIComponent(selected.join(','))}&from=${dateRange.from}&to=${dateRange.to}&lean=1`
         );
-        const publicationByWeek = new Map<string, PublicationStatus>();
-        await mapWithConcurrency(selected, 4, async (athleteId) => {
-          try {
-            const weekData = await request<{ weeks: Array<{ weekStart: string; status: PublicationStatus }> }>(
-              `/api/coach/plan-weeks?athleteId=${athleteId}&from=${dateRange.from}&to=${dateRange.to}`
-            );
-            weekData.weeks.forEach((week) => {
-              publicationByWeek.set(toAthleteWeekKey(athleteId, week.weekStart), week.status);
-            });
-          } catch {
-            // Best-effort only for color display.
-          }
-        });
+        const publicationByWeek = buildPublicationByWeek(itemsData.publicationWeeks);
         setItems(
           itemsData.items.map((item) => {
             const athlete = athletes.find((a) => a.userId === item.athleteId);

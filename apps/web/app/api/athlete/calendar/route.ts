@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
         prof.mark('cache-hit');
         prof.done({ cacheHit: true, cachesBypassed: false, itemCount: cached.value.items.length });
         return success(cached.value, {
-          headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+          headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
         });
       }
     }
@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       const value = await existing;
       prof.done({ cacheHit: true, cachesBypassed: false, inFlightHit: true, itemCount: value.items.length });
       return success(value, {
-        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       });
     }
     prof.mark('cache-miss');
@@ -409,7 +409,7 @@ export async function GET(request: NextRequest) {
         hasWeather: Boolean(value.dayWeather && Object.keys(value.dayWeather).length > 0),
       });
       return success(value, {
-        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       });
     } finally {
       if (!bypassCache) {

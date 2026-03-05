@@ -1,9 +1,6 @@
 import Link from 'next/link';
 import type { Route } from 'next';
-import { auth, currentUser } from '@clerk/nextjs/server';
 
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { DEFAULT_BRAND_NAME, getHeaderClubBranding } from '@/lib/branding';
@@ -12,6 +9,7 @@ import { MobileHeaderTitle } from '@/components/MobileHeaderTitle';
 import { UserHeaderControl } from '@/components/UserHeaderControl';
 import { tokens } from '@/components/ui/tokens';
 import { cn } from '@/lib/cn';
+import { getAppShellBootstrap } from '@/lib/app-shell';
 
 type NavLink = { href: Route; label: string; roles: ('COACH' | 'ATHLETE' | 'ADMIN')[] };
 
@@ -36,162 +34,20 @@ const allNavLinks: NavLink[] = [
   { href: '/athlete/settings', label: 'Settings', roles: ['ATHLETE'] },
 ];
 
-function isAuthDisabled() {
-  return (
-    process.env.NODE_ENV === 'development' &&
-    (process.env.DISABLE_AUTH === 'true' || process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true')
-  );
-}
-
 /**
  * AppHeader - Server Component with Clerk Authentication
  * 
- * Security:
- * - Fetches user role from database using Clerk userId
- * - Falls back to email lookup for first-time login (same logic as requireAuth)
- * - Filters navigation based on actual DB role (not client state)
- * - Shows UserButton for authenticated users
+ * Uses per-request shell bootstrap data so auth, branding, and unread state
+ * are resolved once and shared with the rest of the app shell.
  */
 export async function AppHeader() {
-  const { userId } = await auth();
-  const authDisabled = isAuthDisabled();
-
-  // Get user from database if authenticated
-  let userRole: 'COACH' | 'ATHLETE' | 'ADMIN' | null = null;
-  let currentDbUserId: string | null = null;
-  let unreadNotificationsCount = 0;
-  let clubBranding = {
-    displayName: DEFAULT_BRAND_NAME,
-    logoUrl: null as string | null,
-    darkLogoUrl: null as string | null,
+  const { authUser, branding, unreadNotificationsCount } = await getAppShellBootstrap();
+  const userRole = authUser?.role ?? null;
+  const clubBranding = {
+    displayName: branding.displayName || DEFAULT_BRAND_NAME,
+    logoUrl: branding.logoUrl,
+    darkLogoUrl: branding.darkLogoUrl ?? null,
   };
-  let brandingCoachId: string | null = null;
-
-  if (userId) {
-    // Try to find user by authProviderId first
-    let user = await prisma.user.findUnique({
-      where: { authProviderId: userId },
-      select: { role: true, branding: true, email: true, id: true, authProviderId: true },
-    });
-
-    // If not found by authProviderId, try email lookup (first-time login)
-    if (!user) {
-      const clerkUser = await currentUser();
-      if (clerkUser?.emailAddresses?.[0]?.emailAddress) {
-        const email = clerkUser.emailAddresses[0].emailAddress;
-        
-        const existingUser = await prisma.user.findUnique({
-          where: { email },
-          select: { role: true, branding: true, email: true, id: true, authProviderId: true },
-        });
-
-        if (existingUser && !existingUser.authProviderId) {
-          // Link the Clerk user to our DB user
-          user = await prisma.user.update({
-            where: { id: existingUser.id },
-            data: { authProviderId: userId },
-            select: { role: true, branding: true, email: true, id: true, authProviderId: true },
-          });
-          
-          console.log(`[AppHeader] Linked Clerk user ${userId} to DB user ${user.email}`);
-        } else if (existingUser) {
-          user = existingUser;
-        }
-      }
-    }
-
-    if (user) {
-      userRole = user.role;
-      currentDbUserId = user.id;
-
-      // Resolve the coachId we should use for club branding
-      if (user.role === 'COACH' || user.role === 'ADMIN') {
-        brandingCoachId = user.id;
-      } else {
-        const athleteProfile = await prisma.athleteProfile.findUnique({
-          where: { userId: user.id },
-          select: { coachId: true },
-        });
-        brandingCoachId = athleteProfile?.coachId ?? null;
-      }
-
-      // Always read club branding directly from CoachBranding to avoid any ambiguity.
-      if (brandingCoachId) {
-        const coachBranding = await prisma.coachBranding.findUnique({
-          where: { coachId: brandingCoachId },
-          select: { displayName: true, logoUrl: true, darkLogoUrl: true },
-        });
-
-        if (coachBranding) {
-          clubBranding = {
-            displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
-            logoUrl: coachBranding.logoUrl,
-            darkLogoUrl: coachBranding.darkLogoUrl ?? null,
-          };
-        }
-      }
-    }
-  } else if (authDisabled) {
-    const { user } = await requireAuth();
-    userRole = user.role;
-    currentDbUserId = user.id;
-
-    if (user.role === 'COACH' || user.role === 'ADMIN') {
-      brandingCoachId = user.id;
-    } else {
-      const athleteProfile = await prisma.athleteProfile.findUnique({
-        where: { userId: user.id },
-        select: { coachId: true },
-      });
-      brandingCoachId = athleteProfile?.coachId ?? null;
-    }
-
-    if (brandingCoachId) {
-      const coachBranding = await prisma.coachBranding.findUnique({
-        where: { coachId: brandingCoachId },
-        select: { displayName: true, logoUrl: true, darkLogoUrl: true },
-      });
-
-      if (coachBranding) {
-        clubBranding = {
-          displayName: coachBranding.displayName || DEFAULT_BRAND_NAME,
-          logoUrl: coachBranding.logoUrl,
-          darkLogoUrl: coachBranding.darkLogoUrl ?? null,
-        };
-      }
-    }
-  }
-
-  if (currentDbUserId && (userRole === 'COACH' || userRole === 'ATHLETE')) {
-    if (userRole === 'COACH') {
-      const unreadMessages = await prisma.message.findMany({
-        where: {
-          deletedAt: null,
-          senderRole: 'ATHLETE',
-          coachReadAt: null,
-          thread: { coachId: currentDbUserId },
-        },
-        select: {
-          senderUserId: true,
-          thread: { select: { athleteId: true } },
-        },
-      });
-
-      // Only count unread rows that can appear in the coach mailbox list.
-      unreadNotificationsCount = unreadMessages.filter(
-        (message) => message.senderUserId === message.thread.athleteId
-      ).length;
-    } else {
-      unreadNotificationsCount = await prisma.message.count({
-        where: {
-          deletedAt: null,
-          senderRole: 'COACH',
-          athleteReadAt: null,
-          thread: { athleteId: currentDbUserId },
-        },
-      });
-    }
-  }
 
   // Filter navigation by authenticated role
   const navLinks = userRole
@@ -229,7 +85,7 @@ export async function AppHeader() {
   const headerClubBranding = getHeaderClubBranding(clubBranding);
 
   const mobileLinks = navLinks.map((link) => ({ href: link.href as string, label: link.label }));
-  const showUserControl = Boolean(userId) || authDisabled;
+  const showUserControl = Boolean(authUser);
 
   return (
     <>
@@ -307,7 +163,10 @@ export async function AppHeader() {
           </div>
 
         {/* Desktop: keep existing multi-brand header */}
-        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-4 md:px-6 md:py-0">
+        <div
+          data-desktop-header="v1"
+          className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-4 md:px-6 md:py-0"
+        >
           {/* Left block: Club branding (row 1, col 1) */}
           <div className="col-start-1 row-start-1 flex min-w-0 items-center justify-start">
             {headerClubBranding.type === 'logo' ? (

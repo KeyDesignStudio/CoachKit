@@ -3,6 +3,7 @@ import { ChallengeStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { requireAthlete } from '@/lib/auth';
+import { privateCacheHeaders } from '@/lib/cache';
 import { handleError, success } from '@/lib/http';
 import { formatChallengeScore, mapChallengeWindowLabel, challengeRulesText, maybeCompleteChallenge } from '@/lib/challenges/service';
 import { parseParticipationConfig } from '@/lib/challenges/config';
@@ -29,7 +30,12 @@ export async function GET(request: NextRequest) {
       select: { squadId: true },
     });
     const squadIds = Array.from(new Set(memberships.map((row) => row.squadId)));
-    if (!squadIds.length) return success({ challenges: [] });
+    if (!squadIds.length) {
+      return success(
+        { challenges: [] },
+        { headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }) }
+      );
+    }
 
     const challenges = await prisma.challenge.findMany({
       where: {
@@ -145,7 +151,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return success({ challenges: data });
+    return success({ challenges: data }, { headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }) });
   } catch (error) {
     return handleError(error);
   }

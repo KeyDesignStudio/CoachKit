@@ -50,7 +50,7 @@ type DayTrainingSnapshot = {
   planned: SessionGreetingInfo[];
 };
 
-type AthleteDashboardResponse = {
+export type AthleteDashboardResponse = {
   attention: {
     pendingConfirmation: number;
     workoutsMissed: number;
@@ -125,7 +125,7 @@ type AthleteDashboardResponse = {
   };
 };
 
-type ActiveChallengePreview = {
+export type ActiveChallengePreview = {
   id: string;
   title: string;
   type: string;
@@ -138,7 +138,7 @@ type ActiveChallengePreview = {
   joined: boolean;
 };
 
-type AthleteIntakeLifecycleResponse = {
+export type AthleteIntakeLifecycleResponse = {
   openDraftIntake?: { id?: string | null; createdAt?: string | null } | null;
   latestSubmittedIntake?: { id?: string | null; createdAt?: string | null } | null;
   reminderTracking?: {
@@ -442,7 +442,22 @@ function DashboardFiltersPanel({
   );
 }
 
-export default function AthleteDashboardConsolePage() {
+type AthleteDashboardConsolePageProps = {
+  initialData?: AthleteDashboardResponse | null;
+  initialChallenges?: ActiveChallengePreview[];
+  initialTrainingRequestLifecycle?: AthleteIntakeLifecycleResponse | null;
+  initialQueryKey?: string | null;
+};
+
+function buildAthleteDashboardQueryKey(params: {
+  from: string;
+  to: string;
+  discipline: string | null;
+}) {
+  return [params.from, params.to, params.discipline ?? ''].join('|');
+}
+
+export default function AthleteDashboardConsolePage(props: AthleteDashboardConsolePageProps = {}) {
   const { user, loading: userLoading, error: userError } = useAuthUser();
   const { request } = useApi();
   const router = useRouter();
@@ -453,10 +468,12 @@ export default function AthleteDashboardConsolePage() {
   const [discipline, setDiscipline] = useState<string | null>(null);
   const [calorieEquivalentKey, setCalorieEquivalentKey] = useState<CalorieEquivalentKey>('bigMac');
 
-  const [data, setData] = useState<AthleteDashboardResponse | null>(null);
-  const [activeChallenges, setActiveChallenges] = useState<ActiveChallengePreview[]>([]);
-  const [trainingRequestLifecycle, setTrainingRequestLifecycle] = useState<AthleteIntakeLifecycleResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<AthleteDashboardResponse | null>(props.initialData ?? null);
+  const [activeChallenges, setActiveChallenges] = useState<ActiveChallengePreview[]>(props.initialChallenges ?? []);
+  const [trainingRequestLifecycle, setTrainingRequestLifecycle] = useState<AthleteIntakeLifecycleResponse | null>(
+    props.initialTrainingRequestLifecycle ?? null
+  );
+  const [loading, setLoading] = useState(() => !props.initialData);
   const [error, setError] = useState('');
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -470,6 +487,9 @@ export default function AthleteDashboardConsolePage() {
   const sidebarFiltersRef = useRef<HTMLDivElement | null>(null);
   const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
   const mobileSidebarCloseTimerRef = useRef<number | null>(null);
+  const initialDashboardLoadSkippedRef = useRef(false);
+  const initialChallengesLoadSkippedRef = useRef(false);
+  const initialLifecycleLoadSkippedRef = useRef(false);
 
   const athleteTimeZone = user?.timezone ?? 'UTC';
   const dateRange = useMemo(
@@ -496,14 +516,6 @@ export default function AthleteDashboardConsolePage() {
           bypassCache ? { cache: 'no-store' } : undefined
         );
         setData(resp);
-
-        void request<{ challenges: ActiveChallengePreview[] }>('/api/athlete/challenges?status=ACTIVE', { cache: 'no-store' })
-          .then((challengeResp) => {
-            setActiveChallenges(challengeResp.challenges ?? []);
-          })
-          .catch(() => {
-            setActiveChallenges([]);
-          });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard.');
       } finally {
@@ -516,19 +528,68 @@ export default function AthleteDashboardConsolePage() {
   const reloadTrainingRequestLifecycle = useCallback(async () => {
     if (!user?.userId || user.role !== 'ATHLETE') return;
     try {
-      const lifecycle = await request<AthleteIntakeLifecycleResponse>('/api/athlete/ai-plan/intake/latest', { cache: 'no-store' });
+      const lifecycle = await request<AthleteIntakeLifecycleResponse>('/api/athlete/ai-plan/intake/latest');
       setTrainingRequestLifecycle(lifecycle ?? null);
     } catch {
       setTrainingRequestLifecycle(null);
     }
   }, [request, user?.role, user?.userId]);
 
+  const reloadChallenges = useCallback(async () => {
+    if (!user?.userId || user.role !== 'ATHLETE') return;
+    try {
+      const challengeResp = await request<{ challenges: ActiveChallengePreview[] }>('/api/athlete/challenges?status=ACTIVE');
+      setActiveChallenges(challengeResp.challenges ?? []);
+    } catch {
+      setActiveChallenges([]);
+    }
+  }, [request, user?.role, user?.userId]);
+
   useEffect(() => {
     if (user?.role === 'ATHLETE') {
-      void reload();
-      void reloadTrainingRequestLifecycle();
+      const currentQueryKey = buildAthleteDashboardQueryKey({
+        from: dateRange.from,
+        to: dateRange.to,
+        discipline,
+      });
+
+      const shouldSkipInitialDashboardLoad =
+        !initialDashboardLoadSkippedRef.current && props.initialData && props.initialQueryKey === currentQueryKey;
+      const shouldSkipInitialLifecycleLoad =
+        !initialLifecycleLoadSkippedRef.current && props.initialTrainingRequestLifecycle != null;
+
+      if (shouldSkipInitialDashboardLoad) {
+        initialDashboardLoadSkippedRef.current = true;
+      } else {
+        void reload();
+      }
+
+      if (shouldSkipInitialLifecycleLoad) {
+        initialLifecycleLoadSkippedRef.current = true;
+      } else {
+        void reloadTrainingRequestLifecycle();
+      }
     }
-  }, [reload, reloadTrainingRequestLifecycle, user?.role]);
+  }, [
+    dateRange.from,
+    dateRange.to,
+    discipline,
+    props.initialData,
+    props.initialQueryKey,
+    props.initialTrainingRequestLifecycle,
+    reload,
+    reloadTrainingRequestLifecycle,
+    user?.role,
+  ]);
+
+  useEffect(() => {
+    if (user?.role !== 'ATHLETE') return;
+    if (!initialChallengesLoadSkippedRef.current && props.initialData) {
+      initialChallengesLoadSkippedRef.current = true;
+      return;
+    }
+    void reloadChallenges();
+  }, [props.initialData, reloadChallenges, user?.role]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -551,10 +612,40 @@ export default function AthleteDashboardConsolePage() {
 
   useEffect(() => {
     if (user?.role !== 'ATHLETE') return;
-    const timer = setInterval(() => {
-      void reloadTrainingRequestLifecycle();
-    }, 60_000);
-    return () => clearInterval(timer);
+    if (typeof document === 'undefined') return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (timer !== null || document.visibilityState !== 'visible') return;
+      timer = setInterval(() => {
+        void reloadTrainingRequestLifecycle();
+      }, 60_000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void reloadTrainingRequestLifecycle();
+        startPolling();
+        return;
+      }
+      stopPolling();
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [reloadTrainingRequestLifecycle, user?.role]);
 
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);

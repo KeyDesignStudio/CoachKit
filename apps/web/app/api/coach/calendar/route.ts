@@ -7,7 +7,7 @@ import { requireCoach } from '@/lib/auth';
 import { forbidden } from '@/lib/errors';
 import { handleError, success } from '@/lib/http';
 import { privateCacheHeaders } from '@/lib/cache';
-import { assertValidDateRange, parseDateOnly } from '@/lib/date';
+import { assertValidDateRange, parseDateOnly, startOfWeek } from '@/lib/date';
 import { isStravaTimeDebugEnabled } from '@/lib/debug';
 import { createServerProfiler } from '@/lib/server-profiler';
 import { getWeatherSummariesForRange } from '@/lib/weather-server';
@@ -63,6 +63,11 @@ type CoachCalendarResponse = {
   athleteTimezone: string;
   dayWeather?: Record<string, any>;
   goalCountdownByAthlete?: Record<string, GoalCountdown>;
+  publicationWeeks?: Array<{
+    athleteId: string;
+    weekStart: string;
+    status: 'DRAFT' | 'PUBLISHED';
+  }>;
 };
 
 type CoachCalendarComputed = {
@@ -351,7 +356,7 @@ export async function GET(request: NextRequest) {
           cachesBypassed: false,
         });
         return success(cached.value, {
-          headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+          headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
         });
       }
     }
@@ -367,7 +372,7 @@ export async function GET(request: NextRequest) {
         cachesBypassed: false,
       });
       return success(computed.payload, {
-        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       });
     }
 
@@ -376,6 +381,8 @@ export async function GET(request: NextRequest) {
       // which can differ from athlete-local day boundaries.
       const candidateFromDate = parseDateOnly(addDaysToDayKey(params.from, -1), 'from');
       const candidateToDate = parseDateOnly(addDaysToDayKey(params.to, 1), 'to');
+      const firstWeekStart = startOfWeek(fromDate);
+      const lastWeekStart = startOfWeek(toDate);
 
       const athleteAccess = await getCoachAthleteAccess({
         coachId: user.id,
@@ -418,19 +425,36 @@ export async function GET(request: NextRequest) {
 
       prof.mark('auth+parse');
 
-      const items = await prisma.calendarItem.findMany({
-        where: {
-          athleteId: { in: athleteIds },
-          coachId: user.id,
-          deletedAt: null,
-          date: {
-            gte: candidateFromDate,
-            lte: candidateToDate,
+      const [items, publicationWeeks] = await Promise.all([
+        prisma.calendarItem.findMany({
+          where: {
+            athleteId: { in: athleteIds },
+            coachId: user.id,
+            deletedAt: null,
+            date: {
+              gte: candidateFromDate,
+              lte: candidateToDate,
+            },
           },
-        },
-        orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
-        select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
-      });
+          orderBy: [{ date: 'asc' }, { plannedStartTimeLocal: 'asc' }],
+          select: lean ? calendarItemLeanSelect : calendarItemFullSelect,
+        }),
+        prisma.planWeek.findMany({
+          where: {
+            coachId: user.id,
+            athleteId: { in: athleteIds },
+            weekStart: {
+              gte: firstWeekStart,
+              lte: lastWeekStart,
+            },
+          },
+          select: {
+            athleteId: true,
+            weekStart: true,
+            status: true,
+          },
+        }),
+      ]);
 
       prof.mark('db');
 
@@ -568,7 +592,17 @@ export async function GET(request: NextRequest) {
       }
 
       return {
-        payload: { items: formattedItems, athleteTimezone: primaryAthleteTimezone, dayWeather, goalCountdownByAthlete },
+        payload: {
+          items: formattedItems,
+          athleteTimezone: primaryAthleteTimezone,
+          dayWeather,
+          goalCountdownByAthlete,
+          publicationWeeks: publicationWeeks.map((week) => ({
+            athleteId: week.athleteId,
+            weekStart: week.weekStart.toISOString().slice(0, 10),
+            status: week.status,
+          })),
+        },
         meta: {
           itemCount: formattedItems.length,
           athleteCount: athleteIds.length,
@@ -600,7 +634,7 @@ export async function GET(request: NextRequest) {
       });
 
       return success(computed.payload, {
-        headers: privateCacheHeaders({ maxAgeSeconds: 0 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       });
     } finally {
       if (!bypassCaches) {

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CalendarItemStatus } from '@prisma/client';
+import { CalendarItemStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -45,13 +45,9 @@ const COMPLETED_STATUSES: CalendarItemStatus[] = [
 
 const REVIEWABLE_STATUSES: CalendarItemStatus[] = [...COMPLETED_STATUSES, CalendarItemStatus.SKIPPED];
 
-function minutesOrZero(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function distanceOrZero(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
+const COMPLETED_STATUS_SQL = Prisma.join(
+  COMPLETED_STATUSES.map((status) => Prisma.sql`${status}::"CalendarItemStatus"`)
+);
 
 function readDraftText(draft: unknown, key: string): string | null {
   if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null;
@@ -204,6 +200,49 @@ function buildDashboardInboxCacheKey(params: {
   ].join('|');
 }
 
+function toFiniteNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function buildCalendarItemScopeSql(params: {
+  coachId: string;
+  selectedAthleteIds: string[];
+  discipline: string | null;
+}) {
+  return Prisma.sql`
+    ci."coachId" = ${params.coachId}
+    AND ci."deletedAt" IS NULL
+    ${
+      params.selectedAthleteIds.length > 0
+        ? Prisma.sql`AND ci."athleteId" IN (${Prisma.join(params.selectedAthleteIds)})`
+        : Prisma.empty
+    }
+    ${params.discipline ? Prisma.sql`AND ci."discipline" = ${params.discipline}` : Prisma.empty}
+  `;
+}
+
+type LatestPublishedSetupRow = {
+  athleteId: string;
+  setupJson: Prisma.JsonValue | null;
+};
+
+type LatestSubmittedIntakeRow = {
+  athleteId: string;
+  draftJson: Prisma.JsonValue | null;
+};
+
+type CoachDashboardAggregateMetricsRow = {
+  completedCount: number;
+  totalTrainingMinutes: number | null;
+  totalDistanceKm: number | null;
+};
+
+type CoachDisciplineLoadRow = {
+  discipline: string | null;
+  totalMinutes: number | null;
+  totalDistanceKm: number | null;
+};
+
 async function getDashboardAggregates(params: {
   coachId: string;
   rangeFilter: Record<string, unknown>;
@@ -251,19 +290,15 @@ async function getDashboardAggregates(params: {
     });
     const athleteIds = athletes.map((a) => a.userId);
     const latestPublishedDrafts = athleteIds.length
-      ? await prisma.aiPlanDraft.findMany({
-          where: {
-            athleteId: { in: athleteIds },
-            visibilityStatus: 'PUBLISHED',
-          },
-          select: {
-            athleteId: true,
-            setupJson: true,
-            publishedAt: true,
-            createdAt: true,
-          },
-          orderBy: [{ athleteId: 'asc' }, { publishedAt: 'desc' }, { createdAt: 'desc' }],
-        })
+      ? await prisma.$queryRaw<LatestPublishedSetupRow[]>(Prisma.sql`
+          SELECT DISTINCT ON ("athleteId")
+            "athleteId",
+            "setupJson"
+          FROM "AiPlanDraft"
+          WHERE "athleteId" IN (${Prisma.join(athleteIds)})
+            AND "visibilityStatus" = 'PUBLISHED'
+          ORDER BY "athleteId", "publishedAt" DESC NULLS LAST, "createdAt" DESC
+        `)
       : [];
     const latestPublishedSetupByAthlete = new Map<string, Record<string, unknown>>();
     for (const row of latestPublishedDrafts) {
@@ -272,20 +307,16 @@ async function getDashboardAggregates(params: {
       }
     }
     const latestSubmittedIntakes = athleteIds.length
-      ? await prisma.athleteIntakeResponse.findMany({
-          where: {
-            athleteId: { in: athleteIds },
-            coachId: params.coachId,
-            submittedAt: { not: null },
-          },
-          select: {
-            athleteId: true,
-            draftJson: true,
-            submittedAt: true,
-            createdAt: true,
-          },
-          orderBy: [{ athleteId: 'asc' }, { submittedAt: 'desc' }, { createdAt: 'desc' }],
-        })
+      ? await prisma.$queryRaw<LatestSubmittedIntakeRow[]>(Prisma.sql`
+          SELECT DISTINCT ON ("athleteId")
+            "athleteId",
+            "draftJson"
+          FROM "AthleteIntakeResponse"
+          WHERE "athleteId" IN (${Prisma.join(athleteIds)})
+            AND "coachId" = ${params.coachId}
+            AND "submittedAt" IS NOT NULL
+          ORDER BY "athleteId", "submittedAt" DESC, "createdAt" DESC
+        `)
       : [];
     const latestSubmittedIntakeDraftByAthlete = new Map<string, Record<string, unknown>>();
     for (const row of latestSubmittedIntakes) {
@@ -351,11 +382,101 @@ async function getDashboardAggregates(params: {
       });
     const selectedGoalCountdown = goalCountdowns.length === 1 ? goalCountdowns[0] : null;
 
+    const calendarItemScopeSql = buildCalendarItemScopeSql({
+      coachId: params.coachId,
+      selectedAthleteIds: params.selectedAthleteIds,
+      discipline: Object.keys(params.disciplineFilter).length ? String((params.disciplineFilter as { discipline?: string }).discipline ?? '') || null : null,
+    });
+
+    const currentCompletedMetricsPromise =
+      params.fromDate && params.toDate
+        ? prisma.$queryRaw<CoachDashboardAggregateMetricsRow[]>(Prisma.sql`
+            WITH latest_completion AS (
+              SELECT DISTINCT ON (ca."calendarItemId")
+                ca."calendarItemId",
+                ca."durationMinutes",
+                ca."distanceKm"
+              FROM "CompletedActivity" ca
+              WHERE ca."calendarItemId" IS NOT NULL
+              ORDER BY ca."calendarItemId", ca."startTime" DESC, ca."createdAt" DESC
+            )
+            SELECT
+              COUNT(*)::int AS "completedCount",
+              COALESCE(SUM(COALESCE(lc."durationMinutes", 0)), 0)::int AS "totalTrainingMinutes",
+              COALESCE(SUM(COALESCE(lc."distanceKm", 0)), 0)::double precision AS "totalDistanceKm"
+            FROM "CalendarItem" ci
+            LEFT JOIN latest_completion lc ON lc."calendarItemId" = ci."id"
+            WHERE ${calendarItemScopeSql}
+              AND ci."date" >= ${params.fromDate}
+              AND ci."date" <= ${params.toDate}
+              AND ci."status" IN (${COMPLETED_STATUS_SQL})
+          `)
+        : Promise.resolve<CoachDashboardAggregateMetricsRow[]>([
+            { completedCount: 0, totalTrainingMinutes: 0, totalDistanceKm: 0 },
+          ]);
+
+    const previousCompletedMetricsPromise =
+      params.previousRangeFilter && params.previousFromDayKey && params.previousToDayKey
+        ? (() => {
+            const previousFromDate = parseDateOnly(params.previousFromDayKey, 'from');
+            const previousToDate = parseDateOnly(params.previousToDayKey, 'to');
+            return prisma.$queryRaw<CoachDashboardAggregateMetricsRow[]>(Prisma.sql`
+              WITH latest_completion AS (
+                SELECT DISTINCT ON (ca."calendarItemId")
+                  ca."calendarItemId",
+                  ca."durationMinutes",
+                  ca."distanceKm"
+                FROM "CompletedActivity" ca
+                WHERE ca."calendarItemId" IS NOT NULL
+                ORDER BY ca."calendarItemId", ca."startTime" DESC, ca."createdAt" DESC
+              )
+              SELECT
+                COUNT(*)::int AS "completedCount",
+                COALESCE(SUM(COALESCE(lc."durationMinutes", 0)), 0)::int AS "totalTrainingMinutes",
+                COALESCE(SUM(COALESCE(lc."distanceKm", 0)), 0)::double precision AS "totalDistanceKm"
+              FROM "CalendarItem" ci
+              LEFT JOIN latest_completion lc ON lc."calendarItemId" = ci."id"
+              WHERE ${calendarItemScopeSql}
+                AND ci."date" >= ${previousFromDate}
+                AND ci."date" <= ${previousToDate}
+                AND ci."status" IN (${COMPLETED_STATUS_SQL})
+            `);
+          })()
+        : Promise.resolve<CoachDashboardAggregateMetricsRow[]>([
+            { completedCount: 0, totalTrainingMinutes: 0, totalDistanceKm: 0 },
+          ]);
+
+    const disciplineLoadPromise =
+      params.fromDate && params.toDate
+        ? prisma.$queryRaw<CoachDisciplineLoadRow[]>(Prisma.sql`
+            WITH latest_completion AS (
+              SELECT DISTINCT ON (ca."calendarItemId")
+                ca."calendarItemId",
+                ca."durationMinutes",
+                ca."distanceKm"
+              FROM "CompletedActivity" ca
+              WHERE ca."calendarItemId" IS NOT NULL
+              ORDER BY ca."calendarItemId", ca."startTime" DESC, ca."createdAt" DESC
+            )
+            SELECT
+              UPPER(COALESCE(NULLIF(ci."discipline", ''), 'OTHER')) AS "discipline",
+              COALESCE(SUM(COALESCE(lc."durationMinutes", 0)), 0)::int AS "totalMinutes",
+              COALESCE(SUM(COALESCE(lc."distanceKm", 0)), 0)::double precision AS "totalDistanceKm"
+            FROM "CalendarItem" ci
+            LEFT JOIN latest_completion lc ON lc."calendarItemId" = ci."id"
+            WHERE ${calendarItemScopeSql}
+              AND ci."date" >= ${params.fromDate}
+              AND ci."date" <= ${params.toDate}
+              AND ci."status" IN (${COMPLETED_STATUS_SQL})
+            GROUP BY 1
+          `)
+        : Promise.resolve<CoachDisciplineLoadRow[]>([]);
+
     const [
-      completedCount,
       skippedCount,
-      completedItems,
-      previousCompletedItems,
+      currentCompletedMetricsRows,
+      previousCompletedMetricsRows,
+      disciplineLoadRows,
       attentionPainFlagCount,
       attentionAthleteCommentWorkoutCount,
       attentionSkippedCount,
@@ -370,56 +491,12 @@ async function getDashboardAggregates(params: {
             ...params.rangeFilter,
             ...params.athleteFilter,
             ...params.disciplineFilter,
-            status: { in: COMPLETED_STATUSES },
-          },
-        }),
-        prisma.calendarItem.count({
-          where: {
-            coachId: params.coachId,
-            deletedAt: null,
-            ...params.rangeFilter,
-            ...params.athleteFilter,
-            ...params.disciplineFilter,
             status: CalendarItemStatus.SKIPPED,
           },
         }),
-        prisma.calendarItem.findMany({
-          where: {
-            coachId: params.coachId,
-            deletedAt: null,
-            ...params.rangeFilter,
-            ...params.athleteFilter,
-            ...params.disciplineFilter,
-            status: { in: COMPLETED_STATUSES },
-          },
-          select: {
-            discipline: true,
-            completedActivities: {
-              orderBy: [{ startTime: 'desc' as const }],
-              take: 1,
-              select: { durationMinutes: true, distanceKm: true },
-            },
-          },
-        }),
-        params.previousRangeFilter
-          ? prisma.calendarItem.findMany({
-              where: {
-                coachId: params.coachId,
-                deletedAt: null,
-                ...params.previousRangeFilter,
-                ...params.athleteFilter,
-                ...params.disciplineFilter,
-                status: { in: COMPLETED_STATUSES },
-              },
-              select: {
-                completedActivities: {
-                  orderBy: [{ startTime: 'desc' as const }],
-                  take: 1,
-                  select: { durationMinutes: true, distanceKm: true },
-                },
-              },
-            })
-          : Promise.resolve([] as Array<{ completedActivities: Array<{ durationMinutes: number | null; distanceKm: number | null }> }>),
+        currentCompletedMetricsPromise,
+        previousCompletedMetricsPromise,
+        disciplineLoadPromise,
         prisma.calendarItem.count({
           where: {
             coachId: params.coachId,
@@ -473,43 +550,41 @@ async function getDashboardAggregates(params: {
           includeLoadModel: params.includeLoadModel,
         }),
       ]);
+    const currentCompletedMetrics = currentCompletedMetricsRows[0] ?? {
+      completedCount: 0,
+      totalTrainingMinutes: 0,
+      totalDistanceKm: 0,
+    };
+    const previousCompletedMetrics = previousCompletedMetricsRows[0] ?? {
+      completedCount: 0,
+      totalTrainingMinutes: 0,
+      totalDistanceKm: 0,
+    };
 
-    let totalMinutes = 0;
-    let totalDistanceKm = 0;
-    let previousTotalMinutes = 0;
-    let previousTotalDistanceKm = 0;
-    const disciplineTotals = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
+    const totalMinutes = toFiniteNumber(currentCompletedMetrics.totalTrainingMinutes);
+    const totalDistanceKm = toFiniteNumber(currentCompletedMetrics.totalDistanceKm);
+    const previousTotalMinutes = toFiniteNumber(previousCompletedMetrics.totalTrainingMinutes);
+    const previousTotalDistanceKm = toFiniteNumber(previousCompletedMetrics.totalDistanceKm);
 
-    completedItems.forEach((item) => {
-      const latest = item.completedActivities?.[0];
-      const m = minutesOrZero(latest?.durationMinutes);
-      const d = distanceOrZero(latest?.distanceKm);
-
-      totalMinutes += m;
-      totalDistanceKm += d;
-
-      const key = (item.discipline || 'OTHER').toUpperCase();
-      const prev = disciplineTotals.get(key) ?? { totalMinutes: 0, totalDistanceKm: 0 };
-      prev.totalMinutes += m;
-      prev.totalDistanceKm += d;
-      disciplineTotals.set(key, prev);
-    });
-    previousCompletedItems.forEach((item) => {
-      const latest = item.completedActivities?.[0];
-      previousTotalMinutes += minutesOrZero(latest?.durationMinutes);
-      previousTotalDistanceKm += distanceOrZero(latest?.distanceKm);
-    });
-
+    const disciplineTotals = new Map(
+      disciplineLoadRows.map((row) => [
+        String(row.discipline ?? 'OTHER').toUpperCase(),
+        {
+          totalMinutes: toFiniteNumber(row.totalMinutes),
+          totalDistanceKm: toFiniteNumber(row.totalDistanceKm),
+        },
+      ] as const)
+    );
     const disciplines = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
     const disciplineLoad = disciplines.map((disc) => {
-      const v = disciplineTotals.get(disc) ?? { totalMinutes: 0, totalDistanceKm: 0 };
-      return { discipline: disc, totalMinutes: v.totalMinutes, totalDistanceKm: v.totalDistanceKm };
+      const totals = disciplineTotals.get(disc) ?? { totalMinutes: 0, totalDistanceKm: 0 };
+      return { discipline: disc, totalMinutes: totals.totalMinutes, totalDistanceKm: totals.totalDistanceKm };
     });
 
     return {
       athletes: athleteRows,
       kpis: {
-        workoutsCompleted: completedCount,
+        workoutsCompleted: currentCompletedMetrics.completedCount,
         workoutsSkipped: skippedCount,
         totalTrainingMinutes: totalMinutes,
         totalDistanceKm,
@@ -539,7 +614,7 @@ async function getDashboardAggregates(params: {
       goalCountdowns,
       selectedGoalCountdown,
       meta: {
-        completedItemCount: completedItems.length,
+        completedItemCount: currentCompletedMetrics.completedCount,
       },
     } satisfies DashboardAggregates;
   })();
@@ -849,7 +924,7 @@ export async function GET(request: NextRequest) {
         },
       },
       {
-        headers: privateCacheHeaders({ maxAgeSeconds: 30 }),
+        headers: privateCacheHeaders({ maxAgeSeconds: 30, staleWhileRevalidateSeconds: 60 }),
       }
     );
   } catch (error) {
