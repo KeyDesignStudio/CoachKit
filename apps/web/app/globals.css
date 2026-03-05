@@ -22,6 +22,21 @@
   --bg-success: rgba(16, 185, 129, 0.14);
   --text-success: #047857;
 
+  /* Dashboard feature cards (challenge + goal focus) */
+  --feature-surface: rgba(224, 233, 248, 0.9);
+  --feature-border: rgba(63, 96, 159, 0.24);
+  --feature-accent: #2f68ff;
+  --feature-accent-strong: #2048b7;
+  --feature-muted: #4f6084;
+  --feature-shadow: rgba(26, 47, 92, 0.16);
+  --feature-pill-bg: rgba(47, 104, 255, 0.14);
+  --feature-pill-border: rgba(47, 104, 255, 0.24);
+  --feature-pill-text: #14378d;
+  --feature-success-bg: rgba(16, 185, 129, 0.16);
+  --feature-success-border: rgba(4, 120, 87, 0.3);
+  --feature-success-text: #065f46;
+  --feature-progress-fill: #2f68ff;
+
   /* Data viz / meters */
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
@@ -55,6 +70,20 @@
   --bg-success: rgba(16, 185, 129, 0.14);
   --text-success: #047857;
 
+  --feature-surface: rgba(224, 233, 248, 0.9);
+  --feature-border: rgba(63, 96, 159, 0.24);
+  --feature-accent: #2f68ff;
+  --feature-accent-strong: #2048b7;
+  --feature-muted: #4f6084;
+  --feature-shadow: rgba(26, 47, 92, 0.16);
+  --feature-pill-bg: rgba(47, 104, 255, 0.14);
+  --feature-pill-border: rgba(47, 104, 255, 0.24);
+  --feature-pill-text: #14378d;
+  --feature-success-bg: rgba(16, 185, 129, 0.16);
+  --feature-success-border: rgba(4, 120, 87, 0.3);
+  --feature-success-text: #065f46;
+  --feature-progress-fill: #2f68ff;
+
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
   --strava-card-bg: rgba(255, 242, 233, 0.90);
@@ -84,6 +113,20 @@
 
   --bg-success: rgba(16, 185, 129, 0.22);
   --text-success: #34d399;
+
+  --feature-surface: rgba(19, 29, 52, 0.92);
+  --feature-border: rgba(158, 193, 255, 0.3);
+  --feature-accent: #7ba6ff;
+  --feature-accent-strong: #9ec1ff;
+  --feature-muted: #b9c8e6;
+  --feature-shadow: rgba(2, 7, 20, 0.45);
+  --feature-pill-bg: rgba(123, 166, 255, 0.2);
+  --feature-pill-border: rgba(158, 193, 255, 0.36);
+  --feature-pill-text: #dce9ff;
+  --feature-success-bg: rgba(16, 185, 129, 0.22);
+  --feature-success-border: rgba(52, 211, 153, 0.4);
+  --feature-success-text: #bbf7e4;
+  --feature-progress-fill: #7ba6ff;
 
   --bar-track: rgba(248, 251, 255, 0.18);
   --bar-fill: rgba(248, 251, 255, 0.34);
@@ -115,6 +158,20 @@
 
     --bg-success: rgba(16, 185, 129, 0.22);
     --text-success: #34d399;
+
+    --feature-surface: rgba(19, 29, 52, 0.92);
+    --feature-border: rgba(158, 193, 255, 0.3);
+    --feature-accent: #7ba6ff;
+    --feature-accent-strong: #9ec1ff;
+    --feature-muted: #b9c8e6;
+    --feature-shadow: rgba(2, 7, 20, 0.45);
+    --feature-pill-bg: rgba(123, 166, 255, 0.2);
+    --feature-pill-border: rgba(158, 193, 255, 0.36);
+    --feature-pill-text: #dce9ff;
+    --feature-success-bg: rgba(16, 185, 129, 0.22);
+    --feature-success-border: rgba(52, 211, 153, 0.4);
+    --feature-success-text: #bbf7e4;
+    --feature-progress-fill: #7ba6ff;
 
     --bar-track: rgba(248, 251, 255, 0.18);
     --bar-fill: rgba(248, 251, 255, 0.34);

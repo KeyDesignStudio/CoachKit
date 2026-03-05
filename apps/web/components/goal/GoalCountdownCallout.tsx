@@ -10,11 +10,19 @@ type GoalCountdownCalloutProps = {
 };
 
 function getTone(goal: GoalCountdown) {
-  if (goal.mode === 'race-day') return 'ring-2 ring-amber-500/70 bg-gradient-to-r from-amber-100 via-orange-50 to-emerald-50 dark:ring-amber-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-emerald-950';
-  if (goal.mode === 'daily') return 'ring-1 ring-orange-300/70 bg-gradient-to-r from-orange-50 via-amber-50 to-teal-50 dark:ring-orange-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-teal-950';
-  if (goal.mode === 'weekly') return 'ring-1 ring-teal-300/70 bg-gradient-to-r from-teal-50 via-sky-50 to-emerald-50 dark:ring-teal-400/70 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-emerald-950';
-  if (goal.mode === 'past') return 'ring-1 ring-slate-300/80 bg-gradient-to-r from-slate-100 via-slate-50 to-zinc-100 dark:ring-slate-600/80 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-zinc-900';
-  return 'ring-1 ring-[var(--border-subtle)] bg-[var(--bg-surface)]';
+  if (goal.mode === 'race-day') return 'border-amber-400/75 bg-[var(--feature-surface)]';
+  if (goal.mode === 'past') return 'border-[var(--border-subtle)] bg-[var(--bg-structure)]';
+  return 'border-[var(--feature-border)] bg-[var(--feature-surface)]';
+}
+
+function resolveProgressPct(goal: GoalCountdown): number {
+  const raw = Number(goal.progressPct);
+  if (Number.isFinite(raw)) return Math.max(0, Math.min(100, raw));
+
+  const total = Number(goal.weeksTotal);
+  const elapsed = Number(goal.weeksElapsed);
+  if (!Number.isFinite(total) || !Number.isFinite(elapsed) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, (elapsed / total) * 100));
 }
 
 function formatEventDate(value: string): string {
@@ -48,13 +56,15 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
   const eventDateLabel = formatEventDate(goal.eventDate);
   const who = athleteName ? `${athleteName} · ` : '';
   const showProgress = typeof goal.weeksTotal === 'number' && goal.weeksTotal > 0 && typeof goal.weeksElapsed === 'number';
-  const progressPct = Math.max(0, Math.min(100, goal.progressPct ?? 0));
+  const progressPct = resolveProgressPct(goal);
+  const visibleProgressPct = progressPct > 0 ? Math.max(4, progressPct) : 0;
+  const progressLabel = `${Math.round(progressPct)}%`;
 
   if (variant === 'chip') {
     return (
       <div
         className={cn(
-          'inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--text)]',
+          'inline-flex items-center gap-2 rounded-full border border-[var(--feature-border)] bg-[var(--feature-surface)] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--text)]',
           getTone(goal),
           className
         )}
@@ -68,18 +78,25 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
 
   if (variant === 'ribbon') {
     return (
-      <div className={cn('rounded-2xl px-4 py-3 text-[var(--text)]', getTone(goal), className)}>
+      <div className={cn('rounded-2xl border border-l-4 border-l-[var(--feature-accent)] px-4 py-3 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]', getTone(goal), className)}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-muted)] dark:text-slate-300/90">{who}goal focus</span>
-          <span className="rounded-md bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</span>
-          <span className="text-xs text-[var(--fg-muted)] dark:text-slate-300/85">{eventDateLabel}</span>
-          <span className="ml-auto text-sm font-semibold tabular-nums">{goal.label}</span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--feature-muted)]">{who}goal focus</span>
+          <span className="rounded-md border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-sm font-semibold text-[var(--feature-pill-text)]">
+            {title}
+          </span>
+          <span className="text-xs text-[var(--feature-muted)]">{eventDateLabel}</span>
+          <span className="ml-auto inline-flex rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-sm font-semibold tabular-nums text-[var(--feature-pill-text)]">
+            {goal.label}
+          </span>
         </div>
         {showProgress ? (
           <div className="mt-2">
-            <div className="mb-1 text-[11px] text-[var(--fg-muted)] dark:text-slate-300/85">Progress</div>
+            <div className="mb-1 flex items-center justify-between text-[11px] text-[var(--feature-muted)]">
+              <span>Progress</span>
+              <span className="tabular-nums text-[var(--feature-pill-text)]">{progressLabel}</span>
+            </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bar-track)]">
-              <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progressPct}%` }} />
+              <div className="h-full rounded-full bg-[var(--feature-progress-fill)]" style={{ width: `${visibleProgressPct}%` }} />
             </div>
           </div>
         ) : null}
@@ -88,25 +105,41 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
   }
 
   return (
-    <div className={cn('rounded-2xl px-4 py-4 text-[var(--text)]', getTone(goal), className)}>
+    <div
+      className={cn(
+        'rounded-2xl border border-l-4 border-l-[var(--feature-accent)] px-4 py-4 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]',
+        getTone(goal),
+        className
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wide text-[var(--fg-muted)] dark:text-slate-300/90">{who}goal focus</div>
-          <div className="mt-1 inline-flex rounded-md bg-teal-100 px-2 py-0.5 text-sm font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">{title}</div>
-          <div className="mt-1 text-xs text-[var(--fg-muted)] dark:text-slate-300/85">{eventDateLabel}</div>
+          <div className="text-[11px] uppercase tracking-wide text-[var(--feature-muted)]">{who}goal focus</div>
+          <div className="mt-1 inline-flex rounded-md border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2.5 py-1 text-base font-semibold text-[var(--feature-pill-text)]">
+            {title}
+          </div>
+          <div className="mt-1 text-xs text-[var(--feature-muted)]">{eventDateLabel}</div>
         </div>
         <div className="text-right">
           {showShortLabel ? <div className="text-lg font-semibold leading-none tabular-nums">{goal.shortLabel}</div> : null}
-          <div className={cn('text-xs text-[var(--muted)]', showShortLabel ? 'mt-1' : 'text-sm font-semibold tabular-nums text-[var(--text)]')}>
+          <div
+            className={cn(
+              'inline-flex rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[var(--feature-pill-text)]',
+              showShortLabel ? 'mt-1' : 'text-sm'
+            )}
+          >
             {goal.label}
           </div>
         </div>
       </div>
       {showProgress ? (
         <div className="mt-3">
-          <div className="mb-1 text-[11px] text-[var(--fg-muted)] dark:text-slate-300/85">Progress</div>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)] dark:bg-white/20">
-            <div className="h-full rounded-full bg-orange-500/70" style={{ width: `${progressPct}%` }} />
+          <div className="mb-1 flex items-center justify-between text-[11px] text-[var(--feature-muted)]">
+            <span>Progress</span>
+            <span className="tabular-nums text-[var(--feature-pill-text)]">{progressLabel}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)]">
+            <div className="h-full rounded-full bg-[var(--feature-progress-fill)]" style={{ width: `${visibleProgressPct}%` }} />
           </div>
         </div>
       ) : null}
