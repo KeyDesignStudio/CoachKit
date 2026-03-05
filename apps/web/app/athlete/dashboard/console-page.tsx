@@ -536,18 +536,29 @@ export default function AthleteDashboardConsolePage() {
 
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
   const greetingConfettiPieces = useMemo(
-    () =>
-      Array.from({ length: 28 }, (_, index) => {
-        const angle = (Math.PI * 2 * index) / 28;
-        const distance = 22 + (index % 6) * 10;
+    () => {
+      const rand = (seed: number) => {
+        const x = Math.sin(seed * 12.9898) * 43758.5453;
+        return x - Math.floor(x);
+      };
+      return Array.from({ length: 28 }, (_, index) => {
+        const angle = rand(index + 1) * Math.PI * 2;
+        const distance = 80 * (0.35 + rand(index + 21) * 0.85);
+        const dx = Math.round(Math.cos(angle) * distance);
+        const dy = Math.round(Math.sin(angle) * distance - 36);
+        const gravityDrop = 18 + Math.round(rand(index + 31) * 18);
         return {
-          delay: `${(index % 8) * 16}ms`,
+          delay: `${Math.round(rand(index + 11) * 42)}ms`,
           color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
-          dx: Math.round(Math.cos(angle) * distance),
-          dy: Math.round(Math.sin(angle) * distance) - 30,
-          rot: `${90 + index * 13}deg`,
+          dx,
+          dy,
+          dxEnd: Math.round(dx * 1.08),
+          dyEnd: dy + gravityDrop,
+          rot: `${Math.round(rand(index + 41) * 420 - 210)}deg`,
+          size: 6 + Math.round(rand(index + 51) * 4),
         };
-      }),
+      });
+    },
     []
   );
   const athleteGreeting = useMemo(() => {
@@ -758,8 +769,12 @@ export default function AthleteDashboardConsolePage() {
                       style={{
                         animationDelay: piece.delay,
                         backgroundColor: piece.color,
+                        width: `${piece.size}px`,
+                        height: `${Math.round(piece.size * 1.8)}px`,
                         ['--dx' as any]: `${piece.dx}px`,
                         ['--dy' as any]: `${piece.dy}px`,
+                        ['--dx-end' as any]: `${piece.dxEnd}px`,
+                        ['--dy-end' as any]: `${piece.dyEnd}px`,
                         ['--rot' as any]: piece.rot,
                       }}
                     />

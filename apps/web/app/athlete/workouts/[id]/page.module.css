@@ -13,7 +13,7 @@
   border-radius: 999px;
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
-  animation: completeConfettiBurst 1000ms cubic-bezier(0.16, 0.84, 0.34, 1) forwards;
+  animation: completeConfettiBurst 1300ms cubic-bezier(0.16, 0.8, 0.28, 1) forwards;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2);
 }
 
@@ -25,11 +25,19 @@
   10% {
     opacity: 1;
   }
-  58% {
+  40% {
     opacity: 1;
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -48px))) scale(1) rotate(calc(var(--rot, 230deg) * 0.72));
+  }
+  72% {
+    opacity: 0.84;
+    transform: translate(
+      calc(-50% + ((var(--dx, 0px) * 0.34) + (var(--dx-end, 0px) * 0.66))),
+      calc(-50% + ((var(--dy, -48px) * 0.34) + (var(--dy-end, -36px) * 0.66)))
+    ) scale(0.97) rotate(calc(var(--rot, 230deg) * 0.9));
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -56px))) scale(1) rotate(var(--rot, 230deg));
+    transform: translate(calc(-50% + var(--dx-end, 0px)), calc(-50% + var(--dy-end, -36px))) scale(0.94) rotate(var(--rot, 230deg));
   }
 }

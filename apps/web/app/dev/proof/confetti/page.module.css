@@ -1,0 +1,53 @@
+.stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  min-height: 240px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 92%, white 8%) 0%, var(--bg-card) 100%);
+}
+
+.burstLayer {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.piece {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 13px;
+  border-radius: 999px;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
+  animation: burst 1350ms cubic-bezier(0.16, 0.8, 0.28, 1) forwards;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+
+@keyframes burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -56px))) scale(1) rotate(calc(var(--rot, 230deg) * 0.72));
+  }
+  72% {
+    opacity: 0.86;
+    transform: translate(
+      calc(-50% + ((var(--dx, 0px) * 0.34) + (var(--dx-end, 0px) * 0.66))),
+      calc(-50% + ((var(--dy, -56px) * 0.34) + (var(--dy-end, -40px) * 0.66)))
+    ) scale(0.98) rotate(calc(var(--rot, 230deg) * 0.9));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx-end, 0px)), calc(-50% + var(--dy-end, -40px))) scale(0.94) rotate(var(--rot, 230deg));
+  }
+}

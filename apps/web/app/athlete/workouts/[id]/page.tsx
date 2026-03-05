@@ -355,19 +355,30 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   }, []);
 
   const completeButtonConfetti = useMemo(
-    () =>
-      Array.from({ length: 22 }, (_, index) => {
-        const angle = (Math.PI * 2 * index) / 22;
-        const distance = 30 + (index % 5) * 12;
+    () => {
+      const rand = (seed: number) => {
+        const x = Math.sin(seed * 12.9898) * 43758.5453;
+        return x - Math.floor(x);
+      };
+      return Array.from({ length: 22 }, (_, index) => {
+        const angle = rand(index + 1) * Math.PI * 2;
+        const distance = 64 * (0.35 + rand(index + 21) * 0.85);
+        const dx = Math.round(Math.cos(angle) * distance);
+        const dy = Math.round(Math.sin(angle) * distance - 28);
+        const gravityDrop = 16 + Math.round(rand(index + 31) * 16);
         return {
           left: '50%',
-          delay: `${(index % 6) * 18}ms`,
+          delay: `${Math.round(rand(index + 11) * 42)}ms`,
           color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
-          dx: Math.round(Math.cos(angle) * distance),
-          dy: Math.round(Math.sin(angle) * distance) - 26,
-          rot: `${80 + index * 14}deg`,
+          dx,
+          dy,
+          dxEnd: Math.round(dx * 1.08),
+          dyEnd: dy + gravityDrop,
+          rot: `${Math.round(rand(index + 41) * 420 - 210)}deg`,
+          size: 6 + Math.round(rand(index + 51) * 4),
         };
-      }),
+      });
+    },
     []
   );
   const onCompleteButtonClick = useCallback(
@@ -741,7 +752,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
       <ConfirmModal
         isOpen={confirmDeleteOpen}
         title="Delete workout?"
-        message="This removes the workout from your calendar and your coach's calendar.\n\nThis can't be undone."
+        message="This removes the workout from your calendar and your coach's calendar. This can't be undone."
         confirmLabel={deleting ? 'Deleting…' : 'Delete workout'}
         cancelLabel="Cancel"
         onCancel={() => {
@@ -786,8 +797,12 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
                 left: piece.left,
                 animationDelay: piece.delay,
                 backgroundColor: piece.color,
+                width: `${piece.size}px`,
+                height: `${Math.round(piece.size * 1.8)}px`,
                 ['--dx' as any]: `${piece.dx}px`,
                 ['--dy' as any]: `${piece.dy}px`,
+                ['--dx-end' as any]: `${piece.dxEnd}px`,
+                ['--dy-end' as any]: `${piece.dyEnd}px`,
                 ['--rot' as any]: piece.rot,
               }}
             />
