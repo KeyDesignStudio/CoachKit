@@ -305,9 +305,9 @@ function DashboardChallengesPanel({
             key={challenge.id}
             className="rounded-xl border border-[var(--feature-border)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]"
           >
-            <p className="text-[11px] font-semibold text-[var(--text)]">{challenge.title}</p>
+            <p className="text-[11px] font-semibold text-[var(--feature-title)]">{challenge.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1.5">
-              <p className="text-[8px] text-[var(--feature-muted)]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
+              <p className="text-[9px] text-[var(--feature-muted)]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -329,7 +329,7 @@ function DashboardChallengesPanel({
                     Join
                   </button>
                 ) : (
-                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-border)] bg-[var(--bg-structure)] px-2 text-[8px] font-semibold text-[var(--feature-muted)]">
+                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 text-[8px] font-semibold text-[var(--feature-pill-text)]">
                     Auto joined
                   </span>
                 )}
@@ -339,8 +339,8 @@ function DashboardChallengesPanel({
         ))
       ) : (
         <div className="rounded-xl border border-[var(--feature-border)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]">
-          <p className="text-[11px] font-semibold text-[var(--text)]">Loading challenge</p>
-          <p className="mt-0.5 text-[8px] text-[var(--feature-muted)]">Fetching the latest challenge details.</p>
+          <p className="text-[11px] font-semibold text-[var(--feature-title)]">Loading challenge</p>
+          <p className="mt-0.5 text-[9px] text-[var(--feature-muted)]">Fetching the latest challenge details.</p>
         </div>
       )}
     </div>

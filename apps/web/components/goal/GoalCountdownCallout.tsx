@@ -11,7 +11,7 @@ type GoalCountdownCalloutProps = {
 
 function getTone(goal: GoalCountdown) {
   if (goal.mode === 'race-day') return 'border-amber-400/75 bg-[var(--feature-surface)]';
-  if (goal.mode === 'past') return 'border-[var(--border-subtle)] bg-[var(--bg-structure)]';
+  if (goal.mode === 'past') return 'border-[var(--feature-border)] bg-[var(--feature-surface)]';
   return 'border-[var(--feature-border)] bg-[var(--feature-surface)]';
 }
 
@@ -64,7 +64,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
     return (
       <div
         className={cn(
-          'inline-flex items-center gap-2 rounded-full border border-[var(--feature-border)] bg-[var(--feature-surface)] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--text)]',
+          'inline-flex items-center gap-2 rounded-full border border-[var(--feature-border)] bg-[var(--feature-surface)] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--feature-title)]',
           getTone(goal),
           className
         )}
@@ -78,7 +78,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
 
   if (variant === 'ribbon') {
     return (
-      <div className={cn('rounded-2xl border px-4 py-3 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]', getTone(goal), className)}>
+      <div className={cn('rounded-2xl border px-4 py-3 text-[var(--feature-title)] shadow-[0_6px_16px_var(--feature-shadow)]', getTone(goal), className)}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[11px] uppercase tracking-wide text-[var(--feature-muted)]">{who}goal focus</span>
           <span className="text-sm font-semibold text-[var(--feature-title)]">{title}</span>
@@ -91,7 +91,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
               <span>Progress</span>
               <span className="tabular-nums text-[var(--feature-pill-text)]">{progressLabel}</span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bar-track)]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
               <div className="h-full rounded-full bg-[var(--feature-progress-fill)]" style={{ width: `${visibleProgressPct}%` }} />
             </div>
           </div>
@@ -103,7 +103,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
   return (
     <div
       className={cn(
-        'rounded-2xl border px-4 py-4 text-[var(--text)] shadow-[0_6px_16px_var(--feature-shadow)]',
+        'rounded-2xl border px-4 py-4 text-[var(--feature-title)] shadow-[0_6px_16px_var(--feature-shadow)]',
         getTone(goal),
         className
       )}
@@ -127,7 +127,7 @@ export function GoalCountdownCallout({ goal, variant = 'hero', athleteName, clas
             <span>Progress</span>
             <span className="tabular-nums text-[var(--feature-pill-text)]">{progressLabel}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--bar-track)]">
+          <div className="h-2 overflow-hidden rounded-full bg-white/20">
             <div className="h-full rounded-full bg-[var(--feature-progress-fill)]" style={{ width: `${visibleProgressPct}%` }} />
           </div>
         </div>
