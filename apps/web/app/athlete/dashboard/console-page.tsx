@@ -535,6 +535,21 @@ export default function AthleteDashboardConsolePage() {
   }, [reloadTrainingRequestLifecycle, user?.role]);
 
   const hasOpenTrainingRequest = Boolean(trainingRequestLifecycle?.lifecycle?.hasOpenRequest ?? trainingRequestLifecycle?.openDraftIntake?.id);
+  const greetingConfettiPieces = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, index) => {
+        const angle = (Math.PI * 2 * index) / 28;
+        const distance = 22 + (index % 6) * 10;
+        return {
+          delay: `${(index % 8) * 16}ms`,
+          color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
+          dx: Math.round(Math.cos(angle) * distance),
+          dy: Math.round(Math.sin(angle) * distance) - 30,
+          rot: `${90 + index * 13}deg`,
+        };
+      }),
+    []
+  );
   const athleteGreeting = useMemo(() => {
     const preferredName = String(user?.name ?? 'Athlete').trim().split(/\s+/)[0] || 'Athlete';
     const now = getNowPartsInTimeZone(athleteTimeZone);
@@ -736,14 +751,16 @@ export default function AthleteDashboardConsolePage() {
             <div className="relative overflow-visible">
               {showGreetingCelebration ? (
                 <div className={styles.confettiLayer} aria-hidden data-testid="athlete-dashboard-greeting-confetti">
-                  {Array.from({ length: 16 }, (_, index) => (
+                  {greetingConfettiPieces.map((piece, index) => (
                     <span
                       key={`greeting-confetti-${index}`}
                       className={styles.confettiPiece}
                       style={{
-                        left: `${5 + ((index * 11) % 90)}%`,
-                        animationDelay: `${(index % 6) * 35}ms`,
-                        backgroundColor: index % 3 === 0 ? '#facc15' : index % 3 === 1 ? '#94a3b8' : '#f97316',
+                        animationDelay: piece.delay,
+                        backgroundColor: piece.color,
+                        ['--dx' as any]: `${piece.dx}px`,
+                        ['--dy' as any]: `${piece.dy}px`,
+                        ['--rot' as any]: piece.rot,
                       }}
                     />
                   ))}
