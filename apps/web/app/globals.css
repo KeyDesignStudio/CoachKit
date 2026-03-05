@@ -220,15 +220,12 @@ body {
 }
 
 @media (min-width: 768px) and (hover: none), (min-width: 768px) and (pointer: coarse) {
-  [data-mobile-top-branding='v1'] {
-    display: block !important;
+  [data-tablet-nav-drawer='v1'] {
+    display: inline-flex !important;
   }
 
-  [data-mobile-header='v1'] {
-    display: flex !important;
-  }
-
-  [data-desktop-header='v1'] {
+  [data-desktop-nav-links='v1'],
+  [data-desktop-nav-actions='v1'] {
     display: none !important;
   }
 }

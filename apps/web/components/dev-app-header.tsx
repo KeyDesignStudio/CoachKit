@@ -213,10 +213,10 @@ export function DevAppHeader() {
 
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
-              <div className="xl:hidden">
+              <div data-tablet-nav-drawer="v1" className="xl:hidden">
                 <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
               </div>
-              <nav className="hidden xl:flex items-center gap-2 text-sm font-medium uppercase relative">
+              <nav data-desktop-nav-links="v1" className="hidden xl:flex items-center gap-2 text-sm font-medium uppercase relative">
                 {coachPrimaryDesktopLinks.map((link) => {
                   const submenu = coachDesktopSubmenuByParent.get(link.href);
 
@@ -251,10 +251,10 @@ export function DevAppHeader() {
             </div>
           ) : (
             <>
-              <div className="xl:hidden">
+              <div data-tablet-nav-drawer="v1" className="xl:hidden">
                 <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
               </div>
-              <nav className="hidden xl:flex flex-wrap gap-2 text-sm font-medium uppercase">
+              <nav data-desktop-nav-links="v1" className="hidden xl:flex flex-wrap gap-2 text-sm font-medium uppercase">
                 {desktopTextLinks.map((link) => (
                   <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
                     {link.label}
