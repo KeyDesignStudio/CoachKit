@@ -219,6 +219,20 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+@media (min-width: 768px) and (hover: none), (min-width: 768px) and (pointer: coarse) {
+  [data-mobile-top-branding='v1'] {
+    display: block !important;
+  }
+
+  [data-mobile-header='v1'] {
+    display: flex !important;
+  }
+
+  [data-desktop-header='v1'] {
+    display: none !important;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
