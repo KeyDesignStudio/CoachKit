@@ -80,6 +80,9 @@ type WeatherResponse =
       reason: 'NO_LOCATION';
     };
 
+const COMPLETE_CONFETTI_DURATION_MS = 1800;
+const COMPLETE_CONFETTI_BUFFER_MS = 120;
+
 export default function AthleteWorkoutDetailPage({ params }: { params: { id: string } }) {
   const workoutId = params.id;
   const router = useRouter();
@@ -351,7 +354,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     completeCelebrationTimerRef.current = window.setTimeout(() => {
       setShowCompleteCelebration(false);
       completeCelebrationTimerRef.current = null;
-    }, 2100);
+    }, COMPLETE_CONFETTI_DURATION_MS + COMPLETE_CONFETTI_BUFFER_MS);
   }, []);
 
   const completeButtonConfetti = useMemo(
@@ -383,7 +386,6 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   );
   const onCompleteButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (isDraftStrava) return;
       const rect = event.currentTarget.getBoundingClientRect();
       setCompleteConfettiAnchor({
         left: rect.left,
@@ -391,9 +393,8 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         width: rect.width,
         height: rect.height,
       });
-      triggerCompleteCelebration();
     },
-    [isDraftStrava, triggerCompleteCelebration]
+    []
   );
 
   const navigateToCalendar = useCallback(() => {
@@ -516,10 +517,22 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         });
       }
       setCommentDraft('');
-      await loadData(true);
       if (!isDraftStrava) {
+        if (!completeConfettiAnchor && completeButtonRef.current) {
+          const rect = completeButtonRef.current.getBoundingClientRect();
+          setCompleteConfettiAnchor({
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
         triggerCompleteCelebration();
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, COMPLETE_CONFETTI_DURATION_MS + COMPLETE_CONFETTI_BUFFER_MS);
+        });
       }
+      await loadData(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : isDraftSynced ? 'Failed to confirm workout.' : 'Failed to complete workout.');
     } finally {
