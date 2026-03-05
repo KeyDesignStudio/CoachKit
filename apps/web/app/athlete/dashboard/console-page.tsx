@@ -655,7 +655,7 @@ export default function AthleteDashboardConsolePage() {
     if (user?.role === 'COACH') {
       router.replace('/coach/dashboard');
     } else if (user?.role === 'ADMIN') {
-      router.replace('/admin/ai-usage');
+      router.replace('/admin' as any);
     }
   }, [router, user?.role]);
 

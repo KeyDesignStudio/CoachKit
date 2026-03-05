@@ -228,6 +228,9 @@ export default async function AdminAiUsagePage(props: { searchParams?: Record<st
           <Link href={{ pathname: '/admin/ai-audits' }} className="text-sm underline">
             View raw audits
           </Link>
+          <Link href={{ pathname: '/admin/ai-plan-builder/engine-controls' }} className="text-sm underline">
+            AI engine controls
+          </Link>
           <Link href={{ pathname: '/admin/audit' }} className="text-sm underline">
             View data audit log
           </Link>

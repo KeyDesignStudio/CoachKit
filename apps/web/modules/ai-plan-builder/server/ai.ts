@@ -3,8 +3,10 @@ import { getAiPlanBuilderLlmRateLimitPerHourForCapabilityFromEnv } from '../ai/c
 
 import { consumeLlmRateLimitOrThrow } from './llm-rate-limit';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
+import { refreshAiEngineRuntimeOverridesFromDb } from './engine-controls';
 
-export function getAiPlanBuilderAIForCoachRequest(params: { coachId: string; athleteId?: string }) {
+export async function getAiPlanBuilderAIForCoachRequest(params: { coachId: string; athleteId?: string }) {
+  await refreshAiEngineRuntimeOverridesFromDb();
   const ctx = { actorType: 'COACH' as const, actorId: params.coachId, coachId: params.coachId, athleteId: params.athleteId };
 
   return getAiPlanBuilderAIWithHooks({

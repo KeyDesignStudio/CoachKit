@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import { ApiClientError, useApi } from '@/components/api-client';
 import { Button } from '@/components/ui/Button';
@@ -241,6 +242,11 @@ export function AdminPolicyTuningPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">AI Plan Builder Policy Tuning</h1>
         <p className="mt-1 text-sm text-[var(--fg-muted)]">Tune hard caps and load bands for UAT without code changes.</p>
+        <div className="mt-2">
+          <Link href={"/admin/ai-plan-builder/engine-controls" as any} className="text-sm underline">
+            Open AI engine controls
+          </Link>
+        </div>
       </div>
       {error ? <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
       {info ? <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{info}</div> : null}
@@ -248,4 +254,3 @@ export function AdminPolicyTuningPage() {
     </div>
   );
 }
-

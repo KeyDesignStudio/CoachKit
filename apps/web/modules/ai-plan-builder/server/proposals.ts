@@ -253,7 +253,7 @@ export async function generatePlanChangeProposal(params: {
 
   const triggerTypes = Array.from(new Set(triggers.map((t) => String(t.triggerType)))).sort() as AiAdaptationTriggerType[];
 
-  const ai = getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
+  const ai = await getAiPlanBuilderAIForCoachRequest({ coachId: params.coachId, athleteId: params.athleteId });
   const suggestion = await ai.suggestProposalDiffs({
     triggerTypes,
     draft: {
