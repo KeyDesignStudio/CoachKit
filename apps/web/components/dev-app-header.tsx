@@ -213,7 +213,10 @@ export function DevAppHeader() {
 
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
-              <nav className="flex items-center gap-2 text-sm font-medium uppercase relative">
+              <div className="xl:hidden">
+                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+              </div>
+              <nav className="hidden xl:flex items-center gap-2 text-sm font-medium uppercase relative">
                 {coachPrimaryDesktopLinks.map((link) => {
                   const submenu = coachDesktopSubmenuByParent.get(link.href);
 
@@ -247,37 +250,42 @@ export function DevAppHeader() {
               </nav>
             </div>
           ) : (
-            <nav className="hidden md:flex flex-wrap gap-2 text-sm font-medium uppercase">
-              {desktopTextLinks.map((link) => (
-                <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
-                  {link.label}
-                </Link>
-              ))}
+            <>
+              <div className="xl:hidden">
+                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+              </div>
+              <nav className="hidden xl:flex flex-wrap gap-2 text-sm font-medium uppercase">
+                {desktopTextLinks.map((link) => (
+                  <Link key={link.href} href={link.href as any} className={`${DESKTOP_NAV_LINK_CLASS} md:whitespace-nowrap`}>
+                    {link.label}
+                  </Link>
+                ))}
 
-              {desktopNotificationsLink ? (
-                <Link
-                  key={desktopNotificationsLink.href}
-                  href={desktopNotificationsLink.href as any}
-                  aria-label="Notifications"
-                  className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-                >
-                  <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
-                  <span className="sr-only">Notifications</span>
-                </Link>
-              ) : null}
+                {desktopNotificationsLink ? (
+                  <Link
+                    key={desktopNotificationsLink.href}
+                    href={desktopNotificationsLink.href as any}
+                    aria-label="Notifications"
+                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                  >
+                    <Icon name="inbox" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                    <span className="sr-only">Notifications</span>
+                  </Link>
+                ) : null}
 
-              {desktopSettingsLink ? (
-                <Link
-                  key={desktopSettingsLink.href}
-                  href={desktopSettingsLink.href as any}
-                  aria-label="Settings"
-                  className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
-                >
-                  <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
-                  <span className="sr-only">Settings</span>
-                </Link>
-              ) : null}
-            </nav>
+                {desktopSettingsLink ? (
+                  <Link
+                    key={desktopSettingsLink.href}
+                    href={desktopSettingsLink.href as any}
+                    aria-label="Settings"
+                    className={`${DESKTOP_NAV_LINK_CLASS} justify-center`}
+                  >
+                    <Icon name="settings" size="sm" className="text-[13.5px] text-[var(--muted)]" />
+                    <span className="sr-only">Settings</span>
+                  </Link>
+                ) : null}
+              </nav>
+            </>
           )}
 
           <DevUserMenu role={role} />

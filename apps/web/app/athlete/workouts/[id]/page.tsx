@@ -97,6 +97,7 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ message: string; kind: 'success' | 'error' } | null>(null);
   const [showCompleteCelebration, setShowCompleteCelebration] = useState(false);
+  const [isCompactConfetti, setIsCompactConfetti] = useState(false);
   const [completeConfettiAnchor, setCompleteConfettiAnchor] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [completionForm, setCompletionForm] = useState<{ durationMinutes: number; distanceKm: string; rpe: number | ''; notes: string; painFlag: boolean }>({
@@ -347,6 +348,25 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const update = () => {
+      setIsCompactConfetti(coarsePointer.matches || window.innerWidth < 1280);
+    };
+    update();
+
+    const onPointerChange = () => update();
+    window.addEventListener('resize', update, { passive: true });
+    coarsePointer.addEventListener('change', onPointerChange);
+
+    return () => {
+      window.removeEventListener('resize', update);
+      coarsePointer.removeEventListener('change', onPointerChange);
+    };
+  }, []);
+
   const triggerCompleteCelebration = useCallback(() => {
     if (completeCelebrationTimerRef.current !== null) {
       window.clearTimeout(completeCelebrationTimerRef.current);
@@ -365,26 +385,28 @@ export default function AthleteWorkoutDetailPage({ params }: { params: { id: str
         const x = Math.sin(seed * 12.9898) * 43758.5453;
         return x - Math.floor(x);
       };
-      return Array.from({ length: 34 }, (_, index) => {
+      const pieceCount = isCompactConfetti ? 20 : 34;
+      const travelDistance = isCompactConfetti ? 62 : 74;
+      return Array.from({ length: pieceCount }, (_, index) => {
         const angle = rand(index + 1) * Math.PI * 2;
-        const distance = 74 * (0.35 + rand(index + 21) * 0.85);
+        const distance = travelDistance * (0.35 + rand(index + 21) * 0.85);
         const dx = Math.round(Math.cos(angle) * distance);
         const dy = Math.round(Math.sin(angle) * distance - 71);
         const gravityDrop = 16 + Math.round(rand(index + 31) * 16);
         return {
           left: '50%',
-          delay: `${Math.round(rand(index + 11) * 42)}ms`,
+          delay: `${Math.round(rand(index + 11) * (isCompactConfetti ? 30 : 42))}ms`,
           color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
           dx,
           dy,
           dxEnd: Math.round(dx * 1.08),
           dyEnd: dy + gravityDrop,
           rot: `${Math.round(rand(index + 41) * 420 - 210)}deg`,
-          size: 6 + Math.round(rand(index + 51) * 4),
+          size: (isCompactConfetti ? 5 : 6) + Math.round(rand(index + 51) * (isCompactConfetti ? 3 : 4)),
         };
       });
     },
-    []
+    [isCompactConfetti]
   );
   const onCompleteButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
