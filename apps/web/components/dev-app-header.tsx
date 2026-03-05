@@ -214,7 +214,7 @@ export function DevAppHeader() {
           {isCoachDesktop ? (
             <div className="hidden md:flex items-center gap-3">
               <div data-tablet-nav-drawer="v1" className="xl:hidden">
-                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} closedTriggerIcon="sidebar" />
               </div>
               <nav data-desktop-nav-links="v1" className="hidden xl:flex items-center gap-2 text-sm font-medium uppercase relative">
                 {coachPrimaryDesktopLinks.map((link) => {
@@ -252,7 +252,7 @@ export function DevAppHeader() {
           ) : (
             <>
               <div data-tablet-nav-drawer="v1" className="xl:hidden">
-                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} closedTriggerIcon="sidebar" />
               </div>
               <nav data-desktop-nav-links="v1" className="hidden xl:flex flex-wrap gap-2 text-sm font-medium uppercase">
                 {desktopTextLinks.map((link) => (

@@ -17,9 +17,14 @@ export type MobileNavLink = {
 type MobileNavDrawerProps = {
   links: MobileNavLink[];
   showDashboardSidebarToggle?: boolean;
+  closedTriggerIcon?: 'menu' | 'sidebar';
 };
 
-export function MobileNavDrawer({ links, showDashboardSidebarToggle = true }: MobileNavDrawerProps) {
+export function MobileNavDrawer({
+  links,
+  showDashboardSidebarToggle = true,
+  closedTriggerIcon = 'menu',
+}: MobileNavDrawerProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isCoachDashboardPath = pathname === '/coach/dashboard' || pathname.startsWith('/coach/dashboard/');
@@ -167,7 +172,7 @@ export function MobileNavDrawer({ links, showDashboardSidebarToggle = true }: Mo
           )}
           aria-label={open ? 'Close menu' : 'Open menu'}
         >
-          <Icon name={open ? 'close' : 'menu'} size="md" className="text-[var(--text)]" aria-hidden />
+          <Icon name={open ? 'close' : closedTriggerIcon} size="md" className="text-[var(--text)]" aria-hidden />
         </button>
       </div>
 
