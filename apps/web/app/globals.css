@@ -23,20 +23,20 @@
   --text-success: #047857;
 
   /* Dashboard feature cards (challenge + goal focus) */
-  --feature-surface: #c7d4ea;
-  --feature-border: rgba(56, 86, 145, 0.28);
+  --feature-surface: #425678;
+  --feature-border: rgba(224, 235, 255, 0.35);
   --feature-accent: #2f68ff;
   --feature-accent-strong: #2048b7;
-  --feature-muted: #4f6084;
-  --feature-title: #18346f;
+  --feature-muted: #c4d3ef;
+  --feature-title: #edf3ff;
   --feature-shadow: rgba(26, 47, 92, 0.16);
-  --feature-pill-bg: rgba(47, 104, 255, 0.14);
-  --feature-pill-border: rgba(47, 104, 255, 0.24);
-  --feature-pill-text: #14378d;
-  --feature-success-bg: rgba(16, 185, 129, 0.16);
-  --feature-success-border: rgba(4, 120, 87, 0.3);
-  --feature-success-text: #065f46;
-  --feature-progress-fill: #2f68ff;
+  --feature-pill-bg: rgba(236, 243, 255, 0.14);
+  --feature-pill-border: rgba(236, 243, 255, 0.42);
+  --feature-pill-text: #edf3ff;
+  --feature-success-bg: rgba(16, 185, 129, 0.22);
+  --feature-success-border: rgba(167, 243, 208, 0.42);
+  --feature-success-text: #d1fae5;
+  --feature-progress-fill: #8fb4ff;
 
   /* Data viz / meters */
   --bar-track: rgba(12, 18, 34, 0.10);
@@ -71,20 +71,20 @@
   --bg-success: rgba(16, 185, 129, 0.14);
   --text-success: #047857;
 
-  --feature-surface: #c7d4ea;
-  --feature-border: rgba(56, 86, 145, 0.28);
+  --feature-surface: #425678;
+  --feature-border: rgba(224, 235, 255, 0.35);
   --feature-accent: #2f68ff;
   --feature-accent-strong: #2048b7;
-  --feature-muted: #4f6084;
-  --feature-title: #18346f;
+  --feature-muted: #c4d3ef;
+  --feature-title: #edf3ff;
   --feature-shadow: rgba(26, 47, 92, 0.16);
-  --feature-pill-bg: rgba(47, 104, 255, 0.14);
-  --feature-pill-border: rgba(47, 104, 255, 0.24);
-  --feature-pill-text: #14378d;
-  --feature-success-bg: rgba(16, 185, 129, 0.16);
-  --feature-success-border: rgba(4, 120, 87, 0.3);
-  --feature-success-text: #065f46;
-  --feature-progress-fill: #2f68ff;
+  --feature-pill-bg: rgba(236, 243, 255, 0.14);
+  --feature-pill-border: rgba(236, 243, 255, 0.42);
+  --feature-pill-text: #edf3ff;
+  --feature-success-bg: rgba(16, 185, 129, 0.22);
+  --feature-success-border: rgba(167, 243, 208, 0.42);
+  --feature-success-text: #d1fae5;
+  --feature-progress-fill: #8fb4ff;
 
   --bar-track: rgba(12, 18, 34, 0.10);
   --bar-fill: rgba(12, 18, 34, 0.22);
@@ -116,20 +116,20 @@
   --bg-success: rgba(16, 185, 129, 0.22);
   --text-success: #34d399;
 
-  --feature-surface: #1f3159;
-  --feature-border: rgba(158, 193, 255, 0.3);
+  --feature-surface: #425678;
+  --feature-border: rgba(224, 235, 255, 0.35);
   --feature-accent: #7ba6ff;
   --feature-accent-strong: #9ec1ff;
-  --feature-muted: #b9c8e6;
-  --feature-title: #e6efff;
+  --feature-muted: #c4d3ef;
+  --feature-title: #edf3ff;
   --feature-shadow: rgba(2, 7, 20, 0.45);
-  --feature-pill-bg: rgba(123, 166, 255, 0.2);
-  --feature-pill-border: rgba(158, 193, 255, 0.36);
-  --feature-pill-text: #dce9ff;
+  --feature-pill-bg: rgba(236, 243, 255, 0.14);
+  --feature-pill-border: rgba(236, 243, 255, 0.42);
+  --feature-pill-text: #edf3ff;
   --feature-success-bg: rgba(16, 185, 129, 0.22);
-  --feature-success-border: rgba(52, 211, 153, 0.4);
-  --feature-success-text: #bbf7e4;
-  --feature-progress-fill: #7ba6ff;
+  --feature-success-border: rgba(167, 243, 208, 0.42);
+  --feature-success-text: #d1fae5;
+  --feature-progress-fill: #8fb4ff;
 
   --bar-track: rgba(248, 251, 255, 0.18);
   --bar-fill: rgba(248, 251, 255, 0.34);
@@ -162,20 +162,20 @@
     --bg-success: rgba(16, 185, 129, 0.22);
     --text-success: #34d399;
 
-    --feature-surface: #1f3159;
-    --feature-border: rgba(158, 193, 255, 0.3);
+    --feature-surface: #425678;
+    --feature-border: rgba(224, 235, 255, 0.35);
     --feature-accent: #7ba6ff;
     --feature-accent-strong: #9ec1ff;
-    --feature-muted: #b9c8e6;
-    --feature-title: #e6efff;
+    --feature-muted: #c4d3ef;
+    --feature-title: #edf3ff;
     --feature-shadow: rgba(2, 7, 20, 0.45);
-    --feature-pill-bg: rgba(123, 166, 255, 0.2);
-    --feature-pill-border: rgba(158, 193, 255, 0.36);
-    --feature-pill-text: #dce9ff;
+    --feature-pill-bg: rgba(236, 243, 255, 0.14);
+    --feature-pill-border: rgba(236, 243, 255, 0.42);
+    --feature-pill-text: #edf3ff;
     --feature-success-bg: rgba(16, 185, 129, 0.22);
-    --feature-success-border: rgba(52, 211, 153, 0.4);
-    --feature-success-text: #bbf7e4;
-    --feature-progress-fill: #7ba6ff;
+    --feature-success-border: rgba(167, 243, 208, 0.42);
+    --feature-success-text: #d1fae5;
+    --feature-progress-fill: #8fb4ff;
 
     --bar-track: rgba(248, 251, 255, 0.18);
     --bar-fill: rgba(248, 251, 255, 0.34);
