@@ -16,9 +16,10 @@ export type MobileNavLink = {
 
 type MobileNavDrawerProps = {
   links: MobileNavLink[];
+  showDashboardSidebarToggle?: boolean;
 };
 
-export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ links, showDashboardSidebarToggle = true }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isCoachDashboardPath = pathname === '/coach/dashboard' || pathname.startsWith('/coach/dashboard/');
@@ -139,7 +140,7 @@ export function MobileNavDrawer({ links }: MobileNavDrawerProps) {
   return (
     <>
       <div className="inline-flex items-center gap-2">
-        {isDashboardPath ? (
+        {showDashboardSidebarToggle && isDashboardPath ? (
           <button
             type="button"
             onClick={openDashboardSidebar}

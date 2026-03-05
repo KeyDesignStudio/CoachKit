@@ -372,7 +372,11 @@ export async function AppHeader() {
             {navLinks.length > 0 ? (
               isCoachDesktop ? (
                 <div className="hidden md:flex items-center gap-3">
-                  <nav className="flex items-center gap-2 relative">
+                  <div className="xl:hidden">
+                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                  </div>
+
+                  <nav className="hidden xl:flex items-center gap-2 relative">
                     {coachPrimaryDesktopLinks.map((link) => {
                       const submenu = coachDesktopSubmenuByParent.get(link.href);
 
@@ -421,7 +425,7 @@ export async function AppHeader() {
                       key={desktopNotificationsLink.href}
                       href={desktopNotificationsLink.href}
                       aria-label="Notifications"
-                      className={cn(DESKTOP_NAV_LINK_CLASS, 'relative justify-center')}
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'relative hidden xl:inline-flex justify-center')}
                     >
                       <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
                       {unreadNotificationsCount > 0 ? (
@@ -442,7 +446,7 @@ export async function AppHeader() {
                       key={desktopSettingsLink.href}
                       href={desktopSettingsLink.href}
                       aria-label="Settings"
-                      className={cn(DESKTOP_NAV_LINK_CLASS, 'justify-center')}
+                      className={cn(DESKTOP_NAV_LINK_CLASS, 'hidden xl:inline-flex justify-center')}
                     >
                       <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
                       <span className="sr-only">Settings</span>
@@ -450,46 +454,51 @@ export async function AppHeader() {
                   ) : null}
                 </div>
               ) : (
-                <nav className="hidden md:flex flex-wrap gap-2">
-                  {desktopTextLinks.map((link) => (
-                    <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
-                      {link.label}
-                    </Link>
-                  ))}
+                <>
+                  <div className="xl:hidden">
+                    <MobileNavDrawer links={mobileLinks} showDashboardSidebarToggle={false} />
+                  </div>
+                  <nav className="hidden xl:flex flex-wrap gap-2">
+                    {desktopTextLinks.map((link) => (
+                      <Link key={link.href} href={link.href} className={cn(DESKTOP_NAV_LINK_CLASS, 'md:whitespace-nowrap')}>
+                        {link.label}
+                      </Link>
+                    ))}
 
-                  {desktopNotificationsLink ? (
-                    <Link
-                      key={desktopNotificationsLink.href}
-                      href={desktopNotificationsLink.href}
-                      aria-label="Notifications"
-                      className={cn(DESKTOP_NAV_LINK_CLASS, 'relative justify-center')}
-                    >
-                      <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
-                      {unreadNotificationsCount > 0 ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
-                        />
-                      ) : null}
-                      {unreadNotificationsCount > 0 ? (
-                        <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
-                      ) : null}
-                      <span className="sr-only">Notifications</span>
-                    </Link>
-                  ) : null}
+                    {desktopNotificationsLink ? (
+                      <Link
+                        key={desktopNotificationsLink.href}
+                        href={desktopNotificationsLink.href}
+                        aria-label="Notifications"
+                        className={cn(DESKTOP_NAV_LINK_CLASS, 'relative justify-center')}
+                      >
+                        <Icon name="inbox" size="sm" className="text-[13.5px] text-inherit" />
+                        {unreadNotificationsCount > 0 ? (
+                          <span
+                            aria-hidden="true"
+                            className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-[var(--bg-surface)]"
+                          />
+                        ) : null}
+                        {unreadNotificationsCount > 0 ? (
+                          <span className="sr-only">{`${unreadNotificationsCount} unread notification${unreadNotificationsCount === 1 ? '' : 's'}`}</span>
+                        ) : null}
+                        <span className="sr-only">Notifications</span>
+                      </Link>
+                    ) : null}
 
-                  {desktopSettingsLink ? (
-                    <Link
-                      key={desktopSettingsLink.href}
-                      href={desktopSettingsLink.href}
-                      aria-label="Settings"
-                      className={cn(DESKTOP_NAV_LINK_CLASS, 'justify-center')}
-                    >
-                      <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
-                      <span className="sr-only">Settings</span>
-                    </Link>
-                  ) : null}
-                </nav>
+                    {desktopSettingsLink ? (
+                      <Link
+                        key={desktopSettingsLink.href}
+                        href={desktopSettingsLink.href}
+                        aria-label="Settings"
+                        className={cn(DESKTOP_NAV_LINK_CLASS, 'justify-center')}
+                      >
+                        <Icon name="settings" size="sm" className="text-[13.5px] text-inherit" />
+                        <span className="sr-only">Settings</span>
+                      </Link>
+                    ) : null}
+                  </nav>
+                </>
               )
             ) : null}
 

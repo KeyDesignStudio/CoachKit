@@ -463,6 +463,7 @@ export default function AthleteDashboardConsolePage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSidebarMounted, setMobileSidebarMounted] = useState(false);
   const [showGreetingCelebration, setShowGreetingCelebration] = useState(false);
+  const [isCompactConfetti, setIsCompactConfetti] = useState(false);
   const [sidebarInitialized, setSidebarInitialized] = useState(false);
   const [pendingSidebarSection, setPendingSidebarSection] = useState<'challenges' | 'filters' | null>(null);
   const sidebarChallengesRef = useRef<HTMLDivElement | null>(null);
@@ -530,6 +531,25 @@ export default function AthleteDashboardConsolePage() {
   }, [reload, reloadTrainingRequestLifecycle, user?.role]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const update = () => {
+      setIsCompactConfetti(coarsePointer.matches || window.innerWidth < 1280);
+    };
+    update();
+
+    const onPointerChange = () => update();
+    window.addEventListener('resize', update, { passive: true });
+    coarsePointer.addEventListener('change', onPointerChange);
+
+    return () => {
+      window.removeEventListener('resize', update);
+      coarsePointer.removeEventListener('change', onPointerChange);
+    };
+  }, []);
+
+  useEffect(() => {
     if (user?.role !== 'ATHLETE') return;
     const timer = setInterval(() => {
       void reloadTrainingRequestLifecycle();
@@ -544,25 +564,27 @@ export default function AthleteDashboardConsolePage() {
         const x = Math.sin(seed * 12.9898) * 43758.5453;
         return x - Math.floor(x);
       };
-      return Array.from({ length: 64 }, (_, index) => {
+      const pieceCount = isCompactConfetti ? 36 : 64;
+      const travelDistance = isCompactConfetti ? 138 : 160;
+      return Array.from({ length: pieceCount }, (_, index) => {
         const angle = rand(index + 1) * Math.PI * 2;
-        const distance = 160 * (0.35 + rand(index + 21) * 0.85);
+        const distance = travelDistance * (0.35 + rand(index + 21) * 0.85);
         const dx = Math.round(Math.cos(angle) * distance);
         const dy = Math.round(Math.sin(angle) * distance - 90);
         const gravityDrop = 18 + Math.round(rand(index + 31) * 18);
         return {
-          delay: `${Math.round(rand(index + 11) * 42)}ms`,
+          delay: `${Math.round(rand(index + 11) * (isCompactConfetti ? 32 : 42))}ms`,
           color: ['#facc15', '#fb7185', '#38bdf8', '#34d399'][index % 4],
           dx,
           dy,
           dxEnd: Math.round(dx * 1.08),
           dyEnd: dy + gravityDrop,
           rot: `${Math.round(rand(index + 41) * 420 - 210)}deg`,
-          size: 6 + Math.round(rand(index + 51) * 4),
+          size: (isCompactConfetti ? 5 : 6) + Math.round(rand(index + 51) * (isCompactConfetti ? 3 : 4)),
         };
       });
     },
-    []
+    [isCompactConfetti]
   );
   const athleteGreeting = useMemo(() => {
     const preferredName = String(user?.name ?? 'Athlete').trim().split(/\s+/)[0] || 'Athlete';

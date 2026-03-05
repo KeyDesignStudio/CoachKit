@@ -8,6 +8,7 @@
   height: 130px;
   overflow: visible;
   z-index: 30;
+  contain: layout paint;
 }
 
 .confettiPiece {
@@ -20,7 +21,8 @@
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.7) rotate(0deg);
   animation: greetingConfettiBurst 1800ms cubic-bezier(0.16, 0.8, 0.28, 1) forwards;
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 @keyframes greetingConfettiBurst {
@@ -45,5 +47,23 @@
   100% {
     opacity: 0;
     transform: translate(calc(-50% + var(--dx-end, 0px)), calc(-50% + var(--dy-end, -34px))) scale(0.94) rotate(var(--rot, 200deg));
+  }
+}
+
+@media (min-width: 1280px) and (pointer: fine) {
+  .confettiPiece {
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22);
+  }
+}
+
+@media (max-width: 1279px), (pointer: coarse) {
+  .confettiPiece {
+    animation-duration: 1500ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confettiPiece {
+    animation-duration: 1ms;
   }
 }
