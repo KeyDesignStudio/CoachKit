@@ -67,13 +67,15 @@ type CalendarItem = {
 type WeatherResponse =
   | {
       enabled: true;
-      source: 'open-meteo';
+      source: 'strava' | 'open-meteo';
+      mode: 'observed' | 'forecast';
       date: string;
       timezone: string;
       icon: 'sunny' | 'partly_cloudy' | 'cloudy' | 'rain' | 'storm' | 'fog' | 'snow' | 'wind';
       maxTempC: number;
       sunriseLocal: string;
       sunsetLocal: string;
+      observedAtLocal?: string;
     }
   | {
       enabled: false;
