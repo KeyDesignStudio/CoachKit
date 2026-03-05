@@ -251,13 +251,16 @@ function CoachDashboardChallengesPanel({
     <div className="space-y-1.5 px-1.5">
       {activeChallenges.length ? (
         activeChallenges.map((challenge) => (
-          <div key={challenge.id} className="rounded-xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-2">
-            <p className="text-[11px] font-semibold text-white">{challenge.title}</p>
+          <div
+            key={challenge.id}
+            className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]"
+          >
+            <p className="text-[11px] font-semibold text-[var(--text)]">{challenge.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1.5">
-              <p className="text-[8px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, coachTimeZone)}</p>
+              <p className="text-[8px] text-[var(--feature-muted)]">Starts {formatDisplayInTimeZone(challenge.startAt, coachTimeZone)}</p>
               <button
                 type="button"
-                className="inline-flex min-h-[22px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-2 text-[8px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-accent)] px-2 text-[8px] font-semibold text-white transition-colors hover:bg-[var(--feature-accent-strong)]"
                 onClick={() => onOpenChallenge(challenge.id)}
               >
                 View
@@ -266,9 +269,9 @@ function CoachDashboardChallengesPanel({
           </div>
         ))
       ) : (
-        <div className="rounded-xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-2">
-          <p className="text-[11px] font-semibold text-white">No active challenge</p>
-          <p className="mt-0.5 text-[8px] text-[#d4e3ff]">You haven’t published one yet.</p>
+        <div className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]">
+          <p className="text-[11px] font-semibold text-[var(--text)]">No active challenge</p>
+          <p className="mt-0.5 text-[8px] text-[var(--feature-muted)]">You haven’t published one yet.</p>
         </div>
       )}
     </div>

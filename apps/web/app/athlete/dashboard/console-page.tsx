@@ -301,32 +301,35 @@ function DashboardChallengesPanel({
     <div className="space-y-1.5 px-1.5">
       {activeChallenges.length ? (
         activeChallenges.map((challenge) => (
-          <div key={challenge.id} className="rounded-xl border border-[#8fc5ff]/35 bg-[linear-gradient(145deg,rgba(94,131,196,0.65),rgba(27,48,84,0.92))] p-2">
-            <p className="text-[11px] font-semibold text-white">{challenge.title}</p>
+          <div
+            key={challenge.id}
+            className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]"
+          >
+            <p className="text-[11px] font-semibold text-[var(--text)]">{challenge.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1.5">
-              <p className="text-[8px] text-[#d4e3ff]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
+              <p className="text-[8px] text-[var(--feature-muted)]">Starts {formatDisplayInTimeZone(challenge.startAt, athleteTimeZone)}</p>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  className="inline-flex min-h-[22px] items-center rounded-full border border-[#8fc5ff]/45 bg-[#15316a] px-2 text-[8px] font-semibold text-[#e7efff] transition-colors hover:bg-[#1d3f86]"
+                  className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-accent)] px-2 text-[8px] font-semibold text-white transition-colors hover:bg-[var(--feature-accent-strong)]"
                   onClick={() => onOpenChallenge(challenge.id)}
                 >
                   View
                 </button>
                 {challenge.joined ? (
-                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-emerald-300 bg-emerald-500/20 px-2 text-[8px] font-semibold text-emerald-100">
+                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-success-border)] bg-[var(--feature-success-bg)] px-2 text-[8px] font-semibold text-[var(--feature-success-text)]">
                     Joined
                   </span>
                 ) : challenge.canJoin ? (
                   <button
                     type="button"
-                    className="inline-flex min-h-[22px] items-center rounded-full border border-white/90 bg-white px-2 text-[8px] font-semibold text-[#0b1f4d] shadow-[0_2px_10px_rgba(7,22,52,0.18)] transition-colors hover:bg-[#f3f7ff]"
+                    className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-pill-border)] bg-[var(--feature-pill-bg)] px-2 text-[8px] font-semibold text-[var(--feature-pill-text)] transition-colors hover:bg-[var(--feature-pill-bg)]/80"
                     onClick={() => onOpenChallenge(challenge.id)}
                   >
                     Join
                   </button>
                 ) : (
-                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-slate-300/40 bg-slate-500/20 px-2 text-[8px] font-semibold text-slate-100">
+                  <span className="inline-flex min-h-[22px] items-center rounded-full border border-[var(--feature-border)] bg-[var(--bg-structure)] px-2 text-[8px] font-semibold text-[var(--feature-muted)]">
                     Auto joined
                   </span>
                 )}
@@ -335,9 +338,9 @@ function DashboardChallengesPanel({
           </div>
         ))
       ) : (
-        <div className="rounded-xl border border-[#8fc5ff]/25 bg-[rgba(6,18,41,0.38)] p-2">
-          <p className="text-[11px] font-semibold text-white">Loading challenge</p>
-          <p className="mt-0.5 text-[8px] text-[#d4e3ff]">Fetching the latest challenge details.</p>
+        <div className="rounded-xl border border-[var(--feature-border)] border-l-4 border-l-[var(--feature-accent)] bg-[var(--feature-surface)] p-2 shadow-[0_6px_16px_var(--feature-shadow)]">
+          <p className="text-[11px] font-semibold text-[var(--text)]">Loading challenge</p>
+          <p className="mt-0.5 text-[8px] text-[var(--feature-muted)]">Fetching the latest challenge details.</p>
         </div>
       )}
     </div>
