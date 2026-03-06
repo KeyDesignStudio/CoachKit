@@ -9,7 +9,7 @@ import { PlanLibraryWorkflowPanel } from '@/components/admin/PlanLibraryWorkflow
 import { WorkoutExemplarCatalog } from '@/components/admin/WorkoutExemplarCatalog';
 
 type AdminPlanLibraryWorkspaceProps = {
-  adminEmail: string;
+  adminEmail?: string | null;
 };
 
 export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorkspaceProps) {
@@ -35,7 +35,7 @@ export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorksp
           >
             Open Parser Studio
           </Link>
-          <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div>
+          {adminEmail ? <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div> : null}
         </div>
       </div>
 

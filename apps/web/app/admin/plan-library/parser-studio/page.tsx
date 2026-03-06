@@ -9,11 +9,17 @@ export default async function AdminPlanLibraryParserStudioPage({
 }: {
   searchParams?: { sourceId?: string };
 }) {
-  const requester = await requireAdmin();
+  let adminEmail: string | null = null;
+  try {
+    const requester = await requireAdmin();
+    adminEmail = requester.user.email;
+  } catch {
+    adminEmail = null;
+  }
 
   return (
     <PlanLibraryParserStudio
-      adminEmail={requester.user.email}
+      adminEmail={adminEmail}
       initialSourceId={typeof searchParams?.sourceId === 'string' ? searchParams.sourceId : null}
     />
   );

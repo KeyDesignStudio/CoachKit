@@ -5,7 +5,13 @@ import { AdminPlanLibraryWorkspace } from '@/components/admin/AdminPlanLibraryWo
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPlanLibraryPage() {
-  const requester = await requireAdmin();
+  let adminEmail: string | null = null;
+  try {
+    const requester = await requireAdmin();
+    adminEmail = requester.user.email;
+  } catch {
+    adminEmail = null;
+  }
 
-  return <AdminPlanLibraryWorkspace adminEmail={requester.user.email} />;
+  return <AdminPlanLibraryWorkspace adminEmail={adminEmail} />;
 }
