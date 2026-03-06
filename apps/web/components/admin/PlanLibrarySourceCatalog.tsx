@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Icon } from '@/components/ui/Icon';
@@ -19,6 +20,7 @@ type PlanSourceSummary = {
   licenseText: string | null;
   sourceUrl: string | null;
   sourceFilePath: string | null;
+  layoutFamily: { id: string; slug: string; name: string } | null;
   storedDocumentUrl: string | null;
   storedDocumentKey: string | null;
   storedDocumentContentType: string | null;
@@ -37,6 +39,19 @@ type PlanSourceSummary = {
       sessionCount?: number | null;
       weekCount?: number | null;
       warnings?: string[] | null;
+    } | null;
+  } | null;
+  latestExtractionRun: {
+    id: string;
+    reviewStatus: 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED';
+    confidence: number | null;
+    warningCount: number;
+    createdAt: string;
+    latestReview: {
+      id: string;
+      status: 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED';
+      reviewerEmail: string;
+      createdAt: string;
     } | null;
   } | null;
 };
@@ -254,6 +269,7 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
               const fileLabel = getSourceFileLabel(source.sourceFilePath);
               const extractionHealth = getExtractionHealth(source);
               const topWarnings = extractionHealth.warnings.slice(0, 2);
+              const parserReviewStatus = source.latestExtractionRun?.reviewStatus ?? null;
               return (
                 <article key={source.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -317,6 +333,13 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
                         <Icon name={expanded ? 'close' : 'expandMore'} size="sm" aria-hidden />
                         <span>{expanded ? 'Hide details' : 'View details'}</span>
                       </button>
+                      <Link
+                        href={`/admin/plan-library/parser-studio?sourceId=${source.id}` as any}
+                        className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--border-subtle)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                      >
+                        <Icon name="settings" size="sm" aria-hidden />
+                        <span>Parser Studio</span>
+                      </Link>
                     </div>
                   </div>
 
@@ -328,6 +351,8 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
                     <SourceMetaItem label="Season" value={formatEnum(source.season)} />
                     <SourceMetaItem label="Author" value={source.author?.trim() || '—'} />
                     <SourceMetaItem label="Publisher" value={source.publisher?.trim() || '—'} />
+                    <SourceMetaItem label="Layout family" value={source.layoutFamily?.name || 'Unassigned'} />
+                    <SourceMetaItem label="Parser gate" value={parserReviewStatus ? formatEnum(parserReviewStatus) : 'No review yet'} />
                     <SourceMetaItem label="Source reference" value={fileLabel || source.sourceUrl || source.storedDocumentKey || 'No original document reference stored'} />
                     <SourceMetaItem label="Stored PDF" value={source.storedDocumentUploadedAt ? `Available · ${formatTimestamp(source.storedDocumentUploadedAt)}` : 'Not stored'} />
                   </div>

@@ -180,6 +180,12 @@ enum PlanSeason {
   TAPER
 }
 
+enum PlanSourceExtractionReviewStatus {
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
 enum PlanPhase {
   BASE
   BUILD
@@ -847,6 +853,7 @@ model PlanSource {
   licenseText    String?
   sourceUrl      String?
   sourceFilePath String?
+  layoutFamilyId String?
   storedDocumentUrl         String?
   storedDocumentKey         String?
   storedDocumentContentType String?
@@ -858,7 +865,27 @@ model PlanSource {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  versions PlanSourceVersion[]
+  layoutFamily  PlanSourceLayoutFamily?  @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
+  versions      PlanSourceVersion[]
+  extractionRuns PlanSourceExtractionRun[]
+
+  @@index([layoutFamilyId])
+}
+
+model PlanSourceLayoutFamily {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  familyType       String
+  description      String?
+  extractorHintsJson Json?
+  isPreset         Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  planSources   PlanSource[]
+  extractionRuns PlanSourceExtractionRun[]
 }
 
 model PlanSourceVersion {
@@ -871,9 +898,52 @@ model PlanSourceVersion {
   planSource PlanSource             @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
   weeks      PlanSourceWeekTemplate[]
   rules      PlanSourceRule[]
+  extractionRuns PlanSourceExtractionRun[]
 
   @@unique([planSourceId, version])
   @@index([planSourceId, version])
+}
+
+model PlanSourceExtractionRun {
+  id                    String                           @id @default(cuid())
+  planSourceId          String
+  planSourceVersionId   String?
+  layoutFamilyId        String?
+  extractorVersion      String
+  reviewStatus          PlanSourceExtractionReviewStatus @default(NEEDS_REVIEW)
+  summaryJson           Json?
+  confidence            Float?
+  warningCount          Int                              @default(0)
+  sessionCount          Int                              @default(0)
+  weekCount             Int                              @default(0)
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+
+  planSource        PlanSource             @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
+  planSourceVersion PlanSourceVersion?     @relation(fields: [planSourceVersionId], references: [id], onDelete: SetNull)
+  layoutFamily      PlanSourceLayoutFamily? @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
+  reviews           PlanSourceExtractionReview[]
+
+  @@index([planSourceId, createdAt])
+  @@index([planSourceVersionId])
+  @@index([layoutFamilyId])
+  @@index([reviewStatus, createdAt])
+}
+
+model PlanSourceExtractionReview {
+  id                    String                           @id @default(cuid())
+  extractionRunId       String
+  reviewerUserId        String
+  reviewerEmail         String
+  status                PlanSourceExtractionReviewStatus
+  notes                 String?
+  correctionSummaryJson Json?
+  createdAt             DateTime                         @default(now())
+
+  extractionRun PlanSourceExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Cascade)
+
+  @@index([extractionRunId, createdAt])
+  @@index([reviewerUserId, createdAt])
 }
 
 model PlanSourceWeekTemplate {

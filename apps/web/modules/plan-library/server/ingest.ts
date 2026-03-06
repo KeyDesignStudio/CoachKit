@@ -6,6 +6,8 @@ import { ApiError } from '@/lib/errors';
 
 import { extractFromRawText, extractTextFromPdf } from './extract';
 import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './document-storage';
+import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
+import { persistPlanSourceExtractionArtifacts } from './parser-studio';
 
 const asString = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value.trim() : '');
 
@@ -171,6 +173,9 @@ export async function ingestPlanSourceFromForm(params: {
 
   const checksumSha256 = createHash('sha256').update(contentBytes ?? rawText).digest('hex');
   const extracted = extractFromRawText(rawText, Number.isFinite(durationWeeks) ? durationWeeks : null);
+  const layoutFamilies = await ensurePlanSourceLayoutFamilies();
+  const inferredLayoutFamily = inferLayoutFamily({ title, rawText, sourceUrl: sourceUrl ?? null });
+  const assignedLayoutFamily = layoutFamilies.find((family) => family.slug === inferredLayoutFamily.slug) ?? null;
   const canStoreUploadedPdf = type === 'PDF' && contentBytes && contentBytes.length > 0;
   let storedDocument: Awaited<ReturnType<typeof storePlanSourceDocument>> = null;
 
@@ -250,6 +255,7 @@ export async function ingestPlanSourceFromForm(params: {
         licenseText,
         sourceUrl,
         sourceFilePath: sourcePathComputed || null,
+        layoutFamilyId: assignedLayoutFamily?.id ?? null,
         storedDocumentUrl: storedDocument?.url ?? null,
         storedDocumentKey: storedDocument?.key ?? null,
         storedDocumentContentType: storedDocument?.contentType ?? null,
@@ -261,78 +267,22 @@ export async function ingestPlanSourceFromForm(params: {
       },
     });
 
-    const version = await tx.planSourceVersion.create({
-      data: {
-        planSourceId: planSource.id,
-        version: 1,
-        extractionMetaJson: {
-          contentType,
-          warnings: extracted.warnings,
-          confidence: extracted.confidence,
-          sessionCount: extracted.sessions.length,
-          weekCount: extracted.weeks.length,
-        } as any,
-      },
+    const artifacts = await persistPlanSourceExtractionArtifacts(tx, {
+      planSourceId: planSource.id,
+      version: 1,
+      extracted,
+      contentType,
+      layoutFamily: assignedLayoutFamily
+        ? {
+            id: assignedLayoutFamily.id,
+            slug: assignedLayoutFamily.slug,
+            name: assignedLayoutFamily.name,
+          }
+        : null,
+      inferredLayoutFamily,
     });
 
-    if (extracted.weeks.length) {
-      await tx.planSourceWeekTemplate.createMany({
-        data: extracted.weeks.map((week) => ({
-          planSourceVersionId: version.id,
-          weekIndex: week.weekIndex,
-          phase: week.phase ?? null,
-          totalMinutes: week.totalMinutes ?? null,
-          totalSessions: week.totalSessions ?? null,
-          notes: week.notes ?? null,
-        })),
-      });
-    }
-
-    if (extracted.sessions.length) {
-      const weekIds = await tx.planSourceWeekTemplate.findMany({
-        where: { planSourceVersionId: version.id },
-        select: { id: true, weekIndex: true },
-      });
-      const weekMap = new Map(weekIds.map((w) => [w.weekIndex, w.id]));
-
-      await tx.planSourceSessionTemplate.createMany({
-        data: extracted.sessions
-          .filter((session) => weekMap.has(session.weekIndex))
-          .map((session) => ({
-            planSourceWeekTemplateId: weekMap.get(session.weekIndex)!,
-            ordinal: session.ordinal,
-            dayOfWeek: session.dayOfWeek ?? null,
-            discipline: session.discipline as any,
-            sessionType: session.sessionType,
-            title: session.title ?? null,
-            durationMinutes: session.durationMinutes ?? null,
-            distanceKm: session.distanceKm ?? null,
-            intensityType: session.intensityType ?? null,
-            intensityTargetJson: session.intensityTargetJson as any,
-            recipeV2Json: session.recipeV2Json as any,
-            parserConfidence: session.parserConfidence ?? null,
-            parserWarningsJson: session.parserWarningsJson as any,
-            structureJson: session.structureJson as any,
-            notes: session.notes ?? null,
-          })),
-      });
-    }
-
-    if (extracted.rules.length) {
-      await tx.planSourceRule.createMany({
-        data: extracted.rules.map((rule) => ({
-          planSourceVersionId: version.id,
-          ruleType: rule.ruleType as any,
-          phase: rule.phase ?? null,
-          appliesJson: rule.appliesJson as any,
-          ruleJson: rule.ruleJson as any,
-          explanation: rule.explanation,
-          priority: rule.priority,
-        })),
-      });
-    }
-
-    return { planSource, version };
+    return { planSource, version: artifacts.version, run: artifacts.run };
   });
 
   return {
