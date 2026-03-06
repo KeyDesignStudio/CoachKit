@@ -1,6 +1,7 @@
 import type { DraftPlanSetupV1, DraftPlanV1 } from '../rules/draft-generator';
 import type { PlanDiffOp } from '../server/adaptation-diff';
 import type { SessionDetailV1 } from '../rules/session-detail';
+import type { SessionRecipeV2 } from '../rules/session-recipe';
 import type { AthleteBriefJson, AthleteProfileSnapshot } from '@/modules/ai/athlete-brief/types';
 
 export type AiPlanBuilderAIMode = 'deterministic' | 'llm';
@@ -130,6 +131,20 @@ export type SuggestProposalDiffsResult = {
   respectsLocks: boolean;
 };
 
+export type SessionReferenceRecipe = {
+  referenceId: string;
+  sourceKind: 'plan-library' | 'coach-exemplar';
+  title?: string | null;
+  discipline: string;
+  sessionType: string;
+  durationMinutes?: number | null;
+  distanceKm?: number | null;
+  notes?: string | null;
+  recipeV2: SessionRecipeV2;
+  parserConfidence?: number | null;
+  parserWarnings?: string[];
+};
+
 export type GenerateSessionDetailInput = {
   /** Stable, non-PII summary (from summarizeIntake if present). */
   athleteSummaryText: string;
@@ -153,16 +168,23 @@ export type GenerateSessionDetailInput = {
     environmentTags?: string[];
     fatigueState?: 'fresh' | 'normal' | 'fatigued' | 'cooked';
     availableTimeMinutes?: number;
+    constraintsNotes?: string;
   };
 
   /** The deterministic skeleton session fields. */
   session: {
     weekIndex: number;
     dayOfWeek: number;
+    ordinal?: number;
     discipline: string;
     type: string;
     durationMinutes: number;
+    notes?: string | null;
+    isTravelDay?: boolean;
   };
+
+  /** Optional recipe references from plan-library sources or coach exemplars. */
+  referenceRecipes?: SessionReferenceRecipe[];
 };
 
 export type GenerateSessionDetailResult = {

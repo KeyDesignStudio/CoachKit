@@ -212,6 +212,21 @@ enum PlanSourceDiscipline {
   REST
 }
 
+enum CoachWorkoutExemplarSourceType {
+  COACH_EDIT
+  MANUAL_PROMOTION
+}
+
+enum CoachWorkoutExemplarFeedbackType {
+  PROMOTED
+  UPDATED
+  GOOD_FIT
+  EDITED
+  TOO_EASY
+  TOO_HARD
+  ARCHIVED
+}
+
 enum PlanChangeProposalStatus {
   DRAFT
   PROPOSED
@@ -832,6 +847,10 @@ model PlanSource {
   licenseText    String?
   sourceUrl      String?
   sourceFilePath String?
+  storedDocumentUrl         String?
+  storedDocumentKey         String?
+  storedDocumentContentType String?
+  storedDocumentUploadedAt  DateTime?
   checksumSha256 String         @unique
   isActive       Boolean        @default(false)
   rawText        String
@@ -885,6 +904,9 @@ model PlanSourceSessionTemplate {
   distanceKm              Float?
   intensityType           String?
   intensityTargetJson     Json?
+  recipeV2Json           Json?
+  parserConfidence       Float?
+  parserWarningsJson     Json?
   structureJson           Json?
   notes                   String?
 
@@ -892,6 +914,56 @@ model PlanSourceSessionTemplate {
 
   @@unique([planSourceWeekTemplateId, ordinal])
   @@index([planSourceWeekTemplateId, dayOfWeek])
+}
+
+model CoachWorkoutExemplar {
+  id                String                         @id @default(cuid())
+  coachId           String
+  athleteId         String?
+  sourceType        CoachWorkoutExemplarSourceType @default(COACH_EDIT)
+  sourceDraftId     String?
+  sourceDraftSessionId String?
+  fingerprintSha256 String
+  discipline        String
+  sessionType       String
+  title             String?
+  durationMinutes   Int?
+  distanceKm        Float?
+  objective         String?
+  notes             String?
+  recipeV2Json      Json
+  detailJson        Json?
+  tags              String[]                       @default([])
+  usageCount        Int                            @default(0)
+  positiveFeedbackCount Int                        @default(0)
+  editFeedbackCount Int                            @default(0)
+  isActive          Boolean                        @default(true)
+  lastUsedAt        DateTime?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  feedback CoachWorkoutExemplarFeedback[]
+
+  @@unique([coachId, fingerprintSha256])
+  @@index([coachId, discipline, sessionType, isActive])
+  @@index([coachId, sourceDraftSessionId])
+}
+
+model CoachWorkoutExemplarFeedback {
+  id             String                          @id @default(cuid())
+  exemplarId     String
+  coachId        String
+  athleteId      String?
+  draftId        String?
+  draftSessionId String?
+  feedbackType   CoachWorkoutExemplarFeedbackType
+  note           String?
+  createdAt      DateTime                        @default(now())
+
+  exemplar CoachWorkoutExemplar @relation(fields: [exemplarId], references: [id], onDelete: Cascade)
+
+  @@index([exemplarId, createdAt])
+  @@index([coachId, feedbackType, createdAt])
 }
 
 model PlanSourceRule {
