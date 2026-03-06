@@ -98,6 +98,10 @@ export async function selectPlanSources(params: {
         orderBy: { version: 'desc' },
         take: 1,
       },
+      extractionRuns: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
   });
 
@@ -106,6 +110,8 @@ export async function selectPlanSources(params: {
   for (const source of sources) {
     const version = source.versions[0];
     if (!version) continue;
+    const latestRun = source.extractionRuns[0] ?? null;
+    if (latestRun?.reviewStatus === 'REJECTED') continue;
 
     let metadataScore = 0;
     const reasons: string[] = [];
@@ -146,6 +152,14 @@ export async function selectPlanSources(params: {
     const semanticCorpus = `${source.title} ${source.rawText.slice(0, 7000)}`;
     const sourceTokens = tokenize(semanticCorpus);
     const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
+
+    if (latestRun?.reviewStatus === 'APPROVED') {
+      metadataScore += 2;
+      reasons.push('parser reviewed');
+    } else if (latestRun?.reviewStatus === 'NEEDS_REVIEW' && (latestRun.warningCount ?? 0) >= 12) {
+      metadataScore -= 1;
+      reasons.push('parser review pending');
+    }
 
     if (semanticScore >= 0.08) reasons.push(`semantic ${(semanticScore * 100).toFixed(0)}%`);
     const score = metadataScore + semanticScore * 4 + sourcePriorityScore;

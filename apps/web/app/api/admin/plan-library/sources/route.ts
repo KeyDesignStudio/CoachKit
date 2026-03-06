@@ -11,12 +11,23 @@ export async function GET() {
 
     const sources = await prisma.planSource.findMany({
       include: {
+        layoutFamily: true,
         _count: {
           select: { versions: true },
         },
         versions: {
           orderBy: { version: 'desc' },
           take: 1,
+        },
+        extractionRuns: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            reviews: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
         },
       },
       orderBy: [{ createdAt: 'desc' }, { title: 'asc' }],
@@ -37,6 +48,13 @@ export async function GET() {
         licenseText: source.licenseText,
         sourceUrl: source.sourceUrl,
         sourceFilePath: source.sourceFilePath,
+        layoutFamily: source.layoutFamily
+          ? {
+              id: source.layoutFamily.id,
+              slug: source.layoutFamily.slug,
+              name: source.layoutFamily.name,
+            }
+          : null,
         storedDocumentUrl: source.storedDocumentUrl,
         storedDocumentKey: source.storedDocumentKey,
         storedDocumentContentType: source.storedDocumentContentType,
@@ -52,6 +70,23 @@ export async function GET() {
               version: source.versions[0].version,
               createdAt: source.versions[0].createdAt.toISOString(),
               extractionMetaJson: source.versions[0].extractionMetaJson,
+            }
+          : null,
+        latestExtractionRun: source.extractionRuns[0]
+          ? {
+              id: source.extractionRuns[0].id,
+              reviewStatus: source.extractionRuns[0].reviewStatus,
+              confidence: source.extractionRuns[0].confidence,
+              warningCount: source.extractionRuns[0].warningCount,
+              createdAt: source.extractionRuns[0].createdAt.toISOString(),
+              latestReview: source.extractionRuns[0].reviews[0]
+                ? {
+                    id: source.extractionRuns[0].reviews[0].id,
+                    status: source.extractionRuns[0].reviews[0].status,
+                    reviewerEmail: source.extractionRuns[0].reviews[0].reviewerEmail,
+                    createdAt: source.extractionRuns[0].reviews[0].createdAt.toISOString(),
+                  }
+                : null,
             }
           : null,
       })),

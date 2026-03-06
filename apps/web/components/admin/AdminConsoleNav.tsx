@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Engine Controls', href: '/admin/ai-plan-builder/engine-controls' },
   { label: 'Policy Tuning', href: '/admin/ai-plan-builder/policy-tuning' },
   { label: 'Plan Library', href: '/admin/plan-library' },
+  { label: 'Parser Studio', href: '/admin/plan-library/parser-studio' },
   { label: 'Strava Sync', href: '/admin/strava-sync' },
   { label: 'Data Audit', href: '/admin/audit' },
 ];
