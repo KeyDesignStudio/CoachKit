@@ -3,7 +3,8 @@
 ## What this does
 
 - Strava webhook: records a **sync intent** for the athlete and returns `200` quickly (serverless-safe; avoids sync storms).
-- GitHub Actions (daily): runs a **backfill/reconciliation** sync (idempotent) to catch missed webhook events.
+- GitHub Actions (every 5 minutes): runs the primary **intent drain + bounded reconciliation** sync on Hobby.
+- Vercel cron (once daily on Hobby): acts as a low-frequency backup scheduler.
 - Guarantee: every Strava activity for a connected athlete becomes calendar-visible:
   - matches planned workout → links completion to planned `CalendarItem`
   - no match → creates provider-origin `CalendarItem` (origin=STRAVA, planningStatus=UNPLANNED) and links completion
@@ -23,12 +24,19 @@ Set these in Vercel → Project → Settings → Environment Variables:
 - `STRAVA_CLIENT_ID`
 - `STRAVA_CLIENT_SECRET`
 
-## GitHub Actions daily backfill (Hobby-safe)
+## GitHub Actions primary scheduler (Hobby-safe)
 
 This repo configures a scheduled workflow:
 
 - File: `.github/workflows/strava-sync-cron.yml`
 - Schedule: `*/5 * * * *` (every 5 minutes, UTC)
+- Mode: `intents` with bounded backfill (`forceDays=1`)
+
+## Vercel backup scheduler
+
+- File: `vercel.json`
+- Schedule: `0 2 * * *` (daily at 02:00 UTC on Hobby)
+- Purpose: backup sweep in case GitHub Actions is unavailable
 
 Configure your GitHub repo:
 
@@ -79,7 +87,7 @@ Expected JSON:
 ## Manually trigger cron (copy/paste)
 
 ```bash
-curl -sS -H "Authorization: Bearer $CRON_SECRET" \
+curl -sS -H "x-cron-secret: $CRON_SECRET" \
   "$APP_BASE_URL/api/integrations/strava/cron?mode=intents&forceDays=1" \
   | head -c 4000
 ```
