@@ -59,6 +59,7 @@ test('Coach header navigation uses the drawer menu within the desktop shell acro
 
       const openMenuButton = page.locator('header button[aria-label="Open menu"]:visible').first();
       await expect(openMenuButton, `Tablet header should use drawer navigation for ${profile.name}`).toHaveCount(1);
+      await expect(openMenuButton.locator('.material-symbols-outlined')).toHaveText('menu');
 
       await openMenuButton.click();
       const drawer = page.getByRole('navigation', { name: 'Mobile navigation' });

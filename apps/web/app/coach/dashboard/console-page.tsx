@@ -779,7 +779,7 @@ export default function CoachDashboardConsolePage() {
                 aria-expanded={sidebarOpen}
                 data-testid="coach-dashboard-sidebar-toggle"
               >
-                <Icon name={sidebarOpen ? 'prev' : 'next'} size="md" aria-hidden />
+                <Icon name="sidebar" size="md" aria-hidden />
               </button>
             </div>
 
