@@ -195,6 +195,13 @@ function buildAnnotationCounts(annotations: LayoutRuleSourceAnnotation[]) {
   );
 }
 
+function hasWeeklyGridAnnotationSignal(annotations: LayoutRuleSourceAnnotation[]) {
+  const counts = buildAnnotationCounts(annotations);
+  if (counts.WEEK_HEADER >= 2 && counts.DAY_LABEL >= 3) return true;
+  if (counts.WEEK_HEADER >= 1 && counts.DAY_LABEL >= 1 && counts.SESSION_CELL >= 1) return true;
+  return false;
+}
+
 function clusterAnnotations(
   annotations: Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>,
   axis: 'x' | 'y',
@@ -499,10 +506,20 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
   document?: ExtractedPdfDocument;
 }) {
   const diagnostics: string[] = [];
+  const weeklyGridSignal = hasWeeklyGridAnnotationSignal(params.annotations);
+  const effectiveFamilySlug = WEEKLY_GRID_COMPATIBLE_FAMILIES.has(params.familySlug)
+    ? params.familySlug
+    : weeklyGridSignal
+      ? 'weekly-grid'
+      : params.familySlug;
 
-  if (!WEEKLY_GRID_COMPATIBLE_FAMILIES.has(params.familySlug)) {
+  if (!WEEKLY_GRID_COMPATIBLE_FAMILIES.has(effectiveFamilySlug)) {
     diagnostics.push('Selected layout family does not support weekly-grid template compilation.');
     return { rules: null, diagnostics };
+  }
+
+  if (effectiveFamilySlug !== params.familySlug) {
+    diagnostics.push('Using weekly-grid preview fallback because the current annotations clearly describe a weekly grid.');
   }
 
   const annotations = params.annotations
@@ -625,7 +642,7 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
 
   const rules = {
     version: 'weekly-grid-template-v1',
-    familySlug: params.familySlug,
+    familySlug: effectiveFamilySlug,
     templateSourcePlanId: params.planSourceId,
     compiledAt: new Date().toISOString(),
     annotationCounts: buildAnnotationCounts(params.annotations),

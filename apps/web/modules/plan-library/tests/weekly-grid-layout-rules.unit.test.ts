@@ -215,4 +215,54 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(preview.cells.filter((cell) => cell.dayOfWeek === 0)).toHaveLength(4);
     expect(preview.diagnostics.join(' ')).toContain('Recovered 6/7 day anchors');
   });
+
+  it('falls back to weekly-grid preview when explicit week/day annotations exist on a non-grid family', () => {
+    const document: ExtractedPdfDocument = {
+      rawText: '12 week plan',
+      pages: [
+        {
+          pageNumber: 1,
+          width: 1000,
+          height: 1000,
+          text: '',
+          items: [
+            makeItem('Week 1', 0.18, 0.16, 0.08),
+            makeItem('Week 2', 0.39, 0.16, 0.08),
+            makeItem('Week 3', 0.60, 0.16, 0.08),
+            makeItem('Week 4', 0.81, 0.16, 0.08),
+            makeItem('Mon', 0.05, 0.27, 0.04),
+            makeItem('Tue', 0.05, 0.38, 0.04),
+            makeItem('Wed', 0.05, 0.49, 0.04),
+            makeItem('Thu', 0.05, 0.60, 0.04),
+            makeItem('Fri', 0.05, 0.71, 0.04),
+            makeItem('Sat', 0.05, 0.82, 0.04),
+            makeItem('Sun', 0.05, 0.93, 0.04),
+          ],
+        },
+      ],
+    };
+
+    const preview = buildLayoutFamilyTemplatePreview({
+      familySlug: 'single-column',
+      planSourceId: 'plan_123',
+      annotations: [
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 1', note: null, bboxJson: { x: 0.10, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 2', note: null, bboxJson: { x: 0.31, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 3', note: null, bboxJson: { x: 0.52, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 4', note: null, bboxJson: { x: 0.73, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Mon', note: null, bboxJson: { x: 0.02, y: 0.24, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Tue', note: null, bboxJson: { x: 0.02, y: 0.35, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Wed', note: null, bboxJson: { x: 0.02, y: 0.46, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Thu', note: null, bboxJson: { x: 0.02, y: 0.57, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Fri', note: null, bboxJson: { x: 0.02, y: 0.68, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Sat', note: null, bboxJson: { x: 0.02, y: 0.79, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Sun', note: null, bboxJson: { x: 0.02, y: 0.90, width: 0.06, height: 0.05 } },
+      ],
+      document,
+    });
+
+    expect(preview.cells).toHaveLength(28);
+    expect(preview.rules?.familySlug).toBe('weekly-grid');
+    expect(preview.diagnostics.join(' ')).toContain('weekly-grid preview fallback');
+  });
 });
