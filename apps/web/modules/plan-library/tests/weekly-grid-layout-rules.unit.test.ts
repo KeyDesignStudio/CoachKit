@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { extractFromStructuredPdfDocument } from '@/modules/plan-library/server/extract';
 import { buildLayoutFamilyTemplatePreview, compileLayoutFamilyRules } from '@/modules/plan-library/server/layout-rules';
-import type { ExtractedPdfDocument, PdfTextItem } from '@/modules/plan-library/server/pdf-layout';
+import { extractTextFromPageRegion, type ExtractedPdfDocument, type PdfTextItem } from '@/modules/plan-library/server/pdf-layout';
 
 function makeItem(
   text: string,
@@ -25,6 +25,31 @@ function makeItem(
 }
 
 describe('plan-library weekly-grid layout rules', () => {
+  it('keeps session body text when a PDF text item overlaps a cell but starts slightly outside it', () => {
+    const page: ExtractedPdfDocument['pages'][number] = {
+      pageNumber: 1,
+      width: 1000,
+      height: 1000,
+      text: '',
+      items: [
+        makeItem('SWIM', 0.15, 0.27, 0.06),
+        makeItem('Easy swim, 30-40mins.', 0.15, 0.29, 0.16),
+        makeItem('Use warm-up to work on technique then go longer.', 0.095, 0.31, 0.23),
+      ],
+    };
+
+    const extracted = extractTextFromPageRegion({
+      page,
+      box: { x: 0.10, y: 0.24, width: 0.20, height: 0.10 },
+    });
+
+    expect(extracted.lines).toEqual([
+      'SWIM',
+      'Easy swim, 30-40mins.',
+      'Use warm-up to work on technique then go longer.',
+    ]);
+  });
+
   it('compiles a reusable weekly-grid template from page annotations', () => {
     const rules = compileLayoutFamilyRules({
       familySlug: 'weekly-grid',

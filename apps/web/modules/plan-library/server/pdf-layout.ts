@@ -62,7 +62,7 @@ export async function extractStructuredPdfDocument(buffer: Buffer): Promise<Extr
       const height = isFiniteNumber(viewport?.height) ? viewport.height : 1;
       const textContent = await pageData.getTextContent({
         normalizeWhitespace: false,
-        disableCombineTextItems: false,
+        disableCombineTextItems: true,
       });
 
       const items: PdfTextItem[] = Array.isArray(textContent?.items)
@@ -108,13 +108,41 @@ export async function extractStructuredPdfDocument(buffer: Buffer): Promise<Extr
   };
 }
 
-function pointInBox(point: { x: number; y: number }, box: NormalizedBbox) {
-  return (
-    point.x >= box.x &&
-    point.x <= box.x + box.width &&
-    point.y >= box.y &&
-    point.y <= box.y + box.height
+function itemBox(item: PdfTextItem): NormalizedBbox {
+  return {
+    x: item.normalizedX,
+    y: item.normalizedY,
+    width: Math.max(0.001, item.normalizedWidth),
+    height: Math.max(0.001, item.normalizedHeight),
+  };
+}
+
+function boxesIntersect(left: NormalizedBbox, right: NormalizedBbox) {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
   );
+}
+
+function verticalAnchorInBox(item: PdfTextItem, box: NormalizedBbox) {
+  return item.normalizedY >= box.y && item.normalizedY < box.y + box.height;
+}
+
+function horizontalOverlapRatio(itemBounds: NormalizedBbox, region: NormalizedBbox) {
+  const overlapWidth = Math.max(
+    0,
+    Math.min(itemBounds.x + itemBounds.width, region.x + region.width) - Math.max(itemBounds.x, region.x)
+  );
+  return itemBounds.width > 0 ? overlapWidth / itemBounds.width : 0;
+}
+
+function hasMeaningfulOverlap(item: PdfTextItem, region: NormalizedBbox, minimumHorizontalOverlapRatio = 0.67) {
+  const itemBounds = itemBox(item);
+  if (!boxesIntersect(itemBounds, region)) return false;
+  if (!verticalAnchorInBox(item, region)) return false;
+  return horizontalOverlapRatio(itemBounds, region) >= minimumHorizontalOverlapRatio;
 }
 
 export function extractTextFromPageRegion(params: {
@@ -174,8 +202,8 @@ type ExtractPageItemsParams = {
 export function extractPageItemsFromRegion(params: ExtractPageItemsParams) {
   const excludeBoxes = params.excludeBoxes ?? [];
   return params.page.items
-    .filter((item) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, params.box))
-    .filter((item) => !excludeBoxes.some((box) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, box)));
+    .filter((item) => hasMeaningfulOverlap(item, params.box))
+    .filter((item) => !excludeBoxes.some((box) => boxesIntersect(itemBox(item), box)));
 }
 
 function mergeItemTexts(left: string, right: string, gap: number) {
