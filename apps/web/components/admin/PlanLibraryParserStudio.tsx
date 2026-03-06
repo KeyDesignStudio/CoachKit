@@ -245,7 +245,7 @@ type ParserStudioDetail = {
 };
 
 type PlanLibraryParserStudioProps = {
-  adminEmail: string;
+  adminEmail?: string | null;
   initialSourceId?: string | null;
 };
 
@@ -584,7 +584,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
             Admin review workflow for plan ingestion, layout-family routing, and APB trust gating.
           </p>
         </div>
-        <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div>
+        {adminEmail ? <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div> : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">

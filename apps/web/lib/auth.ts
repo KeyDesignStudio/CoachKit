@@ -167,7 +167,12 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
     return getDevUserContext(getRoleCookie());
   }
 
-  const { userId: clerkUserId } = await auth();
+  let clerkUserId: string | null | undefined;
+  try {
+    ({ userId: clerkUserId } = await auth());
+  } catch {
+    throw unauthorized('Authentication required.');
+  }
 
   if (!clerkUserId) {
     throw unauthorized('Authentication required.');
@@ -178,7 +183,12 @@ export async function requireAuth(): Promise<AuthenticatedContext> {
 
   // If not found by authProviderId, try to link by email (first-time login)
   if (!user) {
-    const clerkUser = await currentUser();
+    let clerkUser;
+    try {
+      clerkUser = await currentUser();
+    } catch {
+      throw unauthorized('Authentication required.');
+    }
     if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
       throw unauthorized('No email address found in authentication.');
     }
