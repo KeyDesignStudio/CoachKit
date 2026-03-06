@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 const DISTANCE_OPTIONS = [
@@ -117,15 +118,27 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-        <h2 className="text-sm font-semibold">Ingest Plan Source</h2>
-        <p className="mt-1 text-xs text-[var(--muted)]">Upload a PDF, paste a URL, or supply raw text.</p>
+      <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Step 1</div>
+            <h2 className="mt-1 text-lg font-semibold">Ingest Plan Source</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Upload the source and enter the minimum metadata CoachKit needs before parsing it.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-[var(--bg-card)] px-4 py-3 text-xs text-[var(--muted)]">
+            Required: title, sport, distance, level, duration, and the source file/text.
+          </div>
+        </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-5">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Required metadata</div>
+          <div className="grid gap-3 md:grid-cols-2">
           <label className="text-xs font-medium text-[var(--muted)]">
             Source type
             <select
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
               value={type}
               onChange={(e) => setType(e.target.value as any)}
             >
@@ -138,7 +151,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
           <label className="text-xs font-medium text-[var(--muted)]">
             Title
             <input
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Plan name"
@@ -147,7 +160,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Sport
-            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={sport} onChange={(e) => setSport(e.target.value)}>
+            <select className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={sport} onChange={(e) => setSport(e.target.value)}>
               <option value="TRIATHLON">Triathlon</option>
               <option value="DUATHLON">Duathlon</option>
               <option value="RUN">Run</option>
@@ -158,7 +171,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Distance
-            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={distance} onChange={(e) => setDistance(e.target.value)}>
+            <select className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={distance} onChange={(e) => setDistance(e.target.value)}>
               {DISTANCE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -169,7 +182,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Level
-            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={level} onChange={(e) => setLevel(e.target.value)}>
+            <select className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={level} onChange={(e) => setLevel(e.target.value)}>
               <option value="BEGINNER">Beginner</option>
               <option value="INTERMEDIATE">Intermediate</option>
               <option value="ADVANCED">Advanced</option>
@@ -179,16 +192,21 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
           <label className="text-xs font-medium text-[var(--muted)]">
             Duration (weeks)
             <input
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
               value={durationWeeks}
               onChange={(e) => setDurationWeeks(e.target.value)}
               inputMode="numeric"
             />
           </label>
+          </div>
+        </div>
 
+        <div className="mt-5">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Optional metadata</div>
+          <div className="grid gap-3 md:grid-cols-2">
           <label className="text-xs font-medium text-[var(--muted)]">
             Season
-            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={season} onChange={(e) => setSeason(e.target.value)}>
+            <select className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={season} onChange={(e) => setSeason(e.target.value)}>
               {SEASON_OPTIONS.map((option) => (
                 <option key={option.value || 'blank'} value={option.value}>
                   {option.label}
@@ -199,21 +217,24 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Author
-            <input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={author} onChange={(e) => setAuthor(e.target.value)} />
+            <input className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={author} onChange={(e) => setAuthor(e.target.value)} />
           </label>
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Publisher
-            <input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={publisher} onChange={(e) => setPublisher(e.target.value)} />
+            <input className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm" value={publisher} onChange={(e) => setPublisher(e.target.value)} />
           </label>
         </div>
+        </div>
 
-        <div className="mt-4 grid gap-3">
+        <div className="mt-5">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Source payload</div>
+          <div className="grid gap-3">
           {type === 'PDF' ? (
             <label className="text-xs font-medium text-[var(--muted)]">
               PDF file
               <input
-                className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
                 type="file"
                 accept="application/pdf"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -225,7 +246,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
             <label className="text-xs font-medium text-[var(--muted)]">
               Source URL
               <input
-                className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                className="mt-1 min-h-[44px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 placeholder="https://..."
@@ -237,7 +258,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
             <label className="text-xs font-medium text-[var(--muted)]">
               Raw text
               <textarea
-                className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                className="mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
                 rows={6}
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
@@ -248,32 +269,47 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
           <label className="text-xs font-medium text-[var(--muted)]">
             License text (optional)
             <textarea
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
+              className="mt-1 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
               rows={3}
               value={licenseText}
               onChange={(e) => setLicenseText(e.target.value)}
             />
           </label>
         </div>
+        </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit || loading}
-            className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded-full bg-[var(--text)] px-4 py-2 text-sm font-medium text-[var(--bg-page)] disabled:opacity-60"
           >
             {loading ? 'Ingesting…' : 'Ingest & Save'}
           </button>
-          {error ? <span className="text-xs text-rose-600">{error}</span> : null}
+          <div className="text-xs text-[var(--muted)]">After upload, open the source in Parser Studio and rerun extraction before approval.</div>
         </div>
+        {error ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
       </div>
 
       {result ? (
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-          <h2 className="text-sm font-semibold">Extraction preview</h2>
-          <div className="mt-2 text-xs text-[var(--muted)]">
-            Source: {result.planSource?.title} · Version {result.version?.version}
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Source saved</div>
+              <h2 className="mt-1 text-lg font-semibold text-emerald-950">Open this source in Parser Studio next</h2>
+              <div className="mt-2 text-sm text-emerald-900">
+                Source: {result.planSource?.title} · Version {result.version?.version}
+              </div>
+            </div>
+            {result.planSource?.id ? (
+              <Link
+                href={`/admin/plan-library/parser-studio?sourceId=${result.planSource.id}` as any}
+                className="inline-flex min-h-[44px] items-center rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white"
+              >
+                Open in Parser Studio
+              </Link>
+            ) : null}
           </div>
           <div className="mt-3 grid gap-2 text-xs">
             <div>Weeks detected: {result.extracted?.weeks?.length ?? 0}</div>
@@ -292,6 +328,9 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
                 ))}
               </ul>
             ) : null}
+          </div>
+          <div className="mt-4 text-sm text-emerald-900">
+            Next: annotate the layout if needed, rerun extraction, fix bad sessions, then approve the source for APB.
           </div>
         </div>
       ) : null}

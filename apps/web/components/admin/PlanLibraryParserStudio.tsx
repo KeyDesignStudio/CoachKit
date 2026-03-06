@@ -30,7 +30,7 @@ type ParserStudioSourceSummary = {
   createdAt: string;
   updatedAt: string;
   storedDocumentUrl: string | null;
-  layoutFamily: { id: string; slug: string; name: string; familyType: string } | null;
+  layoutFamily: { id: string; slug: string; name: string; familyType: string; hasCompiledRules?: boolean } | null;
   recommendedLayoutFamily:
     | {
         id: string;
@@ -91,7 +91,15 @@ type ParserStudioDetail = {
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
-    layoutFamily: { id: string; slug: string; name: string; description?: string | null } | null;
+    layoutFamily: {
+      id: string;
+      slug: string;
+      name: string;
+      description?: string | null;
+      hasCompiledRules?: boolean;
+      compiledTemplateVersion?: string | null;
+      templateSourcePlanId?: string | null;
+    } | null;
     recommendedLayoutFamily:
       | {
           id: string;
@@ -134,6 +142,7 @@ type ParserStudioDetail = {
           parserConfidence: number | null;
           parserWarningsJson: string[] | null;
           recipeV2Json: unknown | null;
+          structureJson: unknown | null;
           notes: string | null;
         }>;
       }>;
@@ -219,6 +228,19 @@ type PlanLibraryParserStudioProps = {
   initialSourceId?: string | null;
 };
 
+type LatestVersionSession = NonNullable<NonNullable<ParserStudioDetail['planSource']['latestVersion']>['weeks'][number]['sessions'][number]>;
+
+type EditableSessionForm = {
+  sessionId: string;
+  dayOfWeek: string;
+  discipline: string;
+  sessionType: string;
+  title: string;
+  durationMinutes: string;
+  distanceKm: string;
+  notes: string;
+};
+
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function formatTimestamp(value: string) {
@@ -259,6 +281,25 @@ function formatDurationMinutes(value: number | null | undefined) {
   return `${value} min`;
 }
 
+function createEditableSessionForm(session: LatestVersionSession): EditableSessionForm {
+  return {
+    sessionId: session.id,
+    dayOfWeek: session.dayOfWeek == null ? '' : String(session.dayOfWeek),
+    discipline: session.discipline,
+    sessionType: session.sessionType,
+    title: session.title ?? '',
+    durationMinutes: session.durationMinutes == null ? '' : String(session.durationMinutes),
+    distanceKm: session.distanceKm == null ? '' : String(session.distanceKm),
+    notes: session.notes ?? '',
+  };
+}
+
+function isManualSessionEdit(structureJson: unknown) {
+  if (!structureJson || typeof structureJson !== 'object') return false;
+  const editor = (structureJson as Record<string, unknown>).editor;
+  return Boolean(editor && typeof editor === 'object' && (editor as Record<string, unknown>).source === 'parser-studio');
+}
+
 function statusBadgeClass(status: 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED') {
   if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700';
   if (status === 'REJECTED') return 'bg-rose-100 text-rose-700';
@@ -286,7 +327,8 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
   const [reviewNotes, setReviewNotes] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
-  const [actionBusy, setActionBusy] = useState<'layout' | 'review' | 'reextract' | null>(null);
+  const [actionBusy, setActionBusy] = useState<'layout' | 'review' | 'reextract' | 'session' | null>(null);
+  const [editingSession, setEditingSession] = useState<EditableSessionForm | null>(null);
 
   const loadOverview = useCallback(async (preferredSourceId?: string | null) => {
     setOverviewLoading(true);
@@ -329,6 +371,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
       setLayoutFamilyId(data.planSource.layoutFamily?.id ?? data.planSource.recommendedLayoutFamily?.id ?? '');
       const latestReview = data.planSource.extractionRuns[0]?.reviews[0];
       setReviewNotes(latestReview?.notes ?? '');
+      setEditingSession(null);
     } catch (error) {
       setDetail(null);
       setDetailError(error instanceof Error ? error.message : 'Failed to load parser studio detail.');
@@ -474,6 +517,41 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
     setDetail(data);
     await loadOverview(selectedId);
   }, [loadOverview, selectedId]);
+
+  const saveSessionEdit = useCallback(async () => {
+    if (!selectedId || !editingSession) return;
+    setActionBusy('session');
+    setActionError('');
+    setActionMessage('');
+    try {
+      const response = await fetch(`/api/admin/plan-library/${selectedId}/sessions/${editingSession.sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dayOfWeek: editingSession.dayOfWeek,
+          discipline: editingSession.discipline,
+          sessionType: editingSession.sessionType,
+          title: editingSession.title,
+          durationMinutes: editingSession.durationMinutes,
+          distanceKm: editingSession.distanceKm,
+          notes: editingSession.notes,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || 'Failed to save session edit.');
+      }
+      const data = payload?.data as ParserStudioDetail;
+      setDetail(data);
+      setEditingSession(null);
+      setActionMessage('Session updated on the latest extracted version.');
+      await loadOverview(selectedId);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to save session edit.');
+    } finally {
+      setActionBusy(null);
+    }
+  }, [editingSession, loadOverview, selectedId]);
 
   return (
     <div className="mx-auto max-w-7xl p-6">
@@ -674,6 +752,20 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                     ) : null}
                   </div>
 
+                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-sm text-[var(--text)]">
+                    <div className="font-medium">Compiled template</div>
+                    <div className="mt-1">
+                      {detail.planSource.layoutFamily?.hasCompiledRules
+                        ? `Ready (${detail.planSource.layoutFamily.compiledTemplateVersion || 'template'})`
+                        : 'No compiled template yet.'}
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      {detail.planSource.layoutFamily?.hasCompiledRules
+                        ? 'Reruns will use the saved weekly-grid template for coordinate-based session extraction.'
+                        : 'Annotate week headers and day labels, then rerun extraction to compile a reusable template.'}
+                    </p>
+                  </div>
+
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -779,24 +871,137 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                                 <div key={session.id} className="rounded-xl border border-[var(--border-subtle)] px-3 py-2">
                                   <div className="flex flex-wrap items-start justify-between gap-2">
                                     <div>
-                                      <div className="text-sm font-medium text-[var(--text)]">
-                                        {session.dayOfWeek != null ? `${DAY_LABELS[session.dayOfWeek] ?? 'Day'} · ` : ''}
-                                        {session.title ?? `${formatEnum(session.discipline)} session`}
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-sm font-medium text-[var(--text)]">
+                                          {session.dayOfWeek != null ? `${DAY_LABELS[session.dayOfWeek] ?? 'Day'} · ` : ''}
+                                          {session.title ?? `${formatEnum(session.discipline)} session`}
+                                        </div>
+                                        {isManualSessionEdit(session.structureJson) ? (
+                                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                                            Edited
+                                          </span>
+                                        ) : null}
                                       </div>
                                       <div className="mt-1 text-xs text-[var(--muted)]">
                                         {formatEnum(session.discipline)} · {formatEnum(session.sessionType)}
                                         {session.intensityType ? ` · ${session.intensityType}` : ''}
                                       </div>
                                     </div>
-                                    <div className="text-right text-xs text-[var(--muted)]">
-                                      {formatDurationMinutes(session.durationMinutes) ?? '—'}
-                                      {formatDistanceKm(session.distanceKm) ? ` · ${formatDistanceKm(session.distanceKm)}` : ''}
+                                    <div className="flex items-start gap-3">
+                                      <div className="text-right text-xs text-[var(--muted)]">
+                                        {formatDurationMinutes(session.durationMinutes) ?? '—'}
+                                        {formatDistanceKm(session.distanceKm) ? ` · ${formatDistanceKm(session.distanceKm)}` : ''}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingSession(createEditableSessionForm(session))}
+                                        className="rounded-full border border-[var(--border-subtle)] px-3 py-1 text-xs font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                                      >
+                                        Edit
+                                      </button>
                                     </div>
                                   </div>
                                   {session.parserWarningsJson?.length ? (
                                     <div className="mt-2 text-xs text-amber-700">Warnings: {session.parserWarningsJson.slice(0, 2).join(' · ')}</div>
                                   ) : null}
                                   {session.notes ? <div className="mt-2 line-clamp-3 text-xs text-[var(--muted)]">{session.notes}</div> : null}
+                                  {editingSession?.sessionId === session.id ? (
+                                    <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                                      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Manual session correction</div>
+                                      <div className="grid gap-3 md:grid-cols-2">
+                                        <label className="space-y-1">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Day</span>
+                                          <select
+                                            value={editingSession.dayOfWeek}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, dayOfWeek: event.target.value } : current))}
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          >
+                                            <option value="">Unset</option>
+                                            {DAY_LABELS.map((label, index) => (
+                                              <option key={label} value={String(index)}>
+                                                {label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Discipline</span>
+                                          <select
+                                            value={editingSession.discipline}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, discipline: event.target.value } : current))}
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          >
+                                            <option value="SWIM">Swim</option>
+                                            <option value="BIKE">Bike</option>
+                                            <option value="RUN">Run</option>
+                                            <option value="STRENGTH">Strength</option>
+                                            <option value="REST">Rest</option>
+                                          </select>
+                                        </label>
+                                        <label className="space-y-1 md:col-span-2">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Title</span>
+                                          <input
+                                            value={editingSession.title}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, title: event.target.value } : current))}
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          />
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Session type</span>
+                                          <input
+                                            value={editingSession.sessionType}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, sessionType: event.target.value } : current))}
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          />
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Duration (min)</span>
+                                          <input
+                                            value={editingSession.durationMinutes}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, durationMinutes: event.target.value } : current))}
+                                            inputMode="numeric"
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          />
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Distance (km)</span>
+                                          <input
+                                            value={editingSession.distanceKm}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, distanceKm: event.target.value } : current))}
+                                            inputMode="decimal"
+                                            className="min-h-[40px] w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          />
+                                        </label>
+                                        <label className="space-y-1 md:col-span-2">
+                                          <span className="text-xs font-medium text-[var(--muted)]">Session notes / prescription</span>
+                                          <textarea
+                                            rows={5}
+                                            value={editingSession.notes}
+                                            onChange={(event) => setEditingSession((current) => (current ? { ...current, notes: event.target.value } : current))}
+                                            className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]"
+                                          />
+                                        </label>
+                                      </div>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => void saveSessionEdit()}
+                                          disabled={actionBusy != null}
+                                          className="rounded-full bg-[var(--text)] px-4 py-2 text-sm font-medium text-[var(--bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          Save session
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingSession(null)}
+                                          disabled={actionBusy != null}
+                                          className="rounded-full border border-[var(--border-subtle)] px-4 py-2 text-sm font-medium text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                               ))
                             ) : (

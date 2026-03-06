@@ -53,6 +53,7 @@ export async function GET() {
               id: source.layoutFamily.id,
               slug: source.layoutFamily.slug,
               name: source.layoutFamily.name,
+              hasCompiledRules: Boolean(source.layoutFamily.rulesJson),
             }
           : null,
         storedDocumentUrl: source.storedDocumentUrl,
