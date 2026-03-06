@@ -150,6 +150,7 @@ export function extractTextFromPageRegion(params: {
   box: NormalizedBbox;
   excludeBoxes?: NormalizedBbox[];
   lineTolerance?: number;
+  minimumHorizontalOverlapRatio?: number;
 }) {
   const lineTolerance = params.lineTolerance ?? 0.0125;
   const items = extractPageItemsFromRegion(params).sort((a, b) => {
@@ -197,12 +198,14 @@ type ExtractPageItemsParams = {
   page: ExtractedPdfPage;
   box: NormalizedBbox;
   excludeBoxes?: NormalizedBbox[];
+  minimumHorizontalOverlapRatio?: number;
 };
 
 export function extractPageItemsFromRegion(params: ExtractPageItemsParams) {
   const excludeBoxes = params.excludeBoxes ?? [];
+  const minimumHorizontalOverlapRatio = params.minimumHorizontalOverlapRatio ?? 0.67;
   return params.page.items
-    .filter((item) => hasMeaningfulOverlap(item, params.box))
+    .filter((item) => hasMeaningfulOverlap(item, params.box, minimumHorizontalOverlapRatio))
     .filter((item) => !excludeBoxes.some((box) => boxesIntersect(itemBox(item), box)));
 }
 
@@ -220,6 +223,7 @@ export function extractTextRunsFromPageRegion(params: {
   excludeBoxes?: NormalizedBbox[];
   lineTolerance?: number;
   wordGapTolerance?: number;
+  minimumHorizontalOverlapRatio?: number;
 }) {
   const lineTolerance = params.lineTolerance ?? 0.0125;
   const wordGapTolerance = params.wordGapTolerance ?? 0.0125;

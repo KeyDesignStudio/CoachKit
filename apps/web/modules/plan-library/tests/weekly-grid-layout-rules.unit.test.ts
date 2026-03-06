@@ -142,7 +142,7 @@ describe('plan-library weekly-grid layout rules', () => {
     expect((extracted.rawJson as any)?.pdfLayout?.mode).toBe('template');
   });
 
-  it('captures grid cell text when the workout header starts slightly above the derived row band', () => {
+  it('captures grid cell text with relaxed matching when text alignment drifts outside strict overlap', () => {
     const annotations = [
       { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 1', note: null, bboxJson: { x: 0.10, y: 0.14, width: 0.14, height: 0.05 } },
       { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 2', note: null, bboxJson: { x: 0.31, y: 0.14, width: 0.14, height: 0.05 } },
@@ -180,9 +180,9 @@ describe('plan-library weekly-grid layout rules', () => {
           height: 1000,
           text: '',
           items: [
-            makeItem('SWIM', firstCell!.x + 0.02, Math.max(0, firstCell!.y - 0.006), 0.06),
-            makeItem('Easy swim, 30-40mins.', firstCell!.x + 0.02, firstCell!.y + 0.018, 0.18),
-            makeItem('Use warm-up then 4 x 100m steady.', firstCell!.x + 0.02, firstCell!.y + 0.04, 0.22),
+            makeItem('SWIM', Math.max(0, firstCell!.x - 0.028), Math.max(0, firstCell!.y - 0.006), 0.12),
+            makeItem('Easy swim, 30-40mins.', Math.max(0, firstCell!.x - 0.02), firstCell!.y + 0.018, 0.2),
+            makeItem('Use warm-up then 4 x 100m steady.', Math.max(0, firstCell!.x - 0.02), firstCell!.y + 0.04, 0.24),
           ],
         },
       ],
@@ -197,6 +197,7 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(extracted.sessions).toHaveLength(1);
     expect(extracted.sessions[0]?.discipline).toBe('SWIM');
     expect(extracted.sessions[0]?.notes).toContain('Use warm-up then 4 x 100m steady.');
+    expect(extracted.warnings.join(' ')).toContain('relaxed cell matching');
   });
 
   it('records a warning when template extraction falls back to raw-text parsing', () => {
