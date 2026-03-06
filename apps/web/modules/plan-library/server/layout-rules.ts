@@ -152,6 +152,11 @@ function parseWeekNumber(label: string | null | undefined) {
   return Number.isFinite(value) && value > 0 ? value - 1 : null;
 }
 
+function displayDayIndex(dayOfWeek: number | null | undefined) {
+  if (dayOfWeek == null) return null;
+  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+}
+
 function deriveBandsFromCenters(centers: number[], minEdge: number, maxEdge: number) {
   if (!centers.length) return [] as Array<{ left: number; right: number }>;
   const sorted = [...centers].sort((a, b) => a - b);
@@ -330,6 +335,101 @@ function extractDayAnchorsFromRuns(runs: PdfTextRun[]) {
   return deduped;
 }
 
+function averageAnchorSize(anchors: AnchorCandidate[]) {
+  return {
+    width: average(anchors.map((anchor) => anchor.bbox.width)),
+    height: average(anchors.map((anchor) => anchor.bbox.height)),
+    x: average(anchors.map((anchor) => anchor.bbox.x)),
+  };
+}
+
+function estimateDayStep(anchors: AnchorCandidate[], sampleSessionCell: NormalizedBbox | null, container: NormalizedBbox | null) {
+  const sorted = [...anchors].sort((left, right) => centerY(left.bbox) - centerY(right.bbox));
+  const explicitGaps: number[] = [];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const leftDay = parseDayOfWeek(sorted[index - 1]?.label);
+    const rightDay = parseDayOfWeek(sorted[index]?.label);
+    const leftIndex = displayDayIndex(leftDay);
+    const rightIndex = displayDayIndex(rightDay);
+    if (leftIndex == null || rightIndex == null || rightIndex <= leftIndex) continue;
+    explicitGaps.push((centerY(sorted[index]!.bbox) - centerY(sorted[index - 1]!.bbox)) / (rightIndex - leftIndex));
+  }
+
+  if (explicitGaps.length) return average(explicitGaps);
+  if (sampleSessionCell) return sampleSessionCell.height;
+  if (container) return container.height / 7;
+  return 0.11;
+}
+
+function normalizeDayAnchors(params: {
+  anchors: AnchorCandidate[];
+  container: NormalizedBbox | null;
+  sampleSessionCell: NormalizedBbox | null;
+  diagnostics: string[];
+}) {
+  const recognized = params.anchors
+    .map((anchor) => ({
+      anchor,
+      dayOfWeek: parseDayOfWeek(anchor.label),
+      displayIndex: displayDayIndex(parseDayOfWeek(anchor.label)),
+    }))
+    .filter(
+      (
+        entry
+      ): entry is { anchor: AnchorCandidate; dayOfWeek: number; displayIndex: number } =>
+        entry.dayOfWeek != null && entry.displayIndex != null
+    )
+    .sort((left, right) => left.displayIndex - right.displayIndex || centerY(left.anchor.bbox) - centerY(right.anchor.bbox));
+
+  if (!recognized.length) return params.anchors;
+
+  const averageSize = averageAnchorSize(recognized.map((entry) => entry.anchor));
+  const step = estimateDayStep(
+    recognized.map((entry) => entry.anchor),
+    params.sampleSessionCell,
+    params.container
+  );
+
+  const baseCandidates = recognized.map((entry) => centerY(entry.anchor.bbox) - entry.displayIndex * step);
+  let baseCenter = average(baseCandidates);
+  if (params.container) {
+    const halfHeight = averageSize.height / 2;
+    const minBase = params.container.y + halfHeight;
+    const maxBase = params.container.y + params.container.height - halfHeight - step * 6;
+    if (Number.isFinite(maxBase) && maxBase >= minBase) {
+      baseCenter = clamp(baseCenter, minBase, maxBase);
+    }
+  }
+
+  const ordered: AnchorCandidate[] = [];
+  for (let displayIndex = 0; displayIndex < 7; displayIndex += 1) {
+    const matched = recognized.find((entry) => entry.displayIndex === displayIndex);
+    if (matched) {
+      ordered.push(matched.anchor);
+      continue;
+    }
+
+    const center = baseCenter + displayIndex * step;
+    ordered.push({
+      label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][displayIndex] ?? `Day ${displayIndex + 1}`,
+      bbox: {
+        x: params.container?.x ?? averageSize.x,
+        y: clamp(center - averageSize.height / 2, 0, 1),
+        width: params.container?.width ?? averageSize.width,
+        height: averageSize.height || Math.max(0.04, params.sampleSessionCell?.height ?? 0.05),
+      },
+    });
+  }
+
+  if (recognized.length !== 7) {
+    params.diagnostics.push(
+      `Recovered ${recognized.length}/7 day anchors from the label rail; missing days were inferred to keep a Mon-Sun grid.`
+    );
+  }
+
+  return ordered;
+}
+
 function deriveAnchorsFromContainer(params: {
   page: ExtractedPdfPage | null;
   container: NormalizedBbox | null;
@@ -452,6 +552,7 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
   }
 
   let dayAnchors: AnchorCandidate[] = [];
+  const dayLabelContainer = dayLabels.length === 1 ? dayLabels[0]!.bbox : null;
   if (dayLabels.length >= 3) {
     const groups = clusterAnnotations(dayLabels, 'y', 0.05);
     dayAnchors = groups
@@ -472,6 +573,15 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
     }
   } else {
     diagnostics.push('Add a DAY_LABEL annotation covering the day rail.');
+  }
+
+  if (dayAnchors.length) {
+    dayAnchors = normalizeDayAnchors({
+      anchors: dayAnchors,
+      container: dayLabelContainer,
+      sampleSessionCell: sessionCells[0] ?? null,
+      diagnostics,
+    });
   }
 
   if (weekAnchors.length < 2 || dayAnchors.length < 3) {
