@@ -500,6 +500,7 @@ function extractFromWeeklyGridPdfDocument(params: {
   const sessionCountByWeek = new Map<number, number>();
   let nextFallbackWeekIndex = 0;
   let parsedPageCount = 0;
+  let usedRelaxedCellMatching = false;
 
   for (const page of params.document.pages) {
     if (!page.items.length) continue;
@@ -556,17 +557,37 @@ function extractFromWeeklyGridPdfDocument(params: {
     for (const row of rules.pageTemplate.dayRows) {
       for (const column of columns) {
         const cellBox = getWeeklyGridCellBox(column, row);
-        const extractionBox = expandNormalizedBox(cellBox, {
+        const strictBox = expandNormalizedBox(cellBox, {
           top: Math.min(0.018, cellBox.height * 0.22),
           bottom: Math.min(0.01, cellBox.height * 0.12),
           left: Math.min(0.012, cellBox.width * 0.08),
           right: Math.min(0.012, cellBox.width * 0.08),
         });
-        const cellText = extractTextFromPageRegion({
+        let cellText = extractTextFromPageRegion({
           page,
-          box: extractionBox,
+          box: strictBox,
           excludeBoxes,
+          minimumHorizontalOverlapRatio: 0.67,
         }).text;
+
+        if (!isMeaningfulSessionCell(cellText)) {
+          const relaxedBox = expandNormalizedBox(cellBox, {
+            top: Math.min(0.03, cellBox.height * 0.35),
+            bottom: Math.min(0.018, cellBox.height * 0.22),
+            left: Math.min(0.02, cellBox.width * 0.15),
+            right: Math.min(0.02, cellBox.width * 0.15),
+          });
+          const relaxedText = extractTextFromPageRegion({
+            page,
+            box: relaxedBox,
+            excludeBoxes,
+            minimumHorizontalOverlapRatio: 0.18,
+          }).text;
+          if (isMeaningfulSessionCell(relaxedText)) {
+            cellText = relaxedText;
+            usedRelaxedCellMatching = true;
+          }
+        }
 
         if (!isMeaningfulSessionCell(cellText)) continue;
 
@@ -607,6 +628,9 @@ function extractFromWeeklyGridPdfDocument(params: {
   }
 
   const weeks = [...weeksByIndex.values()].sort((left, right) => left.weekIndex - right.weekIndex);
+  if (usedRelaxedCellMatching) {
+    warnings.push('Used relaxed cell matching for one or more weekly-grid cells due to PDF text alignment drift.');
+  }
   return finalizeExtractedPlanSource({
     rawText: params.rawTextFallback,
     weeks,
