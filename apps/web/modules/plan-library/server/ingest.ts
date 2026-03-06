@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import type { PlanDistance, PlanLevel, PlanSeason, PlanSourceType, PlanSport } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
@@ -8,19 +9,113 @@ import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './docu
 
 const asString = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value.trim() : '');
 
+const DISTANCE_LABELS: Record<PlanDistance, string> = {
+  SPRINT: 'Sprint',
+  OLYMPIC: 'Olympic',
+  HALF_IRONMAN: '70.3 / Half Ironman',
+  IRONMAN: 'Ironman',
+  DUATHLON_STD: 'Duathlon Standard',
+  DUATHLON_SPRINT: 'Duathlon Sprint',
+  FIVE_K: '5K',
+  TEN_K: '10K',
+  HALF_MARATHON: 'Half Marathon',
+  MARATHON: 'Marathon',
+  OTHER: 'Other',
+};
+
+function normalizeEnumToken(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+function parsePlanSourceType(raw: string): PlanSourceType {
+  const normalized = normalizeEnumToken(raw || 'TEXT');
+  if (normalized === 'PDF' || normalized === 'URL' || normalized === 'TEXT') return normalized as PlanSourceType;
+  throw new ApiError(400, 'INVALID_SOURCE_TYPE', 'Source type must be PDF, URL, or TEXT.');
+}
+
+function parsePlanSport(raw: string): PlanSport {
+  const normalized = normalizeEnumToken(raw || 'TRIATHLON');
+  const map: Record<string, PlanSport> = {
+    TRIATHLON: 'TRIATHLON',
+    DUATHLON: 'DUATHLON',
+    RUN: 'RUN',
+    BIKE: 'BIKE',
+    SWIM: 'SWIM',
+  };
+  const value = map[normalized];
+  if (value) return value;
+  throw new ApiError(400, 'INVALID_SPORT', 'Sport must be Triathlon, Duathlon, Run, Bike, or Swim.');
+}
+
+function parsePlanLevel(raw: string): PlanLevel {
+  const normalized = normalizeEnumToken(raw || 'BEGINNER');
+  const map: Record<string, PlanLevel> = {
+    BEGINNER: 'BEGINNER',
+    INTERMEDIATE: 'INTERMEDIATE',
+    ADVANCED: 'ADVANCED',
+  };
+  const value = map[normalized];
+  if (value) return value;
+  throw new ApiError(400, 'INVALID_LEVEL', 'Level must be Beginner, Intermediate, or Advanced.');
+}
+
+export function parsePlanDistance(raw: string): PlanDistance {
+  const normalized = normalizeEnumToken(raw || 'OTHER');
+  if (normalized === 'OTHER') return 'OTHER';
+  if (normalized.includes('DUATHLON') && normalized.includes('SPRINT')) return 'DUATHLON_SPRINT';
+  if (normalized.includes('DUATHLON')) return 'DUATHLON_STD';
+  if (normalized.includes('70_3') || normalized.includes('HALF_IRONMAN')) return 'HALF_IRONMAN';
+  if (normalized === 'IRONMAN' || normalized.includes('FULL')) return 'IRONMAN';
+  if (normalized.includes('HALF_MARATHON')) return 'HALF_MARATHON';
+  if (normalized === 'MARATHON') return 'MARATHON';
+  if (normalized === 'SPRINT') return 'SPRINT';
+  if (normalized === 'OLYMPIC') return 'OLYMPIC';
+  if (normalized === '5K' || normalized === '5_K' || normalized.includes('FIVE_K')) return 'FIVE_K';
+  if (normalized === '10K' || normalized === '10_K' || normalized.includes('TEN_K')) return 'TEN_K';
+  throw new ApiError(
+    400,
+    'INVALID_DISTANCE',
+    `Distance must be one of: ${Object.values(DISTANCE_LABELS).join(', ')}.`
+  );
+}
+
+export function parsePlanSeason(raw: string): PlanSeason | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = normalizeEnumToken(trimmed);
+  const map: Record<string, PlanSeason> = {
+    IN_SEASON: 'IN_SEASON',
+    INSEASON: 'IN_SEASON',
+    BASE: 'BASE',
+    WINTER: 'WINTER',
+    BUILD: 'BUILD',
+    PEAK: 'PEAK',
+    TAPER: 'TAPER',
+  };
+  const value = map[normalized];
+  if (value) return value;
+  throw new ApiError(400, 'INVALID_SEASON', 'Season must be one of: In Season, Base, Winter, Build, Peak, Taper.');
+}
+
 export async function ingestPlanSourceFromForm(params: {
   form: FormData;
   sourceTag?: string;
   defaultIsActive?: boolean;
 }) {
   const form = params.form;
-  const type = asString(form.get('type')) || 'TEXT';
+  const type = parsePlanSourceType(asString(form.get('type')) || 'TEXT');
   const title = asString(form.get('title')) || 'Untitled plan source';
-  const sport = asString(form.get('sport')) || 'TRIATHLON';
-  const distance = asString(form.get('distance')) || 'OTHER';
-  const level = asString(form.get('level')) || 'BEGINNER';
+  const sport = parsePlanSport(asString(form.get('sport')) || 'TRIATHLON');
+  const distance = parsePlanDistance(asString(form.get('distance')) || 'OTHER');
+  const level = parsePlanLevel(asString(form.get('level')) || 'BEGINNER');
   const durationWeeks = Number(asString(form.get('durationWeeks')) || '0');
-  const season = asString(form.get('season')) || undefined;
+  const season = parsePlanSeason(asString(form.get('season')) || '');
   const author = asString(form.get('author')) || undefined;
   const publisher = asString(form.get('publisher')) || undefined;
   const licenseText = asString(form.get('licenseText')) || undefined;
@@ -143,13 +238,13 @@ export async function ingestPlanSourceFromForm(params: {
   const created = await prisma.$transaction(async (tx) => {
     const planSource = await tx.planSource.create({
       data: {
-        type: type as any,
+        type,
         title,
-        sport: sport as any,
-        distance: distance as any,
-        level: level as any,
+        sport,
+        distance,
+        level,
         durationWeeks: Number.isFinite(durationWeeks) && durationWeeks > 0 ? Math.floor(durationWeeks) : 0,
-        season: season ? (season as any) : null,
+        season,
         author,
         publisher,
         licenseText,

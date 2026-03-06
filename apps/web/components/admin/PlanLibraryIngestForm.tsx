@@ -2,6 +2,30 @@
 
 import { useMemo, useState } from 'react';
 
+const DISTANCE_OPTIONS = [
+  { value: 'OTHER', label: 'Other' },
+  { value: 'SPRINT', label: 'Sprint' },
+  { value: 'OLYMPIC', label: 'Olympic' },
+  { value: 'HALF_IRONMAN', label: '70.3 / Half Ironman' },
+  { value: 'IRONMAN', label: 'Ironman' },
+  { value: 'DUATHLON_STD', label: 'Duathlon Standard' },
+  { value: 'DUATHLON_SPRINT', label: 'Duathlon Sprint' },
+  { value: 'FIVE_K', label: '5K' },
+  { value: 'TEN_K', label: '10K' },
+  { value: 'HALF_MARATHON', label: 'Half Marathon' },
+  { value: 'MARATHON', label: 'Marathon' },
+] as const;
+
+const SEASON_OPTIONS = [
+  { value: '', label: 'Not specified' },
+  { value: 'BASE', label: 'Base' },
+  { value: 'BUILD', label: 'Build' },
+  { value: 'PEAK', label: 'Peak' },
+  { value: 'TAPER', label: 'Taper' },
+  { value: 'WINTER', label: 'Winter' },
+  { value: 'IN_SEASON', label: 'In Season' },
+] as const;
+
 type ExtractResult = {
   planSource?: {
     id: string;
@@ -134,11 +158,13 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Distance
-            <input
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
-              value={distance}
-              onChange={(e) => setDistance(e.target.value)}
-            />
+            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={distance} onChange={(e) => setDistance(e.target.value)}>
+              {DISTANCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="text-xs font-medium text-[var(--muted)]">
@@ -162,12 +188,13 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
 
           <label className="text-xs font-medium text-[var(--muted)]">
             Season
-            <input
-              className="mt-1 w-full rounded border px-2 py-1 text-sm"
-              value={season}
-              onChange={(e) => setSeason(e.target.value)}
-              placeholder="BASE / BUILD / etc"
-            />
+            <select className="mt-1 w-full rounded border px-2 py-1 text-sm" value={season} onChange={(e) => setSeason(e.target.value)}>
+              {SEASON_OPTIONS.map((option) => (
+                <option key={option.value || 'blank'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="text-xs font-medium text-[var(--muted)]">
