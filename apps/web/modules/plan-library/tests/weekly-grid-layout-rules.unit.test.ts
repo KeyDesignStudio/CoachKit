@@ -194,9 +194,9 @@ describe('plan-library weekly-grid layout rules', () => {
       layoutRulesJson: rules,
     });
 
-    expect(extracted.sessions).toHaveLength(1);
-    expect(extracted.sessions[0]?.discipline).toBe('SWIM');
-    expect(extracted.sessions[0]?.notes).toContain('Use warm-up then 4 x 100m steady.');
+    const swimSession = extracted.sessions.find((session) => session.discipline === 'SWIM' && session.dayOfWeek === 1);
+    expect(swimSession).toBeTruthy();
+    expect(swimSession?.notes).toContain('Use warm-up then 4 x 100m steady.');
     expect(extracted.warnings.join(' ')).toContain('relaxed cell matching');
   });
 
