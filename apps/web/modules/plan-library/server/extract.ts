@@ -502,6 +502,7 @@ function extractFromWeeklyGridPdfDocument(params: {
   let parsedPageCount = 0;
   let usedRelaxedCellMatching = false;
   let usedSalvageCellMatching = false;
+  let usedAggressiveCellMatching = false;
 
   for (const page of params.document.pages) {
     if (!page.items.length) continue;
@@ -611,6 +612,27 @@ function extractFromWeeklyGridPdfDocument(params: {
           }
         }
 
+        if (!isMeaningfulSessionCell(cellText)) {
+          const aggressiveBox = expandNormalizedBox(cellBox, {
+            top: Math.min(0.08, cellBox.height * 0.75),
+            bottom: Math.min(0.07, cellBox.height * 0.7),
+            left: Math.min(0.07, cellBox.width * 0.45),
+            right: Math.min(0.07, cellBox.width * 0.45),
+          });
+          const aggressiveText = extractTextFromPageRegion({
+            page,
+            box: aggressiveBox,
+            excludeBoxes,
+            minimumHorizontalOverlapRatio: 0,
+            minimumVerticalOverlapRatio: 0,
+            requireVerticalAnchor: false,
+          }).text;
+          if (isMeaningfulSessionCell(aggressiveText)) {
+            cellText = aggressiveText;
+            usedAggressiveCellMatching = true;
+          }
+        }
+
         if (!isMeaningfulSessionCell(cellText)) continue;
 
         const discipline = detectDiscipline(cellText);
@@ -655,6 +677,9 @@ function extractFromWeeklyGridPdfDocument(params: {
   }
   if (usedSalvageCellMatching) {
     warnings.push('Used salvage cell matching for weekly-grid cells due to severe PDF text alignment drift; review extracted sessions before approval.');
+  }
+  if (usedAggressiveCellMatching) {
+    warnings.push('Used aggressive cell matching for weekly-grid cells because text could not be localized cleanly; verify extracted sessions before APB approval.');
   }
   return finalizeExtractedPlanSource({
     rawText: params.rawTextFallback,
