@@ -890,6 +890,7 @@ model PlanSourceLayoutFamily {
   familyType       String
   description      String?
   extractorHintsJson Json?
+  rulesJson        Json?
   isPreset         Boolean  @default(false)
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())

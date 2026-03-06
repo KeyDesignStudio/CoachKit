@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 
 import { PlanLibraryIngestForm } from '@/components/admin/PlanLibraryIngestForm';
 import { PlanLibrarySourceCatalog } from '@/components/admin/PlanLibrarySourceCatalog';
+import { PlanLibraryWorkflowPanel } from '@/components/admin/PlanLibraryWorkflowPanel';
 import { WorkoutExemplarCatalog } from '@/components/admin/WorkoutExemplarCatalog';
 
 type AdminPlanLibraryWorkspaceProps = {
@@ -19,12 +20,12 @@ export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorksp
   }, []);
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="mx-auto max-w-7xl p-6">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Plan Library (PlanSource v1)</h1>
+          <h1 className="text-2xl font-semibold">Plan Library</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Upload sources here, then use Parser Studio to review extraction quality before weighting them up in APB.
+            Ingest source plans, turn them into structured weeks and sessions, and only approve the sources CoachKit should trust.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -39,9 +40,16 @@ export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorksp
       </div>
 
       <div className="space-y-6">
-        <PlanLibraryIngestForm onIngested={handleIngested} />
-        <PlanLibrarySourceCatalog refreshNonce={refreshNonce} />
-        <WorkoutExemplarCatalog />
+        <PlanLibraryWorkflowPanel refreshNonce={refreshNonce} />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="space-y-6">
+            <PlanLibraryIngestForm onIngested={handleIngested} />
+            <WorkoutExemplarCatalog />
+          </div>
+          <div className="space-y-6">
+            <PlanLibrarySourceCatalog refreshNonce={refreshNonce} />
+          </div>
+        </div>
       </div>
     </div>
   );

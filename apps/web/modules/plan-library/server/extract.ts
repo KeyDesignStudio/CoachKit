@@ -1,10 +1,11 @@
-import pdfParse from 'pdf-parse';
-
 import type { PlanPhase, PlanSourceDiscipline, RuleType } from '@prisma/client';
+
 import { compilePlanLogicGraph } from './logic-compiler';
 import { parseWorkoutRecipeFromSessionText } from './workout-recipe-parser';
 import { segmentPlanDocument } from './document-segmentation';
 import { normalizeDistanceUnitsToKm, parseDistanceKm } from './distance-utils';
+import { parseLayoutFamilyRules, type LayoutFamilyRules, type LayoutRuleSourceAnnotation } from './layout-rules';
+import { extractStructuredPdfDocument, extractTextFromPageRegion, type ExtractedPdfDocument } from './pdf-layout';
 
 export type ExtractedWeekTemplate = {
   weekIndex: number;
@@ -58,6 +59,38 @@ type SessionCandidate = {
   dayOfWeek: number | null;
 };
 
+type FinalizeExtractedPlanSourceParams = {
+  rawText: string;
+  weeks: ExtractedWeekTemplate[];
+  sessions: ExtractedSessionTemplate[];
+  warnings: string[];
+  durationWeeks?: number | null;
+  rawJsonExtra?: Record<string, unknown>;
+  confidenceBias?: number;
+};
+
+type BuildSessionTemplateParams = {
+  weekIndex: number;
+  ordinal: number;
+  dayOfWeek?: number | null;
+  discipline: PlanSourceDiscipline;
+  sessionText: string;
+  title?: string | null;
+};
+
+export type ManualSessionTemplateFields = {
+  sessionType: string;
+  intensityType: string | null;
+  intensityTargetJson: unknown | null;
+  recipeV2Json: unknown | null;
+  parserConfidence: number;
+  parserWarningsJson: unknown | null;
+  structureJson: unknown | null;
+  notes: string | null;
+  durationMinutes: number | null;
+  distanceKm: number | null;
+};
+
 const WEEK_REGEX = /\b(?:week|w)\s*0?(\d{1,2})\b/gi;
 const MINUTES_RANGE_REGEX =
   /(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min)\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min)\b/i;
@@ -90,8 +123,8 @@ const DISCIPLINE_RULES: Array<{ key: PlanSourceDiscipline; match: RegExp }> = [
   { key: 'SWIM', match: /\bswim\b/i },
   { key: 'BIKE', match: /\bbike\b|\bcycle\b/i },
   { key: 'RUN', match: /\brun\b/i },
-  { key: 'STRENGTH', match: /\bstrength\b|\bgym\b/i },
-  { key: 'REST', match: /\brest\b|\boff\b/i },
+  { key: 'STRENGTH', match: /\bstrength\b|\bgym\b|\bs&c\b|\bconditioning\b|\byoga\b/i },
+  { key: 'REST', match: /\brest\b|\boff\b|\brecovery\b/i },
 ];
 
 const SESSION_TYPE_KEYWORDS: Array<{ key: string; match: RegExp }> = [
@@ -110,6 +143,10 @@ const STRUCTURED_SESSION_HEADER_RULES: Array<{ key: PlanSourceDiscipline; match:
   { key: 'STRENGTH', match: /^(strength|s&c|conditioning)\b/i },
   { key: 'REST', match: /^(rest(?: |-)?day|off)\b/i },
 ];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function normalizeLine(line: string) {
   return line
@@ -268,51 +305,25 @@ function extractStructuredSessionCandidates(lines: string[], durationWeeks: numb
   return candidates;
 }
 
-export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  const result = await pdfParse(buffer);
-  return result.text ?? '';
-}
+function buildSessionTemplate(params: BuildSessionTemplateParams) {
+  const sessionText = normalizeDistanceUnitsToKm(params.sessionText.trim());
+  const sessionType = detectSessionType(sessionText);
+  const parsed = parseWorkoutRecipeFromSessionText({
+    discipline: params.discipline,
+    sessionType,
+    sessionText,
+    title: params.title ?? null,
+    durationMinutes: parseMinutes(sessionText),
+  });
 
-export function extractFromRawText(rawText: string, durationWeeks?: number | null): ExtractedPlanSource {
-  const segmented = segmentPlanDocument(rawText);
-  const lines = segmented.filteredLines;
-
-  const weeks: ExtractedWeekTemplate[] = [];
-  const sessions: ExtractedSessionTemplate[] = [];
-  const warnings: string[] = [...segmented.warnings];
-  const sessionCountByWeek = new Map<number, number>();
-  const structuredCandidates = extractStructuredSessionCandidates(lines, durationWeeks, warnings);
-
-  for (const candidate of structuredCandidates) {
-    const weekIndex = candidate.weekIndex ?? 0;
-    if (!weeks.some((week) => week.weekIndex === weekIndex)) {
-      weeks.push({ weekIndex, notes: candidate.lines[0] ?? null });
-    }
-
-    const sessionText = normalizeDistanceUnitsToKm(candidate.lines.join('\n').trim());
-    const sessionType = detectSessionType(sessionText);
-    const parsed = parseWorkoutRecipeFromSessionText({
-      discipline: candidate.discipline,
+  return {
+    session: {
+      weekIndex: params.weekIndex,
+      ordinal: params.ordinal,
+      dayOfWeek: params.dayOfWeek ?? null,
+      discipline: params.discipline,
       sessionType,
-      sessionText,
-      title: candidate.lines[0] ?? null,
-      durationMinutes: parseMinutes(sessionText),
-    });
-
-    const ordinal = (sessionCountByWeek.get(weekIndex) ?? 0) + 1;
-    sessionCountByWeek.set(weekIndex, ordinal);
-
-    if (parsed.warnings.length) {
-      warnings.push(...parsed.warnings.map((warning) => `Session ${ordinal} week ${weekIndex + 1}: ${warning}`));
-    }
-
-    sessions.push({
-      weekIndex,
-      ordinal,
-      dayOfWeek: candidate.dayOfWeek,
-      discipline: candidate.discipline,
-      sessionType,
-      title: (candidate.lines[0] ?? sessionText).slice(0, 120),
+      title: (params.title ?? sessionText).slice(0, 120),
       durationMinutes: parsed.estimatedDurationMinutes ?? parseMinutes(sessionText),
       distanceKm: parseDistanceKm(sessionText),
       intensityType: parsed.intensityType ?? null,
@@ -331,7 +342,355 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
           }
         : null,
       notes: sessionText,
+    } satisfies ExtractedSessionTemplate,
+    warnings: parsed.warnings,
+  };
+}
+
+export function deriveManualSessionTemplateFields(params: {
+  discipline: PlanSourceDiscipline;
+  title?: string | null;
+  notes?: string | null;
+  sessionType?: string | null;
+  durationMinutes?: number | null;
+  distanceKm?: number | null;
+  editor?: { email: string; editedAt?: string };
+}): ManualSessionTemplateFields {
+  const normalizedTitle = params.title?.trim() || null;
+  const normalizedNotes = normalizeDistanceUnitsToKm(params.notes?.trim() || '');
+  const composedText = [normalizedTitle, normalizedNotes].filter(Boolean).join('\n').trim();
+  const built = buildSessionTemplate({
+    weekIndex: 0,
+    ordinal: 1,
+    discipline: params.discipline,
+    sessionText: composedText || normalizedTitle || '',
+    title: normalizedTitle,
+  });
+
+  return {
+    sessionType: params.sessionType?.trim() || built.session.sessionType,
+    intensityType: built.session.intensityType ?? null,
+    intensityTargetJson: built.session.intensityTargetJson ?? null,
+    recipeV2Json: built.session.recipeV2Json ?? null,
+    parserConfidence: 1,
+    parserWarningsJson: null,
+    structureJson: built.session.recipeV2Json
+      ? {
+          recipeV2: built.session.recipeV2Json,
+          parser: {
+            version: 'manual-review',
+            confidence: 1,
+            warnings: built.warnings,
+          },
+          editor: {
+            source: 'parser-studio',
+            email: params.editor?.email ?? null,
+            editedAt: params.editor?.editedAt ?? new Date().toISOString(),
+          },
+        }
+      : {
+          editor: {
+            source: 'parser-studio',
+            email: params.editor?.email ?? null,
+            editedAt: params.editor?.editedAt ?? new Date().toISOString(),
+          },
+        },
+    notes: normalizedNotes || null,
+    durationMinutes:
+      params.durationMinutes != null
+        ? params.durationMinutes
+        : built.session.durationMinutes ?? null,
+    distanceKm:
+      params.distanceKm != null
+        ? params.distanceKm
+        : built.session.distanceKm ?? null,
+  };
+}
+
+function finalizeExtractedPlanSource(params: FinalizeExtractedPlanSourceParams): ExtractedPlanSource {
+  const compiled = compilePlanLogicGraph({
+    rawText: params.rawText,
+    weeks: params.weeks,
+    sessions: params.sessions,
+    durationWeeks: params.durationWeeks ?? null,
+  });
+
+  const confidence = clamp(
+    (params.weeks.length ? 0.3 : 0) +
+      (params.sessions.length ? 0.3 : 0) +
+      Math.max(0, Math.min(0.4, compiled.graph.confidence)) +
+      (params.confidenceBias ?? 0),
+    0,
+    1
+  );
+
+  return {
+    rawText: params.rawText,
+    rawJson: {
+      compiler: {
+        version: 'v1',
+        graph: compiled.graph,
+      },
+      ...(params.rawJsonExtra ?? {}),
+    },
+    weeks: params.weeks,
+    sessions: params.sessions,
+    rules: compiled.rules,
+    warnings: params.warnings,
+    confidence,
+  };
+}
+
+function isMeaningfulSessionCell(text: string) {
+  const normalized = normalizeLine(text);
+  if (!normalized || normalized.length < 4) return false;
+  if (!/[a-z]/i.test(normalized)) return false;
+  if (/^(week\s*\d+|mon|tue|wed|thu|fri|sat|sun)$/i.test(normalized)) return false;
+  return (
+    detectDiscipline(normalized) != null ||
+    parseMinutes(normalized) != null ||
+    parseDistanceKm(normalized) != null ||
+    /\b(optional|brick|fartlek|tempo|steady|easy|massage|yoga|recovery|technique|conditioning|swim|bike|run|rest)\b/i.test(normalized)
+  );
+}
+
+function extractWeekIndexFromHeaderText(text: string) {
+  const matches = extractWeekIndices(text);
+  return matches[0] ?? null;
+}
+
+function extractFromWeeklyGridPdfDocument(params: {
+  document: ExtractedPdfDocument;
+  rawTextFallback: string;
+  durationWeeks?: number | null;
+  layoutRules: LayoutFamilyRules;
+}) {
+  const rules = parseLayoutFamilyRules(params.layoutRules);
+  if (!rules) return null;
+
+  const weeksByIndex = new Map<number, ExtractedWeekTemplate>();
+  const sessions: ExtractedSessionTemplate[] = [];
+  const warnings: string[] = [];
+  const sessionCountByWeek = new Map<number, number>();
+  let nextFallbackWeekIndex = 0;
+  let parsedPageCount = 0;
+
+  for (const page of params.document.pages) {
+    if (!page.items.length) continue;
+
+    const excludeBoxes = [...rules.pageTemplate.ignoreRegions, ...rules.pageTemplate.legendRegions];
+    const blockTitle = rules.pageTemplate.blockTitleBand
+      ? extractTextFromPageRegion({ page, box: rules.pageTemplate.blockTitleBand, excludeBoxes }).text
+      : '';
+
+    const columns = rules.pageTemplate.weekColumns
+      .map((column, columnIndex) => {
+        const headerText = extractTextFromPageRegion({
+          page,
+          box: {
+            x: column.left,
+            y: rules.pageTemplate.weekHeaderBand.top,
+            width: Math.max(0.01, column.right - column.left),
+            height: Math.max(0.01, rules.pageTemplate.weekHeaderBand.bottom - rules.pageTemplate.weekHeaderBand.top),
+          },
+          excludeBoxes,
+        }).text;
+
+        let weekIndex = extractWeekIndexFromHeaderText(headerText) ?? extractWeekIndexFromHeaderText(column.label ?? '');
+        if (weekIndex == null) {
+          weekIndex = nextFallbackWeekIndex;
+          nextFallbackWeekIndex += 1;
+          warnings.push(`Page ${page.pageNumber} column ${columnIndex + 1}: week header could not be read; week index was inferred.`);
+        } else {
+          nextFallbackWeekIndex = Math.max(nextFallbackWeekIndex, weekIndex + 1);
+        }
+
+        if (!weeksByIndex.has(weekIndex)) {
+          weeksByIndex.set(weekIndex, {
+            weekIndex,
+            notes: blockTitle || headerText || null,
+          });
+        } else if (blockTitle && !weeksByIndex.get(weekIndex)?.notes) {
+          weeksByIndex.set(weekIndex, {
+            ...weeksByIndex.get(weekIndex)!,
+            notes: blockTitle,
+          });
+        }
+
+        return {
+          ...column,
+          weekIndex,
+          headerText,
+        };
+      })
+      .sort((left, right) => left.index - right.index);
+
+    let pageSessions = 0;
+
+    for (const row of rules.pageTemplate.dayRows) {
+      for (const column of columns) {
+        const cellText = extractTextFromPageRegion({
+          page,
+          box: {
+            x: column.left,
+            y: row.top,
+            width: Math.max(0.01, column.right - column.left),
+            height: Math.max(0.01, row.bottom - row.top),
+          },
+          excludeBoxes,
+        }).text;
+
+        if (!isMeaningfulSessionCell(cellText)) continue;
+
+        const discipline = detectDiscipline(cellText);
+        if (!discipline) {
+          warnings.push(`Page ${page.pageNumber} week ${column.weekIndex + 1} row ${row.index + 1}: could not infer discipline from cell text.`);
+          continue;
+        }
+
+        const ordinal = (sessionCountByWeek.get(column.weekIndex) ?? 0) + 1;
+        sessionCountByWeek.set(column.weekIndex, ordinal);
+        const lines = cellText.split(/\n+/).map(normalizeLine).filter(Boolean);
+        const built = buildSessionTemplate({
+          weekIndex: column.weekIndex,
+          ordinal,
+          dayOfWeek: row.dayOfWeek,
+          discipline,
+          sessionText: lines.join('\n'),
+          title: lines[0] ?? null,
+        });
+
+        if (built.warnings.length) {
+          warnings.push(...built.warnings.map((warning) => `Session ${ordinal} week ${column.weekIndex + 1}: ${warning}`));
+        }
+
+        sessions.push(built.session);
+        pageSessions += 1;
+      }
+    }
+
+    if (pageSessions > 0) {
+      parsedPageCount += 1;
+    }
+  }
+
+  if (!sessions.length) {
+    return null;
+  }
+
+  const weeks = [...weeksByIndex.values()].sort((left, right) => left.weekIndex - right.weekIndex);
+  return finalizeExtractedPlanSource({
+    rawText: params.rawTextFallback,
+    weeks,
+    sessions,
+    warnings,
+    durationWeeks: params.durationWeeks,
+    confidenceBias: 0.12,
+    rawJsonExtra: {
+      pdfLayout: {
+        version: 'weekly-grid-v1',
+        mode: 'template',
+        templateVersion: rules.version,
+        templateSourcePlanId: rules.templateSourcePlanId,
+        parsedPageCount,
+        pageCount: params.document.pages.length,
+      },
+    },
+  });
+}
+
+export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  const document = await extractStructuredPdfDocument(buffer);
+  return document.rawText;
+}
+
+export function extractFromStructuredPdfDocument(params: {
+  document: ExtractedPdfDocument;
+  durationWeeks?: number | null;
+  rawTextFallback?: string | null;
+  layoutRulesJson?: unknown | null;
+  annotations?: LayoutRuleSourceAnnotation[];
+}) {
+  const rawText = params.document.rawText || params.rawTextFallback || '';
+  const parsedRules = parseLayoutFamilyRules(params.layoutRulesJson ?? null);
+
+  if (parsedRules) {
+    const extracted = extractFromWeeklyGridPdfDocument({
+      document: params.document,
+      rawTextFallback: rawText,
+      durationWeeks: params.durationWeeks,
+      layoutRules: parsedRules,
     });
+    if (extracted) {
+      return extracted;
+    }
+  }
+
+  const fallback = extractFromRawText(rawText, params.durationWeeks ?? null);
+  return {
+    ...fallback,
+    rawJson: {
+      ...(fallback.rawJson && typeof fallback.rawJson === 'object' ? (fallback.rawJson as Record<string, unknown>) : {}),
+      pdfLayout: {
+        version: 'v0',
+        mode: 'text-fallback',
+        pageCount: params.document.pages.length,
+        hasTemplateRules: Boolean(parsedRules),
+        annotationCount: params.annotations?.length ?? 0,
+      },
+    },
+  } satisfies ExtractedPlanSource;
+}
+
+export async function extractFromPdfBuffer(params: {
+  buffer: Buffer;
+  durationWeeks?: number | null;
+  rawTextFallback?: string | null;
+  layoutRulesJson?: unknown | null;
+  annotations?: LayoutRuleSourceAnnotation[];
+}) {
+  const document = await extractStructuredPdfDocument(params.buffer);
+  return extractFromStructuredPdfDocument({
+    document,
+    durationWeeks: params.durationWeeks,
+    rawTextFallback: params.rawTextFallback,
+    layoutRulesJson: params.layoutRulesJson,
+    annotations: params.annotations,
+  });
+}
+
+export function extractFromRawText(rawText: string, durationWeeks?: number | null): ExtractedPlanSource {
+  const segmented = segmentPlanDocument(rawText);
+  const lines = segmented.filteredLines;
+
+  const weeks: ExtractedWeekTemplate[] = [];
+  const sessions: ExtractedSessionTemplate[] = [];
+  const warnings: string[] = [...segmented.warnings];
+  const sessionCountByWeek = new Map<number, number>();
+  const structuredCandidates = extractStructuredSessionCandidates(lines, durationWeeks, warnings);
+
+  for (const candidate of structuredCandidates) {
+    const weekIndex = candidate.weekIndex ?? 0;
+    if (!weeks.some((week) => week.weekIndex === weekIndex)) {
+      weeks.push({ weekIndex, notes: candidate.lines[0] ?? null });
+    }
+
+    const ordinal = (sessionCountByWeek.get(weekIndex) ?? 0) + 1;
+    sessionCountByWeek.set(weekIndex, ordinal);
+    const built = buildSessionTemplate({
+      weekIndex,
+      ordinal,
+      dayOfWeek: candidate.dayOfWeek,
+      discipline: candidate.discipline,
+      sessionText: candidate.lines.join('\n').trim(),
+      title: candidate.lines[0] ?? null,
+    });
+
+    if (built.warnings.length) {
+      warnings.push(...built.warnings.map((warning) => `Session ${ordinal} week ${weekIndex + 1}: ${warning}`));
+    }
+
+    sessions.push(built.session);
   }
 
   if (!sessions.length) {
@@ -376,34 +735,17 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
     }
   }
 
-  const compiled = compilePlanLogicGraph({
+  return finalizeExtractedPlanSource({
     rawText,
     weeks,
     sessions,
-    durationWeeks: durationWeeks ?? null,
-  });
-
-  const confidence = Math.min(
-    1,
-    (weeks.length ? 0.3 : 0) + (sessions.length ? 0.3 : 0) + Math.max(0, Math.min(0.4, compiled.graph.confidence))
-  );
-
-  return {
-    rawText,
-    rawJson: {
-      compiler: {
-        version: 'v1',
-        graph: compiled.graph,
-      },
+    warnings,
+    durationWeeks,
+    rawJsonExtra: {
       segmentation: {
         version: 'v1',
         warningCount: segmented.warnings.length,
       },
     },
-    weeks,
-    sessions,
-    rules: compiled.rules,
-    warnings,
-    confidence,
-  };
+  });
 }

@@ -20,7 +20,7 @@ type PlanSourceSummary = {
   licenseText: string | null;
   sourceUrl: string | null;
   sourceFilePath: string | null;
-  layoutFamily: { id: string; slug: string; name: string } | null;
+  layoutFamily: { id: string; slug: string; name: string; hasCompiledRules?: boolean } | null;
   storedDocumentUrl: string | null;
   storedDocumentKey: string | null;
   storedDocumentContentType: string | null;
@@ -230,14 +230,29 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
   }, [detailById]);
 
   const totalActive = useMemo(() => sources.filter((source) => source.isActive).length, [sources]);
+  const orderedSources = useMemo(() => {
+    const reviewRank = (source: PlanSourceSummary) => {
+      if (source.latestExtractionRun?.reviewStatus === 'NEEDS_REVIEW') return 0;
+      if (!source.latestExtractionRun) return 1;
+      if (source.latestExtractionRun.reviewStatus === 'REJECTED') return 2;
+      return 3;
+    };
+
+    return [...sources].sort((left, right) => {
+      const rankDelta = reviewRank(left) - reviewRank(right);
+      if (rankDelta !== 0) return rankDelta;
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+  }, [sources]);
 
   return (
-    <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <section className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Library Sources</h2>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Step 2 to 4</div>
+          <h2 className="mt-1 text-lg font-semibold">Source Review Queue</h2>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            {sources.length} total sources · {totalActive} active. Stored PDFs can be reopened directly from this catalog when blob storage is configured.
+            {sources.length} total sources · {totalActive} active. Work from the top down: review the parse, open Parser Studio, and only approve what CoachKit should trust.
           </p>
         </div>
         <button
@@ -262,7 +277,7 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
         ) : null}
 
         {!loading
-          ? sources.map((source) => {
+          ? orderedSources.map((source) => {
               const expanded = expandedId === source.id;
               const detail = detailById[source.id];
               const detailError = detailErrorById[source.id];

@@ -4,7 +4,7 @@ import type { PlanDistance, PlanLevel, PlanSeason, PlanSourceType, PlanSport } f
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
-import { extractFromRawText, extractTextFromPdf } from './extract';
+import { extractFromPdfBuffer, extractFromRawText } from './extract';
 import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './document-storage';
 import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
 import { persistPlanSourceExtractionArtifacts } from './parser-studio';
@@ -140,7 +140,6 @@ export async function ingestPlanSourceFromForm(params: {
     contentBytes = Buffer.from(arrayBuffer);
     contentType = file.type || 'application/pdf';
     uploadedFileName = file.name || uploadedFileName;
-    rawText = await extractTextFromPdf(contentBytes);
     if (!sourcePathComputed && params.sourceTag) {
       sourcePathComputed = `${params.sourceTag}:${uploadedFileName}`;
     }
@@ -156,7 +155,7 @@ export async function ingestPlanSourceFromForm(params: {
     const buffer = Buffer.from(await response.arrayBuffer());
     contentBytes = buffer;
     if (contentType?.includes('pdf')) {
-      rawText = await extractTextFromPdf(buffer);
+      rawText = '';
     } else {
       rawText = buffer.toString('utf-8');
     }
@@ -171,11 +170,31 @@ export async function ingestPlanSourceFromForm(params: {
     }
   }
 
-  const checksumSha256 = createHash('sha256').update(contentBytes ?? rawText).digest('hex');
-  const extracted = extractFromRawText(rawText, Number.isFinite(durationWeeks) ? durationWeeks : null);
   const layoutFamilies = await ensurePlanSourceLayoutFamilies();
+  const isPdfSource = Boolean(contentBytes && (type === 'PDF' || (type === 'URL' && contentType?.includes('pdf'))));
+  let extracted = isPdfSource
+    ? await extractFromPdfBuffer({
+        buffer: contentBytes!,
+        durationWeeks: Number.isFinite(durationWeeks) ? durationWeeks : null,
+        rawTextFallback: rawText,
+        layoutRulesJson: null,
+      })
+    : extractFromRawText(rawText, Number.isFinite(durationWeeks) ? durationWeeks : null);
+
+  rawText = extracted.rawText;
   const inferredLayoutFamily = inferLayoutFamily({ title, rawText, sourceUrl: sourceUrl ?? null });
   const assignedLayoutFamily = layoutFamilies.find((family) => family.slug === inferredLayoutFamily.slug) ?? null;
+
+  if (isPdfSource && assignedLayoutFamily?.rulesJson) {
+    extracted = await extractFromPdfBuffer({
+      buffer: contentBytes!,
+      durationWeeks: Number.isFinite(durationWeeks) ? durationWeeks : null,
+      rawTextFallback: rawText,
+      layoutRulesJson: assignedLayoutFamily.rulesJson,
+    });
+    rawText = extracted.rawText;
+  }
+  const checksumSha256 = createHash('sha256').update(contentBytes ?? rawText).digest('hex');
   const canStoreUploadedPdf = type === 'PDF' && contentBytes && contentBytes.length > 0;
   let storedDocument: Awaited<ReturnType<typeof storePlanSourceDocument>> = null;
 

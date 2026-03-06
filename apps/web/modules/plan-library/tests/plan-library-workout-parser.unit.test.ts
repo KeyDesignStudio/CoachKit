@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFromRawText } from '@/modules/plan-library/server/extract';
+import { deriveManualSessionTemplateFields, extractFromRawText } from '@/modules/plan-library/server/extract';
 import { parseWorkoutRecipeFromSessionText } from '@/modules/plan-library/server/workout-recipe-parser';
 
 describe('plan-library workout parser', () => {
@@ -143,5 +143,21 @@ describe('plan-library workout parser', () => {
     expect(extracted.sessions[1]?.distanceKm).toBeCloseTo(5, 1);
     expect(String(extracted.sessions[1]?.notes ?? '')).toContain('5km');
     expect(extracted.warnings.some((warning) => /segmentation removed/i.test(warning))).toBe(true);
+  });
+
+  it('treats parser-studio manual corrections as trusted session overrides while still normalizing miles to kilometers', () => {
+    const manual = deriveManualSessionTemplateFields({
+      discipline: 'RUN',
+      title: 'Tempo run',
+      notes: 'Run 3.1 miles at race pace with 10min warm up and 5min cool down.',
+      sessionType: 'tempo',
+      editor: { email: 'admin@example.com', editedAt: '2026-03-06T10:00:00.000Z' },
+    });
+
+    expect(manual.sessionType).toBe('tempo');
+    expect(manual.distanceKm).toBeCloseTo(5, 1);
+    expect(String(manual.notes ?? '')).toContain('5km');
+    expect(manual.parserConfidence).toBe(1);
+    expect((manual.structureJson as any)?.editor?.source).toBe('parser-studio');
   });
 });

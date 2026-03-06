@@ -3,8 +3,9 @@ import { Prisma, type PlanSourceAnnotationType, type PlanSourceExtractionReviewS
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
-import { extractFromRawText, type ExtractedPlanSource } from './extract';
+import { deriveManualSessionTemplateFields, extractFromPdfBuffer, extractFromRawText, type ExtractedPlanSource } from './extract';
 import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
+import { compileLayoutFamilyRules, parseLayoutFamilyRules } from './layout-rules';
 
 const PARSER_STUDIO_EXTRACTOR_VERSION = 'parser-studio-v1';
 
@@ -206,6 +207,29 @@ async function getAssignedOrInferredLayoutFamily(planSource: {
   return { assigned, inferred, recommended, layoutFamilies };
 }
 
+async function loadPlanSourcePdfBuffer(planSource: {
+  type: string;
+  storedDocumentUrl: string | null;
+  sourceUrl: string | null;
+}) {
+  const candidates = [planSource.storedDocumentUrl, planSource.sourceUrl].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate);
+      if (!response.ok) continue;
+      const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+      const looksLikePdf = contentType.includes('pdf') || candidate.toLowerCase().includes('.pdf') || planSource.type === 'PDF';
+      if (!looksLikePdf) continue;
+      return Buffer.from(await response.arrayBuffer());
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 export async function listParserStudioSources() {
   const layoutFamilies = await ensurePlanSourceLayoutFamilies();
   const sources = await prisma.planSource.findMany({
@@ -257,6 +281,7 @@ export async function listParserStudioSources() {
               slug: source.layoutFamily.slug,
               name: source.layoutFamily.name,
               familyType: source.layoutFamily.familyType,
+              hasCompiledRules: Boolean(parseLayoutFamilyRules(source.layoutFamily.rulesJson)),
             }
           : null,
         recommendedLayoutFamily: recommendedLayoutFamily
@@ -382,6 +407,9 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
             slug: assigned.slug,
             name: assigned.name,
             description: assigned.description,
+            hasCompiledRules: Boolean(parseLayoutFamilyRules(assigned.rulesJson)),
+            compiledTemplateVersion: parseLayoutFamilyRules(assigned.rulesJson)?.version ?? null,
+            templateSourcePlanId: parseLayoutFamilyRules(assigned.rulesJson)?.templateSourcePlanId ?? null,
           }
         : null,
       recommendedLayoutFamily: recommended
@@ -420,6 +448,7 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
                 parserConfidence: session.parserConfidence,
                 parserWarningsJson: session.parserWarningsJson,
                 recipeV2Json: session.recipeV2Json,
+                structureJson: session.structureJson,
                 notes: session.notes,
               })),
             })),
@@ -544,6 +573,9 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     where: { id: planSourceId },
     include: {
       layoutFamily: true,
+      annotations: {
+        orderBy: [{ pageNumber: 'asc' }, { createdAt: 'asc' }],
+      },
       versions: {
         orderBy: { version: 'desc' },
         take: 1,
@@ -560,13 +592,40 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     rawText: planSource.rawText,
     sourceUrl: planSource.sourceUrl,
   });
-  const extracted = extractFromRawText(planSource.rawText, planSource.durationWeeks);
+  const compiledRules = planSource.layoutFamily
+    ? compileLayoutFamilyRules({
+        familySlug: planSource.layoutFamily.slug,
+        planSourceId: planSource.id,
+        annotations: planSource.annotations as any,
+      })
+    : null;
+  const layoutRulesJson = compiledRules ?? planSource.layoutFamily?.rulesJson ?? null;
+  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
+  const extracted = pdfBuffer
+    ? await extractFromPdfBuffer({
+        buffer: pdfBuffer,
+        durationWeeks: planSource.durationWeeks,
+        rawTextFallback: planSource.rawText,
+        layoutRulesJson,
+        annotations: planSource.annotations as any,
+      })
+    : extractFromRawText(planSource.rawText, planSource.durationWeeks);
   const nextVersion = (planSource.versions[0]?.version ?? 0) + 1;
 
   return prisma.$transaction(async (tx) => {
+    if (planSource.layoutFamily && compiledRules) {
+      await tx.planSourceLayoutFamily.update({
+        where: { id: planSource.layoutFamily.id },
+        data: { rulesJson: compiledRules as Prisma.InputJsonValue },
+      });
+    }
+
     await tx.planSource.update({
       where: { id: planSource.id },
-      data: { rawJson: extracted.rawJson as Prisma.InputJsonValue },
+      data: {
+        rawText: extracted.rawText,
+        rawJson: extracted.rawJson as Prisma.InputJsonValue,
+      },
     });
 
     return persistPlanSourceExtractionArtifacts(tx, {
@@ -614,6 +673,92 @@ export async function createPlanSourceAnnotation(params: {
       createdByEmail: params.reviewer.email,
     },
   });
+}
+
+export async function updatePlanSourceSessionTemplate(params: {
+  planSourceId: string;
+  sessionId: string;
+  reviewer: ReviewerContext;
+  data: {
+    dayOfWeek: number | null;
+    discipline: 'SWIM' | 'BIKE' | 'RUN' | 'STRENGTH' | 'REST';
+    sessionType: string;
+    title: string | null;
+    durationMinutes: number | null;
+    distanceKm: number | null;
+    notes: string | null;
+  };
+}) {
+  const session = await prisma.planSourceSessionTemplate.findFirst({
+    where: {
+      id: params.sessionId,
+      planSourceWeekTemplate: {
+        planSourceVersion: {
+          planSourceId: params.planSourceId,
+        },
+      },
+    },
+    include: {
+      planSourceWeekTemplate: {
+        include: {
+          planSourceVersion: {
+            select: {
+              id: true,
+              planSourceId: true,
+              version: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!session) {
+    throw new ApiError(404, 'PLAN_SOURCE_SESSION_NOT_FOUND', 'Plan source session was not found.');
+  }
+
+  const latestVersion = await prisma.planSourceVersion.findFirst({
+    where: { planSourceId: params.planSourceId },
+    orderBy: { version: 'desc' },
+    select: { id: true },
+  });
+
+  if (!latestVersion || latestVersion.id !== session.planSourceWeekTemplate.planSourceVersion.id) {
+    throw new ApiError(400, 'SESSION_NOT_ON_LATEST_VERSION', 'Only sessions on the latest extracted version can be edited.');
+  }
+
+  const manualFields = deriveManualSessionTemplateFields({
+    discipline: params.data.discipline,
+    title: params.data.title,
+    notes: params.data.notes,
+    sessionType: params.data.sessionType,
+    durationMinutes: params.data.durationMinutes,
+    distanceKm: params.data.distanceKm,
+    editor: {
+      email: params.reviewer.email,
+    },
+  });
+
+  await prisma.planSourceSessionTemplate.update({
+    where: { id: session.id },
+    data: {
+      dayOfWeek: params.data.dayOfWeek,
+      discipline: params.data.discipline,
+      sessionType: manualFields.sessionType,
+      title: params.data.title?.trim() || null,
+      durationMinutes: manualFields.durationMinutes,
+      distanceKm: manualFields.distanceKm,
+      intensityType: manualFields.intensityType,
+      intensityTargetJson: manualFields.intensityTargetJson as Prisma.InputJsonValue,
+      recipeV2Json: manualFields.recipeV2Json as Prisma.InputJsonValue,
+      parserConfidence: manualFields.parserConfidence,
+      parserWarningsJson: manualFields.parserWarningsJson as Prisma.InputJsonValue,
+      structureJson: manualFields.structureJson as Prisma.InputJsonValue,
+      notes: manualFields.notes,
+    },
+  });
+
+  return getParserStudioSourceDetail(params.planSourceId);
 }
 
 export async function deletePlanSourceAnnotation(params: { planSourceId: string; annotationId: string }) {
