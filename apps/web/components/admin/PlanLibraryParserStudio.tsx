@@ -204,6 +204,27 @@ type ParserStudioDetail = {
           }
         | null;
     } | null;
+    gridPreview: {
+      pageNumber: number | null;
+      weekCount: number;
+      dayCount: number;
+      cellCount: number;
+      diagnostics: string[];
+      cells: Array<{
+        pageNumber: number | null;
+        label: string;
+        weekIndex: number;
+        dayOfWeek: number | null;
+        rowIndex: number;
+        columnIndex: number;
+        bbox: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+      }>;
+    };
     annotations: Array<{
       id: string;
       pageNumber: number;
@@ -391,6 +412,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
 
   const latestRun = detail?.planSource.latestRun ?? null;
   const warnings = Array.isArray(latestRun?.summaryJson?.warnings) ? latestRun?.summaryJson?.warnings ?? [] : [];
+  const gridPreview = detail?.planSource.gridPreview ?? null;
 
   const refreshAll = useCallback(async (preferredSourceId?: string | null) => {
     await loadOverview(preferredSourceId ?? selectedId ?? null);
@@ -694,6 +716,8 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                     <PlanSourcePdfAnnotator
                       pdfUrl={detail.planSource.storedDocumentUrl}
                       annotations={detail.planSource.annotations}
+                      previewCells={detail.planSource.gridPreview?.cells ?? []}
+                      initialPageNumber={detail.planSource.gridPreview?.pageNumber ?? 1}
                       onCreateAnnotation={createAnnotation}
                       onDeleteAnnotation={deleteAnnotation}
                     />
@@ -764,6 +788,27 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                         ? 'Reruns will use the saved weekly-grid template for coordinate-based session extraction.'
                         : 'Annotate week headers and day labels, then rerun extraction to compile a reusable template.'}
                     </p>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-sm text-[var(--text)]">
+                    <div className="font-medium">Grid preview</div>
+                    <div className="mt-1">
+                      {gridPreview?.cellCount
+                        ? `${gridPreview.cellCount} cells · ${gridPreview.weekCount} weeks · ${gridPreview.dayCount} day rows`
+                        : 'No derived grid yet.'}
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      This uses the current annotations and/or compiled family rules to show the session boxes that will be extracted on rerun.
+                    </p>
+                    {gridPreview?.diagnostics?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {gridPreview.diagnostics.map((diagnostic) => (
+                          <div key={diagnostic} className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            {diagnostic}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">

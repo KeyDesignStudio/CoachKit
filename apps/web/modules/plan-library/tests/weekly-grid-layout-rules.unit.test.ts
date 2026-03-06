@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
 import { extractFromStructuredPdfDocument } from '@/modules/plan-library/server/extract';
-import { compileLayoutFamilyRules } from '@/modules/plan-library/server/layout-rules';
+import { buildLayoutFamilyTemplatePreview, compileLayoutFamilyRules } from '@/modules/plan-library/server/layout-rules';
 import type { ExtractedPdfDocument, PdfTextItem } from '@/modules/plan-library/server/pdf-layout';
 
-function makeItem(text: string, normalizedX: number, normalizedY: number): PdfTextItem {
+function makeItem(
+  text: string,
+  normalizedX: number,
+  normalizedY: number,
+  normalizedWidth = 0.08,
+  normalizedHeight = 0.025
+): PdfTextItem {
   return {
     text,
     x: normalizedX * 1000,
     y: (1 - normalizedY) * 1000,
+    width: normalizedWidth * 1000,
+    height: normalizedHeight * 1000,
     normalizedX,
     normalizedY,
+    normalizedWidth,
+    normalizedHeight,
   };
 }
 
@@ -108,5 +118,55 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(extracted.sessions[2]?.discipline).toBe('BIKE');
     expect(extracted.weeks.map((week) => week.weekIndex)).toEqual([0, 1, 2, 3]);
     expect((extracted.rawJson as any)?.pdfLayout?.mode).toBe('template');
+  });
+
+  it('derives a full 4x7 preview grid from one week-header band and one day rail annotation', () => {
+    const document: ExtractedPdfDocument = {
+      rawText: '12 week plan',
+      pages: [
+        {
+          pageNumber: 1,
+          width: 1000,
+          height: 1000,
+          text: '',
+          items: [
+            makeItem('WEEK', 0.18, 0.16, 0.05),
+            makeItem('1', 0.24, 0.16, 0.02),
+            makeItem('WEEK', 0.39, 0.16, 0.05),
+            makeItem('2', 0.45, 0.16, 0.02),
+            makeItem('WEEK', 0.60, 0.16, 0.05),
+            makeItem('3', 0.66, 0.16, 0.02),
+            makeItem('WEEK', 0.81, 0.16, 0.05),
+            makeItem('4', 0.87, 0.16, 0.02),
+            makeItem('MON', 0.05, 0.27, 0.04),
+            makeItem('TUE', 0.05, 0.38, 0.04),
+            makeItem('WED', 0.05, 0.49, 0.04),
+            makeItem('THU', 0.05, 0.60, 0.04),
+            makeItem('FRI', 0.05, 0.71, 0.04),
+            makeItem('SAT', 0.05, 0.82, 0.04),
+            makeItem('SUN', 0.05, 0.93, 0.04),
+          ],
+        },
+      ],
+    };
+
+    const preview = buildLayoutFamilyTemplatePreview({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_123',
+      annotations: [
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week Column', note: null, bboxJson: { x: 0.10, y: 0.12, width: 0.82, height: 0.08 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Days of the week', note: null, bboxJson: { x: 0.01, y: 0.22, width: 0.09, height: 0.76 } },
+        { pageNumber: 1, annotationType: 'SESSION_CELL', label: 'Sample session cell', note: null, bboxJson: { x: 0.13, y: 0.24, width: 0.17, height: 0.09 } },
+      ],
+      document,
+    });
+
+    expect(preview.rules).toBeTruthy();
+    expect(preview.weekCount).toBe(4);
+    expect(preview.dayCount).toBe(7);
+    expect(preview.cells).toHaveLength(28);
+    expect(preview.diagnostics).toEqual([]);
+    expect(preview.cells[0]?.label).toContain('W1');
+    expect(preview.cells[0]?.dayOfWeek).toBe(1);
   });
 });

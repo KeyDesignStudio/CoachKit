@@ -4,7 +4,12 @@ import { compilePlanLogicGraph } from './logic-compiler';
 import { parseWorkoutRecipeFromSessionText } from './workout-recipe-parser';
 import { segmentPlanDocument } from './document-segmentation';
 import { normalizeDistanceUnitsToKm, parseDistanceKm } from './distance-utils';
-import { parseLayoutFamilyRules, type LayoutFamilyRules, type LayoutRuleSourceAnnotation } from './layout-rules';
+import {
+  getWeeklyGridCellBox,
+  parseLayoutFamilyRules,
+  type LayoutFamilyRules,
+  type LayoutRuleSourceAnnotation,
+} from './layout-rules';
 import { extractStructuredPdfDocument, extractTextFromPageRegion, type ExtractedPdfDocument } from './pdf-layout';
 
 export type ExtractedWeekTemplate = {
@@ -529,14 +534,10 @@ function extractFromWeeklyGridPdfDocument(params: {
 
     for (const row of rules.pageTemplate.dayRows) {
       for (const column of columns) {
+        const cellBox = getWeeklyGridCellBox(column, row);
         const cellText = extractTextFromPageRegion({
           page,
-          box: {
-            x: column.left,
-            y: row.top,
-            width: Math.max(0.01, column.right - column.left),
-            height: Math.max(0.01, row.bottom - row.top),
-          },
+          box: cellBox,
           excludeBoxes,
         }).text;
 
