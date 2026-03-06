@@ -362,7 +362,7 @@ export class LlmAiPlanBuilderAI implements AiPlanBuilderAI {
       input: redacted,
       schema: z.object({ detail: sessionDetailV1Schema }).strict(),
       system:
-        'You are a coaching assistant. Output JSON only matching the schema. Do NOT change schedule, dates, or minutes. Only fill in objective, structure blocks, and targets.',
+        'You are a coaching assistant. Output JSON only matching the schema. Do NOT change schedule, dates, or minutes. Only fill in objective, structure blocks, and targets. When referenceRecipes are provided, use them as style and workout-logic exemplars while preserving the fixed session duration.',
       deterministicFallback: () => this.delegate.generateSessionDetail(input),
     });
   }

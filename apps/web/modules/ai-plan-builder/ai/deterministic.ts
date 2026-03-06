@@ -7,6 +7,8 @@ import type {
   SuggestDraftPlanResult,
   SuggestProposalDiffsInput,
   SuggestProposalDiffsResult,
+  GenerateSessionDetailInput,
+  GenerateSessionDetailResult,
   GenerateIntakeFromProfileInput,
   GenerateIntakeFromProfileResult,
   GenerateAthleteBriefFromIntakeInput,
@@ -16,7 +18,8 @@ import type {
 import { extractProfileDeterministic } from '../rules/profile-extractor';
 import { generateDraftPlanDeterministicV1 } from '../rules/draft-generator';
 import { suggestProposalDiffsDeterministicV1 } from '../rules/proposal-diff-generator';
-import { buildDeterministicSessionDetailV1 } from '../rules/session-detail';
+import { buildDeterministicSessionDetailV1, normalizeSessionDetailV1DurationsToTotal } from '../rules/session-detail';
+import { buildSessionDetailFromReferenceRecipe, syncSessionRecipeV2WithDetail } from '../rules/session-detail-recipe';
 import { buildAthleteBriefDeterministic, athleteBriefSchema } from '../rules/athlete-brief';
 
 import { computeAiUsageAudit, recordAiUsageAudit, type AiInvocationAuditMeta } from './audit';
@@ -158,10 +161,10 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
     return result;
   }
 
-  async generateSessionDetail(input: any): Promise<any> {
+  async generateSessionDetail(input: GenerateSessionDetailInput): Promise<GenerateSessionDetailResult> {
     const startedAt = Date.now();
 
-    const detail = buildDeterministicSessionDetailV1({
+    let detail = buildDeterministicSessionDetailV1({
       discipline: String(input?.session?.discipline ?? ''),
       type: String(input?.session?.type ?? ''),
       durationMinutes: Number(input?.session?.durationMinutes ?? 0),
@@ -181,6 +184,18 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
         sessionOrdinal: Number(input?.session?.ordinal ?? 0),
       },
     });
+
+    const topReference = Array.isArray(input?.referenceRecipes) ? input.referenceRecipes[0] ?? null : null;
+    if (topReference?.recipeV2) {
+      detail = buildSessionDetailFromReferenceRecipe({
+        baseDetail: detail,
+        reference: {
+          recipeV2: topReference.recipeV2,
+          title: topReference.title ?? null,
+          notes: topReference.notes ?? null,
+        },
+      });
+    }
 
     const briefParsed = athleteBriefSchema.safeParse(input?.athleteBrief ?? null);
     if (briefParsed.success) {
@@ -227,6 +242,14 @@ export class DeterministicAiPlanBuilderAI implements AiPlanBuilderAI {
         detail.safetyNotes = `${detail.safetyNotes ?? ''} ${safetyLines.join(' ')}`.trim().slice(0, 800);
       }
     }
+
+    detail = normalizeSessionDetailV1DurationsToTotal({
+      detail: {
+        ...detail,
+        recipeV2: syncSessionRecipeV2WithDetail(detail),
+      },
+      totalMinutes: Number(input?.session?.durationMinutes ?? 0),
+    });
 
     const result = { detail };
 

@@ -79,6 +79,24 @@ type SessionEditorState = {
   blocks: Array<{ blockIndex: number; label: string; steps: string }>;
 };
 
+type WorkoutExemplarSummary = {
+  id: string;
+  sourceType: string;
+  discipline: string;
+  sessionType: string;
+  title: string | null;
+  durationMinutes: number | null;
+  distanceKm: number | null;
+  objective: string | null;
+  notes: string | null;
+  usageCount: number;
+  positiveFeedbackCount: number;
+  editFeedbackCount: number;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  updatedAt: string;
+};
+
 type ProgressOverlayState = {
   title: string;
   progress: number;
@@ -664,6 +682,10 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
   const [detailGenerationWeekIndex, setDetailGenerationWeekIndex] = useState<number | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [sessionEditor, setSessionEditor] = useState<SessionEditorState | null>(null);
+  const [sessionExemplarsBySessionId, setSessionExemplarsBySessionId] = useState<
+    Record<string, { items: WorkoutExemplarSummary[]; loading: boolean; error?: string | null }>
+  >({});
+  const [exemplarBusyKey, setExemplarBusyKey] = useState<string | null>(null);
   const [agentScope, setAgentScope] = useState<'set' | 'session' | 'week' | 'plan'>('week');
   const [agentWeekIndex, setAgentWeekIndex] = useState<number | null>(null);
   const [agentSessionId, setAgentSessionId] = useState<string | null>(null);
@@ -1749,6 +1771,52 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
     }
   }, [draftPlanLatest?.sessions, loadAllDetailsForWeek, stopProgressOverlay]);
 
+  const loadSessionExemplars = useCallback(
+    async (params: { sessionId: string; discipline: string; sessionType: string }) => {
+      const sessionId = String(params.sessionId ?? '');
+      if (!sessionId) return;
+
+      setSessionExemplarsBySessionId((current) => ({
+        ...current,
+        [sessionId]: {
+          items: current[sessionId]?.items ?? [],
+          loading: true,
+          error: null,
+        },
+      }));
+
+      try {
+        const query = new URLSearchParams({
+          discipline: params.discipline,
+          sessionType: params.sessionType,
+          limit: '8',
+        });
+        const data = await request<{ exemplars: WorkoutExemplarSummary[] }>(
+          `/api/coach/athletes/${athleteId}/ai-plan-builder/workout-exemplars?${query.toString()}`,
+          { cache: 'no-store' }
+        );
+        setSessionExemplarsBySessionId((current) => ({
+          ...current,
+          [sessionId]: {
+            items: Array.isArray(data.exemplars) ? data.exemplars : [],
+            loading: false,
+            error: null,
+          },
+        }));
+      } catch (e) {
+        setSessionExemplarsBySessionId((current) => ({
+          ...current,
+          [sessionId]: {
+            items: current[sessionId]?.items ?? [],
+            loading: false,
+            error: e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to load exemplars.',
+          },
+        }));
+      }
+    },
+    [athleteId, request]
+  );
+
   const openSessionEditor = useCallback(
     async (session: any) => {
       const sessionId = String(session?.id ?? '');
@@ -1760,8 +1828,73 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
       }
       setEditingSessionId(sessionId);
       setSessionEditor(buildSessionEditorState(session, hydratedDetail));
+      void loadSessionExemplars({
+        sessionId,
+        discipline: String(session?.discipline ?? '').trim(),
+        sessionType: String(session?.type ?? '').trim(),
+      });
     },
-    [loadSessionDetail, sessionDetailsById]
+    [loadSessionDetail, loadSessionExemplars, sessionDetailsById]
+  );
+
+  const promoteSessionExemplar = useCallback(
+    async (sessionId: string) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!draftPlanId || !sessionId) return;
+      setExemplarBusyKey(`promote:${sessionId}`);
+      setError(null);
+      setInfo(null);
+      try {
+        await request<{ exemplar?: { id: string } }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/workout-exemplars`, {
+          method: 'POST',
+          data: {
+            action: 'promoteDraftSession',
+            draftPlanId,
+            draftSessionId: sessionId,
+          },
+        });
+        const discipline = sessionEditor?.sessionId === sessionId ? sessionEditor.discipline.trim() : '';
+        const sessionType = sessionEditor?.sessionId === sessionId ? sessionEditor.type.trim() : '';
+        await loadSessionExemplars({ sessionId, discipline, sessionType });
+        setInfo('Workout exemplar promoted from the saved session detail.');
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to promote workout exemplar.');
+      } finally {
+        setExemplarBusyKey(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, loadSessionExemplars, request, sessionEditor]
+  );
+
+  const recordExemplarFeedback = useCallback(
+    async (params: { sessionId: string; exemplarId: string; feedbackType: 'GOOD_FIT' | 'EDITED' | 'TOO_HARD' }) => {
+      const draftPlanId = String(draftPlanLatest?.id ?? '');
+      if (!params.sessionId || !params.exemplarId) return;
+      setExemplarBusyKey(`feedback:${params.exemplarId}:${params.feedbackType}`);
+      setError(null);
+      setInfo(null);
+      try {
+        await request<{ ok: boolean }>(`/api/coach/athletes/${athleteId}/ai-plan-builder/workout-exemplars`, {
+          method: 'POST',
+          data: {
+            action: 'feedback',
+            exemplarId: params.exemplarId,
+            feedbackType: params.feedbackType,
+            draftPlanId: draftPlanId || undefined,
+            draftSessionId: params.sessionId,
+          },
+        });
+        const discipline = sessionEditor?.sessionId === params.sessionId ? sessionEditor.discipline.trim() : '';
+        const sessionType = sessionEditor?.sessionId === params.sessionId ? sessionEditor.type.trim() : '';
+        await loadSessionExemplars({ sessionId: params.sessionId, discipline, sessionType });
+        setInfo(`Exemplar feedback recorded (${params.feedbackType.toLowerCase().replace('_', ' ')}).`);
+      } catch (e) {
+        setError(e instanceof ApiClientError ? formatApiErrorMessage(e) : e instanceof Error ? e.message : 'Failed to record exemplar feedback.');
+      } finally {
+        setExemplarBusyKey(null);
+      }
+    },
+    [athleteId, draftPlanLatest?.id, loadSessionExemplars, request, sessionEditor]
   );
 
   const proposeManualEdits = useCallback(
@@ -3629,6 +3762,7 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                         const lazyDetail = sessionDetailsById[sessionId]?.detailJson;
                         const parsed = sessionDetailV1Schema.safeParse(lazyDetail ?? session?.detailJson ?? null);
                         const detailText = parsed.success ? renderWorkoutDetailFromSessionDetailV1(parsed.data) : null;
+                        const exemplarState = sessionExemplarsBySessionId[sessionId];
                         return (
                           <div key={sessionId} className="rounded-md border border-[var(--border-subtle)] px-2 py-2">
                             <div className="text-xs font-medium">{formatSessionHeadline(session)}</div>
@@ -3719,6 +3853,86 @@ export function AiPlanBuilderCoachJourney({ athleteId }: { athleteId: string }) 
                                     ))}
                                   </div>
                                 ) : null}
+                                <div className="mt-3 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-structure)]/40 p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--fg-muted)]">Workout exemplars</div>
+                                      <div className="text-[11px] text-[var(--fg-muted)]">
+                                        Promotion uses the last saved session detail. Save session changes first if you want edited blocks to become the exemplar.
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={busy != null || exemplarBusyKey != null}
+                                        onClick={() => void loadSessionExemplars({ sessionId, discipline: sessionEditor.discipline.trim(), sessionType: sessionEditor.type.trim() })}
+                                      >
+                                        Refresh exemplars
+                                      </Button>
+                                      <Button size="sm" variant="secondary" disabled={busy != null || exemplarBusyKey != null} onClick={() => void promoteSessionExemplar(sessionId)}>
+                                        Promote as exemplar
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {exemplarState?.loading ? <div className="mt-2 text-[11px] text-[var(--fg-muted)]">Loading exemplars…</div> : null}
+                                  {exemplarState?.error ? <div className="mt-2 text-[11px] text-red-700">{exemplarState.error}</div> : null}
+                                  {exemplarState && !exemplarState.loading && !exemplarState.items.length ? (
+                                    <div className="mt-2 text-[11px] text-[var(--fg-muted)]">No matching exemplars yet for this session shape.</div>
+                                  ) : null}
+                                  {exemplarState?.items.length ? (
+                                    <div className="mt-3 space-y-2">
+                                      {exemplarState.items.map((exemplar) => (
+                                        <div key={exemplar.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                          <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="font-medium">
+                                                {exemplar.title?.trim() || `${String(exemplar.discipline).toUpperCase()} ${String(exemplar.sessionType)}`}
+                                              </div>
+                                              <div className="mt-1 text-[var(--fg-muted)]">
+                                                {exemplar.durationMinutes != null ? `${exemplar.durationMinutes} min` : 'Duration —'}
+                                                {exemplar.distanceKm != null ? ` · ${exemplar.distanceKm} km` : ''}
+                                                {exemplar.lastUsedAt ? ` · Last used ${new Date(exemplar.lastUsedAt).toLocaleDateString()}` : ''}
+                                              </div>
+                                            </div>
+                                            <div className="text-[11px] text-[var(--fg-muted)]">
+                                              Uses {exemplar.usageCount} · Good {exemplar.positiveFeedbackCount} · Edit flags {exemplar.editFeedbackCount}
+                                            </div>
+                                          </div>
+                                          {exemplar.objective ? <div className="mt-2 text-[11px] text-[var(--fg-muted)]">Objective: {exemplar.objective}</div> : null}
+                                          {exemplar.notes ? <div className="mt-1 whitespace-pre-wrap text-[11px] text-[var(--fg-muted)]">{exemplar.notes}</div> : null}
+                                          <div className="mt-2 flex flex-wrap gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="secondary"
+                                              disabled={busy != null || exemplarBusyKey != null}
+                                              onClick={() => void recordExemplarFeedback({ sessionId, exemplarId: exemplar.id, feedbackType: 'GOOD_FIT' })}
+                                            >
+                                              Good fit
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="secondary"
+                                              disabled={busy != null || exemplarBusyKey != null}
+                                              onClick={() => void recordExemplarFeedback({ sessionId, exemplarId: exemplar.id, feedbackType: 'EDITED' })}
+                                            >
+                                              Edited
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="secondary"
+                                              disabled={busy != null || exemplarBusyKey != null}
+                                              onClick={() => void recordExemplarFeedback({ sessionId, exemplarId: exemplar.id, feedbackType: 'TOO_HARD' })}
+                                            >
+                                              Too hard
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
                                 <div className="mt-2 flex gap-2">
                                   <Button size="sm" onClick={() => void saveSessionEditor()} disabled={busy != null}>
                                     Save session changes

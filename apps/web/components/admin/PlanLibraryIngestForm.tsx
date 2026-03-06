@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 
 type ExtractResult = {
-  planSource?: { id: string; title: string };
+  planSource?: {
+    id: string;
+    title: string;
+    storedDocumentUrl?: string | null;
+    storedDocumentUploadedAt?: string | null;
+  };
   version?: { id: string; version: number };
   extracted?: {
     warnings?: string[];
@@ -13,7 +18,11 @@ type ExtractResult = {
   };
 };
 
-export function PlanLibraryIngestForm() {
+type PlanLibraryIngestFormProps = {
+  onIngested?: () => void;
+};
+
+export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps) {
   const [type, setType] = useState<'PDF' | 'URL' | 'TEXT'>('PDF');
   const [title, setTitle] = useState('');
   const [sport, setSport] = useState('TRIATHLON');
@@ -74,6 +83,7 @@ export function PlanLibraryIngestForm() {
 
       const payload = (await res.json()) as any;
       setResult(payload?.data ?? payload ?? null);
+      onIngested?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to ingest plan source.');
     } finally {
@@ -242,6 +252,12 @@ export function PlanLibraryIngestForm() {
             <div>Weeks detected: {result.extracted?.weeks?.length ?? 0}</div>
             <div>Sessions detected: {result.extracted?.sessions?.length ?? 0}</div>
             <div>Confidence: {result.extracted?.confidence ?? 0}</div>
+            <div>
+              Stored PDF:{' '}
+              {result.planSource?.storedDocumentUrl
+                ? `available${result.planSource.storedDocumentUploadedAt ? ` · ${new Date(result.planSource.storedDocumentUploadedAt).toLocaleString()}` : ''}`
+                : 'not stored'}
+            </div>
             {result.extracted?.warnings?.length ? (
               <ul className="list-disc pl-4 text-amber-600">
                 {result.extracted.warnings.map((warning, idx) => (

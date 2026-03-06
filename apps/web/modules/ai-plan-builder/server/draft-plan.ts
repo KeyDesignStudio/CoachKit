@@ -26,11 +26,18 @@ import {
   reflowSessionDetailV1ToNewTotal,
   sessionDetailV1Schema,
 } from '../rules/session-detail';
+import { syncSessionRecipeV2WithDetail } from '../rules/session-detail-recipe';
 import type { SessionDetailBlockType, SessionDetailV1 } from '../rules/session-detail';
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 import { buildEffectivePlanInputContext } from './effective-input';
 import { refreshPolicyRuntimeOverridesFromDb } from './policy-tuning';
+import {
+  buildReferenceRecipePool,
+  markCoachWorkoutExemplarsUsed,
+  selectReferenceRecipesForSession,
+  upsertCoachWorkoutExemplarFromSessionDetail,
+} from './reference-recipes';
 
 export const createDraftPlanSchema = z.object({
   planJson: z.unknown(),
@@ -1018,6 +1025,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
       athleteId: true,
       coachId: true,
       setupJson: true,
+      planSourceSelectionJson: true,
       sessions: {
         orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }],
         where: params.onlySessionIds?.length ? { id: { in: params.onlySessionIds } } : undefined,
@@ -1086,10 +1094,30 @@ export async function generateSessionDetailsForDraftPlan(params: {
   const now = new Date();
 
   const selectedSessions = params.limit && params.limit > 0 ? draft.sessions.slice(0, params.limit) : draft.sessions;
+  const referenceRecipePool = await buildReferenceRecipePool({
+    coachId: params.coachId,
+    planSourceSelectionJson: draft.planSourceSelectionJson as Prisma.JsonValue | null,
+    setupJson: draft.setupJson as Prisma.JsonValue | null,
+    sessions: selectedSessions.map((session) => ({
+      discipline: String(session.discipline),
+      type: String(session.type),
+    })),
+  });
+  const usedExemplarIds = new Set<string>();
 
   await mapWithConcurrency(selectedSessions, 4, async (s) => {
     // Coach edits are authoritative; never overwrite them during background enrichment.
     if (String((s as any)?.detailMode || '') === 'coach') return;
+
+    const { referenceRecipes, usedExemplarIds: matchedExemplarIds } = selectReferenceRecipesForSession({
+      pool: referenceRecipePool,
+      session: {
+        discipline: String(s.discipline),
+        type: String(s.type),
+        durationMinutes: Number(s.durationMinutes ?? 0),
+      },
+    });
+    matchedExemplarIds.forEach((id) => usedExemplarIds.add(id));
 
     const input = {
       athleteSummaryText,
@@ -1115,11 +1143,13 @@ export async function generateSessionDetailsForDraftPlan(params: {
       session: {
         weekIndex: s.weekIndex,
         dayOfWeek: s.dayOfWeek,
+        ordinal: s.ordinal,
         notes: s.notes ?? null,
         discipline: s.discipline,
         type: s.type,
         durationMinutes: s.durationMinutes,
       },
+      referenceRecipes,
     };
 
     const detailInputHash = computeStableSha256(input);
@@ -1165,11 +1195,15 @@ export async function generateSessionDetailsForDraftPlan(params: {
             }),
             totalMinutes: s.durationMinutes,
           });
+      const syncedDetail = {
+        ...detail,
+        recipeV2: syncSessionRecipeV2WithDetail(detail),
+      };
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
         data: {
-          detailJson: detail as unknown as Prisma.InputJsonValue,
+          detailJson: syncedDetail as unknown as Prisma.InputJsonValue,
           detailInputHash,
           detailGeneratedAt: now,
           detailMode: effectiveMode,
@@ -1211,11 +1245,15 @@ export async function generateSessionDetailsForDraftPlan(params: {
             }),
             totalMinutes: s.durationMinutes,
           });
+      const syncedDetail = {
+        ...detail,
+        recipeV2: syncSessionRecipeV2WithDetail(detail),
+      };
 
       await prisma.aiPlanDraftSession.update({
         where: { id: s.id },
         data: {
-          detailJson: detail as unknown as Prisma.InputJsonValue,
+          detailJson: syncedDetail as unknown as Prisma.InputJsonValue,
           detailInputHash,
           detailGeneratedAt: now,
           detailMode: 'deterministic',
@@ -1230,7 +1268,7 @@ export async function generateSessionDetailsForDraftPlan(params: {
           provider: 'unknown',
           model: null,
           inputHash: computeStableSha256(input),
-          outputHash: computeStableSha256({ detail }),
+          outputHash: computeStableSha256({ detail: syncedDetail }),
           durationMs: 0,
           maxOutputTokens: null,
           timeoutMs: null,
@@ -1247,6 +1285,10 @@ export async function generateSessionDetailsForDraftPlan(params: {
       );
     }
   });
+
+  if (usedExemplarIds.size) {
+    await markCoachWorkoutExemplarsUsed({ exemplarIds: Array.from(usedExemplarIds) });
+  }
 }
 
 
@@ -1455,6 +1497,7 @@ export async function updateAiDraftPlan(params: {
             discipline: true,
             type: true,
             durationMinutes: true,
+            notes: true,
             detailJson: true,
             detailMode: true,
           },
@@ -1548,10 +1591,14 @@ export async function updateAiDraftPlan(params: {
             updatedDetail = { ...updatedDetail, structure };
           }
 
+          updatedDetail = {
+            ...updatedDetail,
+            recipeV2: syncSessionRecipeV2WithDetail(updatedDetail),
+          };
           updatedDetail = normalizeSessionDetailV1DurationsToTotal({ detail: updatedDetail, totalMinutes: nextDurationMinutes });
           const updatedParsed = sessionDetailV1Schema.safeParse(updatedDetail);
           if (!updatedParsed.success) {
-            updatedDetail = normalizeSessionDetailV1DurationsToTotal({
+            const fallbackDetail = normalizeSessionDetailV1DurationsToTotal({
               detail: buildDeterministicSessionDetailV1({
                 discipline: nextDiscipline as any,
                 type: nextType,
@@ -1560,8 +1607,15 @@ export async function updateAiDraftPlan(params: {
               }),
               totalMinutes: nextDurationMinutes,
             });
+            updatedDetail = {
+              ...fallbackDetail,
+              recipeV2: syncSessionRecipeV2WithDetail(fallbackDetail),
+            };
           } else {
-            updatedDetail = updatedParsed.data;
+            updatedDetail = {
+              ...updatedParsed.data,
+              recipeV2: syncSessionRecipeV2WithDetail(updatedParsed.data),
+            };
           }
 
           nextDetailJson = updatedDetail as unknown as Prisma.InputJsonValue;
@@ -1594,6 +1648,21 @@ export async function updateAiDraftPlan(params: {
               : {}),
           },
         });
+
+        if (shouldEditDetail && nextDetailJson) {
+          await upsertCoachWorkoutExemplarFromSessionDetail({
+            db: tx,
+            coachId: params.coachId,
+            athleteId: params.athleteId,
+            draftId: draft.id,
+            draftSessionId: existing.id,
+            discipline: nextDiscipline,
+            sessionType: nextType,
+            durationMinutes: nextDurationMinutes,
+            notes: edit.notes === undefined ? existing.notes ?? null : edit.notes ?? null,
+            detail: nextDetailJson,
+          });
+        }
       }
     }
 

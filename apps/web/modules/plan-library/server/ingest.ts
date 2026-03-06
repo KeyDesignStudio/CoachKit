@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
 import { extractFromRawText, extractTextFromPdf } from './extract';
+import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './document-storage';
 
 const asString = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value.trim() : '');
 
@@ -31,6 +32,7 @@ export async function ingestPlanSourceFromForm(params: {
   let contentBytes: Buffer | null = null;
   let contentType: string | null = null;
   let sourcePathComputed = sourceFilePath;
+  let uploadedFileName = 'upload.pdf';
 
   if (type === 'PDF') {
     const file = form.get('file');
@@ -40,9 +42,10 @@ export async function ingestPlanSourceFromForm(params: {
     const arrayBuffer = await file.arrayBuffer();
     contentBytes = Buffer.from(arrayBuffer);
     contentType = file.type || 'application/pdf';
+    uploadedFileName = file.name || uploadedFileName;
     rawText = await extractTextFromPdf(contentBytes);
     if (!sourcePathComputed && params.sourceTag) {
-      sourcePathComputed = `${params.sourceTag}:${file.name || 'upload.pdf'}`;
+      sourcePathComputed = `${params.sourceTag}:${uploadedFileName}`;
     }
   } else if (type === 'URL') {
     if (!sourceUrl) {
@@ -73,8 +76,10 @@ export async function ingestPlanSourceFromForm(params: {
 
   const checksumSha256 = createHash('sha256').update(contentBytes ?? rawText).digest('hex');
   const extracted = extractFromRawText(rawText, Number.isFinite(durationWeeks) ? durationWeeks : null);
+  const canStoreUploadedPdf = type === 'PDF' && contentBytes && contentBytes.length > 0;
+  let storedDocument: Awaited<ReturnType<typeof storePlanSourceDocument>> = null;
 
-  const existing = await prisma.planSource.findUnique({
+  let existing = await prisma.planSource.findUnique({
     where: { checksumSha256 },
     include: {
       versions: {
@@ -85,6 +90,32 @@ export async function ingestPlanSourceFromForm(params: {
   });
 
   if (existing) {
+    if (canStoreUploadedPdf && !existing.storedDocumentUrl && planSourceBlobStorageConfigured()) {
+      storedDocument = await storePlanSourceDocument({
+        checksumSha256,
+        content: contentBytes!,
+        fileName: uploadedFileName,
+        contentType: contentType || 'application/pdf',
+      });
+    }
+    if (canStoreUploadedPdf && !existing.storedDocumentUrl && storedDocument) {
+      existing = await prisma.planSource.update({
+        where: { id: existing.id },
+        data: {
+          storedDocumentUrl: storedDocument.url,
+          storedDocumentKey: storedDocument.key,
+          storedDocumentContentType: storedDocument.contentType,
+          storedDocumentUploadedAt: storedDocument.uploadedAt,
+          ...(existing.sourceFilePath ? {} : { sourceFilePath: sourcePathComputed || null }),
+        },
+        include: {
+          versions: {
+            orderBy: { version: 'desc' },
+            take: 1,
+          },
+        },
+      });
+    }
     return {
       duplicate: true,
       planSource: existing,
@@ -99,6 +130,15 @@ export async function ingestPlanSourceFromForm(params: {
       : explicitIsActive === 'false'
         ? false
         : params.defaultIsActive === true;
+
+  if (canStoreUploadedPdf && planSourceBlobStorageConfigured()) {
+    storedDocument = await storePlanSourceDocument({
+      checksumSha256,
+      content: contentBytes!,
+      fileName: uploadedFileName,
+      contentType: contentType || 'application/pdf',
+    });
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const planSource = await tx.planSource.create({
@@ -115,6 +155,10 @@ export async function ingestPlanSourceFromForm(params: {
         licenseText,
         sourceUrl,
         sourceFilePath: sourcePathComputed || null,
+        storedDocumentUrl: storedDocument?.url ?? null,
+        storedDocumentKey: storedDocument?.key ?? null,
+        storedDocumentContentType: storedDocument?.contentType ?? null,
+        storedDocumentUploadedAt: storedDocument?.uploadedAt ?? null,
         checksumSha256,
         isActive,
         rawText,
@@ -170,6 +214,9 @@ export async function ingestPlanSourceFromForm(params: {
             distanceKm: session.distanceKm ?? null,
             intensityType: session.intensityType ?? null,
             intensityTargetJson: session.intensityTargetJson as any,
+            recipeV2Json: session.recipeV2Json as any,
+            parserConfidence: session.parserConfidence ?? null,
+            parserWarningsJson: session.parserWarningsJson as any,
             structureJson: session.structureJson as any,
             notes: session.notes ?? null,
           })),
