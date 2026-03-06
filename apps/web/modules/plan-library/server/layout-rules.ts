@@ -1,6 +1,12 @@
 import type { PlanSourceAnnotationType } from '@prisma/client';
 
-import type { NormalizedBbox } from './pdf-layout';
+import {
+  extractTextRunsFromPageRegion,
+  type ExtractedPdfDocument,
+  type ExtractedPdfPage,
+  type NormalizedBbox,
+  type PdfTextRun,
+} from './pdf-layout';
 
 export type LayoutRuleSourceAnnotation = {
   pageNumber: number;
@@ -17,6 +23,7 @@ export type WeeklyGridLayoutRules = {
   compiledAt: string;
   annotationCounts: Record<PlanSourceAnnotationType, number>;
   pageTemplate: {
+    templatePageNumber: number | null;
     weekColumns: Array<{
       index: number;
       centerX: number;
@@ -37,6 +44,7 @@ export type WeeklyGridLayoutRules = {
       bottom: number;
     };
     blockTitleBand: NormalizedBbox | null;
+    sampleSessionCell: NormalizedBbox | null;
     ignoreRegions: NormalizedBbox[];
     legendRegions: NormalizedBbox[];
   };
@@ -44,7 +52,32 @@ export type WeeklyGridLayoutRules = {
 
 export type LayoutFamilyRules = WeeklyGridLayoutRules;
 
+export type WeeklyGridPreviewCell = {
+  pageNumber: number | null;
+  columnIndex: number;
+  rowIndex: number;
+  weekIndex: number;
+  dayOfWeek: number | null;
+  label: string;
+  bbox: NormalizedBbox;
+};
+
+export type LayoutFamilyTemplatePreview = {
+  rules: LayoutFamilyRules | null;
+  diagnostics: string[];
+  pageNumber: number | null;
+  cells: WeeklyGridPreviewCell[];
+  weekCount: number;
+  dayCount: number;
+};
+
+type AnchorCandidate = {
+  label: string | null;
+  bbox: NormalizedBbox;
+};
+
 const WEEKLY_GRID_COMPATIBLE_FAMILIES = new Set(['weekly-grid', 'mixed-editorial']);
+const DAY_ORDER_FALLBACK = [1, 2, 3, 4, 5, 6, 0];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -91,42 +124,16 @@ function isNonNullBox(value: NormalizedBbox | null): value is NormalizedBbox {
   return Boolean(value);
 }
 
-function clusterAnnotations(
-  annotations: Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>,
-  axis: 'x' | 'y',
-  tolerance: number
-) {
-  const sorted = [...annotations].sort((left, right) =>
-    axis === 'x' ? centerX(left.bbox) - centerX(right.bbox) : centerY(left.bbox) - centerY(right.bbox)
-  );
-  const groups: Array<Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>> = [];
+function normalizeToken(value: string | null | undefined) {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
+}
 
-  for (const annotation of sorted) {
-    const value = axis === 'x' ? centerX(annotation.bbox) : centerY(annotation.bbox);
-    const current = groups[groups.length - 1];
-    if (!current) {
-      groups.push([annotation]);
-      continue;
-    }
-    const currentValue = average(
-      current.map((entry) => (axis === 'x' ? centerX(entry.bbox) : centerY(entry.bbox)))
-    );
-    if (Math.abs(value - currentValue) <= tolerance) {
-      current.push(annotation);
-    } else {
-      groups.push([annotation]);
-    }
-  }
-
-  return groups;
+function alphaToken(value: string | null | undefined) {
+  return normalizeToken(value).toLowerCase().replace(/[^a-z]/g, '');
 }
 
 function parseDayOfWeek(label: string | null | undefined) {
-  const normalized = (label ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-
+  const normalized = alphaToken(label);
   if (!normalized) return null;
   if (normalized.startsWith('mon')) return 1;
   if (normalized.startsWith('tue')) return 2;
@@ -136,6 +143,13 @@ function parseDayOfWeek(label: string | null | undefined) {
   if (normalized.startsWith('sat')) return 6;
   if (normalized.startsWith('sun')) return 0;
   return null;
+}
+
+function parseWeekNumber(label: string | null | undefined) {
+  const match = normalizeToken(label).match(/\b(?:week|wk)\s*([0-9]{1,2})\b/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value - 1 : null;
 }
 
 function deriveBandsFromCenters(centers: number[], minEdge: number, maxEdge: number) {
@@ -176,6 +190,435 @@ function buildAnnotationCounts(annotations: LayoutRuleSourceAnnotation[]) {
   );
 }
 
+function clusterAnnotations(
+  annotations: Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>,
+  axis: 'x' | 'y',
+  tolerance: number
+) {
+  const sorted = [...annotations].sort((left, right) =>
+    axis === 'x' ? centerX(left.bbox) - centerX(right.bbox) : centerY(left.bbox) - centerY(right.bbox)
+  );
+  const groups: Array<Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>> = [];
+
+  for (const annotation of sorted) {
+    const value = axis === 'x' ? centerX(annotation.bbox) : centerY(annotation.bbox);
+    const current = groups[groups.length - 1];
+    if (!current) {
+      groups.push([annotation]);
+      continue;
+    }
+    const currentValue = average(
+      current.map((entry) => (axis === 'x' ? centerX(entry.bbox) : centerY(entry.bbox)))
+    );
+    if (Math.abs(value - currentValue) <= tolerance) {
+      current.push(annotation);
+    } else {
+      groups.push([annotation]);
+    }
+  }
+
+  return groups;
+}
+
+function chooseTemplatePageNumber(annotations: Array<LayoutRuleSourceAnnotation & { bbox: NormalizedBbox }>) {
+  const preferred =
+    annotations.find((annotation) => annotation.annotationType === 'WEEK_HEADER') ??
+    annotations.find((annotation) => annotation.annotationType === 'DAY_LABEL') ??
+    annotations[0];
+  return preferred?.pageNumber ?? null;
+}
+
+function findPage(document: ExtractedPdfDocument | undefined, pageNumber: number | null) {
+  if (!document?.pages.length) return null;
+  if (pageNumber != null) {
+    const matched = document.pages.find((page) => page.pageNumber === pageNumber);
+    if (matched) return matched;
+  }
+  return document.pages[0] ?? null;
+}
+
+function mergeRunBoxes(left: PdfTextRun, right: PdfTextRun, label: string): AnchorCandidate {
+  const x = Math.min(left.normalizedX, right.normalizedX);
+  const y = Math.min(left.normalizedY, right.normalizedY);
+  const rightEdge = Math.max(
+    left.normalizedX + left.normalizedWidth,
+    right.normalizedX + right.normalizedWidth
+  );
+  const bottomEdge = Math.max(
+    left.normalizedY + left.normalizedHeight,
+    right.normalizedY + right.normalizedHeight
+  );
+  return {
+    label,
+    bbox: {
+      x,
+      y,
+      width: rightEdge - x,
+      height: bottomEdge - y,
+    },
+  };
+}
+
+function extractWeekAnchorsFromRuns(runs: PdfTextRun[]) {
+  const candidates: AnchorCandidate[] = [];
+  const sorted = [...runs].sort((left, right) => {
+    const deltaY = left.normalizedY - right.normalizedY;
+    if (Math.abs(deltaY) > 0.018) return deltaY;
+    return left.normalizedX - right.normalizedX;
+  });
+
+  for (let index = 0; index < sorted.length; index += 1) {
+    const run = sorted[index]!;
+    const label = normalizeToken(run.text);
+    if (!label) continue;
+
+    if (/\b(?:week|wk)\s*[0-9]{1,2}\b/i.test(label)) {
+      candidates.push({
+        label,
+        bbox: {
+          x: run.normalizedX,
+          y: run.normalizedY,
+          width: run.normalizedWidth,
+          height: run.normalizedHeight,
+        },
+      });
+      continue;
+    }
+
+    if (/^(?:week|wk)$/i.test(label)) {
+      const next = sorted[index + 1];
+      if (
+        next &&
+        /^\d{1,2}$/.test(normalizeToken(next.text)) &&
+        Math.abs(next.normalizedY - run.normalizedY) <= 0.02
+      ) {
+        candidates.push(mergeRunBoxes(run, next, `${label} ${normalizeToken(next.text)}`));
+        index += 1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function extractDayAnchorsFromRuns(runs: PdfTextRun[]) {
+  const candidates = runs
+    .map((run) => ({
+      label: normalizeToken(run.text),
+      bbox: {
+        x: run.normalizedX,
+        y: run.normalizedY,
+        width: run.normalizedWidth,
+        height: run.normalizedHeight,
+      } satisfies NormalizedBbox,
+    }))
+    .filter((candidate) => parseDayOfWeek(candidate.label) != null)
+    .sort((left, right) => centerY(left.bbox) - centerY(right.bbox));
+
+  const deduped: AnchorCandidate[] = [];
+  for (const candidate of candidates) {
+    const existing = deduped[deduped.length - 1];
+    if (existing && Math.abs(centerY(existing.bbox) - centerY(candidate.bbox)) <= 0.025) {
+      if ((candidate.bbox.width * candidate.bbox.height) > (existing.bbox.width * existing.bbox.height)) {
+        deduped[deduped.length - 1] = candidate;
+      }
+      continue;
+    }
+    deduped.push(candidate);
+  }
+
+  return deduped;
+}
+
+function deriveAnchorsFromContainer(params: {
+  page: ExtractedPdfPage | null;
+  container: NormalizedBbox | null;
+  type: 'week' | 'day';
+  excludeBoxes: NormalizedBbox[];
+}) {
+  if (!params.page || !params.container) return [] as AnchorCandidate[];
+  const runs = extractTextRunsFromPageRegion({
+    page: params.page,
+    box: params.container,
+    excludeBoxes: params.excludeBoxes,
+  });
+  return params.type === 'week' ? extractWeekAnchorsFromRuns(runs) : extractDayAnchorsFromRuns(runs);
+}
+
+function deriveGridBounds(params: {
+  centers: number[];
+  sampleBoxes: NormalizedBbox[];
+  defaultGap: number;
+  minFromAnchors: number;
+  maxFromAnchors: number;
+  minimumCellSize: number;
+}) {
+  const sampleSize = params.sampleBoxes.length
+    ? average(params.sampleBoxes.map((box) => Math.max(params.minimumCellSize, box.width || box.height || params.defaultGap)))
+    : params.defaultGap;
+
+  if (params.sampleBoxes.length >= 2) {
+    const minEdge = Math.min(...params.sampleBoxes.map((box) => box.x));
+    const maxEdge = Math.max(...params.sampleBoxes.map((box) => box.x + box.width));
+    return {
+      min: clamp(Math.min(minEdge, params.minFromAnchors), 0, 1),
+      max: clamp(Math.max(maxEdge, params.maxFromAnchors), 0, 1),
+    };
+  }
+
+  if (params.centers.length) {
+    return {
+      min: clamp(Math.min(params.minFromAnchors, Math.min(...params.centers.map((center) => center - sampleSize / 2))), 0, 1),
+      max: clamp(Math.max(params.maxFromAnchors, Math.max(...params.centers.map((center) => center + sampleSize / 2))), 0, 1),
+    };
+  }
+
+  return {
+    min: clamp(params.minFromAnchors, 0, 1),
+    max: clamp(params.maxFromAnchors, 0, 1),
+  };
+}
+
+function buildCellBox(column: { left: number; right: number }, row: { top: number; bottom: number }): NormalizedBbox {
+  const width = Math.max(0.01, column.right - column.left);
+  const height = Math.max(0.01, row.bottom - row.top);
+  const insetX = Math.min(0.008, width * 0.06);
+  const insetY = Math.min(0.008, height * 0.08);
+  return {
+    x: clamp(column.left + insetX, 0, 1),
+    y: clamp(row.top + insetY, 0, 1),
+    width: Math.max(0.008, width - insetX * 2),
+    height: Math.max(0.008, height - insetY * 2),
+  };
+}
+
+function compileWeeklyGridLayoutRulesDetailed(params: {
+  familySlug: string;
+  planSourceId: string;
+  annotations: LayoutRuleSourceAnnotation[];
+  document?: ExtractedPdfDocument;
+}) {
+  const diagnostics: string[] = [];
+
+  if (!WEEKLY_GRID_COMPATIBLE_FAMILIES.has(params.familySlug)) {
+    diagnostics.push('Selected layout family does not support weekly-grid template compilation.');
+    return { rules: null, diagnostics };
+  }
+
+  const annotations = params.annotations
+    .filter((annotation) => isNormalizedBbox(annotation.bboxJson))
+    .map((annotation) => ({ ...annotation, bbox: annotation.bboxJson }));
+  const templatePageNumber = chooseTemplatePageNumber(annotations);
+  const templatePage = findPage(params.document, templatePageNumber);
+
+  const ignoreRegions = annotations
+    .filter((annotation) => annotation.annotationType === 'IGNORE_REGION')
+    .map((annotation) => annotation.bbox);
+  const legendRegions = annotations
+    .filter((annotation) => annotation.annotationType === 'LEGEND')
+    .map((annotation) => annotation.bbox);
+  const exclusionZones = [...ignoreRegions, ...legendRegions];
+
+  const weekHeaders = annotations.filter((annotation) => annotation.annotationType === 'WEEK_HEADER');
+  const dayLabels = annotations.filter((annotation) => annotation.annotationType === 'DAY_LABEL');
+  const blockTitleBoxes = annotations
+    .filter((annotation) => annotation.annotationType === 'BLOCK_TITLE')
+    .map((annotation) => annotation.bbox);
+  const sessionCells = annotations
+    .filter((annotation) => annotation.annotationType === 'SESSION_CELL')
+    .map((annotation) => annotation.bbox);
+
+  let weekAnchors: AnchorCandidate[] = [];
+  if (weekHeaders.length >= 2) {
+    const groups = clusterAnnotations(weekHeaders, 'x', 0.08);
+    weekAnchors = groups
+      .map((group) => ({
+        label: group[0]?.label?.trim() || null,
+        bbox: averageBox(group.map((annotation) => annotation.bbox)),
+      }))
+      .filter((candidate): candidate is AnchorCandidate => candidate.bbox != null);
+  } else if (weekHeaders.length === 1) {
+    weekAnchors = deriveAnchorsFromContainer({
+      page: templatePage,
+      container: weekHeaders[0].bbox,
+      type: 'week',
+      excludeBoxes: exclusionZones,
+    });
+    if (weekAnchors.length < 2) {
+      diagnostics.push('Week header annotation should cover all week labels so columns can be derived.');
+    }
+  } else {
+    diagnostics.push('Add a WEEK_HEADER annotation for the header row.');
+  }
+
+  let dayAnchors: AnchorCandidate[] = [];
+  if (dayLabels.length >= 3) {
+    const groups = clusterAnnotations(dayLabels, 'y', 0.05);
+    dayAnchors = groups
+      .map((group) => ({
+        label: group[0]?.label?.trim() || null,
+        bbox: averageBox(group.map((annotation) => annotation.bbox)),
+      }))
+      .filter((candidate): candidate is AnchorCandidate => candidate.bbox != null);
+  } else if (dayLabels.length === 1) {
+    dayAnchors = deriveAnchorsFromContainer({
+      page: templatePage,
+      container: dayLabels[0].bbox,
+      type: 'day',
+      excludeBoxes: exclusionZones,
+    });
+    if (dayAnchors.length < 3) {
+      diagnostics.push('Day label annotation should cover the whole day rail so rows can be derived.');
+    }
+  } else {
+    diagnostics.push('Add a DAY_LABEL annotation covering the day rail.');
+  }
+
+  if (weekAnchors.length < 2 || dayAnchors.length < 3) {
+    return { rules: null, diagnostics };
+  }
+
+  const sortedWeekAnchors = [...weekAnchors].sort((left, right) => centerX(left.bbox) - centerX(right.bbox));
+  const sortedDayAnchors = [...dayAnchors].sort((left, right) => centerY(left.bbox) - centerY(right.bbox));
+
+  const weekCenters = sortedWeekAnchors.map((anchor) => centerX(anchor.bbox));
+  const dayCenters = sortedDayAnchors.map((anchor) => centerY(anchor.bbox));
+  const typicalColumnGap =
+    weekCenters.length > 1 ? average(weekCenters.slice(1).map((center, index) => center - weekCenters[index]!)) : 0.16;
+  const typicalRowGap =
+    dayCenters.length > 1 ? average(dayCenters.slice(1).map((center, index) => center - dayCenters[index]!)) : 0.11;
+
+  const horizontalBounds = deriveGridBounds({
+    centers: weekCenters,
+    sampleBoxes: sessionCells.length ? sessionCells : sortedWeekAnchors.map((anchor) => anchor.bbox),
+    defaultGap: typicalColumnGap || 0.16,
+    minFromAnchors: Math.min(...sortedWeekAnchors.map((anchor) => anchor.bbox.x)),
+    maxFromAnchors: Math.max(...sortedWeekAnchors.map((anchor) => anchor.bbox.x + anchor.bbox.width)),
+    minimumCellSize: 0.08,
+  });
+
+  const minimumRowStart = Math.max(
+    Math.max(...sortedWeekAnchors.map((anchor) => anchor.bbox.y + anchor.bbox.height)) + 0.01,
+    Math.min(...sortedDayAnchors.map((anchor) => anchor.bbox.y))
+  );
+  const verticalBounds = deriveGridBounds({
+    centers: dayCenters,
+    sampleBoxes: sessionCells.length ? sessionCells.map((box) => ({ ...box, x: box.y, width: box.height })) : sortedDayAnchors.map((anchor) => ({ ...anchor.bbox, x: anchor.bbox.y, width: anchor.bbox.height })),
+    defaultGap: typicalRowGap || 0.11,
+    minFromAnchors: minimumRowStart,
+    maxFromAnchors: Math.max(...sortedDayAnchors.map((anchor) => anchor.bbox.y + anchor.bbox.height)),
+    minimumCellSize: 0.06,
+  });
+
+  const columnBands = deriveBandsFromCenters(weekCenters, horizontalBounds.min, horizontalBounds.max);
+  const rowBands = deriveBandsFromCenters(dayCenters, verticalBounds.min, verticalBounds.max);
+
+  const rules = {
+    version: 'weekly-grid-template-v1',
+    familySlug: params.familySlug,
+    templateSourcePlanId: params.planSourceId,
+    compiledAt: new Date().toISOString(),
+    annotationCounts: buildAnnotationCounts(params.annotations),
+    pageTemplate: {
+      templatePageNumber,
+      weekColumns: sortedWeekAnchors.map((anchor, index) => ({
+        index,
+        centerX: weekCenters[index]!,
+        left: columnBands[index]!.left,
+        right: columnBands[index]!.right,
+        label: anchor.label,
+      })),
+      dayRows: sortedDayAnchors.map((anchor, index) => ({
+        index,
+        dayOfWeek: parseDayOfWeek(anchor.label) ?? DAY_ORDER_FALLBACK[index] ?? null,
+        label: anchor.label,
+        centerY: dayCenters[index]!,
+        top: rowBands[index]!.left,
+        bottom: rowBands[index]!.right,
+      })),
+      weekHeaderBand: {
+        top: clamp(Math.min(...sortedWeekAnchors.map((anchor) => anchor.bbox.y)), 0, 1),
+        bottom: clamp(Math.max(...sortedWeekAnchors.map((anchor) => anchor.bbox.y + anchor.bbox.height)), 0, 1),
+      },
+      blockTitleBand: averageBox(blockTitleBoxes),
+      sampleSessionCell: sessionCells[0] ?? null,
+      ignoreRegions,
+      legendRegions,
+    },
+  } satisfies WeeklyGridLayoutRules;
+
+  return { rules, diagnostics };
+}
+
+export function getWeeklyGridCellBox(
+  column: { left: number; right: number },
+  row: { top: number; bottom: number }
+) {
+  return buildCellBox(column, row);
+}
+
+export function deriveWeeklyGridPreviewCells(rulesJson: unknown) {
+  const rules = parseLayoutFamilyRules(rulesJson);
+  if (!rules) return [] as WeeklyGridPreviewCell[];
+
+  return rules.pageTemplate.weekColumns.flatMap((column) =>
+    rules.pageTemplate.dayRows.map((row) => ({
+      pageNumber: rules.pageTemplate.templatePageNumber,
+      columnIndex: column.index,
+      rowIndex: row.index,
+      weekIndex: parseWeekNumber(column.label) ?? column.index,
+      dayOfWeek: row.dayOfWeek,
+      label: `W${(parseWeekNumber(column.label) ?? column.index) + 1} ${row.label ?? `Row ${row.index + 1}`}`,
+      bbox: buildCellBox(column, row),
+    }))
+  );
+}
+
+export function buildLayoutFamilyTemplatePreview(params: {
+  familySlug: string;
+  planSourceId: string;
+  annotations: LayoutRuleSourceAnnotation[];
+  document?: ExtractedPdfDocument;
+  rulesJson?: unknown | null;
+}) {
+  if (params.annotations.length) {
+    const compiled = compileWeeklyGridLayoutRulesDetailed(params);
+    if (compiled.rules || compiled.diagnostics.length) {
+      return {
+        rules: compiled.rules,
+        diagnostics: compiled.diagnostics,
+        pageNumber: compiled.rules?.pageTemplate.templatePageNumber ?? null,
+        cells: compiled.rules ? deriveWeeklyGridPreviewCells(compiled.rules) : [],
+        weekCount: compiled.rules?.pageTemplate.weekColumns.length ?? 0,
+        dayCount: compiled.rules?.pageTemplate.dayRows.length ?? 0,
+      } satisfies LayoutFamilyTemplatePreview;
+    }
+  }
+
+  const parsedExistingRules = parseLayoutFamilyRules(params.rulesJson ?? null);
+  if (parsedExistingRules) {
+    const cells = deriveWeeklyGridPreviewCells(parsedExistingRules);
+    return {
+      rules: parsedExistingRules,
+      diagnostics: [] as string[],
+      pageNumber: parsedExistingRules.pageTemplate.templatePageNumber,
+      cells,
+      weekCount: parsedExistingRules.pageTemplate.weekColumns.length,
+      dayCount: parsedExistingRules.pageTemplate.dayRows.length,
+    } satisfies LayoutFamilyTemplatePreview;
+  }
+
+  const compiled = compileWeeklyGridLayoutRulesDetailed(params);
+  return {
+    rules: compiled.rules,
+    diagnostics: compiled.diagnostics,
+    pageNumber: compiled.rules?.pageTemplate.templatePageNumber ?? null,
+    cells: compiled.rules ? deriveWeeklyGridPreviewCells(compiled.rules) : [],
+    weekCount: compiled.rules?.pageTemplate.weekColumns.length ?? 0,
+    dayCount: compiled.rules?.pageTemplate.dayRows.length ?? 0,
+  } satisfies LayoutFamilyTemplatePreview;
+}
+
 export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | null {
   if (!rulesJson || typeof rulesJson !== 'object') return null;
   const candidate = rulesJson as Record<string, unknown>;
@@ -202,7 +645,12 @@ export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | 
             label: typeof record.label === 'string' ? record.label : null,
           };
         })
-        .filter((value): value is { index: number; centerX: number; left: number; right: number; label: string | null } => value != null)
+        .filter(
+          (
+            value
+          ): value is { index: number; centerX: number; left: number; right: number; label: string | null } =>
+            value != null
+        )
     : [];
 
   const dayRows = Array.isArray(pageTemplateRecord.dayRows)
@@ -216,14 +664,28 @@ export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | 
           if (![center, top, bottom].every(Number.isFinite)) return null;
           return {
             index,
-            dayOfWeek: typeof record.dayOfWeek === 'number' && Number.isFinite(record.dayOfWeek) ? record.dayOfWeek : null,
+            dayOfWeek:
+              typeof record.dayOfWeek === 'number' && Number.isFinite(record.dayOfWeek)
+                ? record.dayOfWeek
+                : null,
             label: typeof record.label === 'string' ? record.label : null,
             centerY: center,
             top,
             bottom,
           };
         })
-        .filter((value): value is { index: number; dayOfWeek: number | null; label: string | null; centerY: number; top: number; bottom: number } => value != null)
+        .filter(
+          (
+            value
+          ): value is {
+            index: number;
+            dayOfWeek: number | null;
+            label: string | null;
+            centerY: number;
+            top: number;
+            bottom: number;
+          } => value != null
+        )
     : [];
 
   const weekHeaderBandCandidate = pageTemplateRecord.weekHeaderBand;
@@ -245,8 +707,7 @@ export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | 
     return null;
   }
 
-  const parseRegions = (value: unknown) =>
-    Array.isArray(value) ? value.filter(isNormalizedBbox) : [];
+  const parseRegions = (value: unknown) => (Array.isArray(value) ? value.filter(isNormalizedBbox) : []);
   const annotationCountsCandidate = candidate.annotationCounts;
   const annotationCounts =
     annotationCountsCandidate && typeof annotationCountsCandidate === 'object'
@@ -264,14 +725,26 @@ export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | 
   return {
     version: 'weekly-grid-template-v1',
     familySlug: typeof candidate.familySlug === 'string' ? candidate.familySlug : 'weekly-grid',
-    templateSourcePlanId: typeof candidate.templateSourcePlanId === 'string' ? candidate.templateSourcePlanId : '',
-    compiledAt: typeof candidate.compiledAt === 'string' ? candidate.compiledAt : new Date(0).toISOString(),
+    templateSourcePlanId:
+      typeof candidate.templateSourcePlanId === 'string' ? candidate.templateSourcePlanId : '',
+    compiledAt:
+      typeof candidate.compiledAt === 'string' ? candidate.compiledAt : new Date(0).toISOString(),
     annotationCounts,
     pageTemplate: {
+      templatePageNumber:
+        typeof pageTemplateRecord.templatePageNumber === 'number' &&
+        Number.isFinite(pageTemplateRecord.templatePageNumber)
+          ? pageTemplateRecord.templatePageNumber
+          : null,
       weekColumns,
       dayRows,
       weekHeaderBand,
-      blockTitleBand: isNormalizedBbox(pageTemplateRecord.blockTitleBand) ? pageTemplateRecord.blockTitleBand : null,
+      blockTitleBand: isNormalizedBbox(pageTemplateRecord.blockTitleBand)
+        ? pageTemplateRecord.blockTitleBand
+        : null,
+      sampleSessionCell: isNormalizedBbox(pageTemplateRecord.sampleSessionCell)
+        ? pageTemplateRecord.sampleSessionCell
+        : null,
       ignoreRegions: parseRegions(pageTemplateRecord.ignoreRegions),
       legendRegions: parseRegions(pageTemplateRecord.legendRegions),
     },
@@ -282,104 +755,7 @@ export function compileLayoutFamilyRules(params: {
   familySlug: string;
   planSourceId: string;
   annotations: LayoutRuleSourceAnnotation[];
+  document?: ExtractedPdfDocument;
 }) {
-  if (!WEEKLY_GRID_COMPATIBLE_FAMILIES.has(params.familySlug)) {
-    return null;
-  }
-
-  const annotations = params.annotations.filter((annotation) => isNormalizedBbox(annotation.bboxJson))
-    .map((annotation) => ({ ...annotation, bbox: annotation.bboxJson }));
-  const weekHeaders = annotations.filter((annotation) => annotation.annotationType === 'WEEK_HEADER');
-  const dayLabels = annotations.filter((annotation) => annotation.annotationType === 'DAY_LABEL');
-
-  if (weekHeaders.length < 2 || dayLabels.length < 3) {
-    return null;
-  }
-
-  const weekHeaderGroups = clusterAnnotations(weekHeaders, 'x', 0.08);
-  const dayLabelGroups = clusterAnnotations(dayLabels, 'y', 0.05);
-
-  if (weekHeaderGroups.length < 2 || dayLabelGroups.length < 3) {
-    return null;
-  }
-
-  const weekHeaderBoxes = weekHeaderGroups.map((group) => averageBox(group.map((annotation) => annotation.bbox))).filter(isNonNullBox);
-  const dayLabelBoxes = dayLabelGroups.map((group) => averageBox(group.map((annotation) => annotation.bbox))).filter(isNonNullBox);
-  const sessionCells = annotations
-    .filter((annotation) => annotation.annotationType === 'SESSION_CELL')
-    .map((annotation) => annotation.bbox);
-
-  const weekCenters = weekHeaderBoxes.map((box) => centerX(box));
-  const dayCenters = dayLabelBoxes.map((box) => centerY(box));
-  const typicalColumnGap = weekCenters.length > 1 ? average(weekCenters.slice(1).map((center, index) => center - weekCenters[index]!)) : 0.16;
-  const typicalRowGap = dayCenters.length > 1 ? average(dayCenters.slice(1).map((center, index) => center - dayCenters[index]!)) : 0.11;
-
-  const columnMin = sessionCells.length
-    ? Math.max(0, Math.min(...sessionCells.map((box) => box.x)))
-    : Math.max(0, Math.min(...weekCenters.map((center) => center - typicalColumnGap / 2)));
-  const columnMax = sessionCells.length
-    ? Math.min(1, Math.max(...sessionCells.map((box) => box.x + box.width)))
-    : Math.min(1, Math.max(...weekCenters.map((center) => center + typicalColumnGap / 2)));
-  const rowMin = sessionCells.length
-    ? Math.max(0, Math.min(...sessionCells.map((box) => box.y)))
-    : Math.max(
-        Math.max(...weekHeaderBoxes.map((box) => box.y + box.height)) + 0.01,
-        Math.min(...dayCenters.map((center) => center - typicalRowGap / 2))
-      );
-  const rowMax = sessionCells.length
-    ? Math.min(1, Math.max(...sessionCells.map((box) => box.y + box.height)))
-    : Math.min(1, Math.max(...dayCenters.map((center) => center + typicalRowGap / 2)));
-
-  const columnBands = deriveBandsFromCenters(weekCenters, columnMin, columnMax);
-  const rowBands = deriveBandsFromCenters(dayCenters, rowMin, rowMax);
-
-  const dayOrderFallback = [1, 2, 3, 4, 5, 6, 0];
-  const blockTitleBoxes = annotations
-    .filter((annotation) => annotation.annotationType === 'BLOCK_TITLE')
-    .map((annotation) => annotation.bbox);
-  const ignoreRegions = annotations
-    .filter((annotation) => annotation.annotationType === 'IGNORE_REGION')
-    .map((annotation) => annotation.bbox);
-  const legendRegions = annotations
-    .filter((annotation) => annotation.annotationType === 'LEGEND')
-    .map((annotation) => annotation.bbox);
-
-  return {
-    version: 'weekly-grid-template-v1',
-    familySlug: params.familySlug,
-    templateSourcePlanId: params.planSourceId,
-    compiledAt: new Date().toISOString(),
-    annotationCounts: buildAnnotationCounts(params.annotations),
-    pageTemplate: {
-      weekColumns: weekHeaderBoxes
-        .map((box, index) => ({
-          index,
-          centerX: weekCenters[index]!,
-          left: columnBands[index]!.left,
-          right: columnBands[index]!.right,
-          label: weekHeaderGroups[index]?.[0]?.label?.trim() || null,
-        }))
-        .sort((left, right) => left.centerX - right.centerX),
-      dayRows: dayLabelBoxes
-        .map((box, index) => ({
-          index,
-          dayOfWeek:
-            parseDayOfWeek(dayLabelGroups[index]?.[0]?.label) ??
-            dayOrderFallback[index] ??
-            null,
-          label: dayLabelGroups[index]?.[0]?.label?.trim() || null,
-          centerY: dayCenters[index]!,
-          top: rowBands[index]!.left,
-          bottom: rowBands[index]!.right,
-        }))
-        .sort((left, right) => left.centerY - right.centerY),
-      weekHeaderBand: {
-        top: clamp(Math.min(...weekHeaderBoxes.map((box) => box.y)), 0, 1),
-        bottom: clamp(Math.max(...weekHeaderBoxes.map((box) => box.y + box.height)), 0, 1),
-      },
-      blockTitleBand: averageBox(blockTitleBoxes),
-      ignoreRegions,
-      legendRegions,
-    },
-  } satisfies WeeklyGridLayoutRules;
+  return compileWeeklyGridLayoutRulesDetailed(params).rules;
 }

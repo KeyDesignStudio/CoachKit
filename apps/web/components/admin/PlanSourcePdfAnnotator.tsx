@@ -40,6 +40,16 @@ type PdfAnnotation = {
 type PlanSourcePdfAnnotatorProps = {
   pdfUrl: string;
   annotations: PdfAnnotation[];
+  previewCells?: Array<{
+    pageNumber: number | null;
+    label: string;
+    weekIndex: number;
+    dayOfWeek: number | null;
+    rowIndex: number;
+    columnIndex: number;
+    bbox: AnnotationBox;
+  }>;
+  initialPageNumber?: number | null;
   onCreateAnnotation: (payload: {
     pageNumber: number;
     annotationType: AnnotationType;
@@ -108,7 +118,14 @@ async function loadPdfJs() {
   return window.__coachKitPdfJsPromise;
 }
 
-export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation, onDeleteAnnotation }: PlanSourcePdfAnnotatorProps) {
+export function PlanSourcePdfAnnotator({
+  pdfUrl,
+  annotations,
+  previewCells = [],
+  initialPageNumber,
+  onCreateAnnotation,
+  onDeleteAnnotation,
+}: PlanSourcePdfAnnotatorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -128,6 +145,10 @@ export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation
   const pageAnnotations = useMemo(
     () => annotations.filter((annotation) => annotation.pageNumber === pageNumber),
     [annotations, pageNumber]
+  );
+  const pagePreviewCells = useMemo(
+    () => previewCells.filter((cell) => (cell.pageNumber ?? 1) === pageNumber),
+    [pageNumber, previewCells]
   );
 
   const renderPage = useCallback(async () => {
@@ -159,7 +180,7 @@ export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation
     setError('');
     setPdfDoc(null);
     setPageCount(0);
-    setPageNumber(1);
+    setPageNumber(initialPageNumber && initialPageNumber > 0 ? initialPageNumber : 1);
 
     void (async () => {
       try {
@@ -180,7 +201,12 @@ export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl]);
+  }, [initialPageNumber, pdfUrl]);
+
+  useEffect(() => {
+    if (!pageCount || !initialPageNumber) return;
+    setPageNumber((current) => (current === initialPageNumber ? current : clamp(initialPageNumber, 1, pageCount)));
+  }, [initialPageNumber, pageCount]);
 
   useEffect(() => {
     if (!pdfDoc) return;
@@ -267,6 +293,11 @@ export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation
           <p className="mt-1 text-xs text-[var(--muted)]">
             Draw boxes over the rendered page to mark week headers, session cells, day labels, or ignore regions.
           </p>
+          {pagePreviewCells.length ? (
+            <p className="mt-2 text-xs text-sky-700">
+              Derived grid preview: {pagePreviewCells.length} session cells on this page.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <button
@@ -344,6 +375,18 @@ export function PlanSourcePdfAnnotator({ pdfUrl, annotations, onCreateAnnotation
                   {formatEnum(annotation.annotationType)}
                 </span>
               </div>
+            ))}
+            {pagePreviewCells.map((cell) => (
+              <div
+                key={`preview-${cell.columnIndex}-${cell.rowIndex}-${cell.label}`}
+                className="pointer-events-none absolute border border-dashed border-sky-600 bg-sky-500/5"
+                style={{
+                  left: `${cell.bbox.x * 100}%`,
+                  top: `${cell.bbox.y * 100}%`,
+                  width: `${cell.bbox.width * 100}%`,
+                  height: `${cell.bbox.height * 100}%`,
+                }}
+              />
             ))}
             {draftBox ? (
               <div

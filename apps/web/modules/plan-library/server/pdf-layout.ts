@@ -11,8 +11,24 @@ export type PdfTextItem = {
   text: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   normalizedX: number;
   normalizedY: number;
+  normalizedWidth: number;
+  normalizedHeight: number;
+};
+
+export type PdfTextRun = {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  normalizedX: number;
+  normalizedY: number;
+  normalizedWidth: number;
+  normalizedHeight: number;
 };
 
 export type ExtractedPdfPage = {
@@ -54,13 +70,19 @@ export async function extractStructuredPdfDocument(buffer: Buffer): Promise<Extr
             .map((item: any) => {
               const x = Number(item?.transform?.[4] ?? 0);
               const y = Number(item?.transform?.[5] ?? 0);
+              const itemWidth = Number(item?.width ?? 0);
+              const itemHeight = Number(item?.height ?? 0);
               const text = typeof item?.str === 'string' ? item.str : '';
               return {
                 text,
                 x,
                 y,
+                width: itemWidth,
+                height: itemHeight,
                 normalizedX: clamp(width ? x / width : 0, 0, 1),
                 normalizedY: clamp(height ? 1 - y / height : 0, 0, 1),
+                normalizedWidth: clamp(width ? itemWidth / width : 0, 0, 1),
+                normalizedHeight: clamp(height ? itemHeight / height : 0, 0, 1),
               } satisfies PdfTextItem;
             })
             .filter((item: PdfTextItem) => item.text.length > 0)
@@ -102,16 +124,11 @@ export function extractTextFromPageRegion(params: {
   lineTolerance?: number;
 }) {
   const lineTolerance = params.lineTolerance ?? 0.0125;
-  const excludeBoxes = params.excludeBoxes ?? [];
-
-  const items = params.page.items
-    .filter((item) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, params.box))
-    .filter((item) => !excludeBoxes.some((box) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, box)))
-    .sort((a, b) => {
-      const deltaY = a.normalizedY - b.normalizedY;
-      if (Math.abs(deltaY) > lineTolerance) return deltaY;
-      return a.normalizedX - b.normalizedX;
-    });
+  const items = extractPageItemsFromRegion(params).sort((a, b) => {
+    const deltaY = a.normalizedY - b.normalizedY;
+    if (Math.abs(deltaY) > lineTolerance) return deltaY;
+    return a.normalizedX - b.normalizedX;
+  });
 
   if (!items.length) {
     return {
@@ -146,4 +163,116 @@ export function extractTextFromPageRegion(params: {
     lines: renderedLines,
     itemCount: items.length,
   };
+}
+
+type ExtractPageItemsParams = {
+  page: ExtractedPdfPage;
+  box: NormalizedBbox;
+  excludeBoxes?: NormalizedBbox[];
+};
+
+export function extractPageItemsFromRegion(params: ExtractPageItemsParams) {
+  const excludeBoxes = params.excludeBoxes ?? [];
+  return params.page.items
+    .filter((item) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, params.box))
+    .filter((item) => !excludeBoxes.some((box) => pointInBox({ x: item.normalizedX, y: item.normalizedY }, box)));
+}
+
+function mergeItemTexts(left: string, right: string, gap: number) {
+  if (!left) return right;
+  if (!right) return left;
+  if (/\s$/.test(left) || /^\s/.test(right)) return `${left}${right}`;
+  if (gap > 0.0085) return `${left} ${right}`;
+  return `${left}${right}`;
+}
+
+export function extractTextRunsFromPageRegion(params: {
+  page: ExtractedPdfPage;
+  box: NormalizedBbox;
+  excludeBoxes?: NormalizedBbox[];
+  lineTolerance?: number;
+  wordGapTolerance?: number;
+}) {
+  const lineTolerance = params.lineTolerance ?? 0.0125;
+  const wordGapTolerance = params.wordGapTolerance ?? 0.0125;
+  const items = extractPageItemsFromRegion(params).sort((a, b) => {
+    const deltaY = a.normalizedY - b.normalizedY;
+    if (Math.abs(deltaY) > lineTolerance) return deltaY;
+    return a.normalizedX - b.normalizedX;
+  });
+
+  const lineGroups: Array<{ y: number; items: PdfTextItem[] }> = [];
+  for (const item of items) {
+    const currentLine = lineGroups[lineGroups.length - 1];
+    if (!currentLine || Math.abs(currentLine.y - item.normalizedY) > lineTolerance) {
+      lineGroups.push({ y: item.normalizedY, items: [item] });
+      continue;
+    }
+    currentLine.items.push(item);
+  }
+
+  const runs: PdfTextRun[] = [];
+  for (const line of lineGroups) {
+    const sortedLineItems = [...line.items].sort((a, b) => a.normalizedX - b.normalizedX);
+    let current: PdfTextRun | null = null;
+
+    for (const item of sortedLineItems) {
+      if (!current) {
+        current = {
+          text: item.text,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          normalizedX: item.normalizedX,
+          normalizedY: item.normalizedY,
+          normalizedWidth: item.normalizedWidth,
+          normalizedHeight: item.normalizedHeight,
+        };
+        continue;
+      }
+
+      const currentRight: number = current.normalizedX + current.normalizedWidth;
+      const gap: number = item.normalizedX - currentRight;
+      if (gap > wordGapTolerance) {
+        runs.push(current);
+        current = {
+          text: item.text,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          normalizedX: item.normalizedX,
+          normalizedY: item.normalizedY,
+          normalizedWidth: item.normalizedWidth,
+          normalizedHeight: item.normalizedHeight,
+        };
+        continue;
+      }
+
+      const nextLeft = Math.min(current.normalizedX, item.normalizedX);
+      const nextTop = Math.min(current.normalizedY, item.normalizedY);
+      const nextRight = Math.max(currentRight, item.normalizedX + item.normalizedWidth);
+      const nextBottom = Math.max(
+        current.normalizedY + current.normalizedHeight,
+        item.normalizedY + item.normalizedHeight
+      );
+
+      current = {
+        text: mergeItemTexts(current.text, item.text, gap),
+        x: Math.min(current.x, item.x),
+        y: Math.min(current.y, item.y),
+        width: Math.max(current.x + current.width, item.x + item.width) - Math.min(current.x, item.x),
+        height: Math.max(current.y + current.height, item.y + item.height) - Math.min(current.y, item.y),
+        normalizedX: nextLeft,
+        normalizedY: nextTop,
+        normalizedWidth: nextRight - nextLeft,
+        normalizedHeight: nextBottom - nextTop,
+      };
+    }
+
+    if (current) runs.push(current);
+  }
+
+  return runs.filter((run) => run.text.trim().length > 0);
 }

@@ -3,9 +3,19 @@ import { Prisma, type PlanSourceAnnotationType, type PlanSourceExtractionReviewS
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
-import { deriveManualSessionTemplateFields, extractFromPdfBuffer, extractFromRawText, type ExtractedPlanSource } from './extract';
+import {
+  deriveManualSessionTemplateFields,
+  extractFromRawText,
+  extractFromStructuredPdfDocument,
+  type ExtractedPlanSource,
+} from './extract';
 import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
-import { compileLayoutFamilyRules, parseLayoutFamilyRules } from './layout-rules';
+import {
+  buildLayoutFamilyTemplatePreview,
+  compileLayoutFamilyRules,
+  parseLayoutFamilyRules,
+} from './layout-rules';
+import { extractStructuredPdfDocument } from './pdf-layout';
 
 const PARSER_STUDIO_EXTRACTOR_VERSION = 'parser-studio-v1';
 
@@ -380,6 +390,16 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
   const { assigned, inferred, recommended, layoutFamilies } = await getAssignedOrInferredLayoutFamily(planSource);
   const latestVersion = planSource.versions[0] ?? null;
   const latestRun = planSource.extractionRuns[0] ?? null;
+  const assignedRules = parseLayoutFamilyRules(assigned?.rulesJson ?? null);
+  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
+  const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
+  const preview = buildLayoutFamilyTemplatePreview({
+    familySlug: assigned?.slug ?? recommended?.slug ?? inferred.slug,
+    planSourceId: planSource.id,
+    annotations: planSource.annotations as any,
+    document: pdfDocument ?? undefined,
+    rulesJson: assigned?.rulesJson ?? null,
+  });
 
   return {
     layoutFamilies,
@@ -407,9 +427,9 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
             slug: assigned.slug,
             name: assigned.name,
             description: assigned.description,
-            hasCompiledRules: Boolean(parseLayoutFamilyRules(assigned.rulesJson)),
-            compiledTemplateVersion: parseLayoutFamilyRules(assigned.rulesJson)?.version ?? null,
-            templateSourcePlanId: parseLayoutFamilyRules(assigned.rulesJson)?.templateSourcePlanId ?? null,
+            hasCompiledRules: Boolean(assignedRules),
+            compiledTemplateVersion: assignedRules?.version ?? null,
+            templateSourcePlanId: assignedRules?.templateSourcePlanId ?? null,
           }
         : null,
       recommendedLayoutFamily: recommended
@@ -499,6 +519,22 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
             summaryJson: latestRun.summaryJson,
           }
         : null,
+      gridPreview: {
+        pageNumber: preview.pageNumber,
+        weekCount: preview.weekCount,
+        dayCount: preview.dayCount,
+        cellCount: preview.cells.length,
+        diagnostics: preview.diagnostics,
+        cells: preview.cells.map((cell) => ({
+          pageNumber: cell.pageNumber,
+          label: cell.label,
+          weekIndex: cell.weekIndex,
+          dayOfWeek: cell.dayOfWeek,
+          rowIndex: cell.rowIndex,
+          columnIndex: cell.columnIndex,
+          bbox: cell.bbox,
+        })),
+      },
       annotations: planSource.annotations.map((annotation) => ({
         id: annotation.id,
         pageNumber: annotation.pageNumber,
@@ -592,18 +628,20 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     rawText: planSource.rawText,
     sourceUrl: planSource.sourceUrl,
   });
+  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
+  const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
   const compiledRules = planSource.layoutFamily
     ? compileLayoutFamilyRules({
         familySlug: planSource.layoutFamily.slug,
         planSourceId: planSource.id,
         annotations: planSource.annotations as any,
+        document: pdfDocument ?? undefined,
       })
     : null;
   const layoutRulesJson = compiledRules ?? planSource.layoutFamily?.rulesJson ?? null;
-  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
-  const extracted = pdfBuffer
-    ? await extractFromPdfBuffer({
-        buffer: pdfBuffer,
+  const extracted = pdfDocument
+    ? extractFromStructuredPdfDocument({
+        document: pdfDocument,
         durationWeeks: planSource.durationWeeks,
         rawTextFallback: planSource.rawText,
         layoutRulesJson,
