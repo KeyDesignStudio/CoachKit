@@ -18,6 +18,17 @@ function isAutosyncEnabled() {
   return process.env.STRAVA_AUTOSYNC_ENABLED !== '0';
 }
 
+function getProvidedCronSecret(request: NextRequest) {
+  const headerSecret = request.headers.get('x-cron-secret');
+  if (headerSecret) return headerSecret;
+
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader) return null;
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
 function requireCronAuth(request: NextRequest): NextResponse | null {
   const expected = process.env.CRON_SECRET ?? process.env.COACHKIT_CRON_SECRET;
   if (!expected) {
@@ -25,9 +36,9 @@ function requireCronAuth(request: NextRequest): NextResponse | null {
     throw new ApiError(500, 'CRON_SECRET_MISSING', 'CRON_SECRET is not set.');
   }
 
-  // IMPORTANT: Do not authenticate cron requests via the Authorization header.
-  // Clerk middleware may attempt to parse Authorization as a JWT and reject non-JWT values.
-  const provided = request.headers.get('x-cron-secret');
+  // Accept both the explicit x-cron-secret header (GitHub Actions/manual callers)
+  // and Vercel's Bearer token header for native cron invocations.
+  const provided = getProvidedCronSecret(request);
   if (!provided) {
     return cronAuthFailure();
   }
