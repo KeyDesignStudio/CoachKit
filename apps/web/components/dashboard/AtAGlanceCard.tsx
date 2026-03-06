@@ -50,7 +50,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
       <div className="flex flex-1 items-center">
         <div
           className={cn(
-            'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,9fr)_minmax(0,8fr)] min-[520px]:items-center min-w-0',
+            'grid w-full grid-cols-1 items-start min-[520px]:grid-cols-[minmax(0,8fr)_minmax(0,9fr)] min-[520px]:items-center min-w-0',
             tokens.spacing.widgetGap
           )}
           data-testid={testIds.grid}
@@ -88,7 +88,7 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                 const theme = getDisciplineTheme(row.discipline);
                 const pct = Math.max(0, Math.min(1, row.totalMinutes / maxMinutes));
                 return (
-                  <div key={row.discipline} className={cn('grid grid-cols-[auto,1fr] md:grid-cols-[auto,1fr,auto] items-center min-w-0', tokens.spacing.widgetGap)}>
+                  <div key={row.discipline} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr)] items-center gap-x-3 gap-y-1.5">
                     <div className={cn('flex items-center min-w-[64px]', tokens.spacing.widgetGap)}>
                       <Icon name={theme.iconName} size="sm" className={theme.textClass} aria-hidden />
                       <span className={cn('font-medium text-[var(--text)]', tokens.typography.meta)}>
@@ -96,12 +96,21 @@ export function AtAGlanceCard({ statsRows, disciplineRows, loading = false, minH
                       </span>
                     </div>
 
-                    <div className="h-2 rounded-full bg-[var(--bar-track)] overflow-hidden">
-                      <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
-                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                      <div
+                        className="h-2.5 min-w-[72px] flex-1 basis-[88px] overflow-hidden rounded-full bg-[var(--bar-track)]"
+                        data-testid={`${testIds.disciplineLoad}-row-bar`}
+                      >
+                        <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.round(pct * 100)}%` }} />
+                      </div>
 
-                    <div className={cn('col-span-2 pt-1 text-left md:col-span-1 md:pt-0 tabular-nums md:text-right md:whitespace-nowrap md:truncate max-w-none md:max-w-[120px]', tokens.typography.meta)} title={row.rightValue}>
-                      {row.rightValue}
+                      <div
+                        className={cn('ml-auto tabular-nums whitespace-nowrap text-right text-[11px] text-[var(--muted)] sm:text-xs')}
+                        title={row.rightValue}
+                        data-testid={`${testIds.disciplineLoad}-row-value`}
+                      >
+                        {row.rightValue}
+                      </div>
                     </div>
                   </div>
                 );

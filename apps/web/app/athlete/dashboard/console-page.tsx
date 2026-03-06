@@ -888,7 +888,7 @@ export default function AthleteDashboardConsolePage() {
                 aria-expanded={sidebarOpen}
                 data-testid="athlete-dashboard-sidebar-toggle"
               >
-                <Icon name={sidebarOpen ? 'prev' : 'next'} size="md" aria-hidden />
+                <Icon name="sidebar" size="md" aria-hidden />
               </button>
             </div>
 

@@ -36,6 +36,14 @@ test('Athlete dashboard uses the redesigned desktop layout', async ({ page }) =>
   await expect(caloriesCard).toBeVisible();
   await expect(complianceCard).toBeVisible();
   const stravaBox = await stravaCard.boundingBox();
+  const clippedDisciplineValues = await page.getByTestId('athlete-dashboard-discipline-load').evaluate((node) => {
+    const values = Array.from(node.querySelectorAll<HTMLElement>('[data-testid="athlete-dashboard-discipline-load-row-value"]'));
+    return values.some((value) => value.scrollWidth > value.clientWidth + 1);
+  });
+  const tooNarrowDisciplineBars = await page.getByTestId('athlete-dashboard-discipline-load').evaluate((node) => {
+    const bars = Array.from(node.querySelectorAll<HTMLElement>('[data-testid="athlete-dashboard-discipline-load-row-bar"]'));
+    return bars.some((bar) => bar.clientWidth < 72);
+  });
 
   const caloriesBox = await caloriesCard.boundingBox();
   const complianceBox = await complianceCard.boundingBox();
@@ -46,6 +54,8 @@ test('Athlete dashboard uses the redesigned desktop layout', async ({ page }) =>
   expect(caloriesBox, 'Calories card should have a bounding box').toBeTruthy();
   expect(complianceBox, 'Compliance card should have a bounding box').toBeTruthy();
   expect(stravaBox, 'Strava card should have a bounding box').toBeTruthy();
+  expect(clippedDisciplineValues, 'Discipline summary values should not be clipped').toBeFalsy();
+  expect(tooNarrowDisciplineBars, 'Discipline summary bars should have enough width to be legible').toBeFalsy();
 
   if (needsBox && glanceBox && plannedBox && caloriesBox && complianceBox && stravaBox) {
     expect(Math.abs(needsBox.y - glanceBox.y)).toBeLessThanOrEqual(8);
@@ -63,6 +73,7 @@ test('Athlete dashboard sidebar collapse state persists on desktop', async ({ pa
   await page.goto('/athlete/dashboard', { waitUntil: 'networkidle' });
 
   const toggle = page.getByTestId('athlete-dashboard-sidebar-toggle');
+  await expect(toggle.locator('.material-symbols-outlined')).toHaveText('dock_to_left');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
