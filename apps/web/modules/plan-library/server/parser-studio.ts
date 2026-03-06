@@ -683,20 +683,25 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     throw new ApiError(404, 'PLAN_SOURCE_NOT_FOUND', 'Plan source not found.');
   }
 
+  const layoutFamilies = await ensurePlanSourceLayoutFamilies();
   const inferredLayout = inferLayoutFamily({
     title: planSource.title,
     rawText: planSource.rawText,
     sourceUrl: planSource.sourceUrl,
   });
   const { pdfDocument, diagnostics: pdfDiagnostics } = await loadParserStudioPdf(planSource);
-  const compiledRules = planSource.layoutFamily
-    ? compileLayoutFamilyRules({
-        familySlug: planSource.layoutFamily.slug,
-        planSourceId: planSource.id,
-        annotations: planSource.annotations as any,
-        document: pdfDocument ?? undefined,
-      })
-    : null;
+  const compilationFamilySlug = planSource.layoutFamily?.slug ?? inferredLayout.slug;
+  const compiledRules = compileLayoutFamilyRules({
+    familySlug: compilationFamilySlug,
+    planSourceId: planSource.id,
+    annotations: planSource.annotations as any,
+    document: pdfDocument ?? undefined,
+  });
+  const compiledTemplate = parseLayoutFamilyRules(compiledRules ?? null);
+  const appliedLayoutFamily =
+    (compiledTemplate
+      ? layoutFamilies.find((family) => family.slug === compiledTemplate.familySlug) ?? null
+      : null) ?? planSource.layoutFamily ?? null;
   const layoutRulesJson = compiledRules ?? planSource.layoutFamily?.rulesJson ?? null;
   const extracted = pdfDocument
     ? extractFromStructuredPdfDocument({
@@ -713,9 +718,9 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
   const nextVersion = (planSource.versions[0]?.version ?? 0) + 1;
 
   return prisma.$transaction(async (tx) => {
-    if (planSource.layoutFamily && compiledRules) {
+    if (appliedLayoutFamily && compiledRules) {
       await tx.planSourceLayoutFamily.update({
-        where: { id: planSource.layoutFamily.id },
+        where: { id: appliedLayoutFamily.id },
         data: { rulesJson: compiledRules as Prisma.InputJsonValue },
       });
     }
@@ -725,6 +730,7 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
       data: {
         rawText: extracted.rawText,
         rawJson: extracted.rawJson as Prisma.InputJsonValue,
+        layoutFamilyId: appliedLayoutFamily?.id ?? planSource.layoutFamilyId,
       },
     });
 
@@ -732,11 +738,11 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
       planSourceId: planSource.id,
       version: nextVersion,
       extracted,
-      layoutFamily: planSource.layoutFamily
+      layoutFamily: appliedLayoutFamily
         ? {
-            id: planSource.layoutFamily.id,
-            slug: planSource.layoutFamily.slug,
-            name: planSource.layoutFamily.name,
+            id: appliedLayoutFamily.id,
+            slug: appliedLayoutFamily.slug,
+            name: appliedLayoutFamily.name,
           }
         : null,
       inferredLayoutFamily: inferredLayout,
