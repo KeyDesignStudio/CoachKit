@@ -169,4 +169,50 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(preview.cells[0]?.label).toContain('W1');
     expect(preview.cells[0]?.dayOfWeek).toBe(1);
   });
+
+  it('restores a missing Monday anchor from the day rail instead of dropping the first row', () => {
+    const document: ExtractedPdfDocument = {
+      rawText: '12 week plan',
+      pages: [
+        {
+          pageNumber: 1,
+          width: 1000,
+          height: 1000,
+          text: '',
+          items: [
+            makeItem('WEEK', 0.18, 0.16, 0.05),
+            makeItem('1', 0.24, 0.16, 0.02),
+            makeItem('WEEK', 0.39, 0.16, 0.05),
+            makeItem('2', 0.45, 0.16, 0.02),
+            makeItem('WEEK', 0.60, 0.16, 0.05),
+            makeItem('3', 0.66, 0.16, 0.02),
+            makeItem('WEEK', 0.81, 0.16, 0.05),
+            makeItem('4', 0.87, 0.16, 0.02),
+            makeItem('TUE', 0.05, 0.38, 0.04),
+            makeItem('WED', 0.05, 0.49, 0.04),
+            makeItem('THU', 0.05, 0.60, 0.04),
+            makeItem('FRI', 0.05, 0.71, 0.04),
+            makeItem('SAT', 0.05, 0.82, 0.04),
+            makeItem('SUN', 0.05, 0.93, 0.04),
+          ],
+        },
+      ],
+    };
+
+    const preview = buildLayoutFamilyTemplatePreview({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_123',
+      annotations: [
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week Column', note: null, bboxJson: { x: 0.10, y: 0.12, width: 0.82, height: 0.08 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Days of the week', note: null, bboxJson: { x: 0.01, y: 0.22, width: 0.09, height: 0.76 } },
+        { pageNumber: 1, annotationType: 'SESSION_CELL', label: 'Sample session cell', note: null, bboxJson: { x: 0.13, y: 0.24, width: 0.17, height: 0.09 } },
+      ],
+      document,
+    });
+
+    expect(preview.cells).toHaveLength(28);
+    expect(preview.cells.filter((cell) => cell.dayOfWeek === 1)).toHaveLength(4);
+    expect(preview.cells.filter((cell) => cell.dayOfWeek === 0)).toHaveLength(4);
+    expect(preview.diagnostics.join(' ')).toContain('Recovered 6/7 day anchors');
+  });
 });
