@@ -15,7 +15,7 @@ import {
   compileLayoutFamilyRules,
   parseLayoutFamilyRules,
 } from './layout-rules';
-import { extractStructuredPdfDocument } from './pdf-layout';
+import { extractStructuredPdfDocument, type ExtractedPdfDocument } from './pdf-layout';
 
 const PARSER_STUDIO_EXTRACTOR_VERSION = 'parser-studio-v1';
 
@@ -44,8 +44,19 @@ type ExtractionSummaryJson = {
   };
 };
 
+type LoadedParserStudioPdf = {
+  pdfBuffer: Buffer | null;
+  pdfDocument: ExtractedPdfDocument | null;
+  diagnostics: string[];
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Unknown parser error.';
 }
 
 function computeAdjustedConfidence(rawConfidence: number, warningCount: number) {
@@ -240,6 +251,38 @@ async function loadPlanSourcePdfBuffer(planSource: {
   return null;
 }
 
+async function loadParserStudioPdf(planSource: {
+  type: string;
+  storedDocumentUrl: string | null;
+  sourceUrl: string | null;
+}): Promise<LoadedParserStudioPdf> {
+  const diagnostics: string[] = [];
+  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
+  if (!pdfBuffer) {
+    return {
+      pdfBuffer: null,
+      pdfDocument: null,
+      diagnostics,
+    };
+  }
+
+  try {
+    const pdfDocument = await extractStructuredPdfDocument(pdfBuffer);
+    return {
+      pdfBuffer,
+      pdfDocument,
+      diagnostics,
+    };
+  } catch (error) {
+    diagnostics.push(`Stored PDF preview could not be parsed on the server: ${errorMessage(error)}`);
+    return {
+      pdfBuffer,
+      pdfDocument: null,
+      diagnostics,
+    };
+  }
+}
+
 export async function listParserStudioSources() {
   const layoutFamilies = await ensurePlanSourceLayoutFamilies();
   const sources = await prisma.planSource.findMany({
@@ -391,15 +434,32 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
   const latestVersion = planSource.versions[0] ?? null;
   const latestRun = planSource.extractionRuns[0] ?? null;
   const assignedRules = parseLayoutFamilyRules(assigned?.rulesJson ?? null);
-  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
-  const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
-  const preview = buildLayoutFamilyTemplatePreview({
-    familySlug: assigned?.slug ?? recommended?.slug ?? inferred.slug,
-    planSourceId: planSource.id,
-    annotations: planSource.annotations as any,
-    document: pdfDocument ?? undefined,
-    rulesJson: assigned?.rulesJson ?? null,
-  });
+  const { pdfDocument, diagnostics: pdfDiagnostics } = await loadParserStudioPdf(planSource);
+  let preview;
+  try {
+    preview = buildLayoutFamilyTemplatePreview({
+      familySlug: assigned?.slug ?? recommended?.slug ?? inferred.slug,
+      planSourceId: planSource.id,
+      annotations: planSource.annotations as any,
+      document: pdfDocument ?? undefined,
+      rulesJson: assigned?.rulesJson ?? null,
+    });
+  } catch (error) {
+    preview = {
+      rules: null,
+      diagnostics: [`Grid preview could not be derived: ${errorMessage(error)}`],
+      pageNumber: null,
+      cells: [],
+      weekCount: 0,
+      dayCount: 0,
+    };
+  }
+  if (pdfDiagnostics.length) {
+    preview = {
+      ...preview,
+      diagnostics: [...pdfDiagnostics, ...preview.diagnostics],
+    };
+  }
 
   return {
     layoutFamilies,
@@ -628,8 +688,7 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     rawText: planSource.rawText,
     sourceUrl: planSource.sourceUrl,
   });
-  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
-  const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
+  const { pdfDocument, diagnostics: pdfDiagnostics } = await loadParserStudioPdf(planSource);
   const compiledRules = planSource.layoutFamily
     ? compileLayoutFamilyRules({
         familySlug: planSource.layoutFamily.slug,
@@ -648,6 +707,9 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
         annotations: planSource.annotations as any,
       })
     : extractFromRawText(planSource.rawText, planSource.durationWeeks);
+  if (pdfDiagnostics.length) {
+    extracted.warnings = [...pdfDiagnostics, ...extracted.warnings];
+  }
   const nextVersion = (planSource.versions[0]?.version ?? 0) + 1;
 
   return prisma.$transaction(async (tx) => {
