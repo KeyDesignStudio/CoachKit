@@ -153,6 +153,27 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function expandNormalizedBox(
+  box: { x: number; y: number; width: number; height: number },
+  padding: { top?: number; right?: number; bottom?: number; left?: number }
+) {
+  const left = padding.left ?? 0;
+  const right = padding.right ?? 0;
+  const top = padding.top ?? 0;
+  const bottom = padding.bottom ?? 0;
+  const expandedX = clamp(box.x - left, 0, 1);
+  const expandedY = clamp(box.y - top, 0, 1);
+  const expandedRight = clamp(box.x + box.width + right, 0, 1);
+  const expandedBottom = clamp(box.y + box.height + bottom, 0, 1);
+
+  return {
+    x: expandedX,
+    y: expandedY,
+    width: Math.max(0.001, expandedRight - expandedX),
+    height: Math.max(0.001, expandedBottom - expandedY),
+  };
+}
+
 function normalizeLine(line: string) {
   return line
     .replace(BULLET_REGEX, '-')
@@ -535,9 +556,15 @@ function extractFromWeeklyGridPdfDocument(params: {
     for (const row of rules.pageTemplate.dayRows) {
       for (const column of columns) {
         const cellBox = getWeeklyGridCellBox(column, row);
+        const extractionBox = expandNormalizedBox(cellBox, {
+          top: Math.min(0.018, cellBox.height * 0.22),
+          bottom: Math.min(0.01, cellBox.height * 0.12),
+          left: Math.min(0.012, cellBox.width * 0.08),
+          right: Math.min(0.012, cellBox.width * 0.08),
+        });
         const cellText = extractTextFromPageRegion({
           page,
-          box: cellBox,
+          box: extractionBox,
           excludeBoxes,
         }).text;
 
@@ -628,8 +655,12 @@ export function extractFromStructuredPdfDocument(params: {
   }
 
   const fallback = extractFromRawText(rawText, params.durationWeeks ?? null);
+  const fallbackWarnings = parsedRules
+    ? ['Template-based weekly-grid extraction produced no session cells; fell back to raw-text parsing.']
+    : [];
   return {
     ...fallback,
+    warnings: [...fallbackWarnings, ...fallback.warnings],
     rawJson: {
       ...(fallback.rawJson && typeof fallback.rawJson === 'object' ? (fallback.rawJson as Record<string, unknown>) : {}),
       pdfLayout: {
@@ -637,6 +668,8 @@ export function extractFromStructuredPdfDocument(params: {
         mode: 'text-fallback',
         pageCount: params.document.pages.length,
         hasTemplateRules: Boolean(parsedRules),
+        templateFamilySlug: parsedRules?.familySlug ?? null,
+        templateVersion: parsedRules?.version ?? null,
         annotationCount: params.annotations?.length ?? 0,
       },
     },
