@@ -186,6 +186,16 @@ enum PlanSourceExtractionReviewStatus {
   REJECTED
 }
 
+enum PlanSourceAnnotationType {
+  WEEK_HEADER
+  DAY_LABEL
+  SESSION_CELL
+  BLOCK_TITLE
+  IGNORE_REGION
+  LEGEND
+  NOTE
+}
+
 enum PlanPhase {
   BASE
   BUILD
@@ -868,6 +878,7 @@ model PlanSource {
   layoutFamily  PlanSourceLayoutFamily?  @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
   versions      PlanSourceVersion[]
   extractionRuns PlanSourceExtractionRun[]
+  annotations   PlanSourceAnnotation[]
 
   @@index([layoutFamilyId])
 }
@@ -944,6 +955,25 @@ model PlanSourceExtractionReview {
 
   @@index([extractionRunId, createdAt])
   @@index([reviewerUserId, createdAt])
+}
+
+model PlanSourceAnnotation {
+  id             String                   @id @default(cuid())
+  planSourceId   String
+  pageNumber     Int
+  annotationType PlanSourceAnnotationType
+  label          String?
+  bboxJson       Json
+  note           String?
+  createdByUserId String
+  createdByEmail String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  planSource PlanSource @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
+
+  @@index([planSourceId, pageNumber, annotationType])
+  @@index([planSourceId, createdAt])
 }
 
 model PlanSourceWeekTemplate {

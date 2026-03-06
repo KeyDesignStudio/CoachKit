@@ -1,4 +1,4 @@
-import { Prisma, type PlanSourceExtractionReviewStatus } from '@prisma/client';
+import { Prisma, type PlanSourceAnnotationType, type PlanSourceExtractionReviewStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
@@ -342,6 +342,9 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
           },
         },
       },
+      annotations: {
+        orderBy: [{ pageNumber: 'asc' }, { createdAt: 'asc' }],
+      },
     },
   });
 
@@ -467,6 +470,17 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
             summaryJson: latestRun.summaryJson,
           }
         : null,
+      annotations: planSource.annotations.map((annotation) => ({
+        id: annotation.id,
+        pageNumber: annotation.pageNumber,
+        annotationType: annotation.annotationType,
+        label: annotation.label,
+        bboxJson: annotation.bboxJson,
+        note: annotation.note,
+        createdByEmail: annotation.createdByEmail,
+        createdAt: annotation.createdAt.toISOString(),
+        updatedAt: annotation.updatedAt.toISOString(),
+      })),
     },
   };
 }
@@ -569,4 +583,51 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
       inferredLayoutFamily: inferredLayout,
     });
   });
+}
+
+export async function createPlanSourceAnnotation(params: {
+  planSourceId: string;
+  reviewer: ReviewerContext;
+  pageNumber: number;
+  annotationType: PlanSourceAnnotationType;
+  label?: string | null;
+  note?: string | null;
+  bboxJson: Prisma.InputJsonValue;
+}) {
+  const planSource = await prisma.planSource.findUnique({
+    where: { id: params.planSourceId },
+    select: { id: true },
+  });
+  if (!planSource) {
+    throw new ApiError(404, 'PLAN_SOURCE_NOT_FOUND', 'Plan source not found.');
+  }
+
+  return prisma.planSourceAnnotation.create({
+    data: {
+      planSourceId: params.planSourceId,
+      pageNumber: params.pageNumber,
+      annotationType: params.annotationType,
+      label: params.label?.trim() || null,
+      note: params.note?.trim() || null,
+      bboxJson: params.bboxJson,
+      createdByUserId: params.reviewer.userId,
+      createdByEmail: params.reviewer.email,
+    },
+  });
+}
+
+export async function deletePlanSourceAnnotation(params: { planSourceId: string; annotationId: string }) {
+  const annotation = await prisma.planSourceAnnotation.findFirst({
+    where: {
+      id: params.annotationId,
+      planSourceId: params.planSourceId,
+    },
+    select: { id: true },
+  });
+
+  if (!annotation) {
+    throw new ApiError(404, 'PLAN_SOURCE_ANNOTATION_NOT_FOUND', 'Plan source annotation not found.');
+  }
+
+  await prisma.planSourceAnnotation.delete({ where: { id: annotation.id } });
 }

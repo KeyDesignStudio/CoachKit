@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { PlanSourcePdfAnnotator } from '@/components/admin/PlanSourcePdfAnnotator';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 
@@ -194,6 +195,22 @@ type ParserStudioDetail = {
           }
         | null;
     } | null;
+    annotations: Array<{
+      id: string;
+      pageNumber: number;
+      annotationType: 'WEEK_HEADER' | 'DAY_LABEL' | 'SESSION_CELL' | 'BLOCK_TITLE' | 'IGNORE_REGION' | 'LEGEND' | 'NOTE';
+      label: string | null;
+      bboxJson: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      note: string | null;
+      createdByEmail: string;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   };
 };
 
@@ -422,6 +439,42 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
     }
   }, [refreshAll, selectedId]);
 
+  const createAnnotation = useCallback(async (payload: {
+    pageNumber: number;
+    annotationType: 'WEEK_HEADER' | 'DAY_LABEL' | 'SESSION_CELL' | 'BLOCK_TITLE' | 'IGNORE_REGION' | 'LEGEND' | 'NOTE';
+    label: string;
+    note: string;
+    bbox: { x: number; y: number; width: number; height: number };
+  }) => {
+    if (!selectedId) return;
+    const response = await fetch(`/api/admin/plan-library/${selectedId}/annotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const payloadJson = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payloadJson?.error?.message || 'Failed to save annotation.');
+    }
+    const data = payloadJson?.data as ParserStudioDetail;
+    setDetail(data);
+    await loadOverview(selectedId);
+  }, [loadOverview, selectedId]);
+
+  const deleteAnnotation = useCallback(async (annotationId: string) => {
+    if (!selectedId) return;
+    const response = await fetch(`/api/admin/plan-library/${selectedId}/annotations/${annotationId}`, {
+      method: 'DELETE',
+    });
+    const payloadJson = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payloadJson?.error?.message || 'Failed to delete annotation.');
+    }
+    const data = payloadJson?.data as ParserStudioDetail;
+    setDetail(data);
+    await loadOverview(selectedId);
+  }, [loadOverview, selectedId]);
+
   return (
     <div className="mx-auto max-w-7xl p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -558,6 +611,17 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
               </article>
 
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+                {detail.planSource.storedDocumentUrl ? (
+                  <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 xl:col-span-2">
+                    <PlanSourcePdfAnnotator
+                      pdfUrl={detail.planSource.storedDocumentUrl}
+                      annotations={detail.planSource.annotations}
+                      onCreateAnnotation={createAnnotation}
+                      onDeleteAnnotation={deleteAnnotation}
+                    />
+                  </article>
+                ) : null}
+
                 <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
