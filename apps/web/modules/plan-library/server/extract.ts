@@ -501,6 +501,7 @@ function extractFromWeeklyGridPdfDocument(params: {
   let nextFallbackWeekIndex = 0;
   let parsedPageCount = 0;
   let usedRelaxedCellMatching = false;
+  let usedSalvageCellMatching = false;
 
   for (const page of params.document.pages) {
     if (!page.items.length) continue;
@@ -589,6 +590,27 @@ function extractFromWeeklyGridPdfDocument(params: {
           }
         }
 
+        if (!isMeaningfulSessionCell(cellText)) {
+          const salvageBox = expandNormalizedBox(cellBox, {
+            top: Math.min(0.055, cellBox.height * 0.6),
+            bottom: Math.min(0.045, cellBox.height * 0.5),
+            left: Math.min(0.05, cellBox.width * 0.32),
+            right: Math.min(0.05, cellBox.width * 0.32),
+          });
+          const salvageText = extractTextFromPageRegion({
+            page,
+            box: salvageBox,
+            excludeBoxes,
+            minimumHorizontalOverlapRatio: 0.05,
+            minimumVerticalOverlapRatio: 0.05,
+            requireVerticalAnchor: false,
+          }).text;
+          if (isMeaningfulSessionCell(salvageText)) {
+            cellText = salvageText;
+            usedSalvageCellMatching = true;
+          }
+        }
+
         if (!isMeaningfulSessionCell(cellText)) continue;
 
         const discipline = detectDiscipline(cellText);
@@ -630,6 +652,9 @@ function extractFromWeeklyGridPdfDocument(params: {
   const weeks = [...weeksByIndex.values()].sort((left, right) => left.weekIndex - right.weekIndex);
   if (usedRelaxedCellMatching) {
     warnings.push('Used relaxed cell matching for one or more weekly-grid cells due to PDF text alignment drift.');
+  }
+  if (usedSalvageCellMatching) {
+    warnings.push('Used salvage cell matching for weekly-grid cells due to severe PDF text alignment drift; review extracted sessions before approval.');
   }
   return finalizeExtractedPlanSource({
     rawText: params.rawTextFallback,
