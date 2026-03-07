@@ -10,7 +10,13 @@ import {
   type LayoutFamilyRules,
   type LayoutRuleSourceAnnotation,
 } from './layout-rules';
-import { extractStructuredPdfDocument, extractTextFromPageRegion, type ExtractedPdfDocument } from './pdf-layout';
+import {
+  extractStructuredPdfDocument,
+  extractTextFromPageRegion,
+  type ExtractedPdfDocument,
+  type ExtractedPdfPage,
+  type PdfTextItem,
+} from './pdf-layout';
 
 export type ExtractedWeekTemplate = {
   weekIndex: number;
@@ -500,6 +506,114 @@ function extractPageWeekRangeStart(text: string) {
   return null;
 }
 
+function normalizeCellBox(box: { x: number; y: number; width: number; height: number }) {
+  const x = clamp(box.x, 0, 1);
+  const y = clamp(box.y, 0, 1);
+  const right = clamp(box.x + box.width, 0, 1);
+  const bottom = clamp(box.y + box.height, 0, 1);
+  return {
+    x,
+    y,
+    width: Math.max(0.01, right - x),
+    height: Math.max(0.01, bottom - y),
+  };
+}
+
+function itemBounds(item: PdfTextItem) {
+  return {
+    x: item.normalizedX,
+    y: item.normalizedY,
+    width: item.normalizedWidth,
+    height: item.normalizedHeight,
+  };
+}
+
+function boxesIntersect(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number }
+) {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+}
+
+function verticalAnchorInBox(item: PdfTextItem, box: { x: number; y: number; width: number; height: number }) {
+  const centerY = item.normalizedY + item.normalizedHeight / 2;
+  return centerY >= box.y && centerY <= box.y + box.height;
+}
+
+function horizontalOverlapRatio(
+  item: { x: number; y: number; width: number; height: number },
+  box: { x: number; y: number; width: number; height: number }
+) {
+  const overlapWidth = Math.max(0, Math.min(item.x + item.width, box.x + box.width) - Math.max(item.x, box.x));
+  return item.width > 0 ? overlapWidth / item.width : 0;
+}
+
+function renderCellTextFromItems(items: PdfTextItem[]) {
+  const lineTolerance = 0.0125;
+  const sorted = [...items].sort((a, b) => {
+    const deltaY = a.normalizedY - b.normalizedY;
+    if (Math.abs(deltaY) > lineTolerance) return deltaY;
+    return a.normalizedX - b.normalizedX;
+  });
+  const lines: Array<{ y: number; items: PdfTextItem[] }> = [];
+  for (const item of sorted) {
+    const current = lines[lines.length - 1];
+    if (!current || Math.abs(current.y - item.normalizedY) > lineTolerance) {
+      lines.push({ y: item.normalizedY, items: [item] });
+      continue;
+    }
+    current.items.push(item);
+  }
+  return lines
+    .map((line) =>
+      line.items
+        .sort((a, b) => a.normalizedX - b.normalizedX)
+        .map((item) => item.text)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+    .filter(Boolean)
+    .join('\n');
+}
+
+function extractCellTextWithRecovery(params: {
+  page: ExtractedPdfPage;
+  cellBox: { x: number; y: number; width: number; height: number };
+  excludeBoxes: Array<{ x: number; y: number; width: number; height: number }>;
+}) {
+  const strict = extractTextFromPageRegion({
+    page: params.page,
+    box: params.cellBox,
+    excludeBoxes: params.excludeBoxes,
+  }).text;
+  if (strict.trim()) return strict;
+
+  const expanded = normalizeCellBox({
+    x: params.cellBox.x - 0.015,
+    y: params.cellBox.y - 0.01,
+    width: params.cellBox.width + 0.03,
+    height: params.cellBox.height + 0.02,
+  });
+  const relaxed = extractTextFromPageRegion({
+    page: params.page,
+    box: expanded,
+    excludeBoxes: params.excludeBoxes,
+  }).text;
+  if (relaxed.trim()) return relaxed;
+
+  const recoveredItems = params.page.items
+    .filter((item) => verticalAnchorInBox(item, expanded))
+    .filter((item) => horizontalOverlapRatio(itemBounds(item), expanded) >= 0.2)
+    .filter((item) => !params.excludeBoxes.some((exclude) => boxesIntersect(itemBounds(item), exclude)));
+  return renderCellTextFromItems(recoveredItems);
+}
+
 function extractFromWeeklyGridPdfDocument(params: {
   document: ExtractedPdfDocument;
   rawTextFallback: string;
@@ -585,11 +699,11 @@ function extractFromWeeklyGridPdfDocument(params: {
     for (const row of rules.pageTemplate.dayRows) {
       for (const column of resolvedColumns) {
         const cellBox = getWeeklyGridCellBox(column, row);
-        const cellText = extractTextFromPageRegion({
+        const cellText = extractCellTextWithRecovery({
           page,
-          box: cellBox,
+          cellBox,
           excludeBoxes,
-        }).text;
+        });
 
         const normalizedCellText = normalizeSessionCellText(cellText);
         if (!isMeaningfulSessionCell(normalizedCellText)) continue;
