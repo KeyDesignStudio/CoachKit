@@ -338,6 +338,77 @@ function extractStructuredSessionCandidates(lines: string[], durationWeeks: numb
   return candidates;
 }
 
+function extractDenseDisciplineCandidates(rawText: string) {
+  const normalized = normalizeDistanceUnitsToKm(rawText)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(week|wk)\s*([0-9]{1,2})\b/gi, ' WEEK $2 ')
+    .replace(/\b(mon|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b/gi, ' $1 ')
+    .replace(/\b(rest(?: |-)?day|swim|bike|run|brick|cross|optional|s&c|strength|yoga)\b/gi, '\n$1 ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+
+  if (!normalized) return [] as Array<{ discipline: PlanSourceDiscipline; text: string }>;
+
+  const starts = '(?:rest(?: |-)?day|swim|bike|run|brick|cross|optional|s&c|strength|yoga)';
+  const pattern = new RegExp(`\\b(${starts})\\b[\\s\\S]*?(?=\\b${starts}\\b|$)`, 'gi');
+  const candidates: Array<{ discipline: PlanSourceDiscipline; text: string }> = [];
+
+  for (const match of normalized.matchAll(pattern)) {
+    const chunk = normalizeLine(match[0] ?? '');
+    if (!chunk || chunk.length < 12) continue;
+    const discipline = detectDiscipline(chunk);
+    if (!discipline) continue;
+    candidates.push({ discipline, text: chunk });
+  }
+
+  return candidates;
+}
+
+function buildDenseRecoverySessions(params: {
+  rawText: string;
+  durationWeeks?: number | null;
+  warnings: string[];
+}) {
+  const candidates = extractDenseDisciplineCandidates(params.rawText);
+  if (candidates.length < 6) return null;
+
+  const weekIndices = Array.from(new Set(extractWeekIndices(params.rawText))).sort((a, b) => a - b);
+  const resolvedWeeks =
+    weekIndices.length > 0
+      ? weekIndices
+      : params.durationWeeks && params.durationWeeks > 0
+        ? Array.from({ length: params.durationWeeks }, (_, index) => index)
+        : [0];
+  const dayCycle = [1, 2, 3, 4, 5, 6, 0];
+  const ordinalByWeek = new Map<number, number>();
+  const sessions: ExtractedSessionTemplate[] = [];
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    const weekIndex = resolvedWeeks[index % resolvedWeeks.length] ?? 0;
+    const ordinal = (ordinalByWeek.get(weekIndex) ?? 0) + 1;
+    ordinalByWeek.set(weekIndex, ordinal);
+
+    const built = buildSessionTemplate({
+      weekIndex,
+      ordinal,
+      dayOfWeek: dayCycle[index % dayCycle.length] ?? null,
+      discipline: candidate.discipline,
+      sessionText: candidate.text,
+      title: candidate.text.slice(0, 120),
+    });
+    sessions.push(built.session);
+  }
+
+  if (!sessions.length) return null;
+  params.warnings.push('Dense-text recovery was applied because structured grid extraction collapsed into merged OCR text.');
+  return {
+    weeks: resolvedWeeks.map((weekIndex) => ({ weekIndex })),
+    sessions,
+  };
+}
+
 function buildSessionTemplate(params: BuildSessionTemplateParams) {
   const sessionText = normalizeDistanceUnitsToKm(params.sessionText.trim());
   const sessionType = detectSessionType(sessionText);
@@ -887,6 +958,20 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
         distanceKm: parseDistanceKm(line),
         notes: normalizeDistanceUnitsToKm(line),
       });
+    }
+  }
+
+  if (sessions.length <= 1) {
+    const denseRecovery = buildDenseRecoverySessions({
+      rawText,
+      durationWeeks,
+      warnings,
+    });
+    if (denseRecovery && denseRecovery.sessions.length > sessions.length) {
+      sessions.length = 0;
+      sessions.push(...denseRecovery.sessions);
+      weeks.length = 0;
+      weeks.push(...denseRecovery.weeks);
     }
   }
 

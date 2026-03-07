@@ -160,4 +160,32 @@ describe('plan-library workout parser', () => {
     expect(manual.parserConfidence).toBe(1);
     expect((manual.structureJson as any)?.editor?.source).toBe('parser-studio');
   });
+
+  it('recovers multiple sessions from dense merged OCR text instead of collapsing to a single blob', () => {
+    const extracted = extractFromRawText(
+      `
+        12 WEEK OLYMPIC TRAINING PLAN | WEEKS 5-8 220TRIATHLON.COM MonWedFriSunTueThursSat
+        Block 2 - Improving speed and endurance
+        Week 5 Week 6 Week 7 Week 8
+        SWIM Easy swim, 60mins working on base endurance.
+        RUN Technique run, 40-50mins.
+        BIKE Hilly bike, 75-90mins.
+        REST-DAY Massage or light stretching.
+        SWIM Tempo swim, 75mins.
+        RUN Fartlek run, 30-40mins.
+        BIKE Progressive bike, 85-95mins.
+        BRICK Bike 90mins with run off bike 30-40mins.
+        RUN Long run, 60-75mins.
+        SWIM Technique swim, 45mins.
+        BIKE Easy bike, 60mins.
+        OPTIONAL Optional session, 30-60mins.
+      `,
+      12
+    );
+
+    expect(extracted.sessions.length).toBeGreaterThanOrEqual(8);
+    expect(extracted.sessions.some((session) => session.discipline === 'SWIM')).toBe(true);
+    expect(extracted.sessions.some((session) => session.discipline === 'RUN')).toBe(true);
+    expect(extracted.sessions.some((session) => session.discipline === 'BIKE')).toBe(true);
+  });
 });
