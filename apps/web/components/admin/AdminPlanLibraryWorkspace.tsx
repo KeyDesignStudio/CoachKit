@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
 import { PlanLibraryIngestForm } from '@/components/admin/PlanLibraryIngestForm';
@@ -25,16 +24,10 @@ export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorksp
         <div>
           <h1 className="text-2xl font-semibold">Plan Library</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Ingest source plans, turn them into structured weeks and sessions, and only approve the sources CoachKit should trust.
+            Ingest source plans with automatic structured extraction, then approve only trusted sources CoachKit should use.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href={'/admin/plan-library/parser-studio' as any}
-            className="inline-flex min-h-[44px] items-center rounded-full border border-[var(--border-subtle)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)]"
-          >
-            Open Parser Studio
-          </Link>
           {adminEmail ? <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div> : null}
         </div>
       </div>

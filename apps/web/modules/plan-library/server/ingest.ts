@@ -4,7 +4,7 @@ import type { PlanDistance, PlanLevel, PlanSeason, PlanSourceType, PlanSport } f
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/errors';
 
-import { extractFromPdfBuffer, extractFromRawText } from './extract';
+import { extractPlanSourceWithRobustPipeline } from './robust-extract';
 import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './document-storage';
 import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
 import { persistPlanSourceExtractionArtifacts } from './parser-studio';
@@ -172,28 +172,20 @@ export async function ingestPlanSourceFromForm(params: {
 
   const layoutFamilies = await ensurePlanSourceLayoutFamilies();
   const isPdfSource = Boolean(contentBytes && (type === 'PDF' || (type === 'URL' && contentType?.includes('pdf'))));
-  let extracted = isPdfSource
-    ? await extractFromPdfBuffer({
-        buffer: contentBytes!,
-        durationWeeks: Number.isFinite(durationWeeks) ? durationWeeks : null,
-        rawTextFallback: rawText,
-        layoutRulesJson: null,
-      })
-    : extractFromRawText(rawText, Number.isFinite(durationWeeks) ? durationWeeks : null);
+  const extracted = await extractPlanSourceWithRobustPipeline({
+    type,
+    contentBytes,
+    rawText,
+    durationWeeks: Number.isFinite(durationWeeks) ? durationWeeks : null,
+    title,
+    sport,
+    distance,
+    level,
+  });
 
   rawText = extracted.rawText;
   const inferredLayoutFamily = inferLayoutFamily({ title, rawText, sourceUrl: sourceUrl ?? null });
   const assignedLayoutFamily = layoutFamilies.find((family) => family.slug === inferredLayoutFamily.slug) ?? null;
-
-  if (isPdfSource && assignedLayoutFamily?.rulesJson) {
-    extracted = await extractFromPdfBuffer({
-      buffer: contentBytes!,
-      durationWeeks: Number.isFinite(durationWeeks) ? durationWeeks : null,
-      rawTextFallback: rawText,
-      layoutRulesJson: assignedLayoutFamily.rulesJson,
-    });
-    rawText = extracted.rawText;
-  }
   const checksumSha256 = createHash('sha256').update(contentBytes ?? rawText).digest('hex');
   const canStoreUploadedPdf = type === 'PDF' && contentBytes && contentBytes.length > 0;
   let storedDocument: Awaited<ReturnType<typeof storePlanSourceDocument>> = null;

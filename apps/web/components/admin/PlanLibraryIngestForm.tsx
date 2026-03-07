@@ -1,6 +1,4 @@
 'use client';
-
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 const DISTANCE_OPTIONS = [
@@ -287,7 +285,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
           >
             {loading ? 'Ingesting…' : 'Ingest & Save'}
           </button>
-          <div className="text-xs text-[var(--muted)]">After upload, open the source in Parser Studio and rerun extraction before approval.</div>
+          <div className="text-xs text-[var(--muted)]">After upload, extraction runs automatically. Review the extracted structure in Source Review Queue before approval.</div>
         </div>
         {error ? <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
       </div>
@@ -297,19 +295,11 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Source saved</div>
-              <h2 className="mt-1 text-lg font-semibold text-emerald-950">Open this source in Parser Studio next</h2>
+              <h2 className="mt-1 text-lg font-semibold text-emerald-950">Automatic extraction complete</h2>
               <div className="mt-2 text-sm text-emerald-900">
                 Source: {result.planSource?.title} · Version {result.version?.version}
               </div>
             </div>
-            {result.planSource?.id ? (
-              <Link
-                href={`/admin/plan-library/parser-studio?sourceId=${result.planSource.id}` as any}
-                className="inline-flex min-h-[44px] items-center rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white"
-              >
-                Open in Parser Studio
-              </Link>
-            ) : null}
           </div>
           <div className="mt-3 grid gap-2 text-xs">
             <div>Weeks detected: {result.extracted?.weeks?.length ?? 0}</div>
@@ -330,7 +320,7 @@ export function PlanLibraryIngestForm({ onIngested }: PlanLibraryIngestFormProps
             ) : null}
           </div>
           <div className="mt-4 text-sm text-emerald-900">
-            Next: annotate the layout if needed, rerun extraction, fix bad sessions, then approve the source for APB.
+            Next: verify weeks/sessions are sensible, fix any bad sessions, then approve the source for APB.
           </div>
         </div>
       ) : null}

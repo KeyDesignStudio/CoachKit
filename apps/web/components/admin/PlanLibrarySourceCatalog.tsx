@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Icon } from '@/components/ui/Icon';
@@ -252,7 +251,7 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Step 2 to 4</div>
           <h2 className="mt-1 text-lg font-semibold">Source Review Queue</h2>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            {sources.length} total sources · {totalActive} active. Work from the top down: review the parse, open Parser Studio, and only approve what CoachKit should trust.
+            {sources.length} total sources · {totalActive} active. Work from the top down: review extraction quality and only approve what CoachKit should trust.
           </p>
         </div>
         <button
@@ -348,13 +347,6 @@ export function PlanLibrarySourceCatalog({ refreshNonce }: PlanLibrarySourceCata
                         <Icon name={expanded ? 'close' : 'expandMore'} size="sm" aria-hidden />
                         <span>{expanded ? 'Hide details' : 'View details'}</span>
                       </button>
-                      <Link
-                        href={`/admin/plan-library/parser-studio?sourceId=${source.id}` as any}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--border-subtle)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg-structure)]"
-                      >
-                        <Icon name="settings" size="sm" aria-hidden />
-                        <span>Parser Studio</span>
-                      </Link>
                     </div>
                   </div>
 

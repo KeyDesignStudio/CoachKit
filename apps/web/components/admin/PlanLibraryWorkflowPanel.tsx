@@ -1,9 +1,5 @@
 'use client';
-
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
-import { Icon } from '@/components/ui/Icon';
 
 type WorkflowSourceSummary = {
   id: string;
@@ -65,9 +61,6 @@ export function PlanLibraryWorkflowPanel({ refreshNonce }: PlanLibraryWorkflowPa
     const active = sources.filter((source) => source.isActive).length;
     const approved = sources.filter((source) => source.latestExtractionRun?.reviewStatus === 'APPROVED').length;
     const reviewQueue = sources.filter((source) => source.latestExtractionRun?.reviewStatus !== 'APPROVED').length;
-    const templateQueue = sources.filter(
-      (source) => source.storedDocumentUrl && source.layoutFamily && !source.layoutFamily.hasCompiledRules
-    ).length;
     const nextReviewSource =
       sources.find((source) => source.latestExtractionRun?.reviewStatus === 'NEEDS_REVIEW') ??
       sources.find((source) => source.latestExtractionRun == null) ??
@@ -78,7 +71,6 @@ export function PlanLibraryWorkflowPanel({ refreshNonce }: PlanLibraryWorkflowPa
       active,
       approved,
       reviewQueue,
-      templateQueue,
       nextReviewSource,
     };
   }, [sources]);
@@ -89,24 +81,16 @@ export function PlanLibraryWorkflowPanel({ refreshNonce }: PlanLibraryWorkflowPa
         <div>
           <h2 className="text-lg font-semibold">Plan Library Workflow</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Work each source in order: upload, route the layout, annotate and rerun, fix sessions, then approve it for APB.
+            Work each source in order: upload, run automatic extraction, spot-check session quality, then approve it for APB.
           </p>
         </div>
-        {stats.nextReviewSource ? (
-          <Link
-            href={`/admin/plan-library/parser-studio?sourceId=${stats.nextReviewSource.id}` as any}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[var(--text)] px-4 py-2 text-sm font-medium text-[var(--bg-page)]"
-          >
-            <Icon name="next" size="sm" aria-hidden />
-            <span>Open next source</span>
-          </Link>
-        ) : null}
+        {stats.nextReviewSource ? <div className="text-xs text-[var(--muted)]">Next in queue: {stats.nextReviewSource.title}</div> : null}
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-4">
         <StatCard label="Active Sources" value={loading ? '…' : String(stats.active)} />
         <StatCard label="Needs Review" value={loading ? '…' : String(stats.reviewQueue)} tone={stats.reviewQueue ? 'warn' : 'default'} />
-        <StatCard label="Needs Template" value={loading ? '…' : String(stats.templateQueue)} tone={stats.templateQueue ? 'warn' : 'default'} />
+        <StatCard label="PDF Stored" value={loading ? '…' : String(sources.filter((s) => Boolean(s.storedDocumentUrl)).length)} />
         <StatCard label="Approved" value={loading ? '…' : String(stats.approved)} tone={stats.approved ? 'good' : 'default'} />
       </div>
 
@@ -116,12 +100,12 @@ export function PlanLibraryWorkflowPanel({ refreshNonce }: PlanLibraryWorkflowPa
           <p className="mt-2 text-sm text-[var(--text)]">Upload the PDF and enter the metadata CoachKit needs for correct matching.</p>
         </div>
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">2. Route + Annotate</div>
-          <p className="mt-2 text-sm text-[var(--text)]">Set the layout family, mark week headers/day rows, and compile the template on rerun.</p>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">2. Auto Extract</div>
+          <p className="mt-2 text-sm text-[var(--text)]">CoachKit runs robust extraction automatically and stores normalized weeks and sessions.</p>
         </div>
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">3. Fix Sessions</div>
-          <p className="mt-2 text-sm text-[var(--text)]">Correct bad week/day/session fields directly on the latest extracted structure.</p>
+          <p className="mt-2 text-sm text-[var(--text)]">Spot-check extracted sessions and edit obvious errors directly in the source details card.</p>
         </div>
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">4. Approve</div>
