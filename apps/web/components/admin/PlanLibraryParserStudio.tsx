@@ -88,7 +88,6 @@ type ParserStudioDetail = {
     sourceFilePath: string | null;
     storedDocumentUrl: string | null;
     rawText: string;
-    rawJson: unknown | null;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -245,24 +244,8 @@ type ParserStudioDetail = {
   };
 };
 
-type WeeklyGridCellDiagnostic = {
-  pageNumber: number;
-  weekIndex: number;
-  dayOfWeek: number | null;
-  rowIndex: number;
-  columnIndex: number;
-  modeAttempted: 'strict' | 'relaxed' | 'salvage' | 'aggressive';
-  modeUsed: 'strict' | 'relaxed' | 'salvage' | 'aggressive' | null;
-  textLength: number;
-  meaningful: boolean;
-  disciplineDetected: boolean;
-  accepted: boolean;
-  skippedReason: 'empty' | 'not_meaningful' | 'discipline_not_detected' | null;
-  textPreview: string | null;
-};
-
 type PlanLibraryParserStudioProps = {
-  adminEmail?: string | null;
+  adminEmail: string;
   initialSourceId?: string | null;
 };
 
@@ -342,34 +325,6 @@ function statusBadgeClass(status: 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED') {
   if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-700';
   if (status === 'REJECTED') return 'bg-rose-100 text-rose-700';
   return 'bg-amber-100 text-amber-800';
-}
-
-function getPdfLayoutDiagnostics(rawJson: unknown): {
-  cellDiagnostics: WeeklyGridCellDiagnostic[];
-  capturedCellCount: number | null;
-  acceptedCellCount: number | null;
-  zeroCellReason: 'no_text_captured' | 'no_valid_sessions' | null;
-} {
-  const pdfLayout = rawJson && typeof rawJson === 'object' ? (rawJson as Record<string, unknown>).pdfLayout : null;
-  const diagnostics =
-    pdfLayout && typeof pdfLayout === 'object' ? (pdfLayout as Record<string, unknown>).diagnostics : null;
-
-  const cellDiagnostics = Array.isArray((diagnostics as Record<string, unknown> | null)?.cellDiagnostics)
-    ? ((diagnostics as Record<string, unknown>).cellDiagnostics as WeeklyGridCellDiagnostic[])
-    : [];
-  const capturedCellCount = typeof (diagnostics as Record<string, unknown> | null)?.capturedCellCount === 'number'
-    ? ((diagnostics as Record<string, unknown>).capturedCellCount as number)
-    : null;
-  const acceptedCellCount = typeof (diagnostics as Record<string, unknown> | null)?.acceptedCellCount === 'number'
-    ? ((diagnostics as Record<string, unknown>).acceptedCellCount as number)
-    : null;
-  const zeroCellReasonValue = (diagnostics as Record<string, unknown> | null)?.zeroCellReason;
-  const zeroCellReason =
-    zeroCellReasonValue === 'no_text_captured' || zeroCellReasonValue === 'no_valid_sessions'
-      ? zeroCellReasonValue
-      : null;
-
-  return { cellDiagnostics, capturedCellCount, acceptedCellCount, zeroCellReason };
 }
 
 function MetaStat({ label, value }: { label: string; value: string }) {
@@ -458,19 +413,6 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
   const latestRun = detail?.planSource.latestRun ?? null;
   const warnings = Array.isArray(latestRun?.summaryJson?.warnings) ? latestRun?.summaryJson?.warnings ?? [] : [];
   const gridPreview = detail?.planSource.gridPreview ?? null;
-  const pdfLayoutDiagnostics = detail ? getPdfLayoutDiagnostics(detail.planSource.rawJson) : null;
-  const failedCellDiagnostics = pdfLayoutDiagnostics
-    ? [...pdfLayoutDiagnostics.cellDiagnostics]
-        .filter((diagnostic) => !diagnostic.accepted)
-        .sort((left, right) => {
-          const leftPriority = left.skippedReason === 'discipline_not_detected' ? 0 : left.skippedReason === 'not_meaningful' ? 1 : 2;
-          const rightPriority = right.skippedReason === 'discipline_not_detected' ? 0 : right.skippedReason === 'not_meaningful' ? 1 : 2;
-          if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-          if (left.pageNumber !== right.pageNumber) return left.pageNumber - right.pageNumber;
-          if (left.weekIndex !== right.weekIndex) return left.weekIndex - right.weekIndex;
-          return left.rowIndex - right.rowIndex;
-        })
-    : [];
 
   const refreshAll = useCallback(async (preferredSourceId?: string | null) => {
     await loadOverview(preferredSourceId ?? selectedId ?? null);
@@ -642,7 +584,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
             Admin review workflow for plan ingestion, layout-family routing, and APB trust gating.
           </p>
         </div>
-        {adminEmail ? <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div> : null}
+        <div className="text-sm text-muted-foreground">Admin: {adminEmail}</div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -1127,12 +1069,6 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       These warnings are the current parse risk signals. High warning counts should stay out of APB until reviewed.
                     </p>
-                    {pdfLayoutDiagnostics?.zeroCellReason ? (
-                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Fallback reason: {pdfLayoutDiagnostics.zeroCellReason === 'no_text_captured' ? 'No text was captured from derived grid cells.' : 'Grid text was captured, but no valid sessions were recognized.'}
-                        {' '}Check Cell Diagnostics below.
-                      </div>
-                    ) : null}
                     <div className="mt-4 space-y-2">
                       {warnings.length ? (
                         warnings.map((warning) => (
@@ -1143,39 +1079,6 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                       ) : (
                         <div className="rounded-xl border border-dashed border-[var(--border-subtle)] px-3 py-6 text-sm text-[var(--muted)]">
                           No parser warnings on the latest run.
-                        </div>
-                      )}
-                    </div>
-                  </article>
-
-                  <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                    <h3 className="text-sm font-semibold">Cell Diagnostics</h3>
-                    <p className="mt-1 text-xs text-[var(--muted)]">Per-cell weekly-grid extraction outcomes. Failed cells are shown first.</p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--muted)]">
-                      <span className="rounded-full bg-[var(--bg-structure)] px-2 py-1">
-                        Captured cells: {pdfLayoutDiagnostics?.capturedCellCount ?? 0}
-                      </span>
-                      <span className="rounded-full bg-[var(--bg-structure)] px-2 py-1">
-                        Accepted sessions: {pdfLayoutDiagnostics?.acceptedCellCount ?? 0}
-                      </span>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      {failedCellDiagnostics.length ? (
-                        failedCellDiagnostics.slice(0, 28).map((diagnostic) => (
-                          <div key={`${diagnostic.pageNumber}-${diagnostic.weekIndex}-${diagnostic.rowIndex}-${diagnostic.columnIndex}`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
-                            <div className="font-medium text-[var(--text)]">
-                              Page {diagnostic.pageNumber} · Week {diagnostic.weekIndex + 1} · {diagnostic.dayOfWeek != null ? DAY_LABELS[diagnostic.dayOfWeek] ?? `Row ${diagnostic.rowIndex + 1}` : `Row ${diagnostic.rowIndex + 1}`}
-                            </div>
-                            <div className="mt-1 text-[var(--muted)]">
-                              pass {diagnostic.modeUsed ?? diagnostic.modeAttempted} · text {diagnostic.textLength} chars · meaningful {diagnostic.meaningful ? 'yes' : 'no'} · discipline {diagnostic.disciplineDetected ? 'yes' : 'no'}
-                            </div>
-                            {diagnostic.skippedReason ? <div className="mt-1 text-amber-700">skip: {diagnostic.skippedReason}</div> : null}
-                            {diagnostic.textPreview ? <div className="mt-1 line-clamp-2 text-[var(--muted)]">preview: {diagnostic.textPreview}</div> : null}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-[var(--border-subtle)] px-3 py-6 text-sm text-[var(--muted)]">
-                          No failed cell diagnostics on the latest extraction.
                         </div>
                       )}
                     </div>
