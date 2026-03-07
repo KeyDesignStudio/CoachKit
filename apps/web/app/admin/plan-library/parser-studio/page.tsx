@@ -34,7 +34,7 @@ export default async function AdminPlanLibraryParserStudioPage({
 
   return (
     <PlanLibraryParserStudio
-      adminEmail={adminEmail}
+      adminEmail={adminEmail ?? ''}
       initialSourceId={typeof searchParams?.sourceId === 'string' ? searchParams.sourceId : null}
     />
   );

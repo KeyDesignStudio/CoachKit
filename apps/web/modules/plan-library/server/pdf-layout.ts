@@ -130,14 +130,6 @@ function verticalAnchorInBox(item: PdfTextItem, box: NormalizedBbox) {
   return item.normalizedY >= box.y && item.normalizedY < box.y + box.height;
 }
 
-function verticalOverlapRatio(itemBounds: NormalizedBbox, region: NormalizedBbox) {
-  const overlapHeight = Math.max(
-    0,
-    Math.min(itemBounds.y + itemBounds.height, region.y + region.height) - Math.max(itemBounds.y, region.y)
-  );
-  return itemBounds.height > 0 ? overlapHeight / itemBounds.height : 0;
-}
-
 function horizontalOverlapRatio(itemBounds: NormalizedBbox, region: NormalizedBbox) {
   const overlapWidth = Math.max(
     0,
@@ -146,17 +138,10 @@ function horizontalOverlapRatio(itemBounds: NormalizedBbox, region: NormalizedBb
   return itemBounds.width > 0 ? overlapWidth / itemBounds.width : 0;
 }
 
-function hasMeaningfulOverlap(
-  item: PdfTextItem,
-  region: NormalizedBbox,
-  minimumHorizontalOverlapRatio = 0.67,
-  minimumVerticalOverlapRatio = 0,
-  requireVerticalAnchor = true
-) {
+function hasMeaningfulOverlap(item: PdfTextItem, region: NormalizedBbox, minimumHorizontalOverlapRatio = 0.67) {
   const itemBounds = itemBox(item);
   if (!boxesIntersect(itemBounds, region)) return false;
-  if (requireVerticalAnchor && !verticalAnchorInBox(item, region)) return false;
-  if (verticalOverlapRatio(itemBounds, region) < minimumVerticalOverlapRatio) return false;
+  if (!verticalAnchorInBox(item, region)) return false;
   return horizontalOverlapRatio(itemBounds, region) >= minimumHorizontalOverlapRatio;
 }
 
@@ -165,9 +150,6 @@ export function extractTextFromPageRegion(params: {
   box: NormalizedBbox;
   excludeBoxes?: NormalizedBbox[];
   lineTolerance?: number;
-  minimumHorizontalOverlapRatio?: number;
-  minimumVerticalOverlapRatio?: number;
-  requireVerticalAnchor?: boolean;
 }) {
   const lineTolerance = params.lineTolerance ?? 0.0125;
   const items = extractPageItemsFromRegion(params).sort((a, b) => {
@@ -215,26 +197,12 @@ type ExtractPageItemsParams = {
   page: ExtractedPdfPage;
   box: NormalizedBbox;
   excludeBoxes?: NormalizedBbox[];
-  minimumHorizontalOverlapRatio?: number;
-  minimumVerticalOverlapRatio?: number;
-  requireVerticalAnchor?: boolean;
 };
 
 export function extractPageItemsFromRegion(params: ExtractPageItemsParams) {
   const excludeBoxes = params.excludeBoxes ?? [];
-  const minimumHorizontalOverlapRatio = params.minimumHorizontalOverlapRatio ?? 0.67;
-  const minimumVerticalOverlapRatio = params.minimumVerticalOverlapRatio ?? 0;
-  const requireVerticalAnchor = params.requireVerticalAnchor ?? true;
   return params.page.items
-    .filter((item) =>
-      hasMeaningfulOverlap(
-        item,
-        params.box,
-        minimumHorizontalOverlapRatio,
-        minimumVerticalOverlapRatio,
-        requireVerticalAnchor
-      )
-    )
+    .filter((item) => hasMeaningfulOverlap(item, params.box))
     .filter((item) => !excludeBoxes.some((box) => boxesIntersect(itemBox(item), box)));
 }
 
@@ -252,9 +220,6 @@ export function extractTextRunsFromPageRegion(params: {
   excludeBoxes?: NormalizedBbox[];
   lineTolerance?: number;
   wordGapTolerance?: number;
-  minimumHorizontalOverlapRatio?: number;
-  minimumVerticalOverlapRatio?: number;
-  requireVerticalAnchor?: boolean;
 }) {
   const lineTolerance = params.lineTolerance ?? 0.0125;
   const wordGapTolerance = params.wordGapTolerance ?? 0.0125;
