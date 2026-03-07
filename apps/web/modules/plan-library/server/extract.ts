@@ -346,7 +346,7 @@ function extractDenseWeekMarkers(text: string) {
     .replace(/([A-Za-z])([0-9])/g, '$1 $2');
   const markers: Array<{ index: number; weekIndex: number }> = [];
 
-  const rangePattern = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})/gi;
+  const rangePattern = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})(?:\d{2,})?/gi;
   for (const match of normalized.matchAll(rangePattern)) {
     const start = Number(match[1]);
     const end = Number(match[2]);
@@ -404,7 +404,9 @@ function buildDenseRecoverySessions(params: {
   const candidates = extractDenseDisciplineCandidates(params.rawText);
   if (candidates.length < 6) return null;
 
-  const weekIndices = Array.from(new Set(extractWeekIndices(params.rawText))).sort((a, b) => a - b);
+  const weekIndices = Array.from(
+    new Set(extractDenseWeekMarkers(params.rawText).map((marker) => marker.weekIndex))
+  ).sort((a, b) => a - b);
   const resolvedWeeks =
     weekIndices.length > 0
       ? weekIndices
@@ -412,12 +414,18 @@ function buildDenseRecoverySessions(params: {
         ? Array.from({ length: params.durationWeeks }, (_, index) => index)
         : [0];
   const dayCycle = [1, 2, 3, 4, 5, 6, 0];
+  const explicitCandidateWeeks = new Set(
+    candidates.map((candidate) => candidate.weekIndex).filter((value): value is number => value != null)
+  );
+  const shouldCycleWeeks = explicitCandidateWeeks.size < 2 && resolvedWeeks.length > 1;
   const ordinalByWeek = new Map<number, number>();
   const sessions: ExtractedSessionTemplate[] = [];
 
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]!;
-    const weekIndex = candidate.weekIndex ?? resolvedWeeks[index % resolvedWeeks.length] ?? 0;
+    const weekIndex = shouldCycleWeeks
+      ? resolvedWeeks[Math.floor(index / dayCycle.length) % resolvedWeeks.length] ?? 0
+      : candidate.weekIndex ?? resolvedWeeks[index % resolvedWeeks.length] ?? 0;
     const ordinal = (ordinalByWeek.get(weekIndex) ?? 0) + 1;
     ordinalByWeek.set(weekIndex, ordinal);
 
@@ -438,6 +446,70 @@ function buildDenseRecoverySessions(params: {
     weeks: resolvedWeeks.map((weekIndex) => ({ weekIndex })),
     sessions,
   };
+}
+
+function shouldApplyDenseRecoveryForCollapsedWeeks(params: {
+  rawText: string;
+  sessions: ExtractedSessionTemplate[];
+}) {
+  if (params.sessions.length < 12) return false;
+  const weekIndicesInText = Array.from(
+    new Set(extractDenseWeekMarkers(params.rawText).map((marker) => marker.weekIndex))
+  );
+  if (weekIndicesInText.length < 2) return false;
+
+  const weekCounts = new Map<number, number>();
+  for (const session of params.sessions) {
+    weekCounts.set(session.weekIndex, (weekCounts.get(session.weekIndex) ?? 0) + 1);
+  }
+  const dominantWeekCount = Math.max(...weekCounts.values());
+  const dominantRatio = dominantWeekCount / params.sessions.length;
+  return weekCounts.size <= 2 && dominantRatio >= 0.75;
+}
+
+function rebalanceCollapsedSessionWeeks(params: {
+  rawText: string;
+  sessions: ExtractedSessionTemplate[];
+}) {
+  if (!params.sessions.length) return false;
+  const detectedWeeksSet = new Set<number>();
+  for (const marker of extractDenseWeekMarkers(params.rawText)) {
+    detectedWeeksSet.add(marker.weekIndex);
+  }
+  for (const index of extractWeekIndices(params.rawText)) {
+    detectedWeeksSet.add(index);
+  }
+  const rangeRegex = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})(?:\d{2,})?/gi;
+  for (const match of params.rawText.matchAll(rangeRegex)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) continue;
+    for (let week = start; week <= end; week += 1) {
+      detectedWeeksSet.add(week - 1);
+    }
+  }
+  const detectedWeeks = Array.from(detectedWeeksSet).sort((a, b) => a - b);
+  if (detectedWeeks.length < 2) return false;
+
+  const weekCounts = new Map<number, number>();
+  for (const session of params.sessions) {
+    weekCounts.set(session.weekIndex, (weekCounts.get(session.weekIndex) ?? 0) + 1);
+  }
+  const dominantWeekCount = Math.max(...weekCounts.values());
+  const dominantRatio = dominantWeekCount / params.sessions.length;
+  if (weekCounts.size > 2 || dominantRatio < 0.75) return false;
+
+  const byWeekOrdinal = new Map<number, number>();
+  const dayCycleLength = 7;
+  for (let index = 0; index < params.sessions.length; index += 1) {
+    const reassignedWeek = detectedWeeks[Math.floor(index / dayCycleLength) % detectedWeeks.length] ?? detectedWeeks[0]!;
+    const nextOrdinal = (byWeekOrdinal.get(reassignedWeek) ?? 0) + 1;
+    byWeekOrdinal.set(reassignedWeek, nextOrdinal);
+    const session = params.sessions[index]!;
+    session.weekIndex = reassignedWeek;
+    session.ordinal = nextOrdinal;
+  }
+  return true;
 }
 
 function buildSessionTemplate(params: BuildSessionTemplateParams) {
@@ -992,18 +1064,37 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
     }
   }
 
-  if (sessions.length <= 1) {
+  const shouldRecoverDense =
+    sessions.length <= 1 ||
+    shouldApplyDenseRecoveryForCollapsedWeeks({
+      rawText,
+      sessions,
+    });
+
+  if (shouldRecoverDense) {
     const denseRecovery = buildDenseRecoverySessions({
       rawText,
       durationWeeks,
       warnings,
     });
-    if (denseRecovery && denseRecovery.sessions.length > sessions.length) {
+    if (
+      denseRecovery &&
+      denseRecovery.sessions.length > 0 &&
+      (denseRecovery.sessions.length >= sessions.length || sessions.length <= 1)
+    ) {
       sessions.length = 0;
       sessions.push(...denseRecovery.sessions);
       weeks.length = 0;
       weeks.push(...denseRecovery.weeks);
     }
+  }
+
+  const rebalanced = rebalanceCollapsedSessionWeeks({
+    rawText,
+    sessions,
+  });
+  if (rebalanced) {
+    warnings.push('Week distribution was rebalanced from detected week markers because extraction collapsed sessions into too few weeks.');
   }
 
   if (!weeks.length) {

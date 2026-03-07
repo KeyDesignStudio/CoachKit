@@ -188,4 +188,5 @@ describe('plan-library workout parser', () => {
     expect(extracted.sessions.some((session) => session.discipline === 'RUN')).toBe(true);
     expect(extracted.sessions.some((session) => session.discipline === 'BIKE')).toBe(true);
   });
+
 });
