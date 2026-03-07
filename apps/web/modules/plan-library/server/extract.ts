@@ -83,6 +83,33 @@ type BuildSessionTemplateParams = {
   title?: string | null;
 };
 
+type WeeklyGridExtractionMode = 'strict' | 'relaxed' | 'salvage' | 'aggressive';
+
+type WeeklyGridCellDiagnostic = {
+  pageNumber: number;
+  weekIndex: number;
+  dayOfWeek: number | null;
+  rowIndex: number;
+  columnIndex: number;
+  modeAttempted: WeeklyGridExtractionMode;
+  modeUsed: WeeklyGridExtractionMode | null;
+  textLength: number;
+  meaningful: boolean;
+  disciplineDetected: boolean;
+  accepted: boolean;
+  skippedReason: 'empty' | 'not_meaningful' | 'discipline_not_detected' | null;
+};
+
+type WeeklyGridExtractionAttempt = {
+  extracted: ExtractedPlanSource | null;
+  diagnostics: {
+    cellDiagnostics: WeeklyGridCellDiagnostic[];
+    capturedCellCount: number;
+    acceptedCellCount: number;
+    zeroCellReason: 'no_text_captured' | 'no_valid_sessions' | null;
+  };
+};
+
 export type ManualSessionTemplateFields = {
   sessionType: string;
   intensityType: string | null;
@@ -185,6 +212,19 @@ function normalizeLine(line: string) {
     .trim();
 }
 
+function normalizeSessionCellText(text: string) {
+  return normalizeLine(text)
+    .replace(/[|¦‖]+/g, ' | ')
+    .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b(REST(?:\s|-)?DAY)([A-Za-z])/gi, '$1 $2')
+    .replace(/\b(COM)(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '$1 $2')
+    .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?=(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b)/gi, '$1 ')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
 function toMinutes(value: number, unit: string) {
   const normalized = unit.toLowerCase();
   if (normalized.startsWith('h')) return value * 60;
@@ -192,8 +232,17 @@ function toMinutes(value: number, unit: string) {
 }
 
 function detectDiscipline(line: string): PlanSourceDiscipline | null {
+  const normalized = normalizeSessionCellText(line);
+  const lower = normalized.toLowerCase();
   for (const rule of DISCIPLINE_RULES) {
-    if (rule.match.test(line)) return rule.key;
+    if (rule.match.test(normalized)) return rule.key;
+  }
+  if (/(^|[^a-z])(swim|swims|swimming)($|[^a-z])/i.test(normalized)) return 'SWIM';
+  if (/(^|[^a-z])(bike|bikes|biking|cycle|cycling)($|[^a-z])/i.test(normalized)) return 'BIKE';
+  if (/(^|[^a-z])(run|runs|running|jog|jogging|run\/walk)($|[^a-z])/i.test(normalized)) return 'RUN';
+  if (/(^|[^a-z])(strength|conditioning|gym|yoga|pilates|s&c)($|[^a-z])/i.test(normalized)) return 'STRENGTH';
+  if (lower.includes('rest-day') || lower.includes('rest day') || /(^|[^a-z])(rest|recovery|off)($|[^a-z])/i.test(normalized)) {
+    return 'REST';
   }
   return null;
 }
@@ -468,7 +517,7 @@ function finalizeExtractedPlanSource(params: FinalizeExtractedPlanSourceParams):
 }
 
 function isMeaningfulSessionCell(text: string) {
-  const normalized = normalizeLine(text);
+  const normalized = normalizeSessionCellText(text);
   if (!normalized || normalized.length < 4) return false;
   if (!/[a-z]/i.test(normalized)) return false;
   if (/^(week\s*\d+|mon|tue|wed|thu|fri|sat|sun)$/i.test(normalized)) return false;
@@ -490,12 +539,13 @@ function extractFromWeeklyGridPdfDocument(params: {
   rawTextFallback: string;
   durationWeeks?: number | null;
   layoutRules: LayoutFamilyRules;
-}) {
+}): WeeklyGridExtractionAttempt | null {
   const rules = parseLayoutFamilyRules(params.layoutRules);
   if (!rules) return null;
 
   const weeksByIndex = new Map<number, ExtractedWeekTemplate>();
   const sessions: ExtractedSessionTemplate[] = [];
+  const cellDiagnostics: WeeklyGridCellDiagnostic[] = [];
   const warnings: string[] = [];
   const sessionCountByWeek = new Map<number, number>();
   let nextFallbackWeekIndex = 0;
@@ -559,91 +609,126 @@ function extractFromWeeklyGridPdfDocument(params: {
     for (const row of rules.pageTemplate.dayRows) {
       for (const column of columns) {
         const cellBox = getWeeklyGridCellBox(column, row);
-        const strictBox = expandNormalizedBox(cellBox, {
-          top: Math.min(0.018, cellBox.height * 0.22),
-          bottom: Math.min(0.01, cellBox.height * 0.12),
-          left: Math.min(0.012, cellBox.width * 0.08),
-          right: Math.min(0.012, cellBox.width * 0.08),
-        });
-        let cellText = extractTextFromPageRegion({
-          page,
-          box: strictBox,
-          excludeBoxes,
-          minimumHorizontalOverlapRatio: 0.67,
-        }).text;
-
-        if (!isMeaningfulSessionCell(cellText)) {
-          const relaxedBox = expandNormalizedBox(cellBox, {
-            top: Math.min(0.03, cellBox.height * 0.35),
-            bottom: Math.min(0.018, cellBox.height * 0.22),
-            left: Math.min(0.02, cellBox.width * 0.15),
-            right: Math.min(0.02, cellBox.width * 0.15),
-          });
-          const relaxedText = extractTextFromPageRegion({
-            page,
-            box: relaxedBox,
-            excludeBoxes,
+        const attemptConfigs: Array<{
+          mode: WeeklyGridExtractionMode;
+          box: { x: number; y: number; width: number; height: number };
+          minimumHorizontalOverlapRatio: number;
+          minimumVerticalOverlapRatio?: number;
+          requireVerticalAnchor?: boolean;
+        }> = [
+          {
+            mode: 'strict',
+            box: expandNormalizedBox(cellBox, {
+              top: Math.min(0.018, cellBox.height * 0.22),
+              bottom: Math.min(0.01, cellBox.height * 0.12),
+              left: Math.min(0.012, cellBox.width * 0.08),
+              right: Math.min(0.012, cellBox.width * 0.08),
+            }),
+            minimumHorizontalOverlapRatio: 0.67,
+          },
+          {
+            mode: 'relaxed',
+            box: expandNormalizedBox(cellBox, {
+              top: Math.min(0.03, cellBox.height * 0.35),
+              bottom: Math.min(0.018, cellBox.height * 0.22),
+              left: Math.min(0.02, cellBox.width * 0.15),
+              right: Math.min(0.02, cellBox.width * 0.15),
+            }),
             minimumHorizontalOverlapRatio: 0.18,
-          }).text;
-          if (isMeaningfulSessionCell(relaxedText)) {
-            cellText = relaxedText;
-            usedRelaxedCellMatching = true;
-          }
-        }
-
-        if (!isMeaningfulSessionCell(cellText)) {
-          const salvageBox = expandNormalizedBox(cellBox, {
-            top: Math.min(0.055, cellBox.height * 0.6),
-            bottom: Math.min(0.045, cellBox.height * 0.5),
-            left: Math.min(0.05, cellBox.width * 0.32),
-            right: Math.min(0.05, cellBox.width * 0.32),
-          });
-          const salvageText = extractTextFromPageRegion({
-            page,
-            box: salvageBox,
-            excludeBoxes,
+          },
+          {
+            mode: 'salvage',
+            box: expandNormalizedBox(cellBox, {
+              top: Math.min(0.055, cellBox.height * 0.6),
+              bottom: Math.min(0.045, cellBox.height * 0.5),
+              left: Math.min(0.05, cellBox.width * 0.32),
+              right: Math.min(0.05, cellBox.width * 0.32),
+            }),
             minimumHorizontalOverlapRatio: 0.05,
             minimumVerticalOverlapRatio: 0.05,
             requireVerticalAnchor: false,
-          }).text;
-          if (isMeaningfulSessionCell(salvageText)) {
-            cellText = salvageText;
-            usedSalvageCellMatching = true;
-          }
-        }
-
-        if (!isMeaningfulSessionCell(cellText)) {
-          const aggressiveBox = expandNormalizedBox(cellBox, {
-            top: Math.min(0.08, cellBox.height * 0.75),
-            bottom: Math.min(0.07, cellBox.height * 0.7),
-            left: Math.min(0.07, cellBox.width * 0.45),
-            right: Math.min(0.07, cellBox.width * 0.45),
-          });
-          const aggressiveText = extractTextFromPageRegion({
-            page,
-            box: aggressiveBox,
-            excludeBoxes,
+          },
+          {
+            mode: 'aggressive',
+            box: expandNormalizedBox(cellBox, {
+              top: Math.min(0.08, cellBox.height * 0.75),
+              bottom: Math.min(0.07, cellBox.height * 0.7),
+              left: Math.min(0.07, cellBox.width * 0.45),
+              right: Math.min(0.07, cellBox.width * 0.45),
+            }),
             minimumHorizontalOverlapRatio: 0,
             minimumVerticalOverlapRatio: 0,
             requireVerticalAnchor: false,
+          },
+        ];
+
+        let modeAttempted: WeeklyGridExtractionMode = 'strict';
+        let modeUsed: WeeklyGridExtractionMode | null = null;
+        let cellText = '';
+        let normalizedCellText = '';
+        let discipline: PlanSourceDiscipline | null = null;
+        let meaningful = false;
+
+        for (const config of attemptConfigs) {
+          modeAttempted = config.mode;
+          const attemptedText = extractTextFromPageRegion({
+            page,
+            box: config.box,
+            excludeBoxes,
+            minimumHorizontalOverlapRatio: config.minimumHorizontalOverlapRatio,
+            minimumVerticalOverlapRatio: config.minimumVerticalOverlapRatio,
+            requireVerticalAnchor: config.requireVerticalAnchor,
           }).text;
-          if (isMeaningfulSessionCell(aggressiveText)) {
-            cellText = aggressiveText;
-            usedAggressiveCellMatching = true;
-          }
+          const normalizedAttempt = normalizeSessionCellText(attemptedText);
+          const attemptMeaningful = isMeaningfulSessionCell(normalizedAttempt);
+          const attemptDiscipline = attemptMeaningful ? detectDiscipline(normalizedAttempt) : null;
+
+          cellText = attemptedText;
+          normalizedCellText = normalizedAttempt;
+          meaningful = attemptMeaningful;
+          discipline = attemptDiscipline;
+
+          if (!attemptMeaningful) continue;
+          modeUsed = config.mode;
+          if (config.mode === 'relaxed') usedRelaxedCellMatching = true;
+          if (config.mode === 'salvage') usedSalvageCellMatching = true;
+          if (config.mode === 'aggressive') usedAggressiveCellMatching = true;
+          break;
         }
 
-        if (!isMeaningfulSessionCell(cellText)) continue;
-
-        const discipline = detectDiscipline(cellText);
-        if (!discipline) {
+        let accepted = false;
+        let skippedReason: WeeklyGridCellDiagnostic['skippedReason'] = null;
+        if (!meaningful) {
+          skippedReason = normalizedCellText.length ? 'not_meaningful' : 'empty';
+        } else if (!discipline) {
+          skippedReason = 'discipline_not_detected';
           warnings.push(`Page ${page.pageNumber} week ${column.weekIndex + 1} row ${row.index + 1}: could not infer discipline from cell text.`);
-          continue;
+        } else {
+          accepted = true;
         }
+
+        cellDiagnostics.push({
+          pageNumber: page.pageNumber,
+          weekIndex: column.weekIndex,
+          dayOfWeek: row.dayOfWeek,
+          rowIndex: row.index,
+          columnIndex: column.index,
+          modeAttempted,
+          modeUsed,
+          textLength: normalizedCellText.length,
+          meaningful,
+          disciplineDetected: discipline != null,
+          accepted,
+          skippedReason,
+        });
+
+        if (!accepted || !discipline) continue;
+
+        const normalizedLines = normalizeSessionCellText(cellText);
+        const lines = normalizedLines.split(/\n+/).map(normalizeLine).filter(Boolean);
 
         const ordinal = (sessionCountByWeek.get(column.weekIndex) ?? 0) + 1;
         sessionCountByWeek.set(column.weekIndex, ordinal);
-        const lines = cellText.split(/\n+/).map(normalizeLine).filter(Boolean);
         const built = buildSessionTemplate({
           weekIndex: column.weekIndex,
           ordinal,
@@ -667,8 +752,21 @@ function extractFromWeeklyGridPdfDocument(params: {
     }
   }
 
+  const capturedCellCount = cellDiagnostics.filter((diagnostic) => diagnostic.textLength > 0).length;
+  const acceptedCellCount = cellDiagnostics.filter((diagnostic) => diagnostic.accepted).length;
+  const zeroCellReason =
+    acceptedCellCount > 0 ? null : capturedCellCount > 0 ? 'no_valid_sessions' : 'no_text_captured';
+
   if (!sessions.length) {
-    return null;
+    return {
+      extracted: null,
+      diagnostics: {
+        cellDiagnostics,
+        capturedCellCount,
+        acceptedCellCount,
+        zeroCellReason,
+      },
+    };
   }
 
   const weeks = [...weeksByIndex.values()].sort((left, right) => left.weekIndex - right.weekIndex);
@@ -681,24 +779,38 @@ function extractFromWeeklyGridPdfDocument(params: {
   if (usedAggressiveCellMatching) {
     warnings.push('Used aggressive cell matching for weekly-grid cells because text could not be localized cleanly; verify extracted sessions before APB approval.');
   }
-  return finalizeExtractedPlanSource({
-    rawText: params.rawTextFallback,
-    weeks,
-    sessions,
-    warnings,
-    durationWeeks: params.durationWeeks,
-    confidenceBias: 0.12,
-    rawJsonExtra: {
-      pdfLayout: {
-        version: 'weekly-grid-v1',
-        mode: 'template',
-        templateVersion: rules.version,
-        templateSourcePlanId: rules.templateSourcePlanId,
-        parsedPageCount,
-        pageCount: params.document.pages.length,
+  return {
+    extracted: finalizeExtractedPlanSource({
+      rawText: params.rawTextFallback,
+      weeks,
+      sessions,
+      warnings,
+      durationWeeks: params.durationWeeks,
+      confidenceBias: 0.12,
+      rawJsonExtra: {
+        pdfLayout: {
+          version: 'weekly-grid-v1',
+          mode: 'template',
+          templateVersion: rules.version,
+          templateSourcePlanId: rules.templateSourcePlanId,
+          parsedPageCount,
+          pageCount: params.document.pages.length,
+          diagnostics: {
+            cellDiagnostics,
+            capturedCellCount,
+            acceptedCellCount,
+            zeroCellReason,
+          },
+        },
       },
+    }),
+    diagnostics: {
+      cellDiagnostics,
+      capturedCellCount,
+      acceptedCellCount,
+      zeroCellReason,
     },
-  });
+  };
 }
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
@@ -717,33 +829,56 @@ export function extractFromStructuredPdfDocument(params: {
   const parsedRules = parseLayoutFamilyRules(params.layoutRulesJson ?? null);
 
   if (parsedRules) {
-    const extracted = extractFromWeeklyGridPdfDocument({
+    const extractionAttempt = extractFromWeeklyGridPdfDocument({
       document: params.document,
       rawTextFallback: rawText,
       durationWeeks: params.durationWeeks,
       layoutRules: parsedRules,
     });
-    if (extracted) {
-      return extracted;
+    if (extractionAttempt?.extracted) {
+      return extractionAttempt.extracted;
     }
+    const templateDiagnostics = extractionAttempt?.diagnostics ?? null;
+    const fallback = extractFromRawText(rawText, params.durationWeeks ?? null);
+    const fallbackWarnings = templateDiagnostics
+      ? [
+          templateDiagnostics.zeroCellReason === 'no_text_captured'
+            ? 'Template-based weekly-grid extraction captured no cell text; fell back to raw-text parsing.'
+            : 'Template-based weekly-grid extraction captured cell text but no valid sessions were recognized; fell back to raw-text parsing.',
+        ]
+      : ['Template-based weekly-grid extraction produced no session cells; fell back to raw-text parsing.'];
+    return {
+      ...fallback,
+      warnings: [...fallbackWarnings, ...fallback.warnings],
+      rawJson: {
+        ...(fallback.rawJson && typeof fallback.rawJson === 'object' ? (fallback.rawJson as Record<string, unknown>) : {}),
+        pdfLayout: {
+          version: 'v0',
+          mode: 'text-fallback',
+          pageCount: params.document.pages.length,
+          hasTemplateRules: true,
+          templateFamilySlug: parsedRules.familySlug,
+          templateVersion: parsedRules.version,
+          annotationCount: params.annotations?.length ?? 0,
+          diagnostics: templateDiagnostics,
+        },
+      },
+    } satisfies ExtractedPlanSource;
   }
 
   const fallback = extractFromRawText(rawText, params.durationWeeks ?? null);
-  const fallbackWarnings = parsedRules
-    ? ['Template-based weekly-grid extraction produced no session cells; fell back to raw-text parsing.']
-    : [];
   return {
     ...fallback,
-    warnings: [...fallbackWarnings, ...fallback.warnings],
+    warnings: [...fallback.warnings],
     rawJson: {
       ...(fallback.rawJson && typeof fallback.rawJson === 'object' ? (fallback.rawJson as Record<string, unknown>) : {}),
       pdfLayout: {
         version: 'v0',
         mode: 'text-fallback',
         pageCount: params.document.pages.length,
-        hasTemplateRules: Boolean(parsedRules),
-        templateFamilySlug: parsedRules?.familySlug ?? null,
-        templateVersion: parsedRules?.version ?? null,
+        hasTemplateRules: false,
+        templateFamilySlug: null,
+        templateVersion: null,
         annotationCount: params.annotations?.length ?? 0,
       },
     },

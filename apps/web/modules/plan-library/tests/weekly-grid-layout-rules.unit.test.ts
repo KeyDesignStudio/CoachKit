@@ -24,6 +24,22 @@ function makeItem(
   };
 }
 
+function fullWeeklyGridAnnotations() {
+  return [
+    { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 1', note: null, bboxJson: { x: 0.10, y: 0.14, width: 0.14, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 2', note: null, bboxJson: { x: 0.31, y: 0.14, width: 0.14, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 3', note: null, bboxJson: { x: 0.52, y: 0.14, width: 0.14, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 4', note: null, bboxJson: { x: 0.73, y: 0.14, width: 0.14, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Mon', note: null, bboxJson: { x: 0.02, y: 0.24, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Tue', note: null, bboxJson: { x: 0.02, y: 0.35, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Wed', note: null, bboxJson: { x: 0.02, y: 0.46, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Thu', note: null, bboxJson: { x: 0.02, y: 0.57, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Fri', note: null, bboxJson: { x: 0.02, y: 0.68, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Sat', note: null, bboxJson: { x: 0.02, y: 0.79, width: 0.06, height: 0.05 } },
+    { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Sun', note: null, bboxJson: { x: 0.02, y: 0.90, width: 0.06, height: 0.05 } },
+  ] as const;
+}
+
 describe('plan-library weekly-grid layout rules', () => {
   it('keeps session body text when a PDF text item overlaps a cell but starts slightly outside it', () => {
     const page: ExtractedPdfDocument['pages'][number] = {
@@ -196,7 +212,7 @@ describe('plan-library weekly-grid layout rules', () => {
 
     const swimSession = extracted.sessions.find((session) => session.discipline === 'SWIM' && session.dayOfWeek === 1);
     expect(swimSession).toBeTruthy();
-    expect(swimSession?.notes).toContain('Use warm-up then 4 x 100m steady.');
+    expect(swimSession?.notes).toMatch(/Use warm-up then 4 x 100 ?m steady\./);
     expect(extracted.warnings.join(' ')).toContain('relaxed cell matching');
   });
 
@@ -228,9 +244,78 @@ describe('plan-library weekly-grid layout rules', () => {
       layoutRulesJson: rules,
     });
 
-    expect(extracted.warnings[0]).toContain('Template-based weekly-grid extraction produced no session cells');
+    expect(extracted.warnings[0]).toContain('captured no cell text');
     expect((extracted.rawJson as any)?.pdfLayout?.mode).toBe('text-fallback');
     expect((extracted.rawJson as any)?.pdfLayout?.hasTemplateRules).toBe(true);
+    expect((extracted.rawJson as any)?.pdfLayout?.diagnostics?.zeroCellReason).toBe('no_text_captured');
+  });
+
+  it('normalizes merged OCR tokens and still extracts sessions', () => {
+    const rules = compileLayoutFamilyRules({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_ocr',
+      annotations: [...fullWeeklyGridAnnotations()],
+    });
+
+    const extracted = extractFromStructuredPdfDocument({
+      document: {
+        rawText: 'Week 1',
+        pages: [
+          {
+            pageNumber: 1,
+            width: 1000,
+            height: 1000,
+            text: '',
+            items: [
+              makeItem('WEEK 1', 0.15, 0.16, 0.08),
+              makeItem('MON', 0.04, 0.27, 0.04),
+              makeItem('8SWIM', 0.15, 0.27, 0.08),
+              makeItem('Easy swim, 30-40mins.', 0.15, 0.30, 0.2),
+              makeItem('REST-DAYDay off', 0.15, 0.33, 0.2),
+            ],
+          },
+        ],
+      },
+      durationWeeks: 12,
+      layoutRulesJson: rules,
+    });
+
+    const swimSession = extracted.sessions.find((session) => session.dayOfWeek === 1 && session.discipline === 'SWIM');
+    expect(swimSession).toBeTruthy();
+    expect((extracted.rawJson as any)?.pdfLayout?.diagnostics?.acceptedCellCount).toBeGreaterThan(0);
+  });
+
+  it('reports no_valid_sessions when text is captured but no disciplines are recognized', () => {
+    const rules = compileLayoutFamilyRules({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_ocr_2',
+      annotations: [...fullWeeklyGridAnnotations()],
+    });
+
+    const extracted = extractFromStructuredPdfDocument({
+      document: {
+        rawText: 'Week 1',
+        pages: [
+          {
+            pageNumber: 1,
+            width: 1000,
+            height: 1000,
+            text: '',
+            items: [
+              makeItem('WEEK 1', 0.15, 0.16, 0.08),
+              makeItem('MON', 0.04, 0.27, 0.04),
+              makeItem('Session details 45mins cadence focus only', 0.15, 0.27, 0.25),
+            ],
+          },
+        ],
+      },
+      durationWeeks: 12,
+      layoutRulesJson: rules,
+    });
+
+    expect(extracted.sessions).toHaveLength(0);
+    expect(extracted.warnings[0]).toContain('captured cell text but no valid sessions');
+    expect((extracted.rawJson as any)?.pdfLayout?.diagnostics?.zeroCellReason).toBe('no_valid_sessions');
   });
 
   it('derives a full 4x7 preview grid from one week-header band and one day rail annotation', () => {
