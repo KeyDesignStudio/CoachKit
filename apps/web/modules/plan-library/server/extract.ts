@@ -346,11 +346,25 @@ function extractDenseWeekMarkers(text: string) {
     .replace(/([A-Za-z])([0-9])/g, '$1 $2');
   const markers: Array<{ index: number; weekIndex: number }> = [];
 
-  const rangePattern = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})(?:\d{2,})?/gi;
+  const resolveRangeEnd = (startWeek: number, rawEnd: string) => {
+    const numeric = Number(rawEnd);
+    if (Number.isFinite(numeric) && numeric >= startWeek && numeric - startWeek <= 16) {
+      return numeric;
+    }
+    for (let length = 1; length <= Math.min(2, rawEnd.length); length += 1) {
+      const candidate = Number(rawEnd.slice(0, length));
+      if (Number.isFinite(candidate) && candidate >= startWeek && candidate - startWeek <= 16) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+
+  const rangePattern = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,6})/gi;
   for (const match of normalized.matchAll(rangePattern)) {
     const start = Number(match[1]);
-    const end = Number(match[2]);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) continue;
+    const end = resolveRangeEnd(start, String(match[2] ?? ''));
+    if (!Number.isFinite(start) || end == null || !Number.isFinite(end) || start <= 0 || end < start) continue;
     for (let week = start; week <= end; week += 1) {
       markers.push({ index: match.index ?? 0, weekIndex: week - 1 });
     }
@@ -478,15 +492,6 @@ function rebalanceCollapsedSessionWeeks(params: {
   }
   for (const index of extractWeekIndices(params.rawText)) {
     detectedWeeksSet.add(index);
-  }
-  const rangeRegex = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})(?:\d{2,})?/gi;
-  for (const match of params.rawText.matchAll(rangeRegex)) {
-    const start = Number(match[1]);
-    const end = Number(match[2]);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) continue;
-    for (let week = start; week <= end; week += 1) {
-      detectedWeeksSet.add(week - 1);
-    }
   }
   const detectedWeeks = Array.from(detectedWeeksSet).sort((a, b) => a - b);
   if (detectedWeeks.length < 2) return false;
