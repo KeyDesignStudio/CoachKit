@@ -650,36 +650,42 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     : extractFromRawText(planSource.rawText, planSource.durationWeeks);
   const nextVersion = (planSource.versions[0]?.version ?? 0) + 1;
 
-  return prisma.$transaction(async (tx) => {
-    if (planSource.layoutFamily && compiledRules) {
-      await tx.planSourceLayoutFamily.update({
-        where: { id: planSource.layoutFamily.id },
-        data: { rulesJson: compiledRules as Prisma.InputJsonValue },
+  return prisma.$transaction(
+    async (tx) => {
+      if (planSource.layoutFamily && compiledRules) {
+        await tx.planSourceLayoutFamily.update({
+          where: { id: planSource.layoutFamily.id },
+          data: { rulesJson: compiledRules as Prisma.InputJsonValue },
+        });
+      }
+
+      await tx.planSource.update({
+        where: { id: planSource.id },
+        data: {
+          rawText: extracted.rawText,
+          rawJson: extracted.rawJson as Prisma.InputJsonValue,
+        },
       });
+
+      return persistPlanSourceExtractionArtifacts(tx, {
+        planSourceId: planSource.id,
+        version: nextVersion,
+        extracted,
+        layoutFamily: planSource.layoutFamily
+          ? {
+              id: planSource.layoutFamily.id,
+              slug: planSource.layoutFamily.slug,
+              name: planSource.layoutFamily.name,
+            }
+          : null,
+        inferredLayoutFamily: inferredLayout,
+      });
+    },
+    {
+      maxWait: 10_000,
+      timeout: 60_000,
     }
-
-    await tx.planSource.update({
-      where: { id: planSource.id },
-      data: {
-        rawText: extracted.rawText,
-        rawJson: extracted.rawJson as Prisma.InputJsonValue,
-      },
-    });
-
-    return persistPlanSourceExtractionArtifacts(tx, {
-      planSourceId: planSource.id,
-      version: nextVersion,
-      extracted,
-      layoutFamily: planSource.layoutFamily
-        ? {
-            id: planSource.layoutFamily.id,
-            slug: planSource.layoutFamily.slug,
-            name: planSource.layoutFamily.name,
-          }
-        : null,
-      inferredLayoutFamily: inferredLayout,
-    });
-  });
+  );
 }
 
 export async function createPlanSourceAnnotation(params: {

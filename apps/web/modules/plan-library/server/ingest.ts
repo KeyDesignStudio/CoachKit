@@ -259,50 +259,56 @@ export async function ingestPlanSourceFromForm(params: {
     });
   }
 
-  const created = await prisma.$transaction(async (tx) => {
-    const planSource = await tx.planSource.create({
-      data: {
-        type,
-        title,
-        sport,
-        distance,
-        level,
-        durationWeeks: Number.isFinite(durationWeeks) && durationWeeks > 0 ? Math.floor(durationWeeks) : 0,
-        season,
-        author,
-        publisher,
-        licenseText,
-        sourceUrl,
-        sourceFilePath: sourcePathComputed || null,
-        layoutFamilyId: assignedLayoutFamily?.id ?? null,
-        storedDocumentUrl: storedDocument?.url ?? null,
-        storedDocumentKey: storedDocument?.key ?? null,
-        storedDocumentContentType: storedDocument?.contentType ?? null,
-        storedDocumentUploadedAt: storedDocument?.uploadedAt ?? null,
-        checksumSha256,
-        isActive,
-        rawText,
-        rawJson: extracted.rawJson as any,
-      },
-    });
+  const created = await prisma.$transaction(
+    async (tx) => {
+      const planSource = await tx.planSource.create({
+        data: {
+          type,
+          title,
+          sport,
+          distance,
+          level,
+          durationWeeks: Number.isFinite(durationWeeks) && durationWeeks > 0 ? Math.floor(durationWeeks) : 0,
+          season,
+          author,
+          publisher,
+          licenseText,
+          sourceUrl,
+          sourceFilePath: sourcePathComputed || null,
+          layoutFamilyId: assignedLayoutFamily?.id ?? null,
+          storedDocumentUrl: storedDocument?.url ?? null,
+          storedDocumentKey: storedDocument?.key ?? null,
+          storedDocumentContentType: storedDocument?.contentType ?? null,
+          storedDocumentUploadedAt: storedDocument?.uploadedAt ?? null,
+          checksumSha256,
+          isActive,
+          rawText,
+          rawJson: extracted.rawJson as any,
+        },
+      });
 
-    const artifacts = await persistPlanSourceExtractionArtifacts(tx, {
-      planSourceId: planSource.id,
-      version: 1,
-      extracted,
-      contentType,
-      layoutFamily: assignedLayoutFamily
-        ? {
-            id: assignedLayoutFamily.id,
-            slug: assignedLayoutFamily.slug,
-            name: assignedLayoutFamily.name,
-          }
-        : null,
-      inferredLayoutFamily,
-    });
+      const artifacts = await persistPlanSourceExtractionArtifacts(tx, {
+        planSourceId: planSource.id,
+        version: 1,
+        extracted,
+        contentType,
+        layoutFamily: assignedLayoutFamily
+          ? {
+              id: assignedLayoutFamily.id,
+              slug: assignedLayoutFamily.slug,
+              name: assignedLayoutFamily.name,
+            }
+          : null,
+        inferredLayoutFamily,
+      });
 
-    return { planSource, version: artifacts.version, run: artifacts.run };
-  });
+      return { planSource, version: artifacts.version, run: artifacts.run };
+    },
+    {
+      maxWait: 10_000,
+      timeout: 60_000,
+    }
+  );
 
   return {
     duplicate: false,
