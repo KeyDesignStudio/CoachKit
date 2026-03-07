@@ -527,6 +527,7 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
   planSourceId: string;
   annotations: LayoutRuleSourceAnnotation[];
   document?: ExtractedPdfDocument;
+  templatePageNumberOverride?: number | null;
 }) {
   const diagnostics: string[] = [];
   const weeklyGridSignal = hasWeeklyGridAnnotationSignal(params.annotations);
@@ -548,7 +549,10 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
   const annotations = params.annotations
     .filter((annotation) => isNormalizedBbox(annotation.bboxJson))
     .map((annotation) => ({ ...annotation, bbox: annotation.bboxJson }));
-  const templatePageNumber = chooseTemplatePageNumber(annotations);
+  const templatePageNumber =
+    typeof params.templatePageNumberOverride === 'number' && Number.isFinite(params.templatePageNumberOverride)
+      ? params.templatePageNumberOverride
+      : chooseTemplatePageNumber(annotations);
   const templatePage = findPage(params.document, templatePageNumber);
 
   const ignoreRegions = annotations
@@ -924,6 +928,7 @@ export function compileLayoutFamilyRules(params: {
   planSourceId: string;
   annotations: LayoutRuleSourceAnnotation[];
   document?: ExtractedPdfDocument;
+  templatePageNumberOverride?: number | null;
 }) {
   return compileWeeklyGridLayoutRulesDetailed(params).rules;
 }

@@ -348,7 +348,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
   const [reviewNotes, setReviewNotes] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
-  const [actionBusy, setActionBusy] = useState<'layout' | 'review' | 'reextract' | 'session' | null>(null);
+  const [actionBusy, setActionBusy] = useState<'layout' | 'review' | 'reextract' | 'rebuild' | 'session' | null>(null);
   const [editingSession, setEditingSession] = useState<EditableSessionForm | null>(null);
 
   const loadOverview = useCallback(async (preferredSourceId?: string | null) => {
@@ -503,6 +503,35 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
       setActionBusy(null);
     }
   }, [refreshAll, selectedId]);
+
+  const rebuildTemplate = useCallback(async () => {
+    if (!selectedId) return;
+    setActionBusy('rebuild');
+    setActionError('');
+    setActionMessage('');
+    try {
+      const response = await fetch(`/api/admin/plan-library/${selectedId}/parser-studio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rebuild_template',
+          pageNumber: detail?.planSource.gridPreview?.pageNumber ?? 1,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || 'Failed to rebuild template.');
+      }
+      const data = payload?.data as ParserStudioDetail;
+      setDetail(data);
+      setActionMessage('Template rebuilt from the current page. Run extraction next.');
+      await loadOverview(selectedId);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to rebuild template.');
+    } finally {
+      setActionBusy(null);
+    }
+  }, [detail?.planSource.gridPreview?.pageNumber, loadOverview, selectedId]);
 
   const createAnnotation = useCallback(async (payload: {
     pageNumber: number;
@@ -812,6 +841,15 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void rebuildTemplate()}
+                      disabled={actionBusy != null}
+                      className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--border-subtle)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--bg-structure)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Icon name="refresh" size="sm" aria-hidden />
+                      <span>Rebuild template from this page</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => void rerunExtraction()}

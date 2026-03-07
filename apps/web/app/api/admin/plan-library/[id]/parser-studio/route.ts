@@ -9,6 +9,7 @@ import {
   assignPlanSourceLayoutFamily,
   createPlanSourceExtractionReview,
   getParserStudioSourceDetail,
+  rebuildPlanSourceTemplateFromPage,
   rerunPlanSourceExtraction,
 } from '@/modules/plan-library/server/parser-studio';
 
@@ -63,11 +64,22 @@ export async function POST(request: NextRequest, context: { params: { id: string
     await requireAdmin();
     const body = await request.json().catch(() => ({}));
     const action = String((body as any)?.action ?? '');
-    if (action !== 'reextract') {
-      throw new ApiError(400, 'INVALID_ACTION', 'action must be reextract.');
+    if (action === 'reextract') {
+      const result = await rerunPlanSourceExtraction(context.params.id);
+      return success(result);
     }
-    const result = await rerunPlanSourceExtraction(context.params.id);
-    return success(result);
+    if (action === 'rebuild_template') {
+      const pageNumber =
+        typeof (body as any)?.pageNumber === 'number' && Number.isFinite((body as any).pageNumber)
+          ? Math.max(1, Math.floor((body as any).pageNumber))
+          : null;
+      const result = await rebuildPlanSourceTemplateFromPage({
+        planSourceId: context.params.id,
+        pageNumber,
+      });
+      return success(result);
+    }
+    throw new ApiError(400, 'INVALID_ACTION', 'action must be reextract or rebuild_template.');
   } catch (error) {
     return handleError(error);
   }

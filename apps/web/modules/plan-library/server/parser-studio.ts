@@ -688,6 +688,54 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
   );
 }
 
+export async function rebuildPlanSourceTemplateFromPage(params: {
+  planSourceId: string;
+  pageNumber?: number | null;
+}) {
+  const planSource = await prisma.planSource.findUnique({
+    where: { id: params.planSourceId },
+    include: {
+      layoutFamily: true,
+    },
+  });
+
+  if (!planSource) {
+    throw new ApiError(404, 'PLAN_SOURCE_NOT_FOUND', 'Plan source not found.');
+  }
+  if (!planSource.layoutFamily) {
+    throw new ApiError(400, 'LAYOUT_FAMILY_REQUIRED', 'Assign a layout family before rebuilding the template.');
+  }
+
+  const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
+  const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
+  if (!pdfDocument) {
+    throw new ApiError(400, 'PDF_REQUIRED', 'Template rebuild requires a stored PDF source.');
+  }
+
+  const compiledRules = compileLayoutFamilyRules({
+    familySlug: planSource.layoutFamily.slug,
+    planSourceId: planSource.id,
+    annotations: [],
+    document: pdfDocument,
+    templatePageNumberOverride: params.pageNumber ?? null,
+  });
+
+  if (!compiledRules) {
+    throw new ApiError(
+      400,
+      'TEMPLATE_REBUILD_FAILED',
+      'Unable to rebuild a weekly-grid template from this page. Adjust page selection or annotations and retry.'
+    );
+  }
+
+  await prisma.planSourceLayoutFamily.update({
+    where: { id: planSource.layoutFamily.id },
+    data: { rulesJson: compiledRules as Prisma.InputJsonValue },
+  });
+
+  return getParserStudioSourceDetail(planSource.id);
+}
+
 export async function createPlanSourceAnnotation(params: {
   planSourceId: string;
   reviewer: ReviewerContext;

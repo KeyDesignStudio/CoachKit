@@ -178,6 +178,18 @@ function normalizeSessionCellText(text: string) {
     .replace(/([A-Za-z])([0-9])/g, '$1 $2')
     .replace(/\b(REST(?: |-)?DAY)(?=[A-Za-z])/gi, '$1 ')
     .replace(/\b(OPTIONAL|MASSAGE|RECOVERY)(?=[A-Za-z])/gi, '$1 ')
+    .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?=(Mon|Tue|Wed|Thu|Fri|Sat|Sun))/gi, '$1 ')
+    .replace(/\b(SWIM|BIKE|RUN|REST(?: |-)?DAY|BRICK|CROSS|OPTIONAL)(?=(SWIM|BIKE|RUN|REST|BRICK|CROSS|OPTIONAL))/gi, '$1 ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function cleanupSessionTextForParser(text: string) {
+  return normalizeSessionCellText(text)
+    .replace(/cross\s*reference/gi, '')
+    .replace(/\brest(?: |-)?dayday\b/gi, 'REST-DAY')
+    .replace(/\b([a-z]{2,})(SWIM|BIKE|RUN|REST|BRICK|CROSS|OPTIONAL)\b/g, '$1 $2')
+    .replace(/\b(SWIM|BIKE|RUN|REST|BRICK|CROSS|OPTIONAL)([a-z]{2,})\b/g, '$1 $2')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -556,7 +568,7 @@ function normalizePathologicalWeekDistribution(params: {
 }
 
 function buildSessionTemplate(params: BuildSessionTemplateParams) {
-  const sessionText = normalizeDistanceUnitsToKm(params.sessionText.trim());
+  const sessionText = normalizeDistanceUnitsToKm(cleanupSessionTextForParser(params.sessionText.trim()));
   const sessionType = detectSessionType(sessionText);
   const parsed = parseWorkoutRecipeFromSessionText({
     discipline: params.discipline,
@@ -1009,9 +1021,18 @@ export function extractFromStructuredPdfDocument(params: {
     }
   }
 
-  const fallback = extractFromRawText(rawText, params.durationWeeks ?? null);
+  const fallback = extractFromRawText(rawText, params.durationWeeks ?? null, {
+    disableDenseRecovery: Boolean(parsedRules),
+  });
+  const fallbackWarnings = Array.isArray(fallback.warnings) ? [...fallback.warnings] : [];
+  if (parsedRules) {
+    fallbackWarnings.push(
+      'Template rules were present but yielded no accepted grid sessions; dense-text recovery was disabled to preserve grid-first parsing.'
+    );
+  }
   return {
     ...fallback,
+    warnings: fallbackWarnings,
     rawJson: {
       ...(fallback.rawJson && typeof fallback.rawJson === 'object' ? (fallback.rawJson as Record<string, unknown>) : {}),
       pdfLayout: {
@@ -1042,7 +1063,11 @@ export async function extractFromPdfBuffer(params: {
   });
 }
 
-export function extractFromRawText(rawText: string, durationWeeks?: number | null): ExtractedPlanSource {
+export function extractFromRawText(
+  rawText: string,
+  durationWeeks?: number | null,
+  options?: { disableDenseRecovery?: boolean }
+): ExtractedPlanSource {
   const segmented = segmentPlanDocument(rawText);
   const lines = segmented.filteredLines;
 
@@ -1113,8 +1138,7 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
       rawText,
       sessions,
     });
-
-  if (shouldRecoverDense) {
+  if (shouldRecoverDense && !options?.disableDenseRecovery) {
     const denseRecovery = buildDenseRecoverySessions({
       rawText,
       durationWeeks,
