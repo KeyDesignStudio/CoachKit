@@ -118,10 +118,25 @@ function shouldUseLlmExtraction(params: {
   const baselineSessions = params.baseline.sessions.length;
   const llmWeeks = params.llm.weeks.length;
   const expectedWeeks = params.durationWeeks && params.durationWeeks > 0 ? params.durationWeeks : null;
+  const baselineWarnings = Array.isArray(params.baseline.warnings) ? params.baseline.warnings : [];
+  const baselineLooksCollapsed = baselineWarnings.some((warning) =>
+    /dense[- ]text recovery|collapsed|merged ocr|template rules were present but yielded no accepted grid sessions/i.test(warning)
+  );
 
   if (llmSessions === 0) return false;
-  if (baselineSessions >= 1 && llmSessions < Math.max(8, Math.floor(baselineSessions * 0.45))) return false;
   if (expectedWeeks && llmWeeks < Math.max(2, Math.floor(expectedWeeks * 0.5))) return false;
+
+  // If deterministic parsing is clearly collapsed/merged OCR, allow LLM extraction
+  // with more permissive thresholds.
+  if (baselineLooksCollapsed) {
+    if (expectedWeeks && llmWeeks >= Math.max(2, Math.floor(expectedWeeks * 0.67)) && llmSessions >= expectedWeeks * 2) {
+      return true;
+    }
+    if (llmSessions >= Math.max(6, Math.floor(baselineSessions * 0.25))) return true;
+    return false;
+  }
+
+  if (baselineSessions >= 1 && llmSessions < Math.max(8, Math.floor(baselineSessions * 0.45))) return false;
   return true;
 }
 
@@ -289,7 +304,7 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
         ...baseline,
         warnings: [
           ...(Array.isArray(baseline.warnings) ? baseline.warnings : []),
-          'LLM structured extraction did not clear quality gates; deterministic extraction was retained.',
+          `LLM structured extraction did not clear quality gates; deterministic extraction was retained (llm weeks ${llm.weeks.length}, llm sessions ${llm.sessions.length}, baseline weeks ${baseline.weeks.length}, baseline sessions ${baseline.sessions.length}).`,
         ],
       };
     }
