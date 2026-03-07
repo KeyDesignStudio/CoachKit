@@ -109,6 +109,36 @@ function normalizeSessionType(input: string | null | undefined) {
   return raw.slice(0, 48);
 }
 
+function renderDocumentForLlm(doc: Awaited<ReturnType<typeof extractStructuredPdfDocument>>) {
+  const lineTolerance = 0.0125;
+  const pages = doc.pages.map((page) => {
+    const sorted = [...page.items].sort((a, b) => {
+      const deltaY = a.normalizedY - b.normalizedY;
+      if (Math.abs(deltaY) > lineTolerance) return deltaY;
+      return a.normalizedX - b.normalizedX;
+    });
+
+    const lines: Array<{ y: number; parts: string[] }> = [];
+    for (const item of sorted) {
+      const text = String(item.text ?? '').trim();
+      if (!text) continue;
+      const current = lines[lines.length - 1];
+      if (!current || Math.abs(current.y - item.normalizedY) > lineTolerance) {
+        lines.push({ y: item.normalizedY, parts: [text] });
+      } else {
+        current.parts.push(text);
+      }
+    }
+
+    return [
+      `=== PAGE ${page.pageNumber} ===`,
+      ...lines.map((line) => line.parts.join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean),
+    ].join('\n');
+  });
+
+  return pages.join('\n\n');
+}
+
 function shouldUseLlmExtraction(params: {
   llm: ExtractedPlanSource;
   baseline: ExtractedPlanSource;
@@ -284,12 +314,14 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
 
   try {
     let sourceText = baseline.rawText;
+    let repairedPdfText: string | null = null;
     if (params.type === 'PDF' && params.contentBytes) {
       const doc = await extractStructuredPdfDocument(params.contentBytes);
       if (doc.rawText.trim()) sourceText = doc.rawText;
+      repairedPdfText = renderDocumentForLlm(doc);
     }
 
-    const llm = await extractWithLlm({
+    let llm = await extractWithLlm({
       rawText: sourceText,
       title: params.title,
       sport: params.sport,
@@ -298,6 +330,23 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
       durationWeeks,
     });
     if (!llm) return baseline;
+
+    if (llm.sessions.length === 0 && repairedPdfText && repairedPdfText.trim().length > 0) {
+      const retry = await extractWithLlm({
+        rawText: repairedPdfText,
+        title: params.title,
+        sport: params.sport,
+        distance: params.distance,
+        level: params.level,
+        durationWeeks,
+      });
+      if (retry) {
+        llm = {
+          ...retry,
+          warnings: [...retry.warnings, 'LLM retry used page-rendered text reconstruction for improved parsing.'],
+        };
+      }
+    }
 
     if (!shouldUseLlmExtraction({ llm, baseline, durationWeeks })) {
       return {
