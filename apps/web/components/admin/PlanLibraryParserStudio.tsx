@@ -258,6 +258,7 @@ type WeeklyGridCellDiagnostic = {
   disciplineDetected: boolean;
   accepted: boolean;
   skippedReason: 'empty' | 'not_meaningful' | 'discipline_not_detected' | null;
+  textPreview: string | null;
 };
 
 type PlanLibraryParserStudioProps = {
@@ -462,6 +463,9 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
     ? [...pdfLayoutDiagnostics.cellDiagnostics]
         .filter((diagnostic) => !diagnostic.accepted)
         .sort((left, right) => {
+          const leftPriority = left.skippedReason === 'discipline_not_detected' ? 0 : left.skippedReason === 'not_meaningful' ? 1 : 2;
+          const rightPriority = right.skippedReason === 'discipline_not_detected' ? 0 : right.skippedReason === 'not_meaningful' ? 1 : 2;
+          if (leftPriority !== rightPriority) return leftPriority - rightPriority;
           if (left.pageNumber !== right.pageNumber) return left.pageNumber - right.pageNumber;
           if (left.weekIndex !== right.weekIndex) return left.weekIndex - right.weekIndex;
           return left.rowIndex - right.rowIndex;
@@ -1166,6 +1170,7 @@ export function PlanLibraryParserStudio({ adminEmail, initialSourceId }: PlanLib
                               pass {diagnostic.modeUsed ?? diagnostic.modeAttempted} · text {diagnostic.textLength} chars · meaningful {diagnostic.meaningful ? 'yes' : 'no'} · discipline {diagnostic.disciplineDetected ? 'yes' : 'no'}
                             </div>
                             {diagnostic.skippedReason ? <div className="mt-1 text-amber-700">skip: {diagnostic.skippedReason}</div> : null}
+                            {diagnostic.textPreview ? <div className="mt-1 line-clamp-2 text-[var(--muted)]">preview: {diagnostic.textPreview}</div> : null}
                           </div>
                         ))
                       ) : (
