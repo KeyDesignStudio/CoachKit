@@ -98,6 +98,7 @@ type WeeklyGridCellDiagnostic = {
   disciplineDetected: boolean;
   accepted: boolean;
   skippedReason: 'empty' | 'not_meaningful' | 'discipline_not_detected' | null;
+  textPreview: string | null;
 };
 
 type WeeklyGridExtractionAttempt = {
@@ -244,6 +245,22 @@ function detectDiscipline(line: string): PlanSourceDiscipline | null {
   if (lower.includes('rest-day') || lower.includes('rest day') || /(^|[^a-z])(rest|recovery|off)($|[^a-z])/i.test(normalized)) {
     return 'REST';
   }
+
+  const ocrFriendly = lower
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/6/g, 'g')
+    .replace(/7/g, 't')
+    .replace(/8/g, 'b');
+  const tokenized = ocrFriendly.replace(/[^a-z]+/g, ' ');
+  if (/(^| )(swim|swims|swimming|pool)( |$)/.test(tokenized)) return 'SWIM';
+  if (/(^| )(bike|bikes|biking|cycle|cycling|ride|riding)( |$)/.test(tokenized)) return 'BIKE';
+  if (/(^| )(run|runs|running|jog|jogging|fartlek)( |$)/.test(tokenized)) return 'RUN';
+  if (/(^| )(strength|conditioning|gym|yoga|pilates)( |$)/.test(tokenized)) return 'STRENGTH';
+  if (/(^| )(rest|recovery|off|massage)( |$)/.test(tokenized)) return 'REST';
   return null;
 }
 
@@ -720,6 +737,7 @@ function extractFromWeeklyGridPdfDocument(params: {
           disciplineDetected: discipline != null,
           accepted,
           skippedReason,
+          textPreview: normalizedCellText ? normalizedCellText.slice(0, 160) : null,
         });
 
         if (!accepted || !discipline) continue;
