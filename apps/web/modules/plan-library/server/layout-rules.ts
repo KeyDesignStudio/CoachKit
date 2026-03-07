@@ -866,8 +866,8 @@ export function parseLayoutFamilyRules(rulesJson: unknown): LayoutFamilyRules | 
       : null;
 
   if (
-    !weekColumns.length ||
-    !dayRows.length ||
+    weekColumns.length < 2 ||
+    dayRows.length < 3 ||
     !weekHeaderBand ||
     !Number.isFinite(weekHeaderBand.top) ||
     !Number.isFinite(weekHeaderBand.bottom)

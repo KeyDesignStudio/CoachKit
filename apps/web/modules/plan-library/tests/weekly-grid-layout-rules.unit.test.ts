@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { extractFromStructuredPdfDocument } from '@/modules/plan-library/server/extract';
-import { buildLayoutFamilyTemplatePreview, compileLayoutFamilyRules } from '@/modules/plan-library/server/layout-rules';
+import { buildLayoutFamilyTemplatePreview, compileLayoutFamilyRules, parseLayoutFamilyRules } from '@/modules/plan-library/server/layout-rules';
 import { extractTextFromPageRegion, type ExtractedPdfDocument, type PdfTextItem } from '@/modules/plan-library/server/pdf-layout';
 
 function makeItem(
@@ -414,5 +414,35 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(preview.cells).toHaveLength(28);
     expect(preview.diagnostics.join(' ')).toContain('inferred week columns from page text');
     expect(preview.diagnostics.join(' ')).toContain('inferred day rail from page text');
+  });
+
+  it('rejects under-specified stored rules that cannot represent a real weekly grid', () => {
+    const parsed = parseLayoutFamilyRules({
+      version: 'weekly-grid-template-v1',
+      familySlug: 'weekly-grid',
+      templateSourcePlanId: 'plan_underspecified',
+      compiledAt: new Date().toISOString(),
+      annotationCounts: {
+        WEEK_HEADER: 1,
+        DAY_LABEL: 1,
+        SESSION_CELL: 0,
+        BLOCK_TITLE: 0,
+        IGNORE_REGION: 0,
+        LEGEND: 0,
+        NOTE: 0,
+      },
+      pageTemplate: {
+        templatePageNumber: 1,
+        weekColumns: [{ index: 0, centerX: 0.5, left: 0.2, right: 0.8, label: 'Week 1' }],
+        dayRows: [{ index: 0, dayOfWeek: 1, label: 'Mon', centerY: 0.4, top: 0.3, bottom: 0.5 }],
+        weekHeaderBand: { top: 0.1, bottom: 0.2 },
+        blockTitleBand: null,
+        sampleSessionCell: null,
+        ignoreRegions: [],
+        legendRegions: [],
+      },
+    });
+
+    expect(parsed).toBeNull();
   });
 });
