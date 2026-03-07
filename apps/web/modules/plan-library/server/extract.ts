@@ -848,6 +848,7 @@ function extractFromWeeklyGridPdfDocument(params: {
   rawTextFallback: string;
   durationWeeks?: number | null;
   layoutRules: LayoutFamilyRules;
+  annotations?: LayoutRuleSourceAnnotation[];
 }) {
   const rules = parseLayoutFamilyRules(params.layoutRules);
   if (!rules) return null;
@@ -983,6 +984,92 @@ function extractFromWeeklyGridPdfDocument(params: {
       }
     }
 
+    if (pageSessions === 0) {
+      const pageSessionAnnotations = (params.annotations ?? [])
+        .filter((annotation) => annotation.pageNumber === page.pageNumber)
+        .filter((annotation) => annotation.annotationType === 'SESSION_CELL')
+        .map((annotation) => annotation.bboxJson)
+        .filter((bbox): bbox is { x: number; y: number; width: number; height: number } => bbox != null);
+
+      if (pageSessionAnnotations.length) {
+        const rowCenters = rules.pageTemplate.dayRows.map((row) => ({
+          row,
+          centerY: (row.top + row.bottom) / 2,
+        }));
+        const columnCenters = resolvedColumns.map((column) => ({
+          column,
+          centerX: (column.left + column.right) / 2,
+        }));
+
+        const sortedCells = [...pageSessionAnnotations].sort((left, right) => {
+          const deltaY = left.y - right.y;
+          if (Math.abs(deltaY) > 0.004) return deltaY;
+          return left.x - right.x;
+        });
+
+        for (const cell of sortedCells) {
+          const nearestColumn = columnCenters.reduce<{ column: (typeof resolvedColumns)[number]; distance: number } | null>(
+            (best, candidate) => {
+              const cx = cell.x + cell.width / 2;
+              const distance = Math.abs(candidate.centerX - cx);
+              if (!best || distance < best.distance) {
+                return { column: candidate.column, distance };
+              }
+              return best;
+            },
+            null
+          );
+          const nearestRow = rowCenters.reduce<{ row: (typeof rules.pageTemplate.dayRows)[number]; distance: number } | null>(
+            (best, candidate) => {
+              const cy = cell.y + cell.height / 2;
+              const distance = Math.abs(candidate.centerY - cy);
+              if (!best || distance < best.distance) {
+                return { row: candidate.row, distance };
+              }
+              return best;
+            },
+            null
+          );
+          if (!nearestColumn || !nearestRow) continue;
+
+          const cellText = extractCellTextWithRecovery({
+            page,
+            cellBox: cell,
+            excludeBoxes,
+          });
+          const normalizedCellText = normalizeSessionCellText(cellText);
+          if (!isMeaningfulSessionCell(normalizedCellText)) continue;
+
+          const discipline = detectDiscipline(normalizedCellText);
+          if (!discipline) continue;
+
+          const weekIndex = nearestColumn.column.weekIndex;
+          const ordinal = (sessionCountByWeek.get(weekIndex) ?? 0) + 1;
+          sessionCountByWeek.set(weekIndex, ordinal);
+          const lines = normalizedCellText.split(/\n+/).map(normalizeLine).filter(Boolean);
+          const built = buildSessionTemplate({
+            weekIndex,
+            ordinal,
+            dayOfWeek: nearestRow.row.dayOfWeek,
+            discipline,
+            sessionText: lines.join('\n'),
+            title: lines[0] ?? null,
+          });
+          if (built.warnings.length) {
+            warnings.push(...built.warnings.map((warning) => `Session ${ordinal} week ${weekIndex + 1}: ${warning}`));
+          }
+          sessions.push(built.session);
+          pageSessions += 1;
+        }
+
+        if (pageSessions > 0) {
+          warnings.push(
+            `Page ${page.pageNumber}: template-derived grid cells yielded no sessions; recovered sessions from SESSION_CELL annotations.`
+          );
+        }
+      }
+    }
+
     if (pageSessions > 0) {
       parsedPageCount += 1;
     }
@@ -1034,6 +1121,7 @@ export function extractFromStructuredPdfDocument(params: {
       rawTextFallback: rawText,
       durationWeeks: params.durationWeeks,
       layoutRules: parsedRules,
+      annotations: params.annotations,
     });
     if (extracted) {
       return extracted;
