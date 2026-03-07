@@ -464,6 +464,20 @@ function extractWeekIndexFromHeaderText(text: string) {
   return matches[0] ?? null;
 }
 
+function extractPageWeekRangeStart(text: string) {
+  const normalized = normalizeLine(text).toLowerCase();
+  if (!normalized) return null;
+  const rangeMatch = normalized.match(/\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})/i);
+  if (rangeMatch) {
+    const start = Number(rangeMatch[1]);
+    const end = Number(rangeMatch[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && start > 0 && end >= start) {
+      return start - 1;
+    }
+  }
+  return null;
+}
+
 function extractFromWeeklyGridPdfDocument(params: {
   document: ExtractedPdfDocument;
   rawTextFallback: string;
@@ -510,18 +524,6 @@ function extractFromWeeklyGridPdfDocument(params: {
           nextFallbackWeekIndex = Math.max(nextFallbackWeekIndex, weekIndex + 1);
         }
 
-        if (!weeksByIndex.has(weekIndex)) {
-          weeksByIndex.set(weekIndex, {
-            weekIndex,
-            notes: blockTitle || headerText || null,
-          });
-        } else if (blockTitle && !weeksByIndex.get(weekIndex)?.notes) {
-          weeksByIndex.set(weekIndex, {
-            ...weeksByIndex.get(weekIndex)!,
-            notes: blockTitle,
-          });
-        }
-
         return {
           ...column,
           weekIndex,
@@ -530,10 +532,36 @@ function extractFromWeeklyGridPdfDocument(params: {
       })
       .sort((left, right) => left.index - right.index);
 
+    const pageRangeStart =
+      extractPageWeekRangeStart(blockTitle) ??
+      extractPageWeekRangeStart(columns.map((column) => column.headerText).join(' ')) ??
+      extractPageWeekRangeStart(page.text);
+    const resolvedColumns =
+      pageRangeStart != null
+        ? columns.map((column, index) => ({
+            ...column,
+            weekIndex: pageRangeStart + index,
+          }))
+        : columns;
+
+    for (const column of resolvedColumns) {
+      if (!weeksByIndex.has(column.weekIndex)) {
+        weeksByIndex.set(column.weekIndex, {
+          weekIndex: column.weekIndex,
+          notes: blockTitle || column.headerText || null,
+        });
+      } else if (blockTitle && !weeksByIndex.get(column.weekIndex)?.notes) {
+        weeksByIndex.set(column.weekIndex, {
+          ...weeksByIndex.get(column.weekIndex)!,
+          notes: blockTitle,
+        });
+      }
+    }
+
     let pageSessions = 0;
 
     for (const row of rules.pageTemplate.dayRows) {
-      for (const column of columns) {
+      for (const column of resolvedColumns) {
         const cellBox = getWeeklyGridCellBox(column, row);
         const cellText = extractTextFromPageRegion({
           page,
