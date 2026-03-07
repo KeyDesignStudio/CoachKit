@@ -164,6 +164,18 @@ function normalizeLine(line: string) {
     .trim();
 }
 
+function normalizeSessionCellText(text: string) {
+  return normalizeLine(text)
+    .replace(/[|]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/\b(REST(?: |-)?DAY)(?=[A-Za-z])/gi, '$1 ')
+    .replace(/\b(OPTIONAL|MASSAGE|RECOVERY)(?=[A-Za-z])/gi, '$1 ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function toMinutes(value: number, unit: string) {
   const normalized = unit.toLowerCase();
   if (normalized.startsWith('h')) return value * 60;
@@ -171,8 +183,18 @@ function toMinutes(value: number, unit: string) {
 }
 
 function detectDiscipline(line: string): PlanSourceDiscipline | null {
+  const normalized = normalizeSessionCellText(line);
+  if (!normalized) return null;
   for (const rule of DISCIPLINE_RULES) {
-    if (rule.match.test(line)) return rule.key;
+    if (rule.match.test(normalized)) return rule.key;
+  }
+  const compact = normalized.toLowerCase().replace(/[^a-z]/g, '');
+  if (compact.includes('swim')) return 'SWIM';
+  if (compact.includes('bike') || compact.includes('cycle')) return 'BIKE';
+  if (compact.includes('run') || compact.includes('jog')) return 'RUN';
+  if (compact.includes('strength') || compact.includes('conditioning') || compact.includes('yoga')) return 'STRENGTH';
+  if (compact.includes('restday') || compact.includes('recovery') || compact.includes('off')) {
+    return 'REST';
   }
   return null;
 }
@@ -447,7 +469,7 @@ function finalizeExtractedPlanSource(params: FinalizeExtractedPlanSourceParams):
 }
 
 function isMeaningfulSessionCell(text: string) {
-  const normalized = normalizeLine(text);
+  const normalized = normalizeSessionCellText(text);
   if (!normalized || normalized.length < 4) return false;
   if (!/[a-z]/i.test(normalized)) return false;
   if (/^(week\s*\d+|mon|tue|wed|thu|fri|sat|sun)$/i.test(normalized)) return false;
@@ -569,9 +591,10 @@ function extractFromWeeklyGridPdfDocument(params: {
           excludeBoxes,
         }).text;
 
-        if (!isMeaningfulSessionCell(cellText)) continue;
+        const normalizedCellText = normalizeSessionCellText(cellText);
+        if (!isMeaningfulSessionCell(normalizedCellText)) continue;
 
-        const discipline = detectDiscipline(cellText);
+        const discipline = detectDiscipline(normalizedCellText);
         if (!discipline) {
           warnings.push(`Page ${page.pageNumber} week ${column.weekIndex + 1} row ${row.index + 1}: could not infer discipline from cell text.`);
           continue;
@@ -579,7 +602,7 @@ function extractFromWeeklyGridPdfDocument(params: {
 
         const ordinal = (sessionCountByWeek.get(column.weekIndex) ?? 0) + 1;
         sessionCountByWeek.set(column.weekIndex, ordinal);
-        const lines = cellText.split(/\n+/).map(normalizeLine).filter(Boolean);
+        const lines = normalizedCellText.split(/\n+/).map(normalizeLine).filter(Boolean);
         const built = buildSessionTemplate({
           weekIndex: column.weekIndex,
           ordinal,

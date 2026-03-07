@@ -452,6 +452,29 @@ function deriveAnchorsFromContainer(params: {
   return params.type === 'week' ? extractWeekAnchorsFromRuns(runs) : extractDayAnchorsFromRuns(runs);
 }
 
+function deriveAnchorsFromPageHeuristics(params: {
+  page: ExtractedPdfPage | null;
+  type: 'week' | 'day';
+  excludeBoxes: NormalizedBbox[];
+}) {
+  if (!params.page) return [] as AnchorCandidate[];
+  if (params.type === 'week') {
+    const runs = extractTextRunsFromPageRegion({
+      page: params.page,
+      box: { x: 0.08, y: 0.06, width: 0.86, height: 0.24 },
+      excludeBoxes: params.excludeBoxes,
+    });
+    return extractWeekAnchorsFromRuns(runs);
+  }
+
+  const runs = extractTextRunsFromPageRegion({
+    page: params.page,
+    box: { x: 0, y: 0.18, width: 0.2, height: 0.8 },
+    excludeBoxes: params.excludeBoxes,
+  });
+  return extractDayAnchorsFromRuns(runs);
+}
+
 function deriveGridBounds(params: {
   centers: number[];
   sampleBoxes: NormalizedBbox[];
@@ -565,7 +588,16 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
       diagnostics.push('Week header annotation should cover all week labels so columns can be derived.');
     }
   } else {
-    diagnostics.push('Add a WEEK_HEADER annotation for the header row.');
+    weekAnchors = deriveAnchorsFromPageHeuristics({
+      page: templatePage,
+      type: 'week',
+      excludeBoxes: exclusionZones,
+    });
+    if (weekAnchors.length >= 2) {
+      diagnostics.push('No WEEK_HEADER annotations found; inferred week columns from page text.');
+    } else {
+      diagnostics.push('Add a WEEK_HEADER annotation for the header row.');
+    }
   }
 
   let dayAnchors: AnchorCandidate[] = [];
@@ -589,7 +621,16 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
       diagnostics.push('Day label annotation should cover the whole day rail so rows can be derived.');
     }
   } else {
-    diagnostics.push('Add a DAY_LABEL annotation covering the day rail.');
+    dayAnchors = deriveAnchorsFromPageHeuristics({
+      page: templatePage,
+      type: 'day',
+      excludeBoxes: exclusionZones,
+    });
+    if (dayAnchors.length >= 3) {
+      diagnostics.push('No DAY_LABEL annotations found; inferred day rail from page text.');
+    } else {
+      diagnostics.push('Add a DAY_LABEL annotation covering the day rail.');
+    }
   }
 
   if (dayAnchors.length) {
