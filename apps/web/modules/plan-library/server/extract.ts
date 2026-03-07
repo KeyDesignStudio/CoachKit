@@ -517,6 +517,47 @@ function rebalanceCollapsedSessionWeeks(params: {
   return true;
 }
 
+function normalizePathologicalWeekDistribution(params: {
+  rawText: string;
+  durationWeeks?: number | null;
+  sessions: ExtractedSessionTemplate[];
+}) {
+  if (params.sessions.length < 14) return false;
+
+  const counts = new Map<number, number>();
+  for (const session of params.sessions) {
+    counts.set(session.weekIndex, (counts.get(session.weekIndex) ?? 0) + 1);
+  }
+  const dominant = Math.max(...counts.values());
+  const dominantRatio = dominant / params.sessions.length;
+  if (counts.size > 2 || dominantRatio < 0.7) return false;
+
+  const markerWeeks = Array.from(
+    new Set(extractDenseWeekMarkers(params.rawText).map((marker) => marker.weekIndex))
+  ).sort((a, b) => a - b);
+
+  const inferredWeekCount = Math.max(2, Math.ceil(params.sessions.length / 7));
+  const fallbackCount =
+    params.durationWeeks && params.durationWeeks > 0
+      ? Math.min(params.durationWeeks, inferredWeekCount)
+      : Math.min(12, inferredWeekCount);
+  const fallbackWeeks = Array.from({ length: fallbackCount }, (_, index) => index);
+  const targetWeeks = markerWeeks.length >= 2 ? markerWeeks : fallbackWeeks;
+  if (targetWeeks.length < 2) return false;
+
+  const weekOrdinalMap = new Map<number, number>();
+  const dayCycleLength = 7;
+  for (let index = 0; index < params.sessions.length; index += 1) {
+    const weekIndex = targetWeeks[Math.floor(index / dayCycleLength) % targetWeeks.length] ?? targetWeeks[0]!;
+    const ordinal = (weekOrdinalMap.get(weekIndex) ?? 0) + 1;
+    weekOrdinalMap.set(weekIndex, ordinal);
+    params.sessions[index]!.weekIndex = weekIndex;
+    params.sessions[index]!.ordinal = ordinal;
+  }
+
+  return true;
+}
+
 function buildSessionTemplate(params: BuildSessionTemplateParams) {
   const sessionText = normalizeDistanceUnitsToKm(params.sessionText.trim());
   const sessionType = detectSessionType(sessionText);
@@ -1100,6 +1141,15 @@ export function extractFromRawText(rawText: string, durationWeeks?: number | nul
   });
   if (rebalanced) {
     warnings.push('Week distribution was rebalanced from detected week markers because extraction collapsed sessions into too few weeks.');
+  }
+
+  const normalizedDistribution = normalizePathologicalWeekDistribution({
+    rawText,
+    durationWeeks,
+    sessions,
+  });
+  if (normalizedDistribution) {
+    warnings.push('Session week distribution was normalized because OCR extraction produced an over-concentrated week assignment.');
   }
 
   if (!weeks.length) {
