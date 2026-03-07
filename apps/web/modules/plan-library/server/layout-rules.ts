@@ -646,6 +646,40 @@ function compileWeeklyGridLayoutRulesDetailed(params: {
     });
   }
 
+  // If manual annotations are present but incomplete/noisy, supplement with
+  // page-level heuristics so we can still compile a usable weekly grid.
+  if (weekAnchors.length < 2) {
+    const inferredWeekAnchors = deriveAnchorsFromPageHeuristics({
+      page: templatePage,
+      type: 'week',
+      excludeBoxes: exclusionZones,
+    });
+    if (inferredWeekAnchors.length >= 2) {
+      weekAnchors = inferredWeekAnchors;
+      diagnostics.push('Week anchors were supplemented from page text because annotations were insufficient.');
+    }
+  }
+
+  if (dayAnchors.length < 3) {
+    let inferredDayAnchors = deriveAnchorsFromPageHeuristics({
+      page: templatePage,
+      type: 'day',
+      excludeBoxes: exclusionZones,
+    });
+    if (inferredDayAnchors.length) {
+      inferredDayAnchors = normalizeDayAnchors({
+        anchors: inferredDayAnchors,
+        container: dayLabelContainer,
+        sampleSessionCell: sessionCells[0] ?? null,
+        diagnostics,
+      });
+    }
+    if (inferredDayAnchors.length >= 3) {
+      dayAnchors = inferredDayAnchors;
+      diagnostics.push('Day anchors were supplemented from page text because annotations were insufficient.');
+    }
+  }
+
   if (weekAnchors.length < 2 || dayAnchors.length < 3) {
     return { rules: null, diagnostics };
   }

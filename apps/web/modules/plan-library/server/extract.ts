@@ -901,13 +901,32 @@ function extractFromWeeklyGridPdfDocument(params: {
       extractPageWeekRangeStart(blockTitle) ??
       extractPageWeekRangeStart(columns.map((column) => column.headerText).join(' ')) ??
       extractPageWeekRangeStart(page.text);
-    const resolvedColumns =
+    const resolvedColumnsBase =
       pageRangeStart != null
         ? columns.map((column, index) => ({
             ...column,
             weekIndex: pageRangeStart + index,
           }))
         : columns;
+
+    const uniqueWeekCount = new Set(resolvedColumnsBase.map((column) => column.weekIndex)).size;
+    const hasAmbiguousWeekHeaders = uniqueWeekCount < resolvedColumnsBase.length;
+    const resolvedColumns = hasAmbiguousWeekHeaders
+      ? (() => {
+          const inferredStart =
+            pageRangeStart ??
+            extractPageWeekRangeStart(blockTitle) ??
+            extractPageWeekRangeStart(page.text) ??
+            Math.min(...resolvedColumnsBase.map((column) => column.weekIndex));
+          warnings.push(
+            `Page ${page.pageNumber}: week headers were ambiguous; week indices were reassigned sequentially from week ${inferredStart + 1}.`
+          );
+          return resolvedColumnsBase.map((column, index) => ({
+            ...column,
+            weekIndex: inferredStart + index,
+          }));
+        })()
+      : resolvedColumnsBase;
 
     for (const column of resolvedColumns) {
       if (!weeksByIndex.has(column.weekIndex)) {

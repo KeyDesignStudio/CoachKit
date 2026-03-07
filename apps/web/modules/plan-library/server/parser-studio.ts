@@ -14,6 +14,7 @@ import {
   buildLayoutFamilyTemplatePreview,
   compileLayoutFamilyRules,
   parseLayoutFamilyRules,
+  type LayoutRuleSourceAnnotation,
 } from './layout-rules';
 import { extractStructuredPdfDocument } from './pdf-layout';
 
@@ -51,6 +52,115 @@ function clamp(value: number, min: number, max: number) {
 function computeAdjustedConfidence(rawConfidence: number, warningCount: number) {
   const penalty = Math.min(0.72, warningCount * 0.0225);
   return clamp(rawConfidence - penalty, 0, 1);
+}
+
+function chooseDominantWeeklyGridPage(annotations: LayoutRuleSourceAnnotation[]) {
+  const scoreByPage = new Map<number, number>();
+  for (const annotation of annotations) {
+    const weight =
+      annotation.annotationType === 'WEEK_HEADER'
+        ? 3
+        : annotation.annotationType === 'DAY_LABEL'
+          ? 3
+          : annotation.annotationType === 'SESSION_CELL'
+            ? 1
+            : 0;
+    if (weight <= 0) continue;
+    scoreByPage.set(annotation.pageNumber, (scoreByPage.get(annotation.pageNumber) ?? 0) + weight);
+  }
+  let bestPage: number | null = null;
+  let bestScore = -1;
+  for (const [pageNumber, score] of scoreByPage.entries()) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestPage = pageNumber;
+    }
+  }
+  return bestPage;
+}
+
+function sanitizeWeeklyGridAnnotations(annotations: LayoutRuleSourceAnnotation[]) {
+  const dominantPage = chooseDominantWeeklyGridPage(annotations);
+  if (dominantPage == null) return annotations;
+
+  const keepTypes = new Set<LayoutRuleSourceAnnotation['annotationType']>([
+    'WEEK_HEADER',
+    'DAY_LABEL',
+    'SESSION_CELL',
+    'BLOCK_TITLE',
+    'IGNORE_REGION',
+    'LEGEND',
+  ]);
+
+  return annotations.filter(
+    (annotation) => keepTypes.has(annotation.annotationType) && annotation.pageNumber === dominantPage
+  );
+}
+
+function toLayoutRuleAnnotations(
+  annotations: Array<{
+    pageNumber: number;
+    annotationType: PlanSourceAnnotationType;
+    label: string | null;
+    note: string | null;
+    bboxJson: Prisma.JsonValue;
+  }>
+): LayoutRuleSourceAnnotation[] {
+  return annotations
+    .filter((annotation) => {
+      const candidate = annotation.bboxJson as Record<string, unknown> | null;
+      return Boolean(
+        candidate &&
+          typeof candidate === 'object' &&
+          typeof candidate.x === 'number' &&
+          typeof candidate.y === 'number' &&
+          typeof candidate.width === 'number' &&
+          typeof candidate.height === 'number'
+      );
+    })
+    .map((annotation) => ({
+      pageNumber: annotation.pageNumber,
+      annotationType: annotation.annotationType,
+      label: annotation.label,
+      note: annotation.note,
+      bboxJson: annotation.bboxJson as LayoutRuleSourceAnnotation['bboxJson'],
+    }));
+}
+
+function compileUsableLayoutRules(params: {
+  familySlug: string;
+  planSourceId: string;
+  annotations: LayoutRuleSourceAnnotation[];
+  document?: Awaited<ReturnType<typeof extractStructuredPdfDocument>> | null;
+}) {
+  const direct = compileLayoutFamilyRules({
+    familySlug: params.familySlug,
+    planSourceId: params.planSourceId,
+    annotations: params.annotations,
+    document: params.document ?? undefined,
+  });
+  if (parseLayoutFamilyRules(direct)) return direct;
+
+  if (!new Set(['weekly-grid', 'mixed-editorial']).has(params.familySlug)) {
+    return direct;
+  }
+
+  const sanitized = sanitizeWeeklyGridAnnotations(params.annotations);
+  const fromSanitized = compileLayoutFamilyRules({
+    familySlug: params.familySlug,
+    planSourceId: params.planSourceId,
+    annotations: sanitized,
+    document: params.document ?? undefined,
+  });
+  if (parseLayoutFamilyRules(fromSanitized)) return fromSanitized;
+
+  const preview = buildLayoutFamilyTemplatePreview({
+    familySlug: params.familySlug,
+    planSourceId: params.planSourceId,
+    annotations: sanitized,
+    document: params.document ?? undefined,
+  });
+  return preview.rules ?? fromSanitized;
 }
 
 function summarizeExtraction(params: {
@@ -628,14 +738,15 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
     rawText: planSource.rawText,
     sourceUrl: planSource.sourceUrl,
   });
+  const layoutAnnotations = toLayoutRuleAnnotations(planSource.annotations);
   const pdfBuffer = await loadPlanSourcePdfBuffer(planSource);
   const pdfDocument = pdfBuffer ? await extractStructuredPdfDocument(pdfBuffer) : null;
   const compiledRules = planSource.layoutFamily
-    ? compileLayoutFamilyRules({
+    ? compileUsableLayoutRules({
         familySlug: planSource.layoutFamily.slug,
         planSourceId: planSource.id,
-        annotations: planSource.annotations as any,
-        document: pdfDocument ?? undefined,
+        annotations: layoutAnnotations,
+        document: pdfDocument,
       })
     : null;
   const layoutRulesJson = compiledRules ?? planSource.layoutFamily?.rulesJson ?? null;
@@ -645,14 +756,14 @@ export async function rerunPlanSourceExtraction(planSourceId: string) {
         durationWeeks: planSource.durationWeeks,
         rawTextFallback: planSource.rawText,
         layoutRulesJson,
-        annotations: planSource.annotations as any,
+        annotations: layoutAnnotations,
       })
     : extractFromRawText(planSource.rawText, planSource.durationWeeks);
   const nextVersion = (planSource.versions[0]?.version ?? 0) + 1;
 
   return prisma.$transaction(
     async (tx) => {
-      if (planSource.layoutFamily && compiledRules) {
+      if (planSource.layoutFamily && parseLayoutFamilyRules(compiledRules)) {
         await tx.planSourceLayoutFamily.update({
           where: { id: planSource.layoutFamily.id },
           data: { rulesJson: compiledRules as Prisma.InputJsonValue },
@@ -720,7 +831,7 @@ export async function rebuildPlanSourceTemplateFromPage(params: {
     templatePageNumberOverride: params.pageNumber ?? null,
   });
 
-  if (!compiledRules) {
+  if (!parseLayoutFamilyRules(compiledRules)) {
     throw new ApiError(
       400,
       'TEMPLATE_REBUILD_FAILED',
