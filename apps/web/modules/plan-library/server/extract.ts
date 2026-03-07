@@ -418,28 +418,25 @@ function buildDenseRecoverySessions(params: {
   const candidates = extractDenseDisciplineCandidates(params.rawText);
   if (candidates.length < 6) return null;
 
-  const weekIndices = Array.from(
+  const detectedWeeks = Array.from(
     new Set(extractDenseWeekMarkers(params.rawText).map((marker) => marker.weekIndex))
   ).sort((a, b) => a - b);
+  const inferredWeekCount = Math.max(1, Math.ceil(candidates.length / 7));
+  const fallbackWeekCount =
+    params.durationWeeks && params.durationWeeks > 0
+      ? Math.min(params.durationWeeks, Math.max(2, inferredWeekCount))
+      : Math.max(2, Math.min(12, inferredWeekCount));
   const resolvedWeeks =
-    weekIndices.length > 0
-      ? weekIndices
-      : params.durationWeeks && params.durationWeeks > 0
-        ? Array.from({ length: params.durationWeeks }, (_, index) => index)
-        : [0];
+    detectedWeeks.length >= 2
+      ? detectedWeeks
+      : Array.from({ length: fallbackWeekCount }, (_, index) => index);
   const dayCycle = [1, 2, 3, 4, 5, 6, 0];
-  const explicitCandidateWeeks = new Set(
-    candidates.map((candidate) => candidate.weekIndex).filter((value): value is number => value != null)
-  );
-  const shouldCycleWeeks = explicitCandidateWeeks.size < 2 && resolvedWeeks.length > 1;
   const ordinalByWeek = new Map<number, number>();
   const sessions: ExtractedSessionTemplate[] = [];
 
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]!;
-    const weekIndex = shouldCycleWeeks
-      ? resolvedWeeks[Math.floor(index / dayCycle.length) % resolvedWeeks.length] ?? 0
-      : candidate.weekIndex ?? resolvedWeeks[index % resolvedWeeks.length] ?? 0;
+    const weekIndex = resolvedWeeks[Math.floor(index / dayCycle.length) % resolvedWeeks.length] ?? 0;
     const ordinal = (ordinalByWeek.get(weekIndex) ?? 0) + 1;
     ordinalByWeek.set(weekIndex, ordinal);
 
