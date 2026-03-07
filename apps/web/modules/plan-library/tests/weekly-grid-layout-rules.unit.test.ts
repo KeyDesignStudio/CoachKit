@@ -145,6 +145,48 @@ describe('plan-library weekly-grid layout rules', () => {
     expect((extracted.rawJson as any)?.pdfLayout?.mode).toBe('template');
   });
 
+  it('extracts sessions when cell text has OCR token collisions', () => {
+    const rules = compileLayoutFamilyRules({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_ocr',
+      annotations: [
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 1', note: null, bboxJson: { x: 0.10, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'WEEK_HEADER', label: 'Week 2', note: null, bboxJson: { x: 0.31, y: 0.14, width: 0.14, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Mon', note: null, bboxJson: { x: 0.02, y: 0.24, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Tue', note: null, bboxJson: { x: 0.02, y: 0.35, width: 0.06, height: 0.05 } },
+        { pageNumber: 1, annotationType: 'DAY_LABEL', label: 'Wed', note: null, bboxJson: { x: 0.02, y: 0.46, width: 0.06, height: 0.05 } },
+      ],
+    });
+
+    const document: ExtractedPdfDocument = {
+      rawText: 'Week 1 Week 2',
+      pages: [
+        {
+          pageNumber: 1,
+          width: 1000,
+          height: 1000,
+          text: '',
+          items: [
+            makeItem('Week 1', 0.17, 0.16, 0.08),
+            makeItem('Week 2', 0.38, 0.16, 0.08),
+            makeItem('8SWIMEasy swim, 30-40mins.', 0.15, 0.27, 0.16),
+            makeItem('REST-DAYDay off', 0.15, 0.38, 0.16),
+          ],
+        },
+      ],
+    };
+
+    const extracted = extractFromStructuredPdfDocument({
+      document,
+      durationWeeks: 2,
+      layoutRulesJson: rules,
+    });
+
+    expect(extracted.sessions.length).toBeGreaterThanOrEqual(1);
+    expect(extracted.sessions.some((session) => session.discipline === 'SWIM')).toBe(true);
+    expect(extracted.sessions.some((session) => session.discipline === 'REST')).toBe(true);
+  });
+
   it('derives a full 4x7 preview grid from one week-header band and one day rail annotation', () => {
     const document: ExtractedPdfDocument = {
       rawText: '12 week plan',
@@ -289,5 +331,48 @@ describe('plan-library weekly-grid layout rules', () => {
     expect(preview.cells).toHaveLength(28);
     expect(preview.rules?.familySlug).toBe('weekly-grid');
     expect(preview.diagnostics.join(' ')).toContain('weekly-grid preview fallback');
+  });
+
+  it('infers a weekly-grid template from page text when no annotations exist', () => {
+    const document: ExtractedPdfDocument = {
+      rawText: '12 week plan',
+      pages: [
+        {
+          pageNumber: 1,
+          width: 1000,
+          height: 1000,
+          text: '',
+          items: [
+            makeItem('WEEK', 0.18, 0.16, 0.05),
+            makeItem('1', 0.24, 0.16, 0.02),
+            makeItem('WEEK', 0.39, 0.16, 0.05),
+            makeItem('2', 0.45, 0.16, 0.02),
+            makeItem('WEEK', 0.60, 0.16, 0.05),
+            makeItem('3', 0.66, 0.16, 0.02),
+            makeItem('WEEK', 0.81, 0.16, 0.05),
+            makeItem('4', 0.87, 0.16, 0.02),
+            makeItem('MON', 0.05, 0.27, 0.04),
+            makeItem('TUE', 0.05, 0.38, 0.04),
+            makeItem('WED', 0.05, 0.49, 0.04),
+            makeItem('THU', 0.05, 0.60, 0.04),
+            makeItem('FRI', 0.05, 0.71, 0.04),
+            makeItem('SAT', 0.05, 0.82, 0.04),
+            makeItem('SUN', 0.05, 0.93, 0.04),
+          ],
+        },
+      ],
+    };
+
+    const preview = buildLayoutFamilyTemplatePreview({
+      familySlug: 'weekly-grid',
+      planSourceId: 'plan_123',
+      annotations: [],
+      document,
+    });
+
+    expect(preview.rules).toBeTruthy();
+    expect(preview.cells).toHaveLength(28);
+    expect(preview.diagnostics.join(' ')).toContain('inferred week columns from page text');
+    expect(preview.diagnostics.join(' ')).toContain('inferred day rail from page text');
   });
 });
