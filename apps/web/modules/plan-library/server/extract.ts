@@ -338,28 +338,59 @@ function extractStructuredSessionCandidates(lines: string[], durationWeeks: numb
   return candidates;
 }
 
+function extractDenseWeekMarkers(text: string) {
+  const normalized = normalizeLine(text)
+    .replace(/\b(week)(\d{1,2})\b/gi, '$1 $2')
+    .replace(/\b(weeks)(\d{1,2})\b/gi, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2');
+  const markers: Array<{ index: number; weekIndex: number }> = [];
+
+  const rangePattern = /\bweeks?\s*(\d{1,2})\s*[-–—]\s*(\d{1,2})/gi;
+  for (const match of normalized.matchAll(rangePattern)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) continue;
+    for (let week = start; week <= end; week += 1) {
+      markers.push({ index: match.index ?? 0, weekIndex: week - 1 });
+    }
+  }
+
+  const singlePattern = /\b(?:week|wk)\s*(\d{1,2})\b/gi;
+  for (const match of normalized.matchAll(singlePattern)) {
+    const week = Number(match[1]);
+    if (!Number.isFinite(week) || week <= 0) continue;
+    markers.push({ index: match.index ?? 0, weekIndex: week - 1 });
+  }
+
+  return markers.sort((left, right) => left.index - right.index);
+}
+
 function extractDenseDisciplineCandidates(rawText: string) {
   const normalized = normalizeDistanceUnitsToKm(rawText)
     .replace(/\u00a0/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/\b(week|wk)\s*([0-9]{1,2})\b/gi, ' WEEK $2 ')
     .replace(/\b(mon|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b/gi, ' $1 ')
-    .replace(/\b(rest(?: |-)?day|swim|bike|run|brick|cross|optional|s&c|strength|yoga)\b/gi, '\n$1 ')
+    .replace(/\b(rest(?: |-)?day|swim|bike|run|brick|cross|optional|s&c|strength|yoga)\s*(?=(?:[•●▪◦\-:]|\d))/gi, '\n$1 ')
     .replace(/\n{2,}/g, '\n')
     .trim();
 
-  if (!normalized) return [] as Array<{ discipline: PlanSourceDiscipline; text: string }>;
+  if (!normalized) return [] as Array<{ discipline: PlanSourceDiscipline; text: string; weekIndex: number | null }>;
 
+  const weekMarkers = extractDenseWeekMarkers(normalized);
   const starts = '(?:rest(?: |-)?day|swim|bike|run|brick|cross|optional|s&c|strength|yoga)';
   const pattern = new RegExp(`\\b(${starts})\\b[\\s\\S]*?(?=\\b${starts}\\b|$)`, 'gi');
-  const candidates: Array<{ discipline: PlanSourceDiscipline; text: string }> = [];
+  const candidates: Array<{ discipline: PlanSourceDiscipline; text: string; weekIndex: number | null }> = [];
 
   for (const match of normalized.matchAll(pattern)) {
     const chunk = normalizeLine(match[0] ?? '');
     if (!chunk || chunk.length < 12) continue;
     const discipline = detectDiscipline(chunk);
     if (!discipline) continue;
-    candidates.push({ discipline, text: chunk });
+    const chunkIndex = match.index ?? 0;
+    const weekMarker = [...weekMarkers].reverse().find((marker) => marker.index <= chunkIndex);
+    candidates.push({ discipline, text: chunk, weekIndex: weekMarker?.weekIndex ?? null });
   }
 
   return candidates;
@@ -386,7 +417,7 @@ function buildDenseRecoverySessions(params: {
 
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]!;
-    const weekIndex = resolvedWeeks[index % resolvedWeeks.length] ?? 0;
+    const weekIndex = candidate.weekIndex ?? resolvedWeeks[index % resolvedWeeks.length] ?? 0;
     const ordinal = (ordinalByWeek.get(weekIndex) ?? 0) + 1;
     ordinalByWeek.set(weekIndex, ordinal);
 
