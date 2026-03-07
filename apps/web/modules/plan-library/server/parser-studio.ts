@@ -478,6 +478,7 @@ export async function getParserStudioSourceDetail(planSourceId: string) {
       sourceFilePath: planSource.sourceFilePath,
       storedDocumentUrl: planSource.storedDocumentUrl,
       rawText: planSource.rawText,
+      rawJson: planSource.rawJson,
       isActive: planSource.isActive,
       createdAt: planSource.createdAt.toISOString(),
       updatedAt: planSource.updatedAt.toISOString(),
