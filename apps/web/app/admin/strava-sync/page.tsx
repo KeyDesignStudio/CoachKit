@@ -6,6 +6,7 @@ import { resolveLocalStartUtc } from '@/lib/calendar-local-day';
 import { tokens } from '@/components/ui/tokens';
 
 export const dynamic = 'force-dynamic';
+const HEALTHY_RUN_STATUSES = new Set(['SUCCEEDED', 'PARTIAL']);
 
 function formatTimestamp(value: Date | null): string {
   if (!value) return '—';
@@ -26,7 +27,7 @@ export default async function AdminStravaSyncPage() {
     take: 20,
   });
 
-  const lastSuccess = runs.find((run) => run.status === 'SUCCEEDED') ?? null;
+  const lastSuccess = runs.find((run) => HEALTHY_RUN_STATUSES.has(run.status)) ?? null;
   const lastSuccessAgeMs = lastSuccess ? Date.now() - lastSuccess.startedAt.getTime() : null;
   const showWarning = lastSuccessAgeMs == null || lastSuccessAgeMs > 24 * 60 * 60 * 1000;
 
@@ -72,7 +73,7 @@ export default async function AdminStravaSyncPage() {
       {showWarning ? (
         <div className={cn('mt-4 rounded-2xl border border-amber-300 bg-amber-50 text-amber-800', tokens.spacing.containerPadding)}>
           <div className={cn(tokens.typography.body)}>
-            Warning: No successful Strava cron run in the last 24 hours.
+            Warning: No healthy Strava cron run (success or partial) in the last 24 hours.
           </div>
         </div>
       ) : null}

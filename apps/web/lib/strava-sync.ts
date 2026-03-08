@@ -69,6 +69,25 @@ type StravaActivity = {
   };
 };
 
+type StravaApiErrorPayload = {
+  message?: string;
+  errors?: Array<{
+    code?: string;
+    field?: string;
+    resource?: string;
+  }>;
+};
+
+function formatStravaApiErrorMessage(payload: StravaApiErrorPayload | null | undefined, fallback: string) {
+  if (!payload) return fallback;
+  const base = (payload.message ?? '').trim() || fallback;
+  const first = Array.isArray(payload.errors) ? payload.errors[0] : null;
+  if (!first) return base;
+  const detail = [first.resource, first.field, first.code].filter(Boolean).join('.');
+  if (!detail) return base;
+  return `${base} (${detail})`;
+}
+
 function minutesToTimeString(totalMinutes: number): string {
   const safe = Math.max(0, Math.min(23 * 60 + 59, Math.floor(totalMinutes)));
   const hh = Math.floor(safe / 60);
@@ -133,11 +152,14 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
     refresh_token?: string;
     expires_at?: number;
     scope?: string;
-    message?: string;
-  };
+  } & StravaApiErrorPayload;
 
   if (!response.ok) {
-    throw new ApiError(502, 'STRAVA_TOKEN_REFRESH_FAILED', payload.message || 'Failed to refresh Strava token.');
+    throw new ApiError(
+      502,
+      'STRAVA_TOKEN_REFRESH_FAILED',
+      formatStravaApiErrorMessage(payload, 'Failed to refresh Strava token.')
+    );
   }
 
   if (!payload.access_token || !payload.refresh_token || !payload.expires_at) {

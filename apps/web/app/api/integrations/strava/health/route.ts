@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest) {
     });
 
     const lastSuccess = await prisma.cronRun.findFirst({
-      where: { kind: 'STRAVA_SYNC', status: 'SUCCEEDED' },
+      where: { kind: 'STRAVA_SYNC', status: { in: ['SUCCEEDED', 'PARTIAL'] } },
       orderBy: { startedAt: 'desc' },
       select: { startedAt: true },
     });

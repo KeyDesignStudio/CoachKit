@@ -75,6 +75,12 @@ function parseMode(raw: string | null) {
   return raw === 'backfill' ? ('backfill' as const) : ('intents' as const);
 }
 
+function formatRunError(error: { athleteId?: string; message: string } | undefined) {
+  if (!error) return null;
+  if (!error.athleteId) return error.message;
+  return `athlete:${error.athleteId} · ${error.message}`;
+}
+
 async function runCron(request: NextRequest) {
   const authResponse = requireCronAuth(request);
   if (authResponse) return authResponse;
@@ -332,10 +338,17 @@ async function runCron(request: NextRequest) {
     rateLimited,
   });
 
+    const runStatus =
+      errors.length === 0
+        ? 'SUCCEEDED'
+        : activitiesUpserted > 0 || doneCount > 0 || createdCalendarItems > 0 || matchedCompletions > 0
+          ? 'PARTIAL'
+          : 'FAILED';
+
     await prisma.cronRun.update({
       where: { id: cronRun.id },
       data: {
-        status: errors.length ? 'FAILED' : 'SUCCEEDED',
+        status: runStatus,
         finishedAt: new Date(),
         durationMs: Math.max(0, Date.now() - startedAt.getTime()),
         processedAthletes: athletesConsidered,
@@ -343,7 +356,7 @@ async function runCron(request: NextRequest) {
         matchedActivities: matchedCompletions,
         unplannedActivities: createdCalendarItems,
         errorCount: errors.length,
-        firstError: errors[0]?.message ?? null,
+        firstError: formatRunError(errors[0]),
         summaryJson: {
           mode,
           forceDays,
