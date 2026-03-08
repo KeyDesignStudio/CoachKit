@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/errors';
 import { extractPlanSourceWithRobustPipeline } from './robust-extract';
 import { planSourceBlobStorageConfigured, storePlanSourceDocument } from './document-storage';
 import { ensurePlanSourceLayoutFamilies, inferLayoutFamily } from './layout-families';
-import { persistPlanSourceExtractionArtifacts } from './parser-studio';
+import { persistPlanSourceExtractionArtifacts } from './extraction-artifacts';
 
 const asString = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value.trim() : '');
 

@@ -186,6 +186,26 @@ enum PlanSourceExtractionReviewStatus {
   REJECTED
 }
 
+enum PlanLibraryImportSourceType {
+  CSV
+  XLSX
+  PDF_ASSIST
+}
+
+enum PlanLibraryImportJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PlanLibraryTemplateReviewStatus {
+  DRAFT
+  REVIEWED
+  PUBLISHED
+  REJECTED
+}
+
 enum PlanSourceAnnotationType {
   WEEK_HEADER
   DAY_LABEL
@@ -1082,6 +1102,122 @@ model PlanSourceRule {
 
   @@index([planSourceVersionId, ruleType])
   @@index([planSourceVersionId, phase])
+}
+
+model PlanLibraryImportJob {
+  id           String                     @id @default(cuid())
+  sourceType   PlanLibraryImportSourceType
+  status       PlanLibraryImportJobStatus @default(PENDING)
+  createdBy    String
+  createdAt    DateTime                   @default(now())
+  completedAt  DateTime?
+  errorJson    Json?
+  rawFileUrl   String?
+  rawFileName  String?
+  checksum     String?
+  parseStatsJson Json?
+  draftJson    Json?
+  templateId   String?
+  template     PlanLibraryTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([templateId])
+}
+
+model PlanLibraryTemplate {
+  id            String                         @id @default(cuid())
+  title         String
+  sport         PlanSport
+  distance      PlanDistance
+  level         PlanLevel
+  durationWeeks Int
+  author        String?
+  publisher     String?
+  isPublished   Boolean                        @default(false)
+  publishedAt   DateTime?
+  qualityScore  Float?
+  reviewStatus  PlanLibraryTemplateReviewStatus @default(DRAFT)
+  createdBy     String
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  weeks          PlanLibraryTemplateWeek[]
+  validationRuns PlanLibraryTemplateValidationRun[]
+  exemplarLinks  PlanLibraryTemplateExemplarLink[]
+  importJobs     PlanLibraryImportJob[]
+
+  @@index([isPublished, reviewStatus, updatedAt])
+  @@index([sport, distance, level, durationWeeks])
+}
+
+model PlanLibraryTemplateWeek {
+  id              String   @id @default(cuid())
+  planTemplateId  String
+  weekIndex       Int
+  blockName       String?
+  phaseTag        String?
+  targetLoadScore Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  planTemplate PlanLibraryTemplate         @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  sessions     PlanLibraryTemplateSession[]
+
+  @@unique([planTemplateId, weekIndex])
+  @@index([planTemplateId, weekIndex])
+}
+
+model PlanLibraryTemplateSession {
+  id                  String   @id @default(cuid())
+  planTemplateWeekId  String
+  dayOfWeek           Int
+  discipline          PlanSourceDiscipline
+  sessionType         String
+  title               String?
+  durationMinutes     Int?
+  distanceKm          Float?
+  intensityType       String?
+  intensityTargetJson Json?
+  recipeV2Json        Json?
+  notes               String?
+  sourceConfidence    Float?
+  needsReview         Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  planTemplateWeek PlanLibraryTemplateWeek @relation(fields: [planTemplateWeekId], references: [id], onDelete: Cascade)
+
+  @@index([planTemplateWeekId, dayOfWeek])
+  @@index([discipline, sessionType])
+}
+
+model PlanLibraryTemplateValidationRun {
+  id             String   @id @default(cuid())
+  planTemplateId String
+  score          Float
+  passed         Boolean
+  issuesJson     Json
+  createdAt      DateTime @default(now())
+
+  planTemplate PlanLibraryTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+
+  @@index([planTemplateId, createdAt])
+}
+
+model PlanLibraryTemplateExemplarLink {
+  id               String   @id @default(cuid())
+  planTemplateId   String
+  planSessionId    String?
+  retrievalKey     String
+  retrievalWeight  Float    @default(1)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  planTemplate PlanLibraryTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+
+  @@index([planTemplateId, isActive])
+  @@index([retrievalKey, isActive])
 }
 
 model GroupSession {

@@ -44,13 +44,14 @@
     "pdf-parse": "^1.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@types/node": "^20.12.12",
-    "@types/pdf-parse": "^1.1.4",
     "@types/papaparse": "^5.5.2",
+    "@types/pdf-parse": "^1.1.4",
     "@types/react": "^18.3.7",
     "@types/react-dom": "^18.3.2",
     "autoprefixer": "^10.4.23",

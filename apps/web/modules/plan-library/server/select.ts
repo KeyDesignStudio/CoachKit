@@ -91,83 +91,109 @@ export async function selectPlanSources(params: {
       .join(' ')
   );
 
-  const sources = await prisma.planSource.findMany({
-    where: { isActive: true },
+  const templates = await prisma.planLibraryTemplate.findMany({
+    where: {
+      isPublished: true,
+    },
     include: {
-      versions: {
-        orderBy: { version: 'desc' },
-        take: 1,
+      exemplarLinks: {
+        where: {
+          isActive: true,
+        },
+        select: {
+          retrievalKey: true,
+          retrievalWeight: true,
+        },
       },
-      extractionRuns: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
+      weeks: {
+        include: {
+          sessions: {
+            select: {
+              title: true,
+              notes: true,
+            },
+          },
+        },
       },
     },
   });
 
   const matches: PlanSourceMatch[] = [];
 
-  for (const source of sources) {
-    const version = source.versions[0];
-    if (!version) continue;
-    const latestRun = source.extractionRuns[0] ?? null;
-    if (latestRun?.reviewStatus === 'REJECTED') continue;
-
+  for (const template of templates) {
     let metadataScore = 0;
     const reasons: string[] = [];
 
-    if (inferredSport && source.sport === inferredSport) {
+    if (inferredSport && template.sport === inferredSport) {
       metadataScore += 3;
       reasons.push('sport match');
     }
 
-    if (inferredDistance && source.distance === inferredDistance) {
+    if (inferredDistance && template.distance === inferredDistance) {
       metadataScore += 3;
       reasons.push('distance match');
     }
 
-    if (inferredLevel && source.level === inferredLevel) {
+    if (inferredLevel && template.level === inferredLevel) {
       metadataScore += 2;
       reasons.push('level match');
     }
 
-    if (params.season && source.season === params.season) {
-      metadataScore += 1;
-      reasons.push('season match');
+    if (params.season) {
+      reasons.push('season requested');
     }
 
     if (params.durationWeeks > 0) {
-      const diff = Math.abs(source.durationWeeks - params.durationWeeks);
+      const diff = Math.abs(template.durationWeeks - params.durationWeeks);
       metadataScore += Math.max(0, 3 - Math.min(3, diff));
       reasons.push(`duration delta ${diff}w`);
     }
 
-    const coachPrefix = params.coachId ? `coach:${params.coachId}` : null;
-    const isCoachSource = Boolean(coachPrefix && source.sourceFilePath?.startsWith(coachPrefix));
+    const isCoachSource = Boolean(params.coachId && template.createdBy === params.coachId);
     const sourcePriorityScore = isCoachSource ? 6 : 0;
     if (isCoachSource) {
       reasons.push('coach library priority');
     }
 
-    const semanticCorpus = `${source.title} ${source.rawText.slice(0, 7000)}`;
-    const sourceTokens = tokenize(semanticCorpus);
-    const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
-
-    if (latestRun?.reviewStatus === 'APPROVED') {
-      metadataScore += 2;
-      reasons.push('parser reviewed');
-    } else if (latestRun?.reviewStatus === 'NEEDS_REVIEW' && (latestRun.warningCount ?? 0) >= 12) {
-      metadataScore -= 1;
-      reasons.push('parser review pending');
+    const disciplineKeys = (params.athleteProfile?.disciplines ?? [])
+      .map((entry) => String(entry ?? '').trim().toUpperCase())
+      .filter((entry) => entry.length > 0);
+    const exemplarKeys = Array.from(
+      new Set([
+        ...disciplineKeys.map((discipline) => `global|disc:${discipline}`),
+        ...disciplineKeys.flatMap((discipline) =>
+          params.coachId
+            ? [`coach:${params.coachId}|disc:${discipline}`, `coach:${params.coachId}|disc:${discipline}|type:endurance`]
+            : []
+        ),
+      ])
+    );
+    const exemplarBoost = template.exemplarLinks
+      .filter((link) => exemplarKeys.some((key) => link.retrievalKey.startsWith(key)))
+      .reduce((sum, link) => sum + Number(link.retrievalWeight ?? 0), 0);
+    const exemplarBoostScore = Math.max(0, Math.min(8, exemplarBoost * 0.35));
+    if (exemplarBoostScore > 0) {
+      reasons.push(`exemplar boost ${exemplarBoostScore.toFixed(1)}`);
     }
 
+    const semanticCorpus = [
+      template.title,
+      ...template.weeks.flatMap((week) => week.sessions.map((session) => `${session.title ?? ''} ${session.notes ?? ''}`)),
+    ]
+      .join(' ')
+      .slice(0, 9000);
+    const sourceTokens = tokenize(semanticCorpus);
+    const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
+    metadataScore += Math.max(0, Math.min(4, Number(template.qualityScore ?? 0) * 4));
+    reasons.push(`quality ${Math.round((template.qualityScore ?? 0) * 100)}%`);
+
     if (semanticScore >= 0.08) reasons.push(`semantic ${(semanticScore * 100).toFixed(0)}%`);
-    const score = metadataScore + semanticScore * 4 + sourcePriorityScore;
+    const score = metadataScore + semanticScore * 4 + sourcePriorityScore + exemplarBoostScore;
 
     matches.push({
-      planSourceVersionId: version.id,
-      planSourceId: source.id,
-      title: source.title,
+      planSourceVersionId: template.id,
+      planSourceId: template.id,
+      title: template.title,
       score,
       semanticScore,
       metadataScore,

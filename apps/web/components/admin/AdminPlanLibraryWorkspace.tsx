@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from 'react';
 
-import { PlanLibraryIngestForm } from '@/components/admin/PlanLibraryIngestForm';
-import { PlanLibrarySourceCatalog } from '@/components/admin/PlanLibrarySourceCatalog';
-import { PlanLibraryWorkflowPanel } from '@/components/admin/PlanLibraryWorkflowPanel';
+import { PlanLibraryImportConsole } from '@/components/admin/PlanLibraryImportConsole';
+import { PlanLibraryQualityInsights } from '@/components/admin/PlanLibraryQualityInsights';
+import { PlanLibraryTemplateReviewGrid } from '@/components/admin/PlanLibraryTemplateReviewGrid';
 import { WorkoutExemplarCatalog } from '@/components/admin/WorkoutExemplarCatalog';
 
 type AdminPlanLibraryWorkspaceProps = {
@@ -33,16 +33,10 @@ export function AdminPlanLibraryWorkspace({ adminEmail }: AdminPlanLibraryWorksp
       </div>
 
       <div className="space-y-6">
-        <PlanLibraryWorkflowPanel refreshNonce={refreshNonce} />
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="space-y-6">
-            <PlanLibraryIngestForm onIngested={handleIngested} />
-            <WorkoutExemplarCatalog />
-          </div>
-          <div className="space-y-6">
-            <PlanLibrarySourceCatalog refreshNonce={refreshNonce} />
-          </div>
-        </div>
+        <PlanLibraryImportConsole onImported={() => handleIngested()} />
+        <PlanLibraryQualityInsights refreshToken={refreshNonce} />
+        <PlanLibraryTemplateReviewGrid refreshToken={refreshNonce} />
+        <WorkoutExemplarCatalog />
       </div>
     </div>
   );
