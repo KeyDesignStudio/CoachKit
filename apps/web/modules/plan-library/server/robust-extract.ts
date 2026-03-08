@@ -109,6 +109,25 @@ function normalizeSessionType(input: string | null | undefined) {
   return raw.slice(0, 48);
 }
 
+function normalizeModelAlias(input: string) {
+  const value = String(input ?? '').trim().toLowerCase();
+  if (!value) return '';
+  if (value === '5.2 instant' || value === '5.2-instant' || value === 'gpt-5.2 instant') return 'gpt-5.2-instant';
+  if (value === '5.2' || value === 'gpt-5.2') return 'gpt-5.2';
+  if (value === '4.1-mini' || value === 'gpt4.1-mini') return 'gpt-4.1-mini';
+  return String(input).trim();
+}
+
+function resolveModelCandidates() {
+  const candidates = [
+    normalizeModelAlias(String(process.env.PLAN_LIBRARY_INGEST_MODEL ?? '')),
+    normalizeModelAlias(String(process.env.AI_PLAN_BUILDER_LLM_MODEL ?? '')),
+    'gpt-5.2-instant',
+    'gpt-4.1-mini',
+  ].filter(Boolean);
+  return Array.from(new Set(candidates));
+}
+
 function renderDocumentForLlm(doc: Awaited<ReturnType<typeof extractStructuredPdfDocument>>) {
   const lineTolerance = 0.0125;
   const pages = doc.pages.map((page) => {
@@ -255,43 +274,52 @@ async function extractWithLlm(params: {
   if (!apiKey) return null;
 
   const sourceText = params.rawText.slice(0, 140_000);
-  const model =
-    String(process.env.PLAN_LIBRARY_INGEST_MODEL ?? '').trim() ||
-    String(process.env.AI_PLAN_BUILDER_LLM_MODEL ?? '').trim() ||
-    'gpt-5.2-instant';
-  if (!model) return null;
+  const models = resolveModelCandidates();
+  if (!models.length) return null;
 
   const transport = new OpenAiTransport({ apiKey });
-  const structured = await transport.generateStructuredJson({
-    model,
-    timeoutMs: 45_000,
-    maxOutputTokens: 30_000,
-    schema: LLM_SCHEMA,
-    system: [
-      'You extract endurance training plans into strict structured JSON.',
-      'Do not invent sessions.',
-      'Use week numbers and day labels if present.',
-      'Normalize distance units to kilometers (convert miles to km).',
-      'Keep one session per distinct workout item.',
-      'Ignore marketing text, logos, and editorial headers.',
-    ].join('\n'),
-    input: [
-      `Plan title: ${params.title}`,
-      `Sport: ${params.sport}`,
-      `Distance: ${params.distance}`,
-      `Level: ${params.level}`,
-      `Expected duration weeks: ${params.durationWeeks ?? 'unknown'}`,
-      '',
-      'Plan source text:',
-      sourceText,
-    ].join('\n'),
-  });
+  const errors: string[] = [];
+  for (const model of models) {
+    try {
+      const structured = await transport.generateStructuredJson({
+        model,
+        timeoutMs: 45_000,
+        maxOutputTokens: 30_000,
+        schema: LLM_SCHEMA,
+        system: [
+          'You extract endurance training plans into strict structured JSON.',
+          'Do not invent sessions.',
+          'Use week numbers and day labels if present.',
+          'Normalize distance units to kilometers (convert miles to km).',
+          'Keep one session per distinct workout item.',
+          'Ignore marketing text, logos, and editorial headers.',
+        ].join('\n'),
+        input: [
+          `Plan title: ${params.title}`,
+          `Sport: ${params.sport}`,
+          `Distance: ${params.distance}`,
+          `Level: ${params.level}`,
+          `Expected duration weeks: ${params.durationWeeks ?? 'unknown'}`,
+          '',
+          'Plan source text:',
+          sourceText,
+        ].join('\n'),
+      });
 
-  return buildLlmExtractedPlanSource({
-    rawText: params.rawText,
-    durationWeeks: params.durationWeeks,
-    structured,
-  });
+      const extracted = buildLlmExtractedPlanSource({
+        rawText: params.rawText,
+        durationWeeks: params.durationWeeks,
+        structured,
+      });
+      extracted.warnings = [...extracted.warnings, `LLM extraction model used: ${model}.`];
+      return extracted;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      errors.push(`${model}: ${message}`);
+    }
+  }
+
+  throw new Error(`all model attempts failed (${errors.join(' | ')})`);
 }
 
 export async function extractPlanSourceWithRobustPipeline(params: RobustExtractionParams): Promise<ExtractedPlanSource> {
