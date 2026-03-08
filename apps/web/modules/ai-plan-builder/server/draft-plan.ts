@@ -707,39 +707,32 @@ export async function generateAiDraftPlanV1(params: {
       : planSourceMatchesNormalized.slice(0, 4);
   const selectedVersionIds: string[] =
     requestedVersionIds.length > 0 ? requestedVersionIds : selectedMatches.map((m: PlanSourceMatch) => m.planSourceVersionId);
-  const selectedPlanSources = selectedVersionIds.length
-    ? await prisma.planSourceVersion.findMany({
-        where: { id: { in: selectedVersionIds }, planSource: { isActive: true } },
+  const selectedTemplates = selectedVersionIds.length
+    ? await prisma.planLibraryTemplate.findMany({
+        where: { id: { in: selectedVersionIds }, isPublished: true },
         include: {
-          planSource: {
-            select: {
-              id: true,
-              title: true,
-              distance: true,
-              level: true,
-              durationWeeks: true,
-              checksumSha256: true,
+          weeks: {
+            include: {
+              sessions: true,
             },
           },
-          weeks: { select: { totalMinutes: true, sessions: true } },
-          rules: true,
         },
       })
     : [];
-  const selectedPlanSourcesOrdered = selectedVersionIds
-    .map((id: string) => selectedPlanSources.find((row) => row.id === id) ?? null)
-    .filter(Boolean) as typeof selectedPlanSources;
+  const selectedTemplatesOrdered = selectedVersionIds
+    .map((id: string) => selectedTemplates.find((row) => row.id === id) ?? null)
+    .filter(Boolean) as typeof selectedTemplates;
 
-  const sourceById = new Map(selectedPlanSourcesOrdered.map((s) => [s.id, s]));
+  const sourceById = new Map(selectedTemplatesOrdered.map((s) => [s.id, s]));
   const effectiveSelectedMatches: PlanSourceMatch[] =
     requestedVersionIds.length > 0
-      ? selectedPlanSourcesOrdered.map((source) => {
+      ? selectedTemplatesOrdered.map((source) => {
           const existing = selectedMatches.find((m: PlanSourceMatch) => m.planSourceVersionId === source.id);
           if (existing) return existing;
           return {
             planSourceVersionId: source.id,
-            planSourceId: source.planSource.id,
-            title: source.planSource.title,
+            planSourceId: source.id,
+            title: source.title,
             score: 99,
             semanticScore: 0,
             metadataScore: 0,
@@ -752,8 +745,22 @@ export async function generateAiDraftPlanV1(params: {
       const source = sourceById.get(match.planSourceVersionId);
       if (!source) return null;
       const selectedPlanSourceForApply = {
-        ...source,
-        sessions: source.weeks.flatMap((w) => w.sessions ?? []),
+        id: source.id,
+        version: 1,
+        planSource: {
+          id: source.id,
+          title: source.title,
+          distance: source.distance,
+          level: source.level,
+          durationWeeks: source.durationWeeks,
+          checksumSha256: source.id,
+        },
+        weeks: source.weeks.map((week) => ({
+          totalMinutes: week.sessions.reduce((sum, session) => sum + (session.durationMinutes ?? 0), 0) || null,
+          sessions: week.sessions,
+        })),
+        rules: [],
+        sessions: source.weeks.flatMap((week) => week.sessions ?? []),
       };
       const applied = applyPlanSourceToDraftInput({
         athleteProfile: athleteProfile as any,
@@ -773,7 +780,7 @@ export async function generateAiDraftPlanV1(params: {
     })
     .filter(Boolean) as Array<{
     match: (typeof selectedMatches)[number];
-    source: (typeof selectedPlanSources)[number];
+    source: (typeof selectedTemplates)[number];
     weight: number;
     adjustedSetup: any;
     influenceSummary: any;
@@ -880,20 +887,20 @@ export async function generateAiDraftPlanV1(params: {
         selectedPlanSourceVersionIds: effectiveSelectedMatches.map((m: PlanSourceMatch) => m.planSourceVersionId),
         selectedPlanSource: primarySelected
           ? {
-              planSourceId: primarySelected.source.planSource.id,
+              planSourceId: primarySelected.source.id,
               planSourceVersionId: primarySelected.source.id,
-              planSourceVersion: primarySelected.source.version,
-              title: primarySelected.source.planSource.title,
-              checksumSha256: primarySelected.source.planSource.checksumSha256,
+              planSourceVersion: 1,
+              title: primarySelected.source.title,
+              checksumSha256: primarySelected.source.id,
               archetype: primarySelected.ruleBundle?.planArchetype ?? null,
             }
           : null,
         selectedPlanSources: appliedBySource.map((row) => ({
-          planSourceId: row.source.planSource.id,
+          planSourceId: row.source.id,
           planSourceVersionId: row.source.id,
-          planSourceVersion: row.source.version,
-          title: row.source.planSource.title,
-          checksumSha256: row.source.planSource.checksumSha256,
+          planSourceVersion: 1,
+          title: row.source.title,
+          checksumSha256: row.source.id,
           score: row.match.score,
           semanticScore: row.match.semanticScore,
           metadataScore: row.match.metadataScore,
@@ -966,34 +973,31 @@ export async function listReferencePlansForAthlete(params: { coachId: string; at
   });
   const recommendedMap = new Map(matches.map((m) => [m.planSourceVersionId, m]));
 
-  const versions = await prisma.planSourceVersion.findMany({
-    where: { planSource: { isActive: true } },
-    include: {
-      planSource: {
-        select: {
-          id: true,
-          title: true,
-          sport: true,
-          distance: true,
-          level: true,
-          durationWeeks: true,
-        },
-      },
+  const templates = await prisma.planLibraryTemplate.findMany({
+    where: { isPublished: true },
+    select: {
+      id: true,
+      title: true,
+      sport: true,
+      distance: true,
+      level: true,
+      durationWeeks: true,
+      updatedAt: true,
     },
-    orderBy: [{ createdAt: 'desc' }],
+    orderBy: [{ updatedAt: 'desc' }],
     take: 80,
   });
 
-  return versions.map((v) => {
-    const rec = recommendedMap.get(v.id);
+  return templates.map((template) => {
+    const rec = recommendedMap.get(template.id);
     return {
-      planSourceVersionId: v.id,
-      planSourceId: v.planSource.id,
-      title: v.planSource.title,
-      sport: v.planSource.sport,
-      distance: v.planSource.distance,
-      level: v.planSource.level,
-      durationWeeks: v.planSource.durationWeeks,
+      planSourceVersionId: template.id,
+      planSourceId: template.id,
+      title: template.title,
+      sport: template.sport,
+      distance: template.distance,
+      level: template.level,
+      durationWeeks: template.durationWeeks,
       recommended: Boolean(rec),
       score: rec?.score ?? null,
       reasons: rec?.reasons ?? [],

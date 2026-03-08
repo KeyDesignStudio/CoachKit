@@ -645,14 +645,14 @@ export function deriveManualSessionTemplateFields(params: {
             warnings: built.warnings,
           },
           editor: {
-            source: 'parser-studio',
+            source: 'admin-review',
             email: params.editor?.email ?? null,
             editedAt: params.editor?.editedAt ?? new Date().toISOString(),
           },
         }
       : {
           editor: {
-            source: 'parser-studio',
+            source: 'admin-review',
             email: params.editor?.email ?? null,
             editedAt: params.editor?.editedAt ?? new Date().toISOString(),
           },

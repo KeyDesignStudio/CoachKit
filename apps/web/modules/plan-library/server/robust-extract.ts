@@ -109,6 +109,108 @@ function normalizeSessionType(input: string | null | undefined) {
   return raw.slice(0, 48);
 }
 
+function detectDisciplineFromText(value: string): PlanSourceDiscipline | null {
+  const text = String(value ?? '').toUpperCase();
+  if (/\bSWIM\b/.test(text)) return 'SWIM';
+  if (/\bBIKE\b|\bCYCLE\b/.test(text)) return 'BIKE';
+  if (/\bRUN\b|\bJOG\b/.test(text)) return 'RUN';
+  if (/\bSTRENGTH\b|\bGYM\b|\bCONDITIONING\b/.test(text)) return 'STRENGTH';
+  if (/\bREST(?:-| )?DAY\b|\bRECOVERY\b|\bOFF\b/.test(text)) return 'REST';
+  return null;
+}
+
+function parseWeekIndicesFromText(input: string) {
+  const matches = [...String(input ?? '').matchAll(/\bW(?:EEK|EEK)\s*0?(\d{1,2})\b/gi)]
+    .map((m) => Number(m[1]))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .map((n) => n - 1);
+  return Array.from(new Set(matches)).sort((a, b) => a - b);
+}
+
+function buildCollapsedTextFallback(params: { rawText: string; durationWeeks: number | null }): ExtractedPlanSource | null {
+  const normalized = normalizeDistanceUnitsToKm(String(params.rawText ?? ''))
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/\b(REST(?:-| )?DAY)(?=[A-Za-z])/gi, '$1 ')
+    .replace(/\b(Mon|Tue|Wed|Thu|Thurs|Fri|Sat|Sun)(?=(Mon|Tue|Wed|Thu|Thurs|Fri|Sat|Sun))/gi, '$1 ')
+    .replace(/\b(SWIM|BIKE|RUN|REST(?:-| )?DAY|BRICK|CROSS|STRENGTH)(?=(SWIM|BIKE|RUN|REST|BRICK|CROSS|STRENGTH))/gi, '$1 ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const tokenized = normalized.replace(/\b(SWIM|BIKE|RUN|REST(?:-| )?DAY|BRICK|CROSS|STRENGTH)\b/gi, '\n$1');
+  const lines = tokenized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const weekIndicesDetected = parseWeekIndicesFromText(normalized);
+  const targetWeeks =
+    weekIndicesDetected.length > 0
+      ? weekIndicesDetected
+      : Array.from({ length: Math.max(1, params.durationWeeks ?? 1) }, (_, index) => index);
+
+  const sessions: ExtractedSessionTemplate[] = [];
+  const ordinals = new Map<number, number>();
+  const seen = new Set<string>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const discipline = detectDisciplineFromText(line);
+    if (!discipline) continue;
+
+    const hasWorkoutSignal =
+      /\b(PE|MAIN SET|INTERVAL|TEMPO|AEROBIC|TIME-TRIAL|TIME TRIAL|RACE PACE|KM|MINS?|MINUTES?|HRS?|HOURS?)\b/i.test(
+        line
+      ) || discipline === 'REST';
+    if (!hasWorkoutSignal) continue;
+
+    const fingerprint = line.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!fingerprint || seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+
+    const weekIndex = targetWeeks[index % targetWeeks.length] ?? 0;
+    const ordinal = (ordinals.get(weekIndex) ?? 0) + 1;
+    ordinals.set(weekIndex, ordinal);
+
+    sessions.push({
+      weekIndex,
+      ordinal,
+      dayOfWeek: null,
+      discipline,
+      sessionType: normalizeSessionType(line),
+      title: line.slice(0, 180),
+      durationMinutes: parseDurationMinutes(line),
+      distanceKm: parseDistanceKm(line),
+      intensityType: null,
+      intensityTargetJson: null,
+      recipeV2Json: null,
+      parserConfidence: 0.62,
+      parserWarningsJson: null,
+      structureJson: {
+        source: 'collapsed-text-fallback-v1',
+      },
+      notes: line,
+    });
+  }
+
+  if (!sessions.length) return null;
+  const weeks: ExtractedWeekTemplate[] = targetWeeks.map((weekIndex) => ({ weekIndex, notes: null }));
+  return {
+    rawText: params.rawText,
+    rawJson: {
+      extractionMode: 'collapsed-text-fallback-v1',
+      weekCount: weeks.length,
+      sessionCount: sessions.length,
+    },
+    weeks,
+    sessions,
+    rules: [],
+    warnings: ['Collapsed-text fallback parser was used because deterministic and LLM extraction did not yield usable sessions.'],
+    confidence: 0.62,
+  };
+}
+
 function normalizeModelAlias(input: string) {
   const value = String(input ?? '').trim().toLowerCase();
   if (!value) return '';
@@ -388,6 +490,19 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
 
     return llm;
   } catch (error) {
+    const collapsedFallback = buildCollapsedTextFallback({
+      rawText: baseline.rawText,
+      durationWeeks,
+    });
+    if (collapsedFallback) {
+      return {
+        ...collapsedFallback,
+        warnings: [
+          ...collapsedFallback.warnings,
+          `LLM structured extraction failed and collapsed-text fallback was used (${error instanceof Error ? error.message : 'unknown error'}).`,
+        ],
+      };
+    }
     return {
       ...baseline,
       warnings: [

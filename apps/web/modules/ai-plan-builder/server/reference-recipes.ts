@@ -79,7 +79,52 @@ function parseParserConfidence(value: unknown): number | null {
   return Number.isFinite(nested) ? nested : null;
 }
 
-function extractSelectedPlanSourceVersionIds(params: { planSourceSelectionJson: Prisma.JsonValue | null; setupJson: Prisma.JsonValue | null }) {
+async function applyTemplateExemplarWeightDelta(params: {
+  tx: Prisma.TransactionClient;
+  coachId: string;
+  discipline: string;
+  sessionType: string;
+  delta: number;
+  deactivate?: boolean;
+}) {
+  const discipline = String(params.discipline ?? '').trim().toUpperCase();
+  const sessionType = normalizeSessionType(params.sessionType) || 'endurance';
+  if (!discipline) return;
+
+  const keys = [
+    `coach:${params.coachId}|disc:${discipline}|type:${sessionType}`,
+    `global|disc:${discipline}|type:${sessionType}`,
+  ];
+
+  const links = await params.tx.planLibraryTemplateExemplarLink.findMany({
+    where: {
+      planTemplate: {
+        createdBy: params.coachId,
+      },
+      retrievalKey: {
+        in: keys,
+      },
+      isActive: true,
+    },
+    select: {
+      id: true,
+      retrievalWeight: true,
+    },
+  });
+
+  for (const link of links) {
+    const nextWeight = Math.max(0.05, Math.min(5, Number(link.retrievalWeight ?? 1) + params.delta));
+    await params.tx.planLibraryTemplateExemplarLink.update({
+      where: { id: link.id },
+      data: {
+        retrievalWeight: nextWeight,
+        ...(params.deactivate ? { isActive: false } : {}),
+      },
+    });
+  }
+}
+
+function extractSelectedTemplateIds(params: { planSourceSelectionJson: Prisma.JsonValue | null; setupJson: Prisma.JsonValue | null }) {
   const fromSelection = Array.isArray((params.planSourceSelectionJson as any)?.selectedPlanSourceVersionIds)
     ? (params.planSourceSelectionJson as any).selectedPlanSourceVersionIds
     : [];
@@ -109,18 +154,21 @@ export async function buildReferenceRecipePool(params: {
         .filter((discipline) => discipline.length > 0)
     )
   );
-  const selectedPlanSourceVersionIds = extractSelectedPlanSourceVersionIds({
+  const selectedTemplateIds = extractSelectedTemplateIds({
     planSourceSelectionJson: params.planSourceSelectionJson,
     setupJson: params.setupJson,
   });
 
   const [planLibraryRows, exemplarRows] = await Promise.all([
-    selectedPlanSourceVersionIds.length
-      ? prisma.planSourceSessionTemplate.findMany({
+    selectedTemplateIds.length
+      ? prisma.planLibraryTemplateSession.findMany({
           where: {
-            planSourceWeekTemplate: {
-              planSourceVersionId: {
-                in: selectedPlanSourceVersionIds,
+            planTemplateWeek: {
+              planTemplateId: {
+                in: selectedTemplateIds,
+              },
+              planTemplate: {
+                isPublished: true,
               },
             },
             discipline: {
@@ -136,9 +184,7 @@ export async function buildReferenceRecipePool(params: {
             distanceKm: true,
             notes: true,
             recipeV2Json: true,
-            parserConfidence: true,
-            parserWarningsJson: true,
-            structureJson: true,
+            sourceConfidence: true,
           },
         })
       : Promise.resolve([]),
@@ -168,7 +214,7 @@ export async function buildReferenceRecipePool(params: {
   return {
     planLibrary: planLibraryRows
       .map((row) => {
-        const recipeV2 = parseRecipeV2(row.recipeV2Json ?? row.structureJson ?? null);
+        const recipeV2 = parseRecipeV2(row.recipeV2Json ?? null);
         if (!recipeV2) return null;
         return {
           id: row.id,
@@ -179,8 +225,8 @@ export async function buildReferenceRecipePool(params: {
           distanceKm: row.distanceKm ?? null,
           notes: row.notes ?? null,
           recipeV2,
-          parserConfidence: row.parserConfidence ?? parseParserConfidence(row.structureJson ?? null),
-          parserWarnings: parseParserWarnings(row.parserWarningsJson ?? row.structureJson ?? null),
+          parserConfidence: row.sourceConfidence ?? null,
+          parserWarnings: [],
         };
       })
       .filter(Boolean) as ReferenceRecipePool['planLibrary'],
@@ -390,6 +436,17 @@ export async function upsertCoachWorkoutExemplarFromSessionDetail(params: {
     },
   });
 
+  if ('planLibraryTemplateExemplarLink' in db) {
+    const tx = db as Prisma.TransactionClient;
+    await applyTemplateExemplarWeightDelta({
+      tx,
+      coachId: params.coachId,
+      discipline: params.discipline,
+      sessionType: params.sessionType,
+      delta: existing ? 0.06 : 0.12,
+    });
+  }
+
   return exemplar;
 }
 
@@ -411,6 +468,11 @@ export async function recordCoachWorkoutExemplarFeedback(params: {
   }
 
   await prisma.$transaction(async (tx) => {
+    const exemplarRow = await tx.coachWorkoutExemplar.findUnique({
+      where: { id: params.exemplarId },
+      select: { discipline: true, sessionType: true },
+    });
+
     await tx.coachWorkoutExemplarFeedback.create({
       data: {
         exemplarId: params.exemplarId,
@@ -431,6 +493,27 @@ export async function recordCoachWorkoutExemplarFeedback(params: {
         ...(params.feedbackType === 'ARCHIVED' ? { isActive: false } : {}),
       },
     });
+
+    if (exemplarRow) {
+      const deltaByFeedback: Partial<Record<CoachWorkoutExemplarFeedbackType, number>> = {
+        GOOD_FIT: 0.14,
+        EDITED: 0.05,
+        TOO_EASY: -0.12,
+        TOO_HARD: -0.12,
+        ARCHIVED: -0.2,
+      };
+      const delta = deltaByFeedback[params.feedbackType] ?? 0;
+      if (delta !== 0 || params.feedbackType === 'ARCHIVED') {
+        await applyTemplateExemplarWeightDelta({
+          tx,
+          coachId: params.coachId,
+          discipline: exemplarRow.discipline,
+          sessionType: exemplarRow.sessionType,
+          delta,
+          deactivate: params.feedbackType === 'ARCHIVED',
+        });
+      }
+    }
   });
 }
 

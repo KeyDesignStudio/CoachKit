@@ -155,3 +155,39 @@ export DATABASE_URL='postgresql://...'
 npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
   apps/web/prisma/scripts/seed-assistant-sample-detections.ts
 ```
+
+## seed-plan-library-structured-smoke.ts
+
+Seeds two structured `PlanLibraryTemplate` records for Option 1 smoke testing:
+- one `PUBLISHED` template (high quality score)
+- one `DRAFT` template (low quality score)
+
+Both include week/session structure and validation run rows.
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+export SMOKE_COACH_ID='user-coach-multisport' # optional
+
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/seed-plan-library-structured-smoke.ts
+```
+
+## smoke-apb-published-template-selection.ts
+
+Checks latest APB draft for a coach/athlete and verifies every selected template ID in
+`aiPlanDraft.planSourceSelectionJson` maps to a `PlanLibraryTemplate` that is `isPublished=true`.
+
+**Run (from repo root)**
+
+```bash
+cd /Volumes/DockSSD/Projects/CoachKit
+export DATABASE_URL='postgresql://...'
+export SMOKE_COACH_ID='user-coach-multisport'   # optional
+export SMOKE_ATHLETE_ID='user-athlete-one'      # optional
+
+npx --prefix apps/web ts-node --project apps/web/tsconfig.prisma.json \
+  apps/web/prisma/scripts/smoke-apb-published-template-selection.ts
+```

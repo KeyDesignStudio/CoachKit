@@ -145,7 +145,7 @@ describe('plan-library workout parser', () => {
     expect(extracted.warnings.some((warning) => /segmentation removed/i.test(warning))).toBe(true);
   });
 
-  it('treats parser-studio manual corrections as trusted session overrides while still normalizing miles to kilometers', () => {
+  it('treats admin manual corrections as trusted session overrides while still normalizing miles to kilometers', () => {
     const manual = deriveManualSessionTemplateFields({
       discipline: 'RUN',
       title: 'Tempo run',
@@ -158,7 +158,7 @@ describe('plan-library workout parser', () => {
     expect(manual.distanceKm).toBeCloseTo(5, 1);
     expect(String(manual.notes ?? '')).toContain('5km');
     expect(manual.parserConfidence).toBe(1);
-    expect((manual.structureJson as any)?.editor?.source).toBe('parser-studio');
+    expect((manual.structureJson as any)?.editor?.source).toBe('admin-review');
   });
 
   it('recovers multiple sessions from dense merged OCR text instead of collapsing to a single blob', () => {
