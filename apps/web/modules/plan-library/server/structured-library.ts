@@ -136,21 +136,16 @@ function parseImportSourceType(raw: string): PlanLibraryImportSourceType {
 
 function parseDiscipline(raw: string): PlanSourceDiscipline {
   const normalized = raw.trim().toUpperCase();
-  if (
-    normalized === 'SWIM_OPEN_WATER' ||
-    normalized === 'SWIM OPEN WATER' ||
-    normalized === 'OPEN_WATER_SWIM' ||
-    normalized === 'OPEN WATER SWIM' ||
-    normalized === 'OWS'
-  ) {
+  const compact = normalized.replace(/[^A-Z0-9]+/g, ' ').trim();
+  if (/(OPEN WATER|OWS)/.test(compact) && /(SWIM|SWIMMING)/.test(compact)) {
     return 'SWIM_OPEN_WATER';
   }
-  if (normalized === 'SWIM') return 'SWIM';
-  if (normalized === 'BIKE') return 'BIKE';
-  if (normalized === 'RUN') return 'RUN';
-  if (normalized === 'BRICK') return 'BRICK';
-  if (normalized === 'STRENGTH') return 'STRENGTH';
-  if (normalized === 'REST' || normalized === 'REST_DAY' || normalized === 'REST-DAY') return 'REST';
+  if (/^(SWIM|SWIMMING)$/.test(compact)) return 'SWIM';
+  if (/^(BIKE|BICYCLE|BICYCLING|CYCLE|CYCLING|RIDE|RIDING)$/.test(compact)) return 'BIKE';
+  if (/^(RUN|RUNNING|JOG|JOGGING)$/.test(compact)) return 'RUN';
+  if (/^(BRICK|BIKE RUN|RUN BIKE)$/.test(compact)) return 'BRICK';
+  if (/^(STRENGTH|GYM|CONDITIONING|S C|S&C)$/.test(compact)) return 'STRENGTH';
+  if (/^(REST|REST DAY|RECOVERY|DAY OFF|OFF)$/.test(compact)) return 'REST';
   throw new Error('discipline must be SWIM, SWIM_OPEN_WATER, BIKE, RUN, BRICK, STRENGTH, or REST.');
 }
 
@@ -160,6 +155,40 @@ function toNullableNumber(raw: unknown): number | null {
   if (!text) return null;
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseDayOfWeek(raw: unknown): number | null {
+  if (raw == null) return null;
+  const numeric = Number(String(raw).trim());
+  if (Number.isFinite(numeric)) {
+    const day = Math.floor(numeric);
+    if (day >= 1 && day <= 7) return day;
+  }
+  const normalized = String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  if (!normalized) return null;
+  const dayMap: Record<string, number> = {
+    mon: 1,
+    monday: 1,
+    tue: 2,
+    tues: 2,
+    tuesday: 2,
+    wed: 3,
+    wednesday: 3,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    thursday: 4,
+    fri: 5,
+    friday: 5,
+    sat: 6,
+    saturday: 6,
+    sun: 7,
+    sunday: 7,
+  };
+  return dayMap[normalized] ?? null;
 }
 
 function tryParseJson(raw: unknown): Prisma.InputJsonValue | null {
@@ -176,6 +205,65 @@ function tryParseJson(raw: unknown): Prisma.InputJsonValue | null {
 
 function milesToKm(value: number) {
   return value * 1.60934;
+}
+
+function inferSessionType(rawSessionType: unknown, title: string, notes: string) {
+  const explicit = String(rawSessionType ?? '').trim().toLowerCase();
+  if (explicit) return explicit;
+  const text = `${title} ${notes}`.toLowerCase();
+  if (text.includes('technique') || text.includes('drill')) return 'technique';
+  if (text.includes('tempo')) return 'tempo';
+  if (text.includes('easy') || text.includes('recovery')) return 'easy';
+  if (text.includes('long')) return 'long';
+  if (text.includes('interval')) return 'interval';
+  if (text.includes('threshold')) return 'threshold';
+  if (text.includes('time-trial') || text.includes('time trial') || text.includes('tt')) return 'time-trial';
+  if (text.includes('brick')) return 'brick';
+  if (text.includes('rest')) return 'rest';
+  if (text.includes('strength') || text.includes('gym')) return 'strength';
+  return 'endurance';
+}
+
+function parseDurationMinutesFromText(raw: string): number | null {
+  const text = String(raw ?? '');
+  const range = text.match(/(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min)\b/i);
+  if (range) {
+    const left = Number(range[1]);
+    const right = Number(range[2]);
+    const unit = String(range[3]).toLowerCase();
+    if (Number.isFinite(left) && Number.isFinite(right)) {
+      const average = (left + right) / 2;
+      return unit.startsWith('h') ? Math.round(average * 60) : Math.round(average);
+    }
+  }
+
+  const single = text.match(/(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min)\b/i);
+  if (!single) return null;
+  const value = Number(single[1]);
+  const unit = String(single[2]).toLowerCase();
+  if (!Number.isFinite(value)) return null;
+  return unit.startsWith('h') ? Math.round(value * 60) : Math.round(value);
+}
+
+function parseDistanceKmFromText(raw: string): number | null {
+  const text = String(raw ?? '');
+  const range = text.match(/(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*(km|kilometers?|kilometres?|mi|miles?)\b/i);
+  if (range) {
+    const left = Number(range[1]);
+    const right = Number(range[2]);
+    const unit = String(range[3]).toLowerCase();
+    if (Number.isFinite(left) && Number.isFinite(right)) {
+      const average = (left + right) / 2;
+      return unit.startsWith('mi') ? Number(milesToKm(average).toFixed(2)) : average;
+    }
+  }
+
+  const single = text.match(/(\d+(?:\.\d+)?)\s*(km|kilometers?|kilometres?|mi|miles?)\b/i);
+  if (!single) return null;
+  const value = Number(single[1]);
+  const unit = String(single[2]).toLowerCase();
+  if (!Number.isFinite(value)) return null;
+  return unit.startsWith('mi') ? Number(milesToKm(value).toFixed(2)) : value;
 }
 
 function normalizeDistanceKmFromRow(distanceRaw: unknown, unitRaw: unknown) {
@@ -202,28 +290,36 @@ function parseCsvDraftRows(csvText: string) {
     const rowNumber = index + 2;
     try {
       const weekIndex = Math.max(1, Math.floor(toNullableNumber(row.weekIndex) ?? 0));
-      const dayOfWeek = Math.max(1, Math.min(7, Math.floor(toNullableNumber(row.dayOfWeek) ?? 0)));
+      const dayOfWeek = parseDayOfWeek(row.dayOfWeek);
       if (!weekIndex || !dayOfWeek) {
         throw new Error('weekIndex and dayOfWeek are required.');
       }
-      const sessionType = String(row.sessionType ?? '').trim() || 'endurance';
+      const title = String(row.title ?? '').trim();
+      const notes = String(row.notes ?? '').trim();
+      const intensityTargetRaw = String(row.intensityTargetJson ?? '').trim();
+      const textForInference = [title, notes, intensityTargetRaw].filter(Boolean).join(' ');
+      const sessionType = inferSessionType(row.sessionType, title, notes);
+      const durationMinutes = toNullableNumber(row.durationMinutes) ?? parseDurationMinutesFromText(textForInference);
+      const distanceKm =
+        normalizeDistanceKmFromRow(row.distanceKm, row.distanceUnit) ?? parseDistanceKmFromText(textForInference);
+
       rows.push({
         weekIndex,
         dayOfWeek,
         discipline: parseDiscipline(String(row.discipline ?? '')),
         sessionType,
-        title: String(row.title ?? '').trim() || null,
-        durationMinutes: toNullableNumber(row.durationMinutes),
-        distanceKm: normalizeDistanceKmFromRow(row.distanceKm, row.distanceUnit),
+        title: title || null,
+        durationMinutes,
+        distanceKm,
         intensityType: String(row.intensityType ?? '').trim() || null,
         intensityTargetJson: tryParseJson(row.intensityTargetJson),
         recipeV2Json: tryParseJson(row.recipeV2Json),
-        notes: String(row.notes ?? '').trim() || null,
+        notes: notes || null,
         blockName: String(row.blockName ?? '').trim() || null,
         phaseTag: String(row.phaseTag ?? '').trim() || null,
         targetLoadScore: toNullableNumber(row.targetLoadScore),
         sourceConfidence: toNullableNumber(row.sourceConfidence) ?? 1,
-        needsReview: String(row.needsReview ?? '').trim().toLowerCase() === 'true',
+        needsReview: ['true', '1', 'yes', 'y'].includes(String(row.needsReview ?? '').trim().toLowerCase()),
       });
     } catch (error) {
       issues.push({
