@@ -9,6 +9,8 @@ export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
   query: z.string().trim().min(1, 'Query is required.').max(500, 'Query is too long.'),
+  athleteId: z.string().trim().min(1).optional(),
+  aiPlanDraftId: z.string().trim().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -20,6 +22,8 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       role: user.role,
       query: body.query,
+      athleteId: body.athleteId,
+      aiPlanDraftId: body.aiPlanDraftId,
     });
 
     return success(result, {

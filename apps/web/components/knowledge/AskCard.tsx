@@ -20,7 +20,13 @@ type AskResponse = {
   citations: AskCitation[];
 };
 
-export function AskCard() {
+type AskCardProps = {
+  athleteId?: string | null;
+  aiPlanDraftId?: string | null;
+  placeholder?: string;
+};
+
+export function AskCard({ athleteId = null, aiPlanDraftId = null, placeholder }: AskCardProps) {
   const { request } = useApi();
 
   const [query, setQuery] = useState('');
@@ -43,6 +49,8 @@ export function AskCard() {
         cache: 'no-store',
         data: {
           query: query.trim(),
+          athleteId,
+          aiPlanDraftId,
         },
       });
 
@@ -95,7 +103,7 @@ export function AskCard() {
               }
             }
           }}
-          placeholder="Ask in natural language about athletes, workouts, progress, or risks."
+          placeholder={placeholder ?? 'Ask in natural language about this athlete, their plan, workouts, progress, or risks.'}
           rows={3}
           className={cn(
             'w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text)] resize-y min-h-[100px]',

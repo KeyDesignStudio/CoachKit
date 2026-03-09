@@ -9,6 +9,7 @@ type AnalyticsPayload = {
     draftTemplates: number;
     unresolvedSessions: number;
     averageQualityScore: number;
+    averageOutcomeScore: number;
     validationPassRate: number;
   };
   imports: {
@@ -36,6 +37,12 @@ type AnalyticsPayload = {
       rejectionRateDelta: number;
       goodFitRateDelta: number;
     };
+  };
+  trustedSources: {
+    total: number;
+    active: number;
+    planningEnabled: number;
+    qaEnabled: number;
   };
   topTemplates: Array<{
     id: string;
@@ -107,6 +114,13 @@ export function PlanLibraryQualityInsights({ refreshToken = 0 }: PlanLibraryQual
             <Metric label="Good-fit rate (30d)" value={pct(analytics.qualityKpis.current30d.goodFitRate)} delta={analytics.qualityKpis.trend.goodFitRateDelta} />
           </div>
 
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <Metric label="Avg Outcome" value={pct(analytics.totals.averageOutcomeScore)} />
+            <Metric label="Trusted Sources" value={String(analytics.trustedSources.active)} />
+            <Metric label="Q&A Sources" value={String(analytics.trustedSources.qaEnabled)} />
+            <Metric label="Planning Sources" value={String(analytics.trustedSources.planningEnabled)} />
+          </div>
+
           <div className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3">
             <div className="text-xs font-semibold text-[var(--muted)]">Top weighted templates for APB retrieval</div>
             {analytics.topTemplates.length === 0 ? <div className="mt-1 text-xs text-[var(--muted)]">No published templates ranked yet.</div> : null}
@@ -143,4 +157,3 @@ function Metric(params: { label: string; value: string; delta?: number; invert?:
     </div>
   );
 }
-

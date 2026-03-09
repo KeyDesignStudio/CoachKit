@@ -2,6 +2,7 @@ import { AiPlanDraftVisibilityStatus, CalendarItemStatus, UserRole } from '@pris
 
 import { formatDateShortAu } from '@/lib/client-date';
 import { prisma } from '@/lib/prisma';
+import { matchTrustedKnowledgeSources } from '@/lib/knowledge/trusted-sources';
 
 type AskIntent = 'CONTACT' | 'LAST_SESSION' | 'UPCOMING' | 'PAIN' | 'MISSED' | 'PLAN' | 'GENERAL';
 
@@ -21,6 +22,8 @@ type AskContext = {
   userId: string;
   role: UserRole;
   query: string;
+  athleteId?: string;
+  aiPlanDraftId?: string;
 };
 
 type KnowledgeDoc = {
@@ -34,7 +37,8 @@ type KnowledgeDoc = {
     | 'AI_PLAN_WEEK'
     | 'AI_PLAN_SESSION'
     | 'AI_PROPOSAL'
-    | 'AI_AUDIT';
+    | 'AI_AUDIT'
+    | 'TRUSTED_SOURCE';
   title: string;
   body: string;
   url: string;
@@ -143,6 +147,10 @@ function scoreDoc(doc: KnowledgeDoc, query: string, intent: AskIntent): number {
     score += 0.24;
   }
   if (intent === 'PLAN' && (doc.kind === 'AI_PLAN_WEEK' || doc.kind === 'AI_PLAN_SESSION')) score += 0.28;
+  if (doc.kind === 'TRUSTED_SOURCE' && intent === 'GENERAL') score += 0.22;
+  if (doc.kind === 'TRUSTED_SOURCE' && /(nutrition|supplement|recovery|strength|conditioning|female|anti doping|substance|coach)/.test(normalize(query))) {
+    score += 0.18;
+  }
   const week = parseWeekFromQuery(query);
   if (week != null && (doc.kind === 'AI_PLAN_WEEK' || doc.kind === 'AI_PLAN_SESSION')) {
     if (doc.title.toLowerCase().includes(`week ${week}`)) score += 0.32;
@@ -275,6 +283,14 @@ function buildDeterministicAnswer(intent: AskIntent, query: string, docs: Knowle
     };
   }
 
+  if (docs[0]?.kind === 'TRUSTED_SOURCE') {
+    const source = docs[0];
+    return {
+      answer: `${source.title} is the strongest approved external source for this question. ${source.body.replace(/\s*\|\s*/g, ', ')}.`,
+      primaryDocId: source.id,
+    };
+  }
+
   const top = docs[0];
   return {
     answer: `Top match: ${top.title}${top.date ? ` (${fmtDate(top.date)})` : ''}.`,
@@ -309,16 +325,13 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     };
   }
 
-  const athleteIds = await getScopedAthleteIds(context.userId, context.role);
-  if (!athleteIds.length) {
-    return {
-      answer: 'No athlete records are available in your scope yet.',
-      citations: [],
-    };
-  }
+  const scopedAthleteIds = await getScopedAthleteIds(context.userId, context.role);
+  const athleteIds = context.athleteId && scopedAthleteIds.includes(context.athleteId) ? [context.athleteId] : scopedAthleteIds;
 
-  const [profiles, calendarItems, completed, athleteBriefs, aiDrafts, planChangeProposals, planChangeAudits] = await Promise.all([
-    prisma.athleteProfile.findMany({
+  const [profiles, calendarItems, completed, athleteBriefs, aiDrafts, planChangeProposals, planChangeAudits, matchedTrustedSources] =
+    await Promise.all([
+      athleteIds.length
+        ? prisma.athleteProfile.findMany({
       where: { userId: { in: athleteIds } },
       select: {
         userId: true,
@@ -332,8 +345,10 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
         user: { select: { name: true } },
       },
       take: 300,
-    }),
-    prisma.calendarItem.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length
+        ? prisma.calendarItem.findMany({
       where: { athleteId: { in: athleteIds }, deletedAt: null },
       select: {
         id: true,
@@ -351,8 +366,10 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ date: 'desc' }],
       take: 500,
-    }),
-    prisma.completedActivity.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length
+        ? prisma.completedActivity.findMany({
       where: { athleteId: { in: athleteIds } },
       select: {
         id: true,
@@ -368,8 +385,10 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ startTime: 'desc' }],
       take: 500,
-    }),
-    prisma.athleteBrief.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length
+        ? prisma.athleteBrief.findMany({
       where: { athleteId: { in: athleteIds } },
       select: {
         id: true,
@@ -380,10 +399,13 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ generatedAt: 'desc' }],
       take: 300,
-    }),
-    prisma.aiPlanDraft.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length
+        ? prisma.aiPlanDraft.findMany({
       where: {
         athleteId: { in: athleteIds },
+        ...(context.aiPlanDraftId ? { id: context.aiPlanDraftId } : {}),
         ...(context.role === UserRole.ATHLETE ? { visibilityStatus: AiPlanDraftVisibilityStatus.PUBLISHED } : {}),
       },
       select: {
@@ -398,8 +420,10 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ createdAt: 'desc' }],
       take: 300,
-    }),
-    prisma.planChangeProposal.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length && context.role === UserRole.COACH
+        ? prisma.planChangeProposal.findMany({
       where: context.role === UserRole.COACH ? { athleteId: { in: athleteIds } } : { athleteId: '__none__' },
       select: {
         id: true,
@@ -412,8 +436,10 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ createdAt: 'desc' }],
       take: 300,
-    }),
-    prisma.planChangeAudit.findMany({
+    })
+        : Promise.resolve([]),
+      athleteIds.length && context.role === UserRole.COACH
+        ? prisma.planChangeAudit.findMany({
       where: context.role === UserRole.COACH ? { athleteId: { in: athleteIds } } : { athleteId: '__none__' },
       select: {
         id: true,
@@ -424,8 +450,14 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
       },
       orderBy: [{ createdAt: 'desc' }],
       take: 300,
-    }),
-  ]);
+    })
+        : Promise.resolve([]),
+      matchTrustedKnowledgeSources({
+        query,
+        limit: 3,
+        includePlanning: context.role !== UserRole.ATHLETE,
+      }),
+    ]);
 
   const profileByAthleteId = new Map(
     profiles.map((profile) => {
@@ -463,6 +495,22 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
 
   const docs: KnowledgeDoc[] = [];
   docs.push(...profileByAthleteId.values());
+  docs.push(
+    ...matchedTrustedSources.map(({ row, score }) => ({
+      id: `trusted:${row.id}`,
+      kind: 'TRUSTED_SOURCE' as const,
+      title: row.title,
+      body: [
+        `Authority: ${row.authority}`,
+        `Category: ${row.category}`,
+        `Trust tier: ${row.trustTier}`,
+        `Planning enabled: ${row.planningEnabled ? 'yes' : 'no'}`,
+        `Summary: ${firstNonBlank(row.summaryText)}`,
+        `Relevance: ${(score * 100).toFixed(0)}%`,
+      ].join(' | '),
+      url: row.url,
+    }))
+  );
 
   for (const session of calendarItems) {
     const athleteName = firstNonBlank(session.athlete?.user?.name, profileByAthleteId.get(session.athleteId)?.title, session.athleteId);
@@ -716,6 +764,13 @@ export async function askScopedKnowledge(context: AskContext): Promise<AskResult
     .filter((entry) => entry.score > 0.08)
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
+
+  if (!ranked.length && matchedTrustedSources.length === 0 && !athleteIds.length) {
+    return {
+      answer: 'No athlete records are in scope, and no approved external coaching source matched this question yet.',
+      citations: [],
+    };
+  }
 
   const built = buildDeterministicAnswer(
     intent,

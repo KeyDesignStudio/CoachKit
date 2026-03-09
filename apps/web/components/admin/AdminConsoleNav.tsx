@@ -11,13 +11,14 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Home', href: '/admin' },
-  { label: 'AI Usage', href: '/admin/ai-usage' },
-  { label: 'AI Audits', href: '/admin/ai-audits' },
-  { label: 'Engine Controls', href: '/admin/ai-plan-builder/engine-controls' },
-  { label: 'Policy Tuning', href: '/admin/ai-plan-builder/policy-tuning' },
-  { label: 'Plan Library', href: '/admin/plan-library' },
-  { label: 'Strava Sync', href: '/admin/strava-sync' },
+  { label: 'AI Home', href: '/admin' },
+  { label: 'Usage & Readiness', href: '/admin/ai-usage' },
+  { label: 'Audit Trail', href: '/admin/ai-audits' },
+  { label: 'Engine', href: '/admin/ai-plan-builder/engine-controls' },
+  { label: 'Policies', href: '/admin/ai-plan-builder/policy-tuning' },
+  { label: 'Knowledge Base', href: '/admin/plan-library' },
+  { label: 'Source Trust', href: '/admin/knowledge-sources' },
+  { label: 'Strava Ops', href: '/admin/strava-sync' },
   { label: 'Data Audit', href: '/admin/audit' },
 ];
 

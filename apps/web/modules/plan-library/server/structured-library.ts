@@ -929,7 +929,7 @@ export async function publishPlanLibraryTemplate(templateId: string) {
 }
 
 export async function getPlanLibraryTemplateAnalytics() {
-  const [templates, validationRuns, importJobs, feedback] = await Promise.all([
+  const [templates, validationRuns, importJobs, feedback, outcomeSignals, trustedSources] = await Promise.all([
     prisma.planLibraryTemplate.findMany({
       include: {
         weeks: {
@@ -942,6 +942,14 @@ export async function getPlanLibraryTemplateAnalytics() {
         exemplarLinks: {
           where: { isActive: true },
           select: { retrievalWeight: true },
+        },
+        usageTraces: {
+          where: {
+            outcomeScore: {
+              not: null,
+            },
+          },
+          select: { outcomeScore: true, feedbackCount: true },
         },
       },
     }),
@@ -963,6 +971,14 @@ export async function getPlanLibraryTemplateAnalytics() {
       },
       select: { feedbackType: true, createdAt: true },
     }),
+    prisma.apbOutcomeSignal.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: { outcomeScore: true, createdAt: true },
+    }),
+    prisma.trustedKnowledgeSource.findMany({
+      select: { isActive: true, planningEnabled: true, qaEnabled: true },
+    }),
   ]);
 
   const totalTemplates = templates.length;
@@ -977,6 +993,10 @@ export async function getPlanLibraryTemplateAnalytics() {
 
   const validationPassRate =
     validationRuns.length > 0 ? validationRuns.filter((run) => run.passed).length / validationRuns.length : 0;
+  const averageOutcomeScore =
+    outcomeSignals.length > 0
+      ? outcomeSignals.reduce((sum, row) => sum + Number(row.outcomeScore ?? 0), 0) / outcomeSignals.length
+      : 0;
 
   const now = Date.now();
   const thirtyDaysMs = 1000 * 60 * 60 * 24 * 30;
@@ -1019,6 +1039,7 @@ export async function getPlanLibraryTemplateAnalytics() {
       draftTemplates: Math.max(0, totalTemplates - publishedTemplates),
       unresolvedSessions,
       averageQualityScore,
+      averageOutcomeScore,
       validationPassRate,
     },
     imports: {
@@ -1029,6 +1050,12 @@ export async function getPlanLibraryTemplateAnalytics() {
         xlsx: importJobs.filter((job) => job.sourceType === 'XLSX').length,
         pdfAssist: importJobs.filter((job) => job.sourceType === 'PDF_ASSIST').length,
       },
+    },
+    trustedSources: {
+      total: trustedSources.length,
+      active: trustedSources.filter((row) => row.isActive).length,
+      planningEnabled: trustedSources.filter((row) => row.isActive && row.planningEnabled).length,
+      qaEnabled: trustedSources.filter((row) => row.isActive && row.qaEnabled).length,
     },
     qualityKpis: {
       current30d: currentRates,
