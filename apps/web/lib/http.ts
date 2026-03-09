@@ -66,6 +66,24 @@ export function handleError(
     where?: string;
   }
 ) {
+  const errorMessage = typeof (error as any)?.message === 'string' ? String((error as any).message) : '';
+  if (
+    /invalid input value for enum\s+"PlanSourceDiscipline"/i.test(errorMessage) ||
+    /invalid input value for enum\s+'PlanSourceDiscipline'/i.test(errorMessage)
+  ) {
+    return failure(
+      'DB_SCHEMA_MISMATCH',
+      'Database schema mismatch for plan disciplines. Apply latest migrations and retry.',
+      500,
+      options?.requestId,
+      {
+        diagnostics: {
+          hint: 'Run prisma migrate deploy on the current environment.',
+        },
+      }
+    );
+  }
+
   if (isPrismaInitError(error)) {
     logPrismaInitError({
       requestId: options?.requestId,

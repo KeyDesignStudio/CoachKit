@@ -479,26 +479,32 @@ export async function commitPlanLibraryImportDraft(params: { importJobId: string
     });
 
     const weekIndexes = [...new Set(rows.map((row) => row.weekIndex))].sort((a, b) => a - b);
-    const weekByIndex = new Map<number, string>();
-    for (const weekIndex of weekIndexes) {
-      const row = rows.find((candidate) => candidate.weekIndex === weekIndex) ?? null;
-      const week = await tx.planLibraryTemplateWeek.create({
-        data: {
-          planTemplateId: template.id,
-          weekIndex,
-          blockName: row?.blockName ?? null,
-          phaseTag: row?.phaseTag ?? null,
-          targetLoadScore: row?.targetLoadScore ?? null,
-        },
+    if (weekIndexes.length) {
+      await tx.planLibraryTemplateWeek.createMany({
+        data: weekIndexes.map((weekIndex) => {
+          const row = rows.find((candidate) => candidate.weekIndex === weekIndex) ?? null;
+          return {
+            planTemplateId: template.id,
+            weekIndex,
+            blockName: row?.blockName ?? null,
+            phaseTag: row?.phaseTag ?? null,
+            targetLoadScore: row?.targetLoadScore ?? null,
+          };
+        }),
       });
-      weekByIndex.set(weekIndex, week.id);
     }
 
-    for (const [ordinal, row] of rows.entries()) {
-      const weekId = weekByIndex.get(row.weekIndex);
-      if (!weekId) continue;
-      await tx.planLibraryTemplateSession.create({
-        data: {
+    const weeks = await tx.planLibraryTemplateWeek.findMany({
+      where: { planTemplateId: template.id },
+      select: { id: true, weekIndex: true },
+    });
+    const weekByIndex = new Map<number, string>(weeks.map((week) => [week.weekIndex, week.id]));
+
+    const sessionRows = rows
+      .map((row, ordinal) => {
+        const weekId = weekByIndex.get(row.weekIndex);
+        if (!weekId) return null;
+        return {
           planTemplateWeekId: weekId,
           dayOfWeek: row.dayOfWeek,
           discipline: row.discipline,
@@ -513,7 +519,13 @@ export async function commitPlanLibraryImportDraft(params: { importJobId: string
           sourceConfidence: row.sourceConfidence,
           needsReview: row.needsReview,
           createdAt: new Date(Date.now() + ordinal),
-        },
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+
+    if (sessionRows.length) {
+      await tx.planLibraryTemplateSession.createMany({
+        data: sessionRows,
       });
     }
 
@@ -531,6 +543,9 @@ export async function commitPlanLibraryImportDraft(params: { importJobId: string
       },
     });
     return template;
+  }, {
+    maxWait: 10_000,
+    timeout: 60_000,
   });
 
   return template;
