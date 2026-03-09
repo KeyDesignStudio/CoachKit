@@ -89,7 +89,6 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
   }, [selectedId]);
 
   const loadDetail = useCallback(async (templateId: string) => {
-    setStatusMessage('');
     try {
       const response = await fetch(`/api/admin/plan-library/templates/${templateId}`, { cache: 'no-store' });
       const payload = await response.json().catch(() => null);
@@ -136,12 +135,20 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
 
   async function validateTemplate() {
     if (!detail) return;
-    setStatusMessage('');
+    setError('');
     try {
       const response = await fetch(`/api/admin/plan-library/templates/${detail.id}/validate`, { method: 'POST' });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error?.message || 'Validation failed.');
-      setStatusMessage('Validation complete.');
+      const run = payload?.data?.validationRun as
+        | { score?: number; passed?: boolean; issuesJson?: Array<{ type: 'hard' | 'soft'; code: string; message: string }> }
+        | undefined;
+      const issueCount = Array.isArray(run?.issuesJson) ? run!.issuesJson.length : 0;
+      setStatusMessage(
+        `Validation complete: ${run?.passed ? 'PASS' : 'FAIL'} · score ${formatScore(run?.score ?? null)} · ${issueCount} issue${
+          issueCount === 1 ? '' : 's'
+        }.`
+      );
       await loadDetail(detail.id);
       await loadTemplates();
     } catch (err) {
@@ -151,7 +158,7 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
 
   async function publishTemplate() {
     if (!detail) return;
-    setStatusMessage('');
+    setError('');
     try {
       const response = await fetch(`/api/admin/plan-library/templates/${detail.id}/publish`, { method: 'POST' });
       const payload = await response.json().catch(() => null);
