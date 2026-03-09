@@ -20,6 +20,10 @@ type TemplateSession = {
   title: string | null;
   durationMinutes: number | null;
   distanceKm: number | null;
+  intensityType: string | null;
+  intensityTargetJson: unknown | null;
+  recipeV2Json: unknown | null;
+  notes: string | null;
   sourceConfidence: number | null;
   needsReview: boolean;
 };
@@ -75,6 +79,29 @@ function formatScore(value: number | null | undefined) {
   return `${Math.round(value * 100)}%`;
 }
 
+function prettyJson(value: unknown) {
+  if (value == null) return '';
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function parseJsonDraft(text: string, label: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    throw new Error(`${label} must be valid JSON.`);
+  }
+}
+
+function hasSessionMeta(session: TemplateSession) {
+  return Boolean(session.sessionType || session.intensityType || session.notes || session.intensityTargetJson || session.recipeV2Json);
+}
+
 export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryTemplateReviewGridProps) {
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -91,6 +118,10 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
     title: string;
     durationMinutes: string;
     distanceKm: string;
+    intensityType: string;
+    intensityTargetJsonText: string;
+    recipeV2JsonText: string;
+    notes: string;
   } | null>(null);
 
   const loadTemplates = useCallback(async () => {
@@ -165,6 +196,10 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
       title: session.title ?? '',
       durationMinutes: session.durationMinutes == null ? '' : String(session.durationMinutes),
       distanceKm: session.distanceKm == null ? '' : String(session.distanceKm),
+      intensityType: session.intensityType ?? '',
+      intensityTargetJsonText: prettyJson(session.intensityTargetJson),
+      recipeV2JsonText: prettyJson(session.recipeV2Json),
+      notes: session.notes ?? '',
     });
   }
 
@@ -180,6 +215,8 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
     try {
       const durationValue = editDraft.durationMinutes.trim();
       const distanceValue = editDraft.distanceKm.trim();
+      const intensityTargetJson = parseJsonDraft(editDraft.intensityTargetJsonText, 'Intensity target');
+      const recipeV2Json = parseJsonDraft(editDraft.recipeV2JsonText, 'Recipe');
       const response = await fetch(`/api/admin/plan-library/templates/${detail.id}/sessions/${sessionId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -190,6 +227,10 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
           title: editDraft.title.trim() || null,
           durationMinutes: durationValue ? Number(durationValue) : null,
           distanceKm: distanceValue ? Number(distanceValue) : null,
+          intensityType: editDraft.intensityType.trim() || null,
+          intensityTargetJson,
+          recipeV2Json,
+          notes: editDraft.notes.trim() || null,
           needsReview: false,
         }),
       });
@@ -321,151 +362,267 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
                     </tr>
                   </thead>
                   <tbody>
-                    {detail.weeks.flatMap((week) =>
-                      week.sessions.map((session) => {
+                    {detail.weeks.flatMap((week) => {
+                      const weekRows: JSX.Element[] = [
+                        <tr key={`${week.id}-header`} className="bg-[var(--bg-surface)]">
+                          <td colSpan={9} className="px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                              <span className="font-semibold">Week {week.weekIndex}</span>
+                              <span className="text-[var(--muted)]">Block {week.blockName || '—'}</span>
+                              <span className="text-[var(--muted)]">Phase {week.phaseTag || '—'}</span>
+                              <span className="text-[var(--muted)]">Target load {week.targetLoadScore ?? '—'}</span>
+                              <span className="text-[var(--muted)]">{week.sessions.length} sessions</span>
+                            </div>
+                          </td>
+                        </tr>,
+                      ];
+
+                      week.sessions.forEach((session) => {
                         const isEditing = editingSessionId === session.id && !!editDraft;
-                        return (
-                        <tr key={session.id} className={session.needsReview ? 'bg-amber-50' : ''}>
-                          <td className="px-2 py-2">{week.weekIndex}</td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <select
-                                value={editDraft.dayOfWeek}
-                                onChange={(event) =>
-                                  setEditDraft((current) => (current ? { ...current, dayOfWeek: Number(event.target.value) } : current))
-                                }
-                                className="w-16 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-1 py-1"
-                              >
-                                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                                  <option key={day} value={day}>
-                                    {dayLabel(day)}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              formatDay(session.dayOfWeek)
-                            )}
-                          </td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <select
-                                value={editDraft.discipline}
-                                onChange={(event) =>
-                                  setEditDraft((current) =>
-                                    current ? { ...current, discipline: event.target.value as TemplateSession['discipline'] } : current
-                                  )
-                                }
-                                className="min-w-[130px] rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-1 py-1"
-                              >
-                                {['SWIM', 'SWIM_OPEN_WATER', 'BIKE', 'RUN', 'BRICK', 'STRENGTH', 'REST'].map((value) => (
-                                  <option key={value} value={value}>
-                                    {disciplineLabel(value as TemplateSession['discipline'])}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              session.discipline
-                            )}
-                          </td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <div className="flex min-w-[220px] gap-1">
+                        weekRows.push(
+                          <tr key={session.id} className={session.needsReview ? 'bg-amber-50' : ''}>
+                            <td className="px-2 py-2">{week.weekIndex}</td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <select
+                                  value={editDraft.dayOfWeek}
+                                  onChange={(event) =>
+                                    setEditDraft((current) => (current ? { ...current, dayOfWeek: Number(event.target.value) } : current))
+                                  }
+                                  className="w-16 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-1 py-1"
+                                >
+                                  {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                                    <option key={day} value={day}>
+                                      {dayLabel(day)}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                formatDay(session.dayOfWeek)
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <select
+                                  value={editDraft.discipline}
+                                  onChange={(event) =>
+                                    setEditDraft((current) =>
+                                      current ? { ...current, discipline: event.target.value as TemplateSession['discipline'] } : current
+                                    )
+                                  }
+                                  className="min-w-[130px] rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-1 py-1"
+                                >
+                                  {['SWIM', 'SWIM_OPEN_WATER', 'BIKE', 'RUN', 'BRICK', 'STRENGTH', 'REST'].map((value) => (
+                                    <option key={value} value={value}>
+                                      {disciplineLabel(value as TemplateSession['discipline'])}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                session.discipline
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
                                 <input
                                   value={editDraft.title}
                                   onChange={(event) =>
                                     setEditDraft((current) => (current ? { ...current, title: event.target.value } : current))
                                   }
-                                  className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
+                                  className="w-full min-w-[280px] rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
                                   placeholder="Session title"
                                 />
+                              ) : (
+                                session.title || session.sessionType
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
                                 <input
-                                  value={editDraft.sessionType}
+                                  value={editDraft.durationMinutes}
                                   onChange={(event) =>
-                                    setEditDraft((current) => (current ? { ...current, sessionType: event.target.value } : current))
+                                    setEditDraft((current) => (current ? { ...current, durationMinutes: event.target.value } : current))
                                   }
-                                  className="w-24 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
-                                  placeholder="type"
+                                  className="w-20 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
+                                  placeholder="min"
+                                  inputMode="decimal"
                                 />
-                              </div>
-                            ) : (
-                              session.title || session.sessionType
-                            )}
-                          </td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <input
-                                value={editDraft.durationMinutes}
-                                onChange={(event) =>
-                                  setEditDraft((current) => (current ? { ...current, durationMinutes: event.target.value } : current))
-                                }
-                                className="w-20 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
-                                placeholder="min"
-                                inputMode="decimal"
-                              />
-                            ) : (
-                              `${session.durationMinutes ?? '—'} min`
-                            )}
-                          </td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <input
-                                value={editDraft.distanceKm}
-                                onChange={(event) =>
-                                  setEditDraft((current) => (current ? { ...current, distanceKm: event.target.value } : current))
-                                }
-                                className="w-20 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
-                                placeholder="km"
-                                inputMode="decimal"
-                              />
-                            ) : (
-                              `${session.distanceKm ?? '—'} km`
-                            )}
-                          </td>
-                          <td className="px-2 py-2">{formatScore(session.sourceConfidence)}</td>
-                          <td className="px-2 py-2">
-                            <button
-                              type="button"
-                              disabled={savingId === session.id}
-                              onClick={() => void setNeedsReview(session.id, !session.needsReview)}
-                              className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
-                            >
-                              {session.needsReview ? 'Mark resolved' : 'Flag'}
-                            </button>
-                          </td>
-                          <td className="px-2 py-2">
-                            {isEditing ? (
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  disabled={savingId === session.id}
-                                  onClick={() => void saveSessionEdit(session.id)}
-                                  className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={savingId === session.id}
-                                  onClick={cancelEditing}
-                                  className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
+                              ) : (
+                                `${session.durationMinutes ?? '—'} min`
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <input
+                                  value={editDraft.distanceKm}
+                                  onChange={(event) =>
+                                    setEditDraft((current) => (current ? { ...current, distanceKm: event.target.value } : current))
+                                  }
+                                  className="w-20 rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
+                                  placeholder="km"
+                                  inputMode="decimal"
+                                />
+                              ) : (
+                                `${session.distanceKm ?? '—'} km`
+                              )}
+                            </td>
+                            <td className="px-2 py-2">{formatScore(session.sourceConfidence)}</td>
+                            <td className="px-2 py-2">
                               <button
                                 type="button"
                                 disabled={savingId === session.id}
-                                onClick={() => startEditing(session)}
+                                onClick={() => void setNeedsReview(session.id, !session.needsReview)}
                                 className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
                               >
-                                Edit
+                                {session.needsReview ? 'Mark resolved' : 'Flag'}
                               </button>
-                            )}
-                          </td>
-                        </tr>
-                      )})
-                    )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={savingId === session.id}
+                                    onClick={() => void saveSessionEdit(session.id)}
+                                    className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingId === session.id}
+                                    onClick={cancelEditing}
+                                    className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={savingId === session.id}
+                                  onClick={() => startEditing(session)}
+                                  className="rounded-full border border-[var(--border-subtle)] px-2 py-1 text-xs"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+
+                        if (isEditing) {
+                          weekRows.push(
+                            <tr key={`${session.id}-detail`} className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                              <td colSpan={9} className="px-3 py-3">
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                  <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Session type</span>
+                                    <input
+                                      value={editDraft.sessionType}
+                                      onChange={(event) =>
+                                        setEditDraft((current) => (current ? { ...current, sessionType: event.target.value } : current))
+                                      }
+                                      className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
+                                      placeholder="endurance / interval / technique"
+                                    />
+                                  </label>
+                                  <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Intensity type</span>
+                                    <input
+                                      value={editDraft.intensityType}
+                                      onChange={(event) =>
+                                        setEditDraft((current) => (current ? { ...current, intensityType: event.target.value } : current))
+                                      }
+                                      className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1"
+                                      placeholder="pace / power / PE"
+                                    />
+                                  </label>
+                                  <label className="space-y-1 lg:col-span-2">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Notes</span>
+                                    <textarea
+                                      value={editDraft.notes}
+                                      onChange={(event) =>
+                                        setEditDraft((current) => (current ? { ...current, notes: event.target.value } : current))
+                                      }
+                                      className="min-h-[90px] w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-2"
+                                      placeholder="Imported session notes"
+                                    />
+                                  </label>
+                                  <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Intensity target JSON</span>
+                                    <textarea
+                                      value={editDraft.intensityTargetJsonText}
+                                      onChange={(event) =>
+                                        setEditDraft((current) =>
+                                          current ? { ...current, intensityTargetJsonText: event.target.value } : current
+                                        )
+                                      }
+                                      className="min-h-[140px] w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-2 font-mono text-[11px]"
+                                      placeholder='{"target":"8km","intervals":["6-7"]}'
+                                    />
+                                  </label>
+                                  <label className="space-y-1">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Recipe JSON</span>
+                                    <textarea
+                                      value={editDraft.recipeV2JsonText}
+                                      onChange={(event) =>
+                                        setEditDraft((current) =>
+                                          current ? { ...current, recipeV2JsonText: event.target.value } : current
+                                        )
+                                      }
+                                      className="min-h-[140px] w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-card)] px-2 py-2 font-mono text-[11px]"
+                                      placeholder='{"raw":"Run - 6-7 x 1km vigorous"}'
+                                    />
+                                  </label>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        } else if (hasSessionMeta(session)) {
+                          weekRows.push(
+                            <tr key={`${session.id}-detail`} className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                              <td colSpan={9} className="px-3 py-3">
+                                <div className="flex flex-wrap gap-2 text-[11px]">
+                                  <span className="rounded-full border border-[var(--border-subtle)] px-2 py-1">
+                                    Type {session.sessionType || '—'}
+                                  </span>
+                                  <span className="rounded-full border border-[var(--border-subtle)] px-2 py-1">
+                                    Intensity {session.intensityType || '—'}
+                                  </span>
+                                </div>
+                                {session.notes ? (
+                                  <div className="mt-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Notes</div>
+                                    <div className="mt-1 whitespace-pre-wrap text-[12px] text-[var(--muted)]">{session.notes}</div>
+                                  </div>
+                                ) : null}
+                                {session.intensityTargetJson ? (
+                                  <div className="mt-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                                      Intensity target JSON
+                                    </div>
+                                    <pre className="mt-1 overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 font-mono text-[11px]">
+                                      {prettyJson(session.intensityTargetJson)}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                                {session.recipeV2Json ? (
+                                  <div className="mt-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Recipe JSON</div>
+                                    <pre className="mt-1 overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 font-mono text-[11px]">
+                                      {prettyJson(session.recipeV2Json)}
+                                    </pre>
+                                  </div>
+                                ) : null}
+                              </td>
+                            </tr>
+                          );
+                        }
+                      });
+
+                      return weekRows;
+                    })}
                   </tbody>
                 </table>
               </div>
