@@ -139,6 +139,10 @@ function safeJson(raw: string): unknown | null {
 
 function normalizeDiscipline(raw: string): PlanSourceDiscipline {
   const v = raw.trim().toLowerCase();
+  if ((v.includes('open') && v.includes('water') && v.includes('swim')) || v.includes('ows')) {
+    return PlanSourceDiscipline.SWIM_OPEN_WATER;
+  }
+  if (v.includes('brick')) return PlanSourceDiscipline.BRICK;
   if (v.includes('swim')) return PlanSourceDiscipline.SWIM;
   if (v.includes('bike') || v.includes('cycle')) return PlanSourceDiscipline.BIKE;
   if (v.includes('run')) return PlanSourceDiscipline.RUN;

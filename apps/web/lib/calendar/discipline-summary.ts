@@ -45,6 +45,8 @@ function normalizeDiscipline(value: unknown): DisciplineKey {
   const raw = typeof value === 'string' ? value.trim() : '';
   const upper = raw.toUpperCase();
   if (!upper) return 'OTHER';
+  if (upper === 'SWIM_OPEN_WATER' || upper === 'OPEN_WATER_SWIM' || upper === 'OWS') return 'SWIM';
+  if (upper === 'BRICK') return 'BIKE';
   return upper;
 }
 

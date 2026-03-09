@@ -57,7 +57,10 @@ function logChallengeEvent(event: string, payload: Record<string, unknown>) {
 }
 
 function normalizeDiscipline(value: string | null | undefined) {
-  return String(value ?? '').trim().toUpperCase();
+  const upper = String(value ?? '').trim().toUpperCase();
+  if (upper === 'SWIM_OPEN_WATER' || upper === 'OPEN_WATER_SWIM' || upper === 'OWS') return 'SWIM';
+  if (upper === 'BRICK') return 'BIKE';
+  return upper;
 }
 
 function getActivityDiscipline(activity: CompletionActivityRow): string {

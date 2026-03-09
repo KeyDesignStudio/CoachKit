@@ -32,7 +32,7 @@ const LLM_SCHEMA = z.object({
       z.object({
         weekNumber: z.number().int().min(1).max(104),
         dayLabel: z.string().trim().min(1).max(16).nullable().optional(),
-        discipline: z.enum(['SWIM', 'BIKE', 'RUN', 'STRENGTH', 'REST']),
+        discipline: z.enum(['SWIM', 'SWIM_OPEN_WATER', 'BIKE', 'RUN', 'BRICK', 'STRENGTH', 'REST']),
         sessionType: z.string().trim().min(1).max(60).nullable().optional(),
         title: z.string().trim().min(1).max(180),
         details: z.string().trim().min(1).max(2000).nullable().optional(),
@@ -111,9 +111,11 @@ function normalizeSessionType(input: string | null | undefined) {
 
 function detectDisciplineFromText(value: string): PlanSourceDiscipline | null {
   const text = String(value ?? '').toUpperCase();
+  if (/\b(OPEN[\s-]?WATER|OWS)\b.*\bSWIM\b|\bSWIM\b.*\b(OPEN[\s-]?WATER|OWS)\b/.test(text)) return 'SWIM_OPEN_WATER';
   if (/\bSWIM\b/.test(text)) return 'SWIM';
   if (/\bBIKE\b|\bCYCLE\b/.test(text)) return 'BIKE';
   if (/\bRUN\b|\bJOG\b/.test(text)) return 'RUN';
+  if (/\bBRICK\b/.test(text)) return 'BRICK';
   if (/\bSTRENGTH\b|\bGYM\b|\bCONDITIONING\b/.test(text)) return 'STRENGTH';
   if (/\bREST(?:-| )?DAY\b|\bRECOVERY\b|\bOFF\b/.test(text)) return 'REST';
   return null;

@@ -17,7 +17,7 @@ import { SessionDrawer } from '@/components/coach/SessionDrawer';
 import { addDays, formatDisplay, startOfWeek, toDateInput } from '@/lib/client-date';
 import { cn } from '@/lib/cn';
 
-const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
 
 type DisciplineOption = (typeof DISCIPLINE_OPTIONS)[number];

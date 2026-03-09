@@ -124,7 +124,13 @@ export function compilePlanLogicGraph(params: {
     const minutes = Math.max(0, Number(s.durationMinutes ?? 0) || 0);
     weekMinutesByWeek.set(s.weekIndex, (weekMinutesByWeek.get(s.weekIndex) ?? 0) + minutes);
 
-    const d = String(s.discipline).toLowerCase();
+    const rawDiscipline = String(s.discipline).toLowerCase();
+    const d =
+      rawDiscipline === 'swim_open_water' || rawDiscipline === 'open_water_swim' || rawDiscipline === 'ows'
+        ? 'swim'
+        : rawDiscipline === 'brick'
+          ? 'bike'
+          : rawDiscipline;
     if (d in disciplineCounts) disciplineCounts[d] += 1;
 
     const sessionType = String(s.sessionType || 'endurance').toLowerCase();

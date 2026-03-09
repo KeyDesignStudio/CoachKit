@@ -131,9 +131,11 @@ const DAY_LABELS: Record<string, number> = {
 };
 
 const DISCIPLINE_RULES: Array<{ key: PlanSourceDiscipline; match: RegExp }> = [
+  { key: 'SWIM_OPEN_WATER', match: /\b(open[\s-]?water|ows)\b.*\bswim\b|\bswim\b.*\b(open[\s-]?water|ows)\b/i },
   { key: 'SWIM', match: /\bswim\b/i },
   { key: 'BIKE', match: /\bbike\b|\bcycle\b/i },
   { key: 'RUN', match: /\brun\b/i },
+  { key: 'BRICK', match: /\bbrick\b/i },
   { key: 'STRENGTH', match: /\bstrength\b|\bgym\b|\bs&c\b|\bconditioning\b|\byoga\b/i },
   { key: 'REST', match: /\brest\b|\boff\b|\brecovery\b/i },
 ];
@@ -148,9 +150,11 @@ const SESSION_TYPE_KEYWORDS: Array<{ key: string; match: RegExp }> = [
 ];
 
 const STRUCTURED_SESSION_HEADER_RULES: Array<{ key: PlanSourceDiscipline; match: RegExp }> = [
+  { key: 'SWIM_OPEN_WATER', match: /^(open[\s-]?water|ows|swim\s+open[\s-]?water|open[\s-]?water\s+swim)\b/i },
   { key: 'SWIM', match: /^(swim)\b/i },
   { key: 'BIKE', match: /^(bike|cycling?)\b/i },
   { key: 'RUN', match: /^(run|run\/walk|jog)\b/i },
+  { key: 'BRICK', match: /^(brick)\b/i },
   { key: 'STRENGTH', match: /^(strength|s&c|conditioning)\b/i },
   { key: 'REST', match: /^(rest(?: |-)?day|off)\b/i },
 ];
@@ -207,9 +211,11 @@ function detectDiscipline(line: string): PlanSourceDiscipline | null {
     if (rule.match.test(normalized)) return rule.key;
   }
   const compact = normalized.toLowerCase().replace(/[^a-z]/g, '');
+  if ((compact.includes('openwater') || compact.includes('ows')) && compact.includes('swim')) return 'SWIM_OPEN_WATER';
   if (compact.includes('swim')) return 'SWIM';
   if (compact.includes('bike') || compact.includes('cycle')) return 'BIKE';
   if (compact.includes('run') || compact.includes('jog')) return 'RUN';
+  if (compact.includes('brick')) return 'BRICK';
   if (compact.includes('strength') || compact.includes('conditioning') || compact.includes('yoga')) return 'STRENGTH';
   if (compact.includes('restday') || compact.includes('recovery') || compact.includes('off')) {
     return 'REST';

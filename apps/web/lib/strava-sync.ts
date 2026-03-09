@@ -313,6 +313,8 @@ async function matchAndLinkCalendarItem(params: {
   function normalizeDiscipline(value: string) {
     const upper = String(value ?? '').trim().toUpperCase();
     if (upper === 'STR') return 'STRENGTH';
+    if (upper === 'SWIM_OPEN_WATER' || upper === 'OPEN_WATER_SWIM' || upper === 'OWS') return 'SWIM';
+    if (upper === 'BRICK') return 'BIKE';
     return upper;
   }
 

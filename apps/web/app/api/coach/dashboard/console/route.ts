@@ -488,7 +488,13 @@ async function getDashboardAggregates(params: {
       totalMinutes += m;
       totalDistanceKm += d;
 
-      const key = (item.discipline || 'OTHER').toUpperCase();
+      const raw = (item.discipline || 'OTHER').toUpperCase();
+      const key =
+        raw === 'SWIM_OPEN_WATER' || raw === 'OPEN_WATER_SWIM' || raw === 'OWS'
+          ? 'SWIM'
+          : raw === 'BRICK'
+            ? 'BIKE'
+            : raw;
       const prev = disciplineTotals.get(key) ?? { totalMinutes: 0, totalDistanceKm: 0 };
       prev.totalMinutes += m;
       prev.totalDistanceKm += d;

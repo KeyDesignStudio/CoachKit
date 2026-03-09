@@ -136,12 +136,22 @@ function parseImportSourceType(raw: string): PlanLibraryImportSourceType {
 
 function parseDiscipline(raw: string): PlanSourceDiscipline {
   const normalized = raw.trim().toUpperCase();
+  if (
+    normalized === 'SWIM_OPEN_WATER' ||
+    normalized === 'SWIM OPEN WATER' ||
+    normalized === 'OPEN_WATER_SWIM' ||
+    normalized === 'OPEN WATER SWIM' ||
+    normalized === 'OWS'
+  ) {
+    return 'SWIM_OPEN_WATER';
+  }
   if (normalized === 'SWIM') return 'SWIM';
   if (normalized === 'BIKE') return 'BIKE';
   if (normalized === 'RUN') return 'RUN';
+  if (normalized === 'BRICK') return 'BRICK';
   if (normalized === 'STRENGTH') return 'STRENGTH';
   if (normalized === 'REST' || normalized === 'REST_DAY' || normalized === 'REST-DAY') return 'REST';
-  throw new Error('discipline must be SWIM, BIKE, RUN, STRENGTH, or REST.');
+  throw new Error('discipline must be SWIM, SWIM_OPEN_WATER, BIKE, RUN, BRICK, STRENGTH, or REST.');
 }
 
 function toNullableNumber(raw: unknown): number | null {
@@ -688,9 +698,9 @@ export async function validatePlanLibraryTemplate(templateId: string) {
       acc[session.discipline] = (acc[session.discipline] ?? 0) + 1;
       return acc;
     }, {});
-    const runCount = disciplineCount.RUN ?? 0;
-    const bikeCount = disciplineCount.BIKE ?? 0;
-    const swimCount = disciplineCount.SWIM ?? 0;
+    const runCount = (disciplineCount.RUN ?? 0) + (disciplineCount.BRICK ?? 0);
+    const bikeCount = (disciplineCount.BIKE ?? 0) + (disciplineCount.BRICK ?? 0);
+    const swimCount = (disciplineCount.SWIM ?? 0) + (disciplineCount.SWIM_OPEN_WATER ?? 0);
     if (template.sport === 'TRIATHLON' && (runCount === 0 || bikeCount === 0 || swimCount === 0)) {
       issues.push({
         type: 'soft',

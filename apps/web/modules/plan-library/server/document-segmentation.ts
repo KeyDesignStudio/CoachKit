@@ -7,7 +7,7 @@ const NOISE_SECTION_REGEX =
   /\b(training zones?|how it works|are these plans for you|please read this before you start|tips to maximize your training|meet the expert|cut out the guide|fold the guide|photos|illustrations|key\b|zone 1\b|zone 2\b|zone 3\b|zone 4\b|zone 5\b|tri\d+\.plan)\b/i;
 const MONTH_PAGE_REGEX = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}\b/i;
 const DAY_OR_WEEK_REGEX = /^(day\s+\d+|w(?:eek)?\s*0?\d{1,2}\b|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs|rsday|r|rs)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)$/i;
-const DISCIPLINE_HEADER_REGEX = /^(swim|bike|cycling?|run|run\/walk|strength|rest|off)(?:\b|\/)/i;
+const DISCIPLINE_HEADER_REGEX = /^(swim|open[\s-]?water|ows|bike|cycling?|run|run\/walk|brick|strength|rest|off)(?:\b|\/)/i;
 const BLOCK_HEADING_REGEX = /^(warm[\s-]?up|cool[\s-]?down|main(?: set| session)?|session|technique|drill|strength|optional workout)\b/i;
 const SESSION_METRIC_REGEX =
   /\b(\d+(?:\.\d+)?)\s*(km|kms|kilometres?|kilometers?|mile|miles|mi|m|hours?|hrs?|hr|h|minutes?|mins?|min|secs?|seconds?)\b/i;
