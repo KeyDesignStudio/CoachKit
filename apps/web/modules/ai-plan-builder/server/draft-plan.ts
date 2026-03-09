@@ -31,6 +31,7 @@ import type { SessionDetailBlockType, SessionDetailV1 } from '../rules/session-d
 import { getAiPlanBuilderCapabilitySpecVersion, getAiPlanBuilderEffectiveMode } from '../ai/config';
 import { recordAiInvocationAudit } from './ai-invocation-audit';
 import { buildEffectivePlanInputContext } from './effective-input';
+import { recordDraftTemplateUsage } from './outcome-learning';
 import { refreshPolicyRuntimeOverridesFromDb } from './policy-tuning';
 import {
   buildReferenceRecipePool,
@@ -498,6 +499,95 @@ function blendAppliedPlanSources(params: {
   };
 }
 
+function tokenizeSimilarityValue(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+}
+
+function jaccardSimilarity(a: string, b: string): number {
+  const left = new Set(tokenizeSimilarityValue(a));
+  const right = new Set(tokenizeSimilarityValue(b));
+  if (!left.size || !right.size) return 0;
+  let intersection = 0;
+  for (const token of left) {
+    if (right.has(token)) intersection += 1;
+  }
+  const union = left.size + right.size - intersection;
+  if (!union) return 0;
+  return Number((intersection / union).toFixed(3));
+}
+
+function buildDraftNoveltyDiagnostics(params: {
+  draft: DraftPlanV1;
+  selectedTemplates: Array<{
+    id: string;
+    title: string;
+    weeks: Array<{
+      sessions: Array<{
+        discipline: string;
+        sessionType: string;
+        title: string | null;
+        notes: string | null;
+      }>;
+    }>;
+  }>;
+}) {
+  const templateSessions = params.selectedTemplates.flatMap((template) =>
+    template.weeks.flatMap((week) =>
+      week.sessions.map((session) => ({
+        templateId: template.id,
+        templateTitle: template.title,
+        discipline: String(session.discipline ?? ''),
+        sessionType: String(session.sessionType ?? ''),
+        text: [session.title ?? '', session.notes ?? '', session.sessionType ?? ''].filter(Boolean).join(' ').trim(),
+      }))
+    )
+  );
+
+  const byDraftSession = params.draft.weeks.flatMap((week) =>
+    week.sessions.map((session) => {
+      const draftText = [session.discipline, session.type, session.notes ?? ''].filter(Boolean).join(' ').trim();
+      const best = templateSessions
+        .filter((candidate) => candidate.discipline === session.discipline)
+        .map((candidate) => ({
+          templateId: candidate.templateId,
+          templateTitle: candidate.templateTitle,
+          similarity: jaccardSimilarity(draftText, candidate.text),
+        }))
+        .sort((a, b) => b.similarity - a.similarity)[0] ?? { templateId: null, templateTitle: null, similarity: 0 };
+
+      return {
+        weekIndex: week.weekIndex,
+        dayOfWeek: session.dayOfWeek,
+        discipline: session.discipline,
+        type: session.type,
+        similarity: best.similarity,
+        templateId: best.templateId,
+        templateTitle: best.templateTitle,
+      };
+    })
+  );
+
+  const similarities = byDraftSession.map((row) => row.similarity).filter((value) => Number.isFinite(value));
+  const maxSessionSimilarity = similarities.length ? Math.max(...similarities) : 0;
+  const meanSessionSimilarity = similarities.length ? similarities.reduce((sum, value) => sum + value, 0) / similarities.length : 0;
+  const flagged = byDraftSession.filter((row) => row.similarity >= 0.82);
+
+  return {
+    version: 'v1',
+    threshold: 0.82,
+    maxSessionSimilarity: Number(maxSessionSimilarity.toFixed(3)),
+    meanSessionSimilarity: Number(meanSessionSimilarity.toFixed(3)),
+    highSimilarityCount: flagged.length,
+    passed: maxSessionSimilarity < 0.82 && flagged.length <= 2,
+    flaggedSessions: flagged.slice(0, 8),
+  };
+}
+
 function applyAdaptationMemoryToSetup(params: { setup: any; memory: Awaited<ReturnType<typeof buildAdaptationMemorySummary>> }) {
   const setup = { ...(params.setup ?? {}) };
   const memory = params.memory;
@@ -681,6 +771,13 @@ export async function generateAiDraftPlanV1(params: {
     score: number;
     semanticScore: number;
     metadataScore: number;
+    sourcePriorityScore: number;
+    athleteFitScore: number;
+    templateQualityScore: number;
+    exemplarBoostScore: number;
+    outcomeBoostScore: number;
+    durationDeltaWeeks: number;
+    sourceOrigin: 'coach' | 'global';
     reasons: string[];
   };
   const planSourceMatchesNormalized: PlanSourceMatch[] = planSourceMatches.map((m) => ({
@@ -690,6 +787,13 @@ export async function generateAiDraftPlanV1(params: {
     score: m.score,
     semanticScore: m.semanticScore,
     metadataScore: m.metadataScore,
+    sourcePriorityScore: m.sourcePriorityScore,
+    athleteFitScore: m.athleteFitScore,
+    templateQualityScore: m.templateQualityScore,
+    exemplarBoostScore: m.exemplarBoostScore,
+    outcomeBoostScore: m.outcomeBoostScore,
+    durationDeltaWeeks: m.durationDeltaWeeks,
+    sourceOrigin: m.sourceOrigin,
     reasons: [...m.reasons],
   }));
 
@@ -736,6 +840,13 @@ export async function generateAiDraftPlanV1(params: {
             score: 99,
             semanticScore: 0,
             metadataScore: 0,
+            sourcePriorityScore: 0,
+            athleteFitScore: 0,
+            templateQualityScore: Number(source.qualityScore ?? 0) * 4,
+            exemplarBoostScore: 0,
+            outcomeBoostScore: 0,
+            durationDeltaWeeks: 0,
+            sourceOrigin: source.createdBy === params.coachId ? 'coach' : 'global',
             reasons: ['coach selected'],
           };
         })
@@ -834,6 +945,21 @@ export async function generateAiDraftPlanV1(params: {
     setup: effectiveSetupForValidation,
     draft,
   });
+  const noveltyDiagnostics = buildDraftNoveltyDiagnostics({
+    draft,
+    selectedTemplates: selectedTemplatesOrdered as Array<{
+      id: string;
+      title: string;
+      weeks: Array<{
+        sessions: Array<{
+          discipline: string;
+          sessionType: string;
+          title: string | null;
+          notes: string | null;
+        }>;
+      }>;
+    }>,
+  });
   if (qualityGate.hardViolations.length) {
     throw new ApiError(400, 'PLAN_CONSTRAINT_VIOLATION', 'Draft plan violates hard planning constraints.', {
       diagnostics: {
@@ -904,6 +1030,12 @@ export async function generateAiDraftPlanV1(params: {
           score: row.match.score,
           semanticScore: row.match.semanticScore,
           metadataScore: row.match.metadataScore,
+          athleteFitScore: row.match.athleteFitScore,
+          templateQualityScore: row.match.templateQualityScore,
+          exemplarBoostScore: row.match.exemplarBoostScore,
+          outcomeBoostScore: row.match.outcomeBoostScore,
+          durationDeltaWeeks: row.match.durationDeltaWeeks,
+          sourceOrigin: row.match.sourceOrigin,
           reasons: row.match.reasons,
         })),
         matchScores: planSourceMatchesForReasoning.map((m: PlanSourceMatch) => ({
@@ -913,10 +1045,17 @@ export async function generateAiDraftPlanV1(params: {
           score: m.score,
           semanticScore: m.semanticScore,
           metadataScore: m.metadataScore,
+          athleteFitScore: m.athleteFitScore,
+          templateQualityScore: m.templateQualityScore,
+          exemplarBoostScore: m.exemplarBoostScore,
+          outcomeBoostScore: m.outcomeBoostScore,
+          durationDeltaWeeks: m.durationDeltaWeeks,
+          sourceOrigin: m.sourceOrigin,
           reasons: m.reasons,
         })),
         influenceSummary: blended.influenceSummary,
         adaptationMemory,
+        noveltyCheck: noveltyDiagnostics,
       } as unknown as Prisma.InputJsonValue,
       weeks: {
         create: draft.weeks.map((w) => ({
@@ -945,6 +1084,24 @@ export async function generateAiDraftPlanV1(params: {
       weeks: { orderBy: [{ weekIndex: 'asc' }] },
       sessions: { orderBy: [{ weekIndex: 'asc' }, { ordinal: 'asc' }] },
     },
+  });
+
+  await recordDraftTemplateUsage({
+    draftId: created.id,
+    athleteId: params.athleteId,
+    coachId: params.coachId,
+    noveltyCheck: noveltyDiagnostics as unknown as Record<string, unknown>,
+    selectedTemplates: appliedBySource.map((row) => ({
+      templateId: row.source.id,
+      influenceScore: Number(row.weight ?? 0),
+      matchScore: Number(row.match.score ?? 0),
+      sourceOrigin: row.match.sourceOrigin,
+      reasons: row.match.reasons,
+      athleteFitScore: row.match.athleteFitScore,
+      templateQualityScore: row.match.templateQualityScore,
+      exemplarBoostScore: row.match.exemplarBoostScore,
+      durationDeltaWeeks: row.match.durationDeltaWeeks,
+    })),
   });
 
   // Fire-and-forget enrichment so draft generation latency is not blocked by per-session detail calls.
@@ -1001,6 +1158,11 @@ export async function listReferencePlansForAthlete(params: { coachId: string; at
       recommended: Boolean(rec),
       score: rec?.score ?? null,
       reasons: rec?.reasons ?? [],
+      sourcePriorityScore: rec?.sourcePriorityScore ?? null,
+      athleteFitScore: rec?.athleteFitScore ?? null,
+      templateQualityScore: rec?.templateQualityScore ?? null,
+      exemplarBoostScore: rec?.exemplarBoostScore ?? null,
+      durationDeltaWeeks: rec?.durationDeltaWeeks ?? null,
     };
   });
 }

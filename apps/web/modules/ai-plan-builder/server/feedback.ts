@@ -5,6 +5,7 @@ import { assertCoachOwnsAthlete } from '@/lib/auth';
 import { ApiError } from '@/lib/errors';
 
 import { requireAiPlanBuilderV1Enabled } from './flag';
+import { recomputeDraftOutcomeSignal } from './outcome-learning';
 
 export const createAthleteSessionFeedbackSchema = z.object({
   aiPlanDraftId: z.string().min(1),
@@ -51,7 +52,7 @@ export async function createAthleteSessionFeedback(params: {
     throw new ApiError(400, 'INVALID_DRAFT_SESSION', 'draftSessionId must belong to aiPlanDraftId.');
   }
 
-  return prisma.athleteSessionFeedback.create({
+  const feedback = await prisma.athleteSessionFeedback.create({
     data: {
       athleteId: params.athleteId,
       coachId: params.coachId,
@@ -65,6 +66,8 @@ export async function createAthleteSessionFeedback(params: {
       sleepQuality: params.sleepQuality ?? null,
     },
   });
+  await recomputeDraftOutcomeSignal({ draftId: draft.id });
+  return feedback;
 }
 
 export async function listAthleteSessionFeedback(params: {
@@ -129,7 +132,7 @@ export async function createAthleteSessionFeedbackAsAthlete(params: {
     throw new ApiError(400, 'INVALID_DRAFT_SESSION', 'draftSessionId must belong to aiPlanDraftId.');
   }
 
-  return prisma.athleteSessionFeedback.create({
+  const feedback = await prisma.athleteSessionFeedback.create({
     data: {
       athleteId: params.athleteId,
       coachId: draft.coachId,
@@ -143,6 +146,8 @@ export async function createAthleteSessionFeedbackAsAthlete(params: {
       sleepQuality: params.sleepQuality ?? null,
     },
   });
+  await recomputeDraftOutcomeSignal({ draftId: draft.id });
+  return feedback;
 }
 
 export async function listAthleteSessionFeedbackAsAthlete(params: {

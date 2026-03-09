@@ -86,6 +86,11 @@ async function applyTemplateExemplarWeightDelta(params: {
   sessionType: string;
   delta: number;
   deactivate?: boolean;
+  exemplarId?: string | null;
+  feedbackType?: CoachWorkoutExemplarFeedbackType | 'PROMOTED' | 'UPDATED' | null;
+  draftId?: string | null;
+  draftSessionId?: string | null;
+  reason?: string;
 }) {
   const discipline = String(params.discipline ?? '').trim().toUpperCase();
   const sessionType = normalizeSessionType(params.sessionType) || 'endurance';
@@ -108,17 +113,35 @@ async function applyTemplateExemplarWeightDelta(params: {
     },
     select: {
       id: true,
+      retrievalKey: true,
       retrievalWeight: true,
     },
   });
 
   for (const link of links) {
-    const nextWeight = Math.max(0.05, Math.min(5, Number(link.retrievalWeight ?? 1) + params.delta));
+    const oldWeight = Number(link.retrievalWeight ?? 1);
+    const nextWeight = Math.max(0.05, Math.min(5, oldWeight + params.delta));
     await params.tx.planLibraryTemplateExemplarLink.update({
       where: { id: link.id },
       data: {
         retrievalWeight: nextWeight,
         ...(params.deactivate ? { isActive: false } : {}),
+      },
+    });
+    await params.tx.exemplarWeightHistory.create({
+      data: {
+        exemplarId: params.exemplarId ?? null,
+        coachId: params.coachId,
+        discipline,
+        sessionType,
+        retrievalKey: link.retrievalKey,
+        oldWeight,
+        newWeight: nextWeight,
+        delta: Number((nextWeight - oldWeight).toFixed(3)),
+        reason: params.reason ?? 'Template exemplar weight adjusted from coach feedback.',
+        feedbackType: params.feedbackType ?? null,
+        draftId: params.draftId ?? null,
+        draftSessionId: params.draftSessionId ?? null,
       },
     });
   }
@@ -444,6 +467,11 @@ export async function upsertCoachWorkoutExemplarFromSessionDetail(params: {
       discipline: params.discipline,
       sessionType: params.sessionType,
       delta: existing ? 0.06 : 0.12,
+      exemplarId: exemplar.id,
+      feedbackType: existing ? 'UPDATED' : 'PROMOTED',
+      draftId: params.draftId ?? null,
+      draftSessionId: params.draftSessionId ?? null,
+      reason: existing ? 'Coach updated an exemplar from a draft session.' : 'Coach promoted a draft session into the exemplar library.',
     });
   }
 
@@ -511,6 +539,11 @@ export async function recordCoachWorkoutExemplarFeedback(params: {
           sessionType: exemplarRow.sessionType,
           delta,
           deactivate: params.feedbackType === 'ARCHIVED',
+          exemplarId: params.exemplarId,
+          feedbackType: params.feedbackType,
+          draftId: params.draftId ?? null,
+          draftSessionId: params.draftSessionId ?? null,
+          reason: `Coach exemplar feedback: ${params.feedbackType}.`,
         });
       }
     }

@@ -52,32 +52,32 @@ export default async function AdminHomePage() {
 
   const aiTiles: AdminTile[] = [
     {
-      title: 'AI Engine Controls',
-      description: 'Model/mode/token/rate-limit levers and capability overrides.',
+      title: 'Engine Controls',
+      description: 'Control model, fallback, rate-limit, and capability routing behavior.',
       href: '/admin/ai-plan-builder/engine-controls',
       tag: 'APB',
       disabled: !apbEnabled,
       hint: apbEnabled ? undefined : 'Enable AI_PLAN_BUILDER_V1 to access.',
     },
     {
-      title: 'AI Usage',
-      description: 'Readiness snapshot, rollups, cost estimates, and alert checks.',
+      title: 'Usage & Readiness',
+      description: 'Readiness snapshot, rollups, costs, and alert checks.',
       href: '/admin/ai-usage',
       tag: 'APB',
       disabled: !apbEnabled,
       hint: apbEnabled ? undefined : 'Enable AI_PLAN_BUILDER_V1 to access.',
     },
     {
-      title: 'AI Audits',
-      description: 'Per-invocation traces: model, fallback, retries, and error code.',
+      title: 'Audit Trail',
+      description: 'Per-invocation traces for model, fallback, retries, and errors.',
       href: '/admin/ai-audits',
       tag: 'APB',
       disabled: !apbEnabled,
       hint: apbEnabled ? undefined : 'Enable AI_PLAN_BUILDER_V1 to access.',
     },
     {
-      title: 'Policy Tuning',
-      description: 'Adjust planning safety/load policy profiles for APB generation.',
+      title: 'Policy Controls',
+      description: 'Tune planning safety, load policy, and generation guardrails.',
       href: '/admin/ai-plan-builder/policy-tuning',
       tag: 'APB',
       disabled: !apbEnabled,
@@ -87,14 +87,20 @@ export default async function AdminHomePage() {
 
   const opsTiles: AdminTile[] = [
     {
-      title: 'Plan Library',
-      description: 'Manage plan-source ingestion and publishing.',
+      title: 'Knowledge Base',
+      description: 'Manage structured training templates, imports, and publish state.',
       href: '/admin/plan-library',
-      tag: 'Ops',
+      tag: 'Knowledge',
+    },
+    {
+      title: 'Source Trust',
+      description: 'Govern which external authorities CoachKit can cite or use during planning support.',
+      href: '/admin/knowledge-sources',
+      tag: 'Knowledge',
     },
     {
       title: 'Strava Sync Monitor',
-      description: 'Inspect cron health and recent provider placement behavior.',
+      description: 'Inspect cron health and athlete import behavior.',
       href: '/admin/strava-sync',
       tag: 'Ops',
     },
@@ -110,8 +116,10 @@ export default async function AdminHomePage() {
     <div className="mx-auto max-w-7xl p-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Admin Console</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Control center for AI operations, telemetry, and platform administration.</p>
+          <h1 className="text-2xl font-semibold">AI Control Plane</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Govern CoachKit AI behavior, knowledge quality, source trust, and operational health from one control surface.
+          </p>
         </div>
         <div className="text-sm text-muted-foreground">Admin: {requester.user.email}</div>
       </div>
@@ -143,7 +151,7 @@ export default async function AdminHomePage() {
       </div>
 
       <div className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">AI & APB Controls</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Engine And Governance</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {aiTiles.map((tile) => (
             <div key={tile.title} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">
@@ -167,7 +175,7 @@ export default async function AdminHomePage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Platform Operations</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Knowledge And Operations</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {opsTiles.map((tile) => (
             <div key={tile.title} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4">

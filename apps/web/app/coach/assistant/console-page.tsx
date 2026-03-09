@@ -238,9 +238,11 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
         <Block>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className={tokens.typography.sectionLabel}>Invisible Assistant Coach</p>
-              <h1 className={tokens.typography.h1}>Assistant Inbox</h1>
-              <p className={cn('mt-1', tokens.typography.bodyMuted)}>High-signal detections with explainable evidence and one-click actions.</p>
+              <p className={tokens.typography.sectionLabel}>Coach Planning Assistant</p>
+              <h1 className={tokens.typography.h1}>Recommendations inbox</h1>
+              <p className={cn('mt-1', tokens.typography.bodyMuted)}>
+                High-signal recommendations, plan changes, and coach communication actions grounded in athlete evidence.
+              </p>
             </div>
 
             <div className="w-full md:w-[280px]">
@@ -261,9 +263,11 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
         <Block>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className={tokens.typography.sectionLabel}>Signals Assistant</p>
-              <h2 className={tokens.typography.h2}>AI Signals And Recommendations</h2>
-              <p className={cn('mt-1', tokens.typography.bodyMuted)}>Evidence-backed detections and safe proposal handoff into the plan workflow.</p>
+              <p className={tokens.typography.sectionLabel}>Coach Suggestions</p>
+              <h2 className={tokens.typography.h2}>Recommended changes and follow-up actions</h2>
+              <p className={cn('mt-1', tokens.typography.bodyMuted)}>
+                CoachKit highlights what needs attention, explains why it matters, and can hand safe changes into the plan workflow.
+              </p>
             </div>
             <div className="w-full md:w-[280px]">
               <SelectField
@@ -283,7 +287,7 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="xl:col-span-5">
-          <Block title="Detections" className="h-full">
+          <Block title="Recommendations queue" className="h-full">
             {loading ? <p className={tokens.typography.bodyMuted}>Loading detections…</p> : null}
             {!loading && items.length === 0 ? <p className={tokens.typography.bodyMuted}>No detections in this state.</p> : null}
 
@@ -329,7 +333,7 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
         </div>
 
         <div className="xl:col-span-7">
-          <Block title="Insight" className="h-full">
+          <Block title="Recommendation detail" className="h-full">
             {detailLoading ? <p className={tokens.typography.bodyMuted}>Loading detail…</p> : null}
             {!detailLoading && !detail ? <p className={tokens.typography.bodyMuted}>Select a detection to view evidence and actions.</p> : null}
 
@@ -349,7 +353,7 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
                 </div>
 
                 <div>
-                  <p className={tokens.typography.sectionLabel}>What I am seeing</p>
+                  <p className={tokens.typography.sectionLabel}>Why CoachKit is surfacing this</p>
                   <div className="mt-2 space-y-2">
                     {summaryBullets.map((line, index) => (
                       <p key={`${line}-${index}`} className={tokens.typography.body}>
@@ -367,7 +371,7 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
                 </div>
 
                 <div>
-                  <p className={tokens.typography.sectionLabel}>Recommended actions</p>
+                  <p className={tokens.typography.sectionLabel}>Recommended next actions</p>
                   <div className="mt-2 space-y-2">
                     {detail.recommendations.length === 0 ? <p className={tokens.typography.bodyMuted}>No recommendations available.</p> : null}
                     {detail.recommendations.map((recommendation) => (
@@ -451,7 +455,7 @@ export default function AssistantConsolePage({ athleteId = null, embedded = fals
                               })
                             }
                           >
-                            {busyAction === 'discuss' ? 'Preparing…' : 'Discuss in chat'}
+                            {busyAction === 'discuss' ? 'Preparing…' : 'Ask CoachKit'}
                           </Button>
                         </div>
                       </div>

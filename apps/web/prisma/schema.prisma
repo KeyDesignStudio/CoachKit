@@ -458,13 +458,16 @@ model User {
   athleteBriefs            AthleteBrief[]            @relation("CoachToAthleteBriefs")
 
   // AI Plan Builder (Tranche 10)
-  aiInvocationAudits       AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
-  aiLlmRateLimitEvents     AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
-  adminAuditEvents         AdminAuditEvent[]        @relation("AdminAuditEventActor")
-  assistantDetections      AssistantDetection[]
-  assistantActions         AssistantAction[]
-  challenges               Challenge[]
-  challengeSeries          ChallengeSeries[]
+  aiInvocationAudits      AiInvocationAudit[]      @relation("AiInvocationAuditCoach")
+  aiLlmRateLimitEvents    AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventCoach")
+  adminAuditEvents        AdminAuditEvent[]        @relation("AdminAuditEventActor")
+  assistantDetections     AssistantDetection[]
+  assistantActions        AssistantAction[]
+  challenges              Challenge[]
+  challengeSeries         ChallengeSeries[]
+  planTemplateUsageTraces PlanTemplateUsageTrace[]
+  exemplarWeightHistories ExemplarWeightHistory[]
+  apbOutcomeSignals       ApbOutcomeSignal[]
 
   @@index([role])
 }
@@ -540,26 +543,26 @@ model WorkoutLibraryUsage {
 }
 
 model AthleteProfile {
-  userId                  String                @id
-  coachId                 String
+  userId         String    @id
+  coachId        String
   // Identity (canonical)
-  firstName        String?
-  lastName         String?
-  dateOfBirth      DateTime?
-  gender           String?
-  timezone         String?
-  trainingSuburb   String?
-  email            String?
-  mobilePhone      String?
+  firstName      String?
+  lastName       String?
+  dateOfBirth    DateTime?
+  gender         String?
+  timezone       String?
+  trainingSuburb String?
+  email          String?
+  mobilePhone    String?
 
   // Sport context
-  disciplines      String[] // e.g. ["RUN","BIKE","SWIM"]
-  primaryGoal      String?
-  secondaryGoals   String[] @default([])
-  focus            String?
-  eventName        String?
-  eventDate        DateTime?
-  timelineWeeks    Int?
+  disciplines    String[] // e.g. ["RUN","BIKE","SWIM"]
+  primaryGoal    String?
+  secondaryGoals String[]  @default([])
+  focus          String?
+  eventName      String?
+  eventDate      DateTime?
+  timelineWeeks  Int?
 
   // Training profile
   experienceLevel     String?
@@ -611,16 +614,16 @@ model AthleteProfile {
   user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
   coach User @relation("CoachToAthletes", fields: [coachId], references: [id], onDelete: Restrict)
 
-  calendarItems       CalendarItem[]
-  completedActivities CompletedActivity[]
-  painReports         PainReport[]
-  squadMemberships    SquadMember[]
-  groupSessionTargets GroupSessionTarget[]
-  planWeeks           PlanWeek[]
-  coachJournalEntries CoachJournalEntry[]
-  stravaConnection    StravaConnection?
-  stravaSyncIntents   StravaSyncIntent[]
-  externalConnections ExternalConnection[]
+  calendarItems         CalendarItem[]
+  completedActivities   CompletedActivity[]
+  painReports           PainReport[]
+  squadMemberships      SquadMember[]
+  groupSessionTargets   GroupSessionTarget[]
+  planWeeks             PlanWeek[]
+  coachJournalEntries   CoachJournalEntry[]
+  stravaConnection      StravaConnection?
+  stravaSyncIntents     StravaSyncIntent[]
+  externalConnections   ExternalConnection[]
   externalWebhookEvents ExternalWebhookEvent[]
 
   // AI Plan Builder (v1)
@@ -644,8 +647,10 @@ model AthleteProfile {
   athleteBriefs     AthleteBrief[]
 
   // AI Plan Builder (Tranche 10)
-  aiInvocationAudits   AiInvocationAudit[]   @relation("AiInvocationAuditAthlete")
-  aiLlmRateLimitEvents AiLlmRateLimitEvent[] @relation("AiLlmRateLimitEventAthlete")
+  aiInvocationAudits      AiInvocationAudit[]      @relation("AiInvocationAuditAthlete")
+  aiLlmRateLimitEvents    AiLlmRateLimitEvent[]    @relation("AiLlmRateLimitEventAthlete")
+  planTemplateUsageTraces PlanTemplateUsageTrace[]
+  apbOutcomeSignals       ApbOutcomeSignal[]
 
   @@index([coachId])
 }
@@ -703,9 +708,9 @@ model Challenge {
   publishedAt         DateTime?
   completedAt         DateTime?
 
-  coach        User                 @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  squad        Squad                @relation(fields: [squadId], references: [id], onDelete: Cascade)
-  series       ChallengeSeries?     @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  coach        User                   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  squad        Squad                  @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  series       ChallengeSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   participants ChallengeParticipant[]
   badgeAwards  BadgeAward[]
 
@@ -715,16 +720,16 @@ model Challenge {
 }
 
 model ChallengeParticipant {
-  id                         String   @id @default(cuid())
+  id                         String    @id @default(cuid())
   challengeId                String
   athleteId                  String
-  joinedAt                   DateTime @default(now())
-  score                      Float    @default(0)
-  sessionsCount              Int      @default(0)
+  joinedAt                   DateTime  @default(now())
+  score                      Float     @default(0)
+  sessionsCount              Int       @default(0)
   lastContributingActivityAt DateTime?
   rank                       Int?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   challenge Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
@@ -735,11 +740,11 @@ model ChallengeParticipant {
 }
 
 model BadgeAward {
-  id          String            @id @default(cuid())
+  id          String             @id @default(cuid())
   athleteId   String
   challengeId String
   type        ChallengeBadgeType
-  awardedAt   DateTime          @default(now())
+  awardedAt   DateTime           @default(now())
 
   athlete   AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
   challenge Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -873,53 +878,53 @@ model AthletePlanInstanceItem {
 }
 
 model PlanSource {
-  id             String         @id @default(cuid())
-  type           PlanSourceType
-  title          String
-  sport          PlanSport
-  distance       PlanDistance
-  level          PlanLevel
-  durationWeeks  Int
-  season         PlanSeason?
-  author         String?
-  publisher      String?
-  licenseText    String?
-  sourceUrl      String?
-  sourceFilePath String?
-  layoutFamilyId String?
+  id                        String         @id @default(cuid())
+  type                      PlanSourceType
+  title                     String
+  sport                     PlanSport
+  distance                  PlanDistance
+  level                     PlanLevel
+  durationWeeks             Int
+  season                    PlanSeason?
+  author                    String?
+  publisher                 String?
+  licenseText               String?
+  sourceUrl                 String?
+  sourceFilePath            String?
+  layoutFamilyId            String?
   storedDocumentUrl         String?
   storedDocumentKey         String?
   storedDocumentContentType String?
   storedDocumentUploadedAt  DateTime?
-  checksumSha256 String         @unique
-  isActive       Boolean        @default(false)
-  rawText        String
-  rawJson        Json?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  checksumSha256            String         @unique
+  isActive                  Boolean        @default(false)
+  rawText                   String
+  rawJson                   Json?
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
 
-  layoutFamily  PlanSourceLayoutFamily?  @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
-  versions      PlanSourceVersion[]
+  layoutFamily   PlanSourceLayoutFamily?   @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
+  versions       PlanSourceVersion[]
   extractionRuns PlanSourceExtractionRun[]
-  annotations   PlanSourceAnnotation[]
+  annotations    PlanSourceAnnotation[]
 
   @@index([layoutFamilyId])
 }
 
 model PlanSourceLayoutFamily {
-  id               String   @id @default(cuid())
-  slug             String   @unique
-  name             String
-  familyType       String
-  description      String?
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  name               String
+  familyType         String
+  description        String?
   extractorHintsJson Json?
-  rulesJson        Json?
-  isPreset         Boolean  @default(false)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  rulesJson          Json?
+  isPreset           Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  planSources   PlanSource[]
+  planSources    PlanSource[]
   extractionRuns PlanSourceExtractionRun[]
 }
 
@@ -930,9 +935,9 @@ model PlanSourceVersion {
   extractionMetaJson Json
   createdAt          DateTime @default(now())
 
-  planSource PlanSource             @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
-  weeks      PlanSourceWeekTemplate[]
-  rules      PlanSourceRule[]
+  planSource     PlanSource                @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
+  weeks          PlanSourceWeekTemplate[]
+  rules          PlanSourceRule[]
   extractionRuns PlanSourceExtractionRun[]
 
   @@unique([planSourceId, version])
@@ -940,23 +945,23 @@ model PlanSourceVersion {
 }
 
 model PlanSourceExtractionRun {
-  id                    String                           @id @default(cuid())
-  planSourceId          String
-  planSourceVersionId   String?
-  layoutFamilyId        String?
-  extractorVersion      String
-  reviewStatus          PlanSourceExtractionReviewStatus @default(NEEDS_REVIEW)
-  summaryJson           Json?
-  confidence            Float?
-  warningCount          Int                              @default(0)
-  sessionCount          Int                              @default(0)
-  weekCount             Int                              @default(0)
-  createdAt             DateTime                         @default(now())
-  updatedAt             DateTime                         @updatedAt
+  id                  String                           @id @default(cuid())
+  planSourceId        String
+  planSourceVersionId String?
+  layoutFamilyId      String?
+  extractorVersion    String
+  reviewStatus        PlanSourceExtractionReviewStatus @default(NEEDS_REVIEW)
+  summaryJson         Json?
+  confidence          Float?
+  warningCount        Int                              @default(0)
+  sessionCount        Int                              @default(0)
+  weekCount           Int                              @default(0)
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
 
-  planSource        PlanSource             @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
-  planSourceVersion PlanSourceVersion?     @relation(fields: [planSourceVersionId], references: [id], onDelete: SetNull)
-  layoutFamily      PlanSourceLayoutFamily? @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
+  planSource        PlanSource                   @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
+  planSourceVersion PlanSourceVersion?           @relation(fields: [planSourceVersionId], references: [id], onDelete: SetNull)
+  layoutFamily      PlanSourceLayoutFamily?      @relation(fields: [layoutFamilyId], references: [id], onDelete: SetNull)
   reviews           PlanSourceExtractionReview[]
 
   @@index([planSourceId, createdAt])
@@ -982,17 +987,17 @@ model PlanSourceExtractionReview {
 }
 
 model PlanSourceAnnotation {
-  id             String                   @id @default(cuid())
-  planSourceId   String
-  pageNumber     Int
-  annotationType PlanSourceAnnotationType
-  label          String?
-  bboxJson       Json
-  note           String?
+  id              String                   @id @default(cuid())
+  planSourceId    String
+  pageNumber      Int
+  annotationType  PlanSourceAnnotationType
+  label           String?
+  bboxJson        Json
+  note            String?
   createdByUserId String
-  createdByEmail String
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
+  createdByEmail  String
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
   planSource PlanSource @relation(fields: [planSourceId], references: [id], onDelete: Cascade)
 
@@ -1001,7 +1006,7 @@ model PlanSourceAnnotation {
 }
 
 model PlanSourceWeekTemplate {
-  id                  String   @id @default(cuid())
+  id                  String     @id @default(cuid())
   planSourceVersionId String
   weekIndex           Int
   phase               PlanPhase?
@@ -1009,7 +1014,7 @@ model PlanSourceWeekTemplate {
   totalSessions       Int?
   notes               String?
 
-  planSourceVersion PlanSourceVersion          @relation(fields: [planSourceVersionId], references: [id], onDelete: Cascade)
+  planSourceVersion PlanSourceVersion           @relation(fields: [planSourceVersionId], references: [id], onDelete: Cascade)
   sessions          PlanSourceSessionTemplate[]
 
   @@unique([planSourceVersionId, weekIndex])
@@ -1017,22 +1022,22 @@ model PlanSourceWeekTemplate {
 }
 
 model PlanSourceSessionTemplate {
-  id                      String   @id @default(cuid())
+  id                       String               @id @default(cuid())
   planSourceWeekTemplateId String
-  ordinal                 Int
-  dayOfWeek               Int?
-  discipline              PlanSourceDiscipline
-  sessionType             String
-  title                   String?
-  durationMinutes         Int?
-  distanceKm              Float?
-  intensityType           String?
-  intensityTargetJson     Json?
-  recipeV2Json           Json?
-  parserConfidence       Float?
-  parserWarningsJson     Json?
-  structureJson           Json?
-  notes                   String?
+  ordinal                  Int
+  dayOfWeek                Int?
+  discipline               PlanSourceDiscipline
+  sessionType              String
+  title                    String?
+  durationMinutes          Int?
+  distanceKm               Float?
+  intensityType            String?
+  intensityTargetJson      Json?
+  recipeV2Json             Json?
+  parserConfidence         Float?
+  parserWarningsJson       Json?
+  structureJson            Json?
+  notes                    String?
 
   planSourceWeekTemplate PlanSourceWeekTemplate @relation(fields: [planSourceWeekTemplateId], references: [id], onDelete: Cascade)
 
@@ -1041,32 +1046,33 @@ model PlanSourceSessionTemplate {
 }
 
 model CoachWorkoutExemplar {
-  id                String                         @id @default(cuid())
-  coachId           String
-  athleteId         String?
-  sourceType        CoachWorkoutExemplarSourceType @default(COACH_EDIT)
-  sourceDraftId     String?
-  sourceDraftSessionId String?
-  fingerprintSha256 String
-  discipline        String
-  sessionType       String
-  title             String?
-  durationMinutes   Int?
-  distanceKm        Float?
-  objective         String?
-  notes             String?
-  recipeV2Json      Json
-  detailJson        Json?
-  tags              String[]                       @default([])
-  usageCount        Int                            @default(0)
-  positiveFeedbackCount Int                        @default(0)
-  editFeedbackCount Int                            @default(0)
-  isActive          Boolean                        @default(true)
-  lastUsedAt        DateTime?
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
+  id                    String                         @id @default(cuid())
+  coachId               String
+  athleteId             String?
+  sourceType            CoachWorkoutExemplarSourceType @default(COACH_EDIT)
+  sourceDraftId         String?
+  sourceDraftSessionId  String?
+  fingerprintSha256     String
+  discipline            String
+  sessionType           String
+  title                 String?
+  durationMinutes       Int?
+  distanceKm            Float?
+  objective             String?
+  notes                 String?
+  recipeV2Json          Json
+  detailJson            Json?
+  tags                  String[]                       @default([])
+  usageCount            Int                            @default(0)
+  positiveFeedbackCount Int                            @default(0)
+  editFeedbackCount     Int                            @default(0)
+  isActive              Boolean                        @default(true)
+  lastUsedAt            DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
 
-  feedback CoachWorkoutExemplarFeedback[]
+  feedback      CoachWorkoutExemplarFeedback[]
+  weightHistory ExemplarWeightHistory[]
 
   @@unique([coachId, fingerprintSha256])
   @@index([coachId, discipline, sessionType, isActive])
@@ -1074,7 +1080,7 @@ model CoachWorkoutExemplar {
 }
 
 model CoachWorkoutExemplarFeedback {
-  id             String                          @id @default(cuid())
+  id             String                           @id @default(cuid())
   exemplarId     String
   coachId        String
   athleteId      String?
@@ -1082,7 +1088,7 @@ model CoachWorkoutExemplarFeedback {
   draftSessionId String?
   feedbackType   CoachWorkoutExemplarFeedbackType
   note           String?
-  createdAt      DateTime                        @default(now())
+  createdAt      DateTime                         @default(now())
 
   exemplar CoachWorkoutExemplar @relation(fields: [exemplarId], references: [id], onDelete: Cascade)
 
@@ -1091,15 +1097,15 @@ model CoachWorkoutExemplarFeedback {
 }
 
 model PlanSourceRule {
-  id                  String    @id @default(cuid())
+  id                  String     @id @default(cuid())
   planSourceVersionId String
   ruleType            RuleType
   phase               PlanPhase?
   appliesJson         Json
   ruleJson            Json
   explanation         String
-  priority            Int       @default(1)
-  createdAt           DateTime  @default(now())
+  priority            Int        @default(1)
+  createdAt           DateTime   @default(now())
 
   planSourceVersion PlanSourceVersion @relation(fields: [planSourceVersionId], references: [id], onDelete: Cascade)
 
@@ -1108,20 +1114,20 @@ model PlanSourceRule {
 }
 
 model PlanLibraryImportJob {
-  id           String                     @id @default(cuid())
-  sourceType   PlanLibraryImportSourceType
-  status       PlanLibraryImportJobStatus @default(PENDING)
-  createdBy    String
-  createdAt    DateTime                   @default(now())
-  completedAt  DateTime?
-  errorJson    Json?
-  rawFileUrl   String?
-  rawFileName  String?
-  checksum     String?
+  id             String                      @id @default(cuid())
+  sourceType     PlanLibraryImportSourceType
+  status         PlanLibraryImportJobStatus  @default(PENDING)
+  createdBy      String
+  createdAt      DateTime                    @default(now())
+  completedAt    DateTime?
+  errorJson      Json?
+  rawFileUrl     String?
+  rawFileName    String?
+  checksum       String?
   parseStatsJson Json?
-  draftJson    Json?
-  templateId   String?
-  template     PlanLibraryTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  draftJson      Json?
+  templateId     String?
+  template       PlanLibraryTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([status, createdAt])
@@ -1129,7 +1135,7 @@ model PlanLibraryImportJob {
 }
 
 model PlanLibraryTemplate {
-  id            String                         @id @default(cuid())
+  id            String                          @id @default(cuid())
   title         String
   sport         PlanSport
   distance      PlanDistance
@@ -1137,18 +1143,19 @@ model PlanLibraryTemplate {
   durationWeeks Int
   author        String?
   publisher     String?
-  isPublished   Boolean                        @default(false)
+  isPublished   Boolean                         @default(false)
   publishedAt   DateTime?
   qualityScore  Float?
   reviewStatus  PlanLibraryTemplateReviewStatus @default(DRAFT)
   createdBy     String
-  createdAt     DateTime                       @default(now())
-  updatedAt     DateTime                       @updatedAt
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
 
   weeks          PlanLibraryTemplateWeek[]
   validationRuns PlanLibraryTemplateValidationRun[]
   exemplarLinks  PlanLibraryTemplateExemplarLink[]
   importJobs     PlanLibraryImportJob[]
+  usageTraces    PlanTemplateUsageTrace[]
 
   @@index([isPublished, reviewStatus, updatedAt])
   @@index([sport, distance, level, durationWeeks])
@@ -1164,7 +1171,7 @@ model PlanLibraryTemplateWeek {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  planTemplate PlanLibraryTemplate         @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  planTemplate PlanLibraryTemplate          @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
   sessions     PlanLibraryTemplateSession[]
 
   @@unique([planTemplateId, weekIndex])
@@ -1172,7 +1179,7 @@ model PlanLibraryTemplateWeek {
 }
 
 model PlanLibraryTemplateSession {
-  id                  String   @id @default(cuid())
+  id                  String               @id @default(cuid())
   planTemplateWeekId  String
   dayOfWeek           Int
   discipline          PlanSourceDiscipline
@@ -1185,9 +1192,9 @@ model PlanLibraryTemplateSession {
   recipeV2Json        Json?
   notes               String?
   sourceConfidence    Float?
-  needsReview         Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  needsReview         Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   planTemplateWeek PlanLibraryTemplateWeek @relation(fields: [planTemplateWeekId], references: [id], onDelete: Cascade)
 
@@ -1209,18 +1216,91 @@ model PlanLibraryTemplateValidationRun {
 }
 
 model PlanLibraryTemplateExemplarLink {
-  id               String   @id @default(cuid())
-  planTemplateId   String
-  planSessionId    String?
-  retrievalKey     String
-  retrievalWeight  Float    @default(1)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  planTemplateId  String
+  planSessionId   String?
+  retrievalKey    String
+  retrievalWeight Float    @default(1)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
 
   planTemplate PlanLibraryTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
 
   @@index([planTemplateId, isActive])
   @@index([retrievalKey, isActive])
+}
+
+model PlanTemplateUsageTrace {
+  id                 String    @id @default(cuid())
+  draftId            String
+  templateId         String
+  athleteId          String
+  coachId            String
+  influenceScore     Float
+  matchScore         Float?
+  sourceOrigin       String?
+  matchedSignalsJson Json?
+  feedbackCount      Int       @default(0)
+  outcomeScore       Float?
+  lastOutcomeAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  draft    AiPlanDraft         @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  template PlanLibraryTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  athlete  AthleteProfile      @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach    User                @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@unique([draftId, templateId])
+  @@index([templateId, createdAt])
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
+}
+
+model ExemplarWeightHistory {
+  id             String   @id @default(cuid())
+  exemplarId     String?
+  coachId        String
+  discipline     String
+  sessionType    String
+  retrievalKey   String?
+  oldWeight      Float
+  newWeight      Float
+  delta          Float
+  reason         String
+  feedbackType   String?
+  draftId        String?
+  draftSessionId String?
+  createdAt      DateTime @default(now())
+
+  exemplar CoachWorkoutExemplar? @relation(fields: [exemplarId], references: [id], onDelete: SetNull)
+  coach    User                  @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@index([coachId, createdAt])
+  @@index([exemplarId, createdAt])
+  @@index([discipline, sessionType, createdAt])
+}
+
+model TrustedKnowledgeSource {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  title            String
+  url              String   @unique
+  category         String
+  authority        String
+  trustTier        Int      @default(1)
+  planningEnabled  Boolean  @default(false)
+  qaEnabled        Boolean  @default(true)
+  citationRequired Boolean  @default(true)
+  summaryText      String?
+  tags             String[] @default([])
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([isActive, qaEnabled])
+  @@index([isActive, planningEnabled])
+  @@index([category, trustTier])
 }
 
 model GroupSession {
@@ -1328,26 +1408,26 @@ model CalendarItem {
 }
 
 model CompletedActivity {
-  id                 String           @id @default(cuid())
-  athleteId          String
-  calendarItemId     String?
-  source             CompletionSource
-  externalProvider   String?
-  externalActivityId String?
-  startTime          DateTime
-  durationMinutes    Int
-  distanceKm         Float?
-  rpe                Int?
-  notes              String?
-  painFlag           Boolean          @default(false)
-  confirmedAt        DateTime?
-  metricsJson        Json?
-  matchConfidence    String?
-  matchScore         Int?
-  matchDayDiff       Int?
+  id                   String           @id @default(cuid())
+  athleteId            String
+  calendarItemId       String?
+  source               CompletionSource
+  externalProvider     String?
+  externalActivityId   String?
+  startTime            DateTime
+  durationMinutes      Int
+  distanceKm           Float?
+  rpe                  Int?
+  notes                String?
+  painFlag             Boolean          @default(false)
+  confirmedAt          DateTime?
+  metricsJson          Json?
+  matchConfidence      String?
+  matchScore           Int?
+  matchDayDiff         Int?
   matchTimeDiffMinutes Int?
-  fileUrl            String?
-  createdAt          DateTime         @default(now())
+  fileUrl              String?
+  createdAt            DateTime         @default(now())
 
   athlete      AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
   calendarItem CalendarItem?  @relation(fields: [calendarItemId], references: [id], onDelete: SetNull)
@@ -1399,11 +1479,11 @@ model AssistantPatternDefinition {
 }
 
 model AssistantDetection {
-  id                  String                 @id @default(cuid())
+  id                  String                  @id @default(cuid())
   athleteId           String
   coachId             String
   patternDefinitionId String
-  detectedAt          DateTime               @default(now())
+  detectedAt          DateTime                @default(now())
   periodStart         DateTime
   periodEnd           DateTime
   severity            AssistantSeverity
@@ -1412,16 +1492,16 @@ model AssistantDetection {
   state               AssistantDetectionState @default(NEW)
   dismissReason       String?
   snoozedUntil        DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 
-  athlete           AthleteProfile           @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
-  coach             User                     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete           AthleteProfile             @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  coach             User                       @relation(fields: [coachId], references: [id], onDelete: Cascade)
   patternDefinition AssistantPatternDefinition @relation(fields: [patternDefinitionId], references: [id], onDelete: Restrict)
 
   recommendations AssistantRecommendation[]
-  llmOutputs       AssistantLlmOutput[]
-  actions          AssistantAction[]
+  llmOutputs      AssistantLlmOutput[]
+  actions         AssistantAction[]
 
   @@index([coachId, state, detectedAt])
   @@index([athleteId, detectedAt])
@@ -1466,8 +1546,8 @@ model AssistantAction {
   actionPayload Json?
   createdAt     DateTime            @default(now())
 
-  coach     User              @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  athlete   AthleteProfile    @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
+  coach     User               @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  athlete   AthleteProfile     @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
   detection AssistantDetection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
 
   @@index([coachId, createdAt])
@@ -1642,17 +1722,17 @@ model StravaSyncIntent {
 }
 
 model ExternalConnection {
-  id               String           @id @default(cuid())
-  athleteId        String
-  provider         ExternalProvider
+  id                String           @id @default(cuid())
+  athleteId         String
+  provider          ExternalProvider
   externalAthleteId String
-  accessToken      String
-  refreshToken     String?
-  expiresAt        DateTime?
-  scope            String?
-  lastSyncAt       DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  accessToken       String
+  refreshToken      String?
+  expiresAt         DateTime?
+  scope             String?
+  lastSyncAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Cascade)
 
@@ -1662,7 +1742,7 @@ model ExternalConnection {
 }
 
 model ExternalWebhookEvent {
-  id                 String                    @id @default(cuid())
+  id                 String                     @id @default(cuid())
   provider           ExternalProvider
   athleteId          String?
   externalAthleteId  String?
@@ -1685,19 +1765,19 @@ model ExternalWebhookEvent {
 }
 
 model CronRun {
-  id               String   @id @default(cuid())
-  kind             String
-  status           String
-  startedAt        DateTime @default(now())
-  finishedAt       DateTime?
-  durationMs       Int?
-  processedAthletes Int?
-  importedActivities Int?
-  matchedActivities Int?
+  id                  String    @id @default(cuid())
+  kind                String
+  status              String
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+  durationMs          Int?
+  processedAthletes   Int?
+  importedActivities  Int?
+  matchedActivities   Int?
   unplannedActivities Int?
-  errorCount       Int?
-  firstError       String?
-  summaryJson      Json?
+  errorCount          Int?
+  firstError          String?
+  summaryJson         Json?
 
   createdAt DateTime @default(now())
 
@@ -1800,13 +1880,13 @@ model AthleteBrief {
   athleteId String // AthleteProfile.userId
   coachId   String // User.id
 
-  generatedAt DateTime @default(now())
-  inputHash   String
-  briefJson   Json
-  summaryText String?
-  riskFlags   String[] @default([])
+  generatedAt    DateTime @default(now())
+  inputHash      String
+  briefJson      Json
+  summaryText    String?
+  riskFlags      String[] @default([])
   sourcesPresent Json?
-  aiMode      String?
+  aiMode         String?
 
   updatedAt DateTime @updatedAt
 
@@ -1879,8 +1959,10 @@ model AiPlanDraft {
 
   publishAcks AiPlanPublishAck[]
 
-  feedback AthleteSessionFeedback[]
-  triggers AdaptationTrigger[]
+  feedback            AthleteSessionFeedback[]
+  triggers            AdaptationTrigger[]
+  outcomeSignals      ApbOutcomeSignal[]
+  templateUsageTraces PlanTemplateUsageTrace[]
 
   @@index([athleteId, createdAt])
   @@index([coachId, createdAt])
@@ -1950,6 +2032,31 @@ model AthleteSessionFeedback {
   @@index([athleteId, createdAt])
   @@index([draftId, createdAt])
   @@index([sessionId, createdAt])
+}
+
+model ApbOutcomeSignal {
+  id                   String   @id @default(cuid())
+  draftId              String
+  athleteId            String
+  coachId              String
+  sessionFeedbackCount Int      @default(0)
+  completionRate       Float?
+  skipRate             Float?
+  avgRpe               Float?
+  sorenessRate         Float?
+  tooHardRate          Float?
+  outcomeScore         Float?
+  summaryJson          Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  draft   AiPlanDraft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  athlete AthleteProfile @relation(fields: [athleteId], references: [userId], onDelete: Restrict)
+  coach   User           @relation(fields: [coachId], references: [id], onDelete: Restrict)
+
+  @@unique([draftId])
+  @@index([athleteId, createdAt])
+  @@index([coachId, createdAt])
 }
 
 model AdaptationTrigger {
@@ -2022,10 +2129,10 @@ model AiPlanDraftSession {
 
   feedback AthleteSessionFeedback[]
 
+  @@unique([draftId, weekIndex, ordinal])
   @@index([draftId, id])
   @@index([draftId, detailInputHash])
   @@index([draftId, weekIndex])
-  @@unique([draftId, weekIndex, ordinal])
 }
 
 model PlanChangeProposal {
@@ -2101,11 +2208,11 @@ model PlanChangeAudit {
 // DB-backed LLM rate limiting + metadata-only invocation audits.
 
 model AiLlmRateLimitEvent {
-  id         String               @id @default(cuid())
+  id         String                @id @default(cuid())
   actorType  AiInvocationActorType
   actorId    String
   capability String
-  createdAt  DateTime             @default(now())
+  createdAt  DateTime              @default(now())
 
   coachId   String?
   athleteId String?
@@ -2120,30 +2227,30 @@ model AiLlmRateLimitEvent {
 }
 
 model AiInvocationAudit {
-  id            String               @id @default(cuid())
-  actorType     AiInvocationActorType
-  actorId       String
-  coachId       String?
-  athleteId     String?
+  id        String                @id @default(cuid())
+  actorType AiInvocationActorType
+  actorId   String
+  coachId   String?
+  athleteId String?
 
   capability    String
   specVersion   String
   effectiveMode String
 
-  provider      String
-  model         String?
+  provider String
+  model    String?
 
-  inputHash     String
-  outputHash    String
+  inputHash  String
+  outputHash String
 
-  durationMs    Int
+  durationMs      Int
   maxOutputTokens Int?
-  timeoutMs     Int?
-  retryCount    Int
-  fallbackUsed  Boolean              @default(false)
-  errorCode     String?
+  timeoutMs       Int?
+  retryCount      Int
+  fallbackUsed    Boolean @default(false)
+  errorCode       String?
 
-  createdAt     DateTime             @default(now())
+  createdAt DateTime @default(now())
 
   coach   User?           @relation("AiInvocationAuditCoach", fields: [coachId], references: [id], onDelete: SetNull)
   athlete AthleteProfile? @relation("AiInvocationAuditAthlete", fields: [athleteId], references: [userId], onDelete: SetNull)
@@ -2155,27 +2262,27 @@ model AiInvocationAudit {
 }
 
 model AiInvocationDailyRollup {
-  id              String   @id @default(cuid())
-  date            DateTime // UTC day, stored at midnight UTC
-  provider        String
-  model           String
-  capability      String
-  effectiveMode   String
+  id            String   @id @default(cuid())
+  date          DateTime // UTC day, stored at midnight UTC
+  provider      String
+  model         String
+  capability    String
+  effectiveMode String
 
   callCount       Int
   fallbackCount   Int
   errorCount      Int
   retryCountTotal Int
 
-  avgDurationMs   Int
-  p95DurationMs   Int?
+  avgDurationMs Int
+  p95DurationMs Int?
 
-  maxOutputTokensAvg   Int
+  maxOutputTokensAvg    Int
   estimatedOutputTokens Int
   estimatedCostUsd      Float
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([date, provider, model, capability, effectiveMode])
   @@index([date])
@@ -2183,23 +2290,23 @@ model AiInvocationDailyRollup {
 }
 
 model AiUsageAlert {
-  id             String               @id @default(cuid())
-  createdAt      DateTime             @default(now())
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
   dateRangeStart DateTime
   dateRangeEnd   DateTime
 
   // NOTE: Postgres UNIQUE indexes treat NULLs as distinct, so a composite unique
   // over nullable columns will not de-dupe alerts where provider/model/capability
   // are NULL. Use a stable, non-null unique key instead.
-  dedupeKey      String               @unique
+  dedupeKey String @unique
 
-  severity       AiUsageAlertSeverity
-  alertType      AiUsageAlertType
-  scope          AiUsageAlertScope
+  severity  AiUsageAlertSeverity
+  alertType AiUsageAlertType
+  scope     AiUsageAlertScope
 
-  capability     String?
-  provider       String?
-  model          String?
+  capability String?
+  provider   String?
+  model      String?
 
   observedValue  Float
   thresholdValue Float
@@ -2207,25 +2314,26 @@ model AiUsageAlert {
 
   acknowledgedAt DateTime?
   acknowledgedBy String?
+
   @@index([createdAt(sort: Desc)])
   @@index([alertType, createdAt(sort: Desc)])
   @@index([dateRangeStart])
 }
 
 model AdminAuditEvent {
-  id           String           @id @default(cuid())
-  createdAt    DateTime         @default(now())
-  action       AdminAuditAction
-  tableName    String
-  fieldName    String
-  recordId     String
-  changeText   String
-  beforeValue  Json?
-  afterValue   Json?
+  id          String           @id @default(cuid())
+  createdAt   DateTime         @default(now())
+  action      AdminAuditAction
+  tableName   String
+  fieldName   String
+  recordId    String
+  changeText  String
+  beforeValue Json?
+  afterValue  Json?
 
-  actorUserId  String?
-  actorEmail   String?
-  actorRole    UserRole?
+  actorUserId String?
+  actorEmail  String?
+  actorRole   UserRole?
 
   actor User? @relation("AdminAuditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 

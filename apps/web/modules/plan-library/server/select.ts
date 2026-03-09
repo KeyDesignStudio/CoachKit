@@ -11,6 +11,11 @@ export type PlanSourceMatch = {
   semanticScore: number;
   metadataScore: number;
   sourcePriorityScore: number;
+  athleteFitScore: number;
+  templateQualityScore: number;
+  exemplarBoostScore: number;
+  outcomeBoostScore: number;
+  durationDeltaWeeks: number;
   sourceOrigin: 'coach' | 'global';
   reasons: string[];
 };
@@ -105,6 +110,18 @@ export async function selectPlanSources(params: {
           retrievalWeight: true,
         },
       },
+      usageTraces: {
+        where: {
+          outcomeScore: {
+            not: null,
+          },
+        },
+        select: {
+          outcomeScore: true,
+          feedbackCount: true,
+        },
+        take: 50,
+      },
       weeks: {
         include: {
           sessions: {
@@ -123,19 +140,23 @@ export async function selectPlanSources(params: {
   for (const template of templates) {
     let metadataScore = 0;
     const reasons: string[] = [];
+    let athleteFitScore = 0;
 
     if (inferredSport && template.sport === inferredSport) {
       metadataScore += 3;
+      athleteFitScore += 3;
       reasons.push('sport match');
     }
 
     if (inferredDistance && template.distance === inferredDistance) {
       metadataScore += 3;
+      athleteFitScore += 3;
       reasons.push('distance match');
     }
 
     if (inferredLevel && template.level === inferredLevel) {
       metadataScore += 2;
+      athleteFitScore += 2;
       reasons.push('level match');
     }
 
@@ -146,6 +167,7 @@ export async function selectPlanSources(params: {
     if (params.durationWeeks > 0) {
       const diff = Math.abs(template.durationWeeks - params.durationWeeks);
       metadataScore += Math.max(0, 3 - Math.min(3, diff));
+      athleteFitScore += Math.max(0, 3 - Math.min(3, diff));
       reasons.push(`duration delta ${diff}w`);
     }
 
@@ -184,11 +206,22 @@ export async function selectPlanSources(params: {
       .slice(0, 9000);
     const sourceTokens = tokenize(semanticCorpus);
     const semanticScore = queryTokens.length ? jaccard(queryTokens, sourceTokens) : 0;
-    metadataScore += Math.max(0, Math.min(4, Number(template.qualityScore ?? 0) * 4));
+    const templateQualityScore = Math.max(0, Math.min(4, Number(template.qualityScore ?? 0) * 4));
+    const outcomeSamples = template.usageTraces
+      .map((trace) => (typeof trace.outcomeScore === 'number' ? trace.outcomeScore : null))
+      .filter((value): value is number => value != null);
+    const averageOutcomeScore =
+      outcomeSamples.length > 0 ? outcomeSamples.reduce((sum, value) => sum + value, 0) / outcomeSamples.length : null;
+    const outcomeBoostScore =
+      averageOutcomeScore == null ? 0 : Math.max(-1.5, Math.min(2.5, (averageOutcomeScore - 0.55) * 4));
+    metadataScore += templateQualityScore;
     reasons.push(`quality ${Math.round((template.qualityScore ?? 0) * 100)}%`);
+    if (averageOutcomeScore != null) {
+      reasons.push(`outcomes ${Math.round(averageOutcomeScore * 100)}%`);
+    }
 
     if (semanticScore >= 0.08) reasons.push(`semantic ${(semanticScore * 100).toFixed(0)}%`);
-    const score = metadataScore + semanticScore * 4 + sourcePriorityScore + exemplarBoostScore;
+    const score = metadataScore + semanticScore * 4 + sourcePriorityScore + exemplarBoostScore + outcomeBoostScore;
 
     matches.push({
       planSourceVersionId: template.id,
@@ -198,6 +231,11 @@ export async function selectPlanSources(params: {
       semanticScore,
       metadataScore,
       sourcePriorityScore,
+      athleteFitScore,
+      templateQualityScore,
+      exemplarBoostScore,
+      outcomeBoostScore,
+      durationDeltaWeeks: params.durationWeeks > 0 ? Math.abs(template.durationWeeks - params.durationWeeks) : 0,
       sourceOrigin: isCoachSource ? 'coach' : 'global',
       reasons,
     });
