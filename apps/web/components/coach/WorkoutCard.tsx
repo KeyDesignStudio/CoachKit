@@ -15,6 +15,7 @@ type WorkoutCardProps = {
 function getDisciplineLabel(discipline: string): string {
   const d = (discipline || 'OTHER').toUpperCase();
   if (d === 'RUN' || d === 'BIKE' || d === 'SWIM' || d === 'REST') return d;
+  if (d === 'SWIM_OPEN_WATER' || d === 'OPEN_WATER_SWIM' || d === 'OWS') return 'OWS';
   if (d === 'BRICK') return 'BRICK';
   if (d === 'STRENGTH') return 'STR';
   return d.slice(0, 5);

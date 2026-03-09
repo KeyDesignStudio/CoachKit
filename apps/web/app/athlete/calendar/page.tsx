@@ -27,7 +27,7 @@ import { computePercentDelta } from '@/lib/trend-delta';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DISCIPLINE_OPTIONS = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 const DEFAULT_DISCIPLINE = DISCIPLINE_OPTIONS[0];
 
 const APB_CALENDAR_ORIGIN = 'AI_PLAN_BUILDER';

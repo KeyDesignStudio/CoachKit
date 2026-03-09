@@ -19,7 +19,7 @@ type SquadOption = {
 
 type ChallengeTypeValue = 'VOLUME' | 'FREQUENCY' | 'PERFORMANCE' | 'POINTS';
 
-const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'BRICK', 'OTHER'] as const;
+const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'STRENGTH', 'BRICK', 'OTHER'] as const;
 const CHALLENGE_TITLE_MAX_LENGTH = 25;
 
 function toIsoDate(value: string) {

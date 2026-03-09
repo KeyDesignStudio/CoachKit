@@ -221,7 +221,7 @@ export function AiPlanBuilderReviewPlanSection({
   sessionDetailsById,
   loadSessionDetail,
 }: ReviewPlanProps) {
-  const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'] as const;
+  const disciplineOptions = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
   const weekCommencingByIndex = useMemo(() => {
     const map = new Map<number, string>();

@@ -10,7 +10,7 @@ import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { uiH2, uiMuted } from '@/components/ui/typography';
 import type { AthleteBriefJson } from '@/modules/ai/athlete-brief/types';
 
-const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
 type AthleteProfile = {
   userId: string;

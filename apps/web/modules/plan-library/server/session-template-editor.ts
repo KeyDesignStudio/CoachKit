@@ -11,7 +11,7 @@ export async function updatePlanSourceSessionTemplate(params: {
   reviewer: { userId: string; email: string };
   data: {
     dayOfWeek: number | null;
-    discipline: 'SWIM' | 'BIKE' | 'RUN' | 'STRENGTH' | 'REST';
+    discipline: 'SWIM' | 'SWIM_OPEN_WATER' | 'BIKE' | 'RUN' | 'BRICK' | 'STRENGTH' | 'REST';
     sessionType: string;
     title: string | null;
     durationMinutes: number | null;

@@ -3,7 +3,7 @@
 
 import type { IconName } from './iconRegistry';
 
-export type DisciplineKey = 'RUN' | 'BIKE' | 'SWIM' | 'BRICK' | 'STRENGTH' | 'REST' | 'OTHER';
+export type DisciplineKey = 'RUN' | 'BIKE' | 'SWIM' | 'SWIM_OPEN_WATER' | 'BRICK' | 'STRENGTH' | 'REST' | 'OTHER';
 
 export type DisciplineTheme = {
   accentClass: string; // Left border color
@@ -35,12 +35,19 @@ export const DISCIPLINE_THEMES: Record<DisciplineKey, DisciplineTheme> = {
     badgeText: 'SWIM',
     iconName: 'disciplineSwim',
   },
+  SWIM_OPEN_WATER: {
+    accentClass: 'border-l-cyan-500/60',
+    bgClass: 'bg-cyan-50/30',
+    textClass: 'text-cyan-800',
+    badgeText: 'OWS',
+    iconName: 'disciplineSwim',
+  },
   BRICK: {
     accentClass: 'border-l-purple-400/60',
     bgClass: 'bg-purple-50/30',
     textClass: 'text-purple-700',
     badgeText: 'BRICK',
-    iconName: 'disciplineBrick',
+    iconName: 'disciplineBike',
   },
   STRENGTH: {
     accentClass: 'border-l-orange-400/60',
@@ -73,7 +80,8 @@ export function getDisciplineTheme(discipline: string | undefined | null): Disci
     return DISCIPLINE_THEMES.OTHER;
   }
   
-  const normalized = discipline.toUpperCase() as DisciplineKey;
+  const raw = discipline.toUpperCase();
+  const normalized = (raw === 'OPEN_WATER_SWIM' || raw === 'OWS' ? 'SWIM_OPEN_WATER' : raw) as DisciplineKey;
   const theme = DISCIPLINE_THEMES[normalized] || DISCIPLINE_THEMES.OTHER;
   
   // Dev-time regression guard: warn if expected discipline falls back to OTHER

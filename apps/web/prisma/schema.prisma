@@ -73,6 +73,7 @@ enum WorkoutLibraryDiscipline {
   RUN
   BIKE
   SWIM
+  SWIM_OPEN_WATER
   BRICK
   STRENGTH
   OTHER
@@ -242,8 +243,10 @@ enum RuleType {
 
 enum PlanSourceDiscipline {
   SWIM
+  SWIM_OPEN_WATER
   BIKE
   RUN
+  BRICK
   STRENGTH
   REST
 }

@@ -130,9 +130,11 @@ function readNumber(source: Record<string, unknown>, ...keys: string[]) {
 
 function normalizeDiscipline(row: ActivityRow): Discipline {
   const fromCalendar = String(row.calendarItem?.discipline ?? '').toUpperCase();
-  if (fromCalendar === 'BIKE') return 'BIKE';
+  if (fromCalendar === 'BIKE' || fromCalendar === 'BRICK') return 'BIKE';
   if (fromCalendar === 'RUN') return 'RUN';
-  if (fromCalendar === 'SWIM') return 'SWIM';
+  if (fromCalendar === 'SWIM' || fromCalendar === 'SWIM_OPEN_WATER' || fromCalendar === 'OPEN_WATER_SWIM' || fromCalendar === 'OWS') {
+    return 'SWIM';
+  }
 
   const strava = asObject(asObject(row.metricsJson)?.strava);
   const activity = asObject(strava.activity);

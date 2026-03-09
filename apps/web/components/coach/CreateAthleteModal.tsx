@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { getDisciplineTheme } from '@/components/ui/disciplineTheme';
 import { cn } from '@/lib/cn';
 
-const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
+const DISCIPLINES = ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'REST', 'OTHER'] as const;
 
 type CreateAthleteModalProps = {
   isOpen: boolean;

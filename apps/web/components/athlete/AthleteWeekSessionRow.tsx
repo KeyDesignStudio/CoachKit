@@ -41,6 +41,7 @@ type AthleteWeekSessionRowProps = {
 function getDisciplineLabel(discipline: string): string {
   const d = (discipline || 'OTHER').toUpperCase();
   if (d === 'RUN' || d === 'BIKE' || d === 'SWIM' || d === 'REST') return d;
+  if (d === 'SWIM_OPEN_WATER' || d === 'OPEN_WATER_SWIM' || d === 'OWS') return 'OWS';
   if (d === 'BRICK') return 'BRICK';
   if (d === 'STRENGTH') return 'STR';
   return d.slice(0, 5);
@@ -243,7 +244,9 @@ export function AthleteWeekSessionRow({
             let icon: IconName = 'disciplineOther';
             if (type === 'RUN' || type === 'TREADMILL') icon = 'disciplineRun';
             if (type === 'BIKE' || type === 'INDOOR_BIKE') icon = 'disciplineBike';
-            if (type === 'SWIM') icon = 'disciplineSwim';
+            if (type === 'SWIM' || type === 'SWIM_OPEN_WATER' || type === 'OPEN_WATER_SWIM' || type === 'OWS') {
+              icon = 'disciplineSwim';
+            }
             if (type === 'STRENGTH') icon = 'disciplineStrength';
             if (type === 'REST') icon = 'disciplineRest';
             

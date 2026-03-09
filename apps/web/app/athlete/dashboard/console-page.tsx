@@ -1030,7 +1030,14 @@ export default function AthleteDashboardConsolePage() {
                         const seedOrder = ['BIKE', 'RUN', 'SWIM', 'OTHER'] as const;
                         const byDiscipline = new Map<string, { totalMinutes: number; totalDistanceKm: number }>();
                         for (const row of data?.rangeSummary?.byDiscipline ?? []) {
-                          byDiscipline.set(String(row.discipline || 'OTHER').toUpperCase(), {
+                          const raw = String(row.discipline || 'OTHER').toUpperCase();
+                          const key =
+                            raw === 'SWIM_OPEN_WATER' || raw === 'OPEN_WATER_SWIM' || raw === 'OWS'
+                              ? 'SWIM'
+                              : raw === 'BRICK'
+                                ? 'BIKE'
+                                : raw;
+                          byDiscipline.set(key, {
                             totalMinutes: Number(row.completedMinutes ?? 0),
                             totalDistanceKm: Number(row.completedDistanceKm ?? 0),
                           });

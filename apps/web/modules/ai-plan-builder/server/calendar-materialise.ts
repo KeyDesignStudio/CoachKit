@@ -43,6 +43,9 @@ function toCalendarDiscipline(raw: string): string {
   const d = String(raw ?? '').trim().toLowerCase();
   if (d === 'run') return 'RUN';
   if (d === 'bike' || d === 'ride' || d === 'cycle') return 'BIKE';
+  if (d === 'swim_open_water' || d === 'open_water_swim' || d === 'open-water-swim' || d === 'open water swim' || d === 'ows') {
+    return 'SWIM_OPEN_WATER';
+  }
   if (d === 'swim') return 'SWIM';
   if (d === 'brick') return 'BRICK';
   if (d === 'strength') return 'OTHER';

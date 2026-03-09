@@ -39,8 +39,8 @@ function jaccard(a: string[], b: string[]): number {
 
 function inferSport(profile: AthleteProfileSnapshot | null | undefined): PlanSport | null {
   const disciplines = profile?.disciplines?.map((d) => d.toUpperCase()) ?? [];
-  const hasSwim = disciplines.includes('SWIM');
-  const hasBike = disciplines.includes('BIKE');
+  const hasSwim = disciplines.includes('SWIM') || disciplines.includes('SWIM_OPEN_WATER') || disciplines.includes('OPEN_WATER_SWIM');
+  const hasBike = disciplines.includes('BIKE') || disciplines.includes('BRICK');
   const hasRun = disciplines.includes('RUN');
   if (hasSwim && hasBike && hasRun) return 'TRIATHLON';
   if (hasBike && hasRun) return 'DUATHLON';

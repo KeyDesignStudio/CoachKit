@@ -250,6 +250,7 @@ function inferPrimaryGoal(params: { discipline: PlanSourceDiscipline; sessionTyp
   if (type === 'tempo' || /\btempo\b/.test(text)) return 'tempo-control';
   if (type === 'easy' || type === 'recovery' || /\brecovery\b|\beasy\b/.test(text)) return 'recovery-absorption';
   if (params.discipline === 'STRENGTH' || /\bstrength\b|\bconditioning\b/.test(text)) return 'strength-resilience';
+  if (params.discipline === 'BRICK') return 'race-specificity';
   if (/\brace pace\b|\btime trial\b|\bbrick\b/.test(text)) return 'race-specificity';
   return 'aerobic-durability';
 }

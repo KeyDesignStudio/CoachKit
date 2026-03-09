@@ -33,6 +33,9 @@ function titleCaseWords(words: string[]): string[] {
 function normalizeDiscipline(raw: string): string {
   const d = raw.trim().toLowerCase();
   if (!d) return '';
+  if (d === 'swim_open_water' || d === 'open_water_swim' || d === 'open-water-swim' || d === 'open water swim' || d === 'ows') {
+    return 'swim_open_water';
+  }
   if (d === 'run') return 'run';
   if (d === 'bike' || d === 'ride' || d === 'cycle') return 'bike';
   if (d === 'swim') return 'swim';
@@ -46,6 +49,7 @@ function normalizeDiscipline(raw: string): string {
   if (d === 'brick'.toUpperCase()) return 'brick';
   if (d === 'strength'.toUpperCase()) return 'strength';
   if (d === 'rest'.toUpperCase()) return 'rest';
+  if (d === 'swim_open_water'.toUpperCase() || d === 'open_water_swim'.toUpperCase()) return 'swim_open_water';
   return d;
 }
 
@@ -57,6 +61,8 @@ function sportNoun(discipline: string): string {
       return 'Ride';
     case 'swim':
       return 'Swim';
+    case 'swim_open_water':
+      return 'Open Water Swim';
     case 'brick':
       return 'Brick';
     case 'strength':

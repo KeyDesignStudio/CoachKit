@@ -89,7 +89,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
         key: 'disciplines',
         prompt: 'Which disciplines are you training for right now?',
         type: 'multi',
-        options: ['RUN', 'BIKE', 'SWIM', 'STRENGTH', 'OTHER'],
+        options: ['RUN', 'BIKE', 'SWIM', 'SWIM_OPEN_WATER', 'BRICK', 'STRENGTH', 'OTHER'],
       },
       {
         key: 'weekly_hours_per_day',
