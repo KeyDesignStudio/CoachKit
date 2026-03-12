@@ -699,6 +699,39 @@ export async function getPlanLibraryTemplate(templateId: string) {
   return template;
 }
 
+export async function deletePlanLibraryTemplate(templateId: string) {
+  const template = await prisma.planLibraryTemplate.findUnique({
+    where: { id: templateId },
+    select: {
+      id: true,
+      title: true,
+      isPublished: true,
+      reviewStatus: true,
+    },
+  });
+  if (!template) throw new ApiError(404, 'PLAN_TEMPLATE_NOT_FOUND', 'Template not found.');
+  if (template.isPublished || template.reviewStatus === 'PUBLISHED') {
+    throw new ApiError(400, 'PLAN_TEMPLATE_PUBLISHED', 'Published templates cannot be deleted from the review grid.');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.planLibraryTemplate.delete({
+      where: { id: templateId },
+    });
+
+    await tx.planLibraryImportJob.updateMany({
+      where: { templateId },
+      data: { templateId: null },
+    });
+  });
+
+  return {
+    id: template.id,
+    title: template.title,
+    deleted: true,
+  };
+}
+
 export async function updatePlanLibraryTemplateSession(params: {
   templateId: string;
   sessionId: string;
