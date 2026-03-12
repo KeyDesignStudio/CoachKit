@@ -189,4 +189,35 @@ describe('plan-library workout parser', () => {
     expect(extracted.sessions.some((session) => session.discipline === 'BIKE')).toBe(true);
   });
 
+  it('splits MULTI-BRICK sessions and strips trailing editorial noise from merged OCR text', () => {
+    const extracted = extractFromRawText(
+      `
+        WEEK 1
+        RUN
+        8km moderate, on a flat route, aim for
+        consistent pace per km
+        MUL TI-BRICK
+        3x
+        10mins bike vigorous
+        1km run moderate
+        90secs rest between reps
+        Week focus: Time to get started! start on any day of the week
+
+        WEEK 2
+        BIKE
+        4x [8mins moderate /2mins easy]
+        REST-DA Y REST-DA Y REST-DA Y
+      `,
+      2
+    );
+
+    expect(extracted.sessions).toHaveLength(3);
+    expect(extracted.sessions[0]?.discipline).toBe('RUN');
+    expect(extracted.sessions[0]?.title).toContain('consistent pace per km');
+    expect(String(extracted.sessions[0]?.notes ?? '')).not.toContain('Week focus');
+    expect(extracted.sessions[1]?.discipline).toBe('BRICK');
+    expect(String(extracted.sessions[1]?.notes ?? '')).toContain('10 mins bike vigorous');
+    expect(String(extracted.sessions[2]?.notes ?? '')).not.toContain('REST-DAY');
+  });
+
 });

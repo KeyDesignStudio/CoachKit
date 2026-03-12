@@ -11,6 +11,7 @@ const ENABLED = process.env.LOCAL_REALPDF === '1';
 
 const REAL_PDFS = [
   '/Users/gordonprice/Downloads/12WkOlympicBeginner.pdf',
+  '/Users/gordonprice/Downloads/PlanOlympic6week.pdf',
   '/Users/gordonprice/Downloads/PlanOlympic6mth.pdf',
   '/Users/gordonprice/Downloads/5k Run_ 45 Day Beginner Training Guide.pdf',
   '/Users/gordonprice/Downloads/Race_Your_First_703.pdf',
@@ -94,5 +95,26 @@ suite('plan-library real PDF local regression', () => {
     expect(olympic?.mode).toBe('template');
     expect(olympic?.weeks).toBe(12);
     expect((olympic?.sessions ?? 0) >= 56).toBe(true);
+  });
+
+  it('keeps the 6-week Olympic PDF free of merged REST-DAY noise in workout notes', async () => {
+    const filePath = '/Users/gordonprice/Downloads/PlanOlympic6week.pdf';
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+
+    const buffer = fs.readFileSync(filePath);
+    const document = await extractStructuredPdfDocument(buffer);
+    const extracted = extractFromStructuredPdfDocument({
+      document,
+      durationWeeks: 6,
+      rawTextFallback: document.rawText,
+    });
+
+    const noisyWorkouts = extracted.sessions.filter(
+      (session) => session.discipline !== 'REST' && /\bREST(?: |-)?DAY\b/i.test(String(session.notes ?? ''))
+    );
+    expect(noisyWorkouts).toHaveLength(0);
+    expect(extracted.sessions.length).toBeGreaterThan(0);
   });
 });

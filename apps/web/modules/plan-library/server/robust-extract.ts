@@ -213,6 +213,52 @@ function buildCollapsedTextFallback(params: { rawText: string; durationWeeks: nu
   };
 }
 
+function countSuspiciousSessions(source: ExtractedPlanSource) {
+  return source.sessions.filter((session) => {
+    const combined = `${session.title ?? ''} ${session.notes ?? ''}`;
+    if (
+      session.discipline !== 'REST' &&
+      /\bREST(?:-| )?DAY\b|week focus:|220\s*triathlon|execute your race plan|good luck!?/i.test(combined)
+    ) {
+      return true;
+    }
+    if (
+      session.discipline === 'REST' &&
+      (session.distanceKm != null ||
+        session.durationMinutes != null ||
+        /\b(swim|bike|run|brick)\b/i.test(combined.replace(/\bREST(?:-| )?DAY\b/gi, '')))
+    ) {
+      return true;
+    }
+    return false;
+  }).length;
+}
+
+function scoreExtractedPlanSourceQuality(source: ExtractedPlanSource) {
+  const suspiciousSessions = countSuspiciousSessions(source);
+  const nonRestSessions = source.sessions.filter((session) => session.discipline !== 'REST').length;
+  const weekCount = source.weeks.length;
+  const averageConfidence =
+    source.sessions.length > 0
+      ? source.sessions.reduce((sum, session) => sum + Number(session.parserConfidence ?? source.confidence ?? 0.5), 0) / source.sessions.length
+      : Number(source.confidence ?? 0);
+
+  return nonRestSessions * 2 + weekCount * 1.5 + averageConfidence * 4 - suspiciousSessions * 6;
+}
+
+export function shouldPreferCollapsedFallback(params: {
+  baseline: ExtractedPlanSource;
+  collapsedFallback: ExtractedPlanSource | null;
+}) {
+  const { baseline, collapsedFallback } = params;
+  if (!collapsedFallback) return false;
+  if (baseline.sessions.length === 0) return true;
+  if (baseline.sessions.length >= 6 && countSuspiciousSessions(collapsedFallback) > countSuspiciousSessions(baseline)) {
+    return false;
+  }
+  return scoreExtractedPlanSourceQuality(collapsedFallback) > scoreExtractedPlanSourceQuality(baseline) + 2;
+}
+
 function normalizeModelAlias(input: string) {
   const value = String(input ?? '').trim().toLowerCase();
   if (!value) return '';
@@ -496,7 +542,7 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
       rawText: baseline.rawText,
       durationWeeks,
     });
-    if (collapsedFallback) {
+    if (shouldPreferCollapsedFallback({ baseline, collapsedFallback })) {
       return {
         ...collapsedFallback,
         warnings: [
@@ -509,7 +555,9 @@ export async function extractPlanSourceWithRobustPipeline(params: RobustExtracti
       ...baseline,
       warnings: [
         ...(Array.isArray(baseline.warnings) ? baseline.warnings : []),
-        `LLM structured extraction failed; deterministic extraction was retained (${error instanceof Error ? error.message : 'unknown error'}).`,
+        collapsedFallback
+          ? `LLM structured extraction failed; deterministic extraction was retained because collapsed-text fallback scored worse (${error instanceof Error ? error.message : 'unknown error'}).`
+          : `LLM structured extraction failed; deterministic extraction was retained (${error instanceof Error ? error.message : 'unknown error'}).`,
       ],
     };
   }

@@ -109,6 +109,7 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<{
@@ -284,6 +285,38 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
     }
   }
 
+  async function deleteTemplate() {
+    if (!detail) return;
+    if (detail.isPublished || detail.reviewStatus === 'PUBLISHED') {
+      setError('Published templates cannot be deleted here.');
+      return;
+    }
+    const confirmed =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(`Delete "${detail.title}"? This removes the draft template and all of its review data.`);
+    if (!confirmed) return;
+
+    setDeletingTemplateId(detail.id);
+    setError('');
+    setStatusMessage('');
+    try {
+      const response = await fetch(`/api/admin/plan-library/templates/${detail.id}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || 'Delete failed.');
+      const deletedTitle = payload?.data?.deleted?.title || detail.title;
+      setStatusMessage(`Deleted draft template: ${deletedTitle}.`);
+      setDetail(null);
+      setSelectedId(null);
+      cancelEditing();
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }
+
   return (
     <section className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Review Grid</div>
@@ -333,6 +366,16 @@ export function PlanLibraryTemplateReviewGrid({ refreshToken = 0 }: PlanLibraryT
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {!detail.isPublished && detail.reviewStatus !== 'PUBLISHED' ? (
+                    <button
+                      type="button"
+                      onClick={deleteTemplate}
+                      disabled={deletingTemplateId === detail.id}
+                      className="rounded-full border border-rose-200 px-3 py-2 text-xs text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deletingTemplateId === detail.id ? 'Deleting…' : 'Delete draft'}
+                    </button>
+                  ) : null}
                   <button type="button" onClick={validateTemplate} className="rounded-full border border-[var(--border-subtle)] px-3 py-2 text-xs">
                     Validate
                   </button>

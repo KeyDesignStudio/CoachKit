@@ -154,7 +154,7 @@ const STRUCTURED_SESSION_HEADER_RULES: Array<{ key: PlanSourceDiscipline; match:
   { key: 'SWIM', match: /^(swim)\b/i },
   { key: 'BIKE', match: /^(bike|cycling?)\b/i },
   { key: 'RUN', match: /^(run|run\/walk|jog)\b/i },
-  { key: 'BRICK', match: /^(brick)\b/i },
+  { key: 'BRICK', match: /^(multi[\s-]?brick|brick)\b/i },
   { key: 'STRENGTH', match: /^(strength|s&c|conditioning)\b/i },
   { key: 'REST', match: /^(rest(?: |-)?day|off)\b/i },
 ];
@@ -169,6 +169,10 @@ function normalizeLine(line: string) {
     .replace(FRACTION_HALF_REGEX, '0.5')
     .replace(FRACTION_QUARTER_REGEX, '0.25')
     .replace(FRACTION_THREE_QUARTERS_REGEX, '0.75')
+    .replace(/\bREST-DA\s+Y\b/gi, 'REST-DAY')
+    .replace(/\bMUL\s+TI-BRICK\b/gi, 'MULTI-BRICK')
+    .replace(/\bOL\s+YMPIC\b/gi, 'OLYMPIC')
+    .replace(/\bTRIA\s+THLON\b/gi, 'TRIATHLON')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .trim();
@@ -289,6 +293,80 @@ function detectStructuredSessionHeader(line: string): PlanSourceDiscipline | nul
   return null;
 }
 
+function shouldIgnoreTrailingNoiseLine(line: string) {
+  return (
+    /^week focus:/i.test(line) ||
+    /^220triathlon\.com$/i.test(line) ||
+    /^olympic triathlon\b/i.test(line) ||
+    /^execute your race plan\b/i.test(line) ||
+    /^good luck!?$/i.test(line)
+  );
+}
+
+function isBareSessionHeaderLine(line: string, discipline: PlanSourceDiscipline) {
+  const normalized = normalizeLine(line).toLowerCase();
+  if (!normalized) return false;
+  if (discipline === 'RUN') return normalized === 'run';
+  if (discipline === 'BIKE') return normalized === 'bike' || normalized === 'cycling';
+  if (discipline === 'SWIM') return normalized === 'swim';
+  if (discipline === 'SWIM_OPEN_WATER') {
+    return normalized === 'open water' || normalized === 'ows' || normalized === 'swim open water';
+  }
+  if (discipline === 'BRICK') return normalized === 'brick' || normalized === 'multi-brick';
+  if (discipline === 'STRENGTH') return normalized === 'strength' || normalized === 'conditioning' || normalized === 's&c';
+  if (discipline === 'REST') return normalized === 'rest-day' || normalized === 'rest day' || normalized === 'off';
+  return false;
+}
+
+function splitSessionCandidate(candidate: SessionCandidate): SessionCandidate[] {
+  const segments: SessionCandidate[] = [];
+  let current: SessionCandidate | null = null;
+
+  const pushCurrent = () => {
+    if (!current) return;
+    current.lines = current.lines.map(normalizeLine).filter(Boolean);
+    if (current.lines.length) segments.push(current);
+    current = null;
+  };
+
+  for (const rawLine of candidate.lines) {
+    const line = normalizeLine(rawLine);
+    if (!line || shouldIgnoreTrailingNoiseLine(line)) continue;
+
+    const headerDiscipline = detectStructuredSessionHeader(line);
+    if (headerDiscipline) {
+      if (headerDiscipline === 'REST' && current && current.discipline !== 'REST') {
+        pushCurrent();
+        continue;
+      }
+
+      pushCurrent();
+      current = {
+        discipline: headerDiscipline,
+        lines: [line],
+        weekIndex: candidate.weekIndex,
+        dayOfWeek: candidate.dayOfWeek,
+      };
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        discipline: candidate.discipline,
+        lines: [line],
+        weekIndex: candidate.weekIndex,
+        dayOfWeek: candidate.dayOfWeek,
+      };
+      continue;
+    }
+
+    current.lines.push(line);
+  }
+
+  pushCurrent();
+  return segments.length ? segments : [candidate];
+}
+
 function assignInferredWeekIndices(candidates: SessionCandidate[], durationWeeks: number | null | undefined, warnings: string[]) {
   const unresolved = candidates.filter((candidate) => candidate.weekIndex == null);
   if (!unresolved.length) return;
@@ -316,7 +394,7 @@ function extractStructuredSessionCandidates(lines: string[], durationWeeks: numb
   const finalize = () => {
     if (!current) return;
     current.lines = current.lines.map(normalizeLine).filter(Boolean);
-    if (current.lines.length) candidates.push(current);
+    if (current.lines.length) candidates.push(...splitSessionCandidate(current));
     current = null;
   };
 
@@ -338,6 +416,10 @@ function extractStructuredSessionCandidates(lines: string[], durationWeeks: numb
 
     const headerDiscipline = detectStructuredSessionHeader(line);
     if (headerDiscipline) {
+      if (headerDiscipline === 'REST' && current && current.discipline !== 'REST') {
+        finalize();
+        continue;
+      }
       finalize();
       current = {
         discipline: headerDiscipline,
@@ -574,7 +656,23 @@ function normalizePathologicalWeekDistribution(params: {
 }
 
 function buildSessionTemplate(params: BuildSessionTemplateParams) {
-  const sessionText = normalizeDistanceUnitsToKm(cleanupSessionTextForParser(params.sessionText.trim()));
+  const normalizedText = cleanupSessionTextForParser(params.sessionText.trim());
+  const normalizedLines = normalizedText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const sessionBodyLines =
+    normalizedLines.length > 1 && isBareSessionHeaderLine(normalizedLines[0] ?? '', params.discipline)
+      ? normalizedLines.slice(1)
+      : normalizedLines;
+  const sessionText = normalizeDistanceUnitsToKm(
+    sessionBodyLines
+      .join('\n')
+      .replace(/\bWeek focus:\b[\s\S]*$/i, '')
+      .replace(/\b220TRIATHLON\.COM\b/gi, '')
+      .replace(/\bREST(?: |-)?DAY\b[\s\S]*$/i, params.discipline === 'REST' ? 'REST-DAY' : '')
+      .trim()
+  );
   const sessionType = detectSessionType(sessionText);
   const parsed = parseWorkoutRecipeFromSessionText({
     discipline: params.discipline,
@@ -584,6 +682,33 @@ function buildSessionTemplate(params: BuildSessionTemplateParams) {
     durationMinutes: parseMinutes(sessionText),
   });
 
+  const parserWarnings = [...parsed.warnings];
+  let parserConfidence = parsed.confidence ?? null;
+  if (params.discipline !== 'REST' && /\bREST(?: |-)?DAY\b/i.test(normalizedText)) {
+    parserWarnings.push('Trailing REST-DAY content was removed from merged layout text.');
+    parserConfidence = parserConfidence == null ? 0.72 : Math.max(0.4, parserConfidence - 0.18);
+  }
+  if (/\bweek focus:\b/i.test(normalizedText)) {
+    parserWarnings.push('Editorial week-focus content was removed from session text.');
+    parserConfidence = parserConfidence == null ? 0.78 : Math.max(0.45, parserConfidence - 0.1);
+  }
+  if (params.discipline !== 'BRICK' && /\bmulti[\s-]?brick\b/i.test(normalizedText)) {
+    parserWarnings.push('Session text referenced MULTI-BRICK outside a brick session.');
+    parserConfidence = parserConfidence == null ? 0.65 : Math.max(0.35, parserConfidence - 0.22);
+  }
+
+  const sessionLines = sessionText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const firstLine = sessionLines[0] ?? (params.title ?? sessionText).trim();
+  const secondLine = sessionLines[1] ?? '';
+  const title =
+    firstLine &&
+    secondLine &&
+    /(?:[,;:-]|\b(?:aim for|with|including|include|through set|in final)\b)$/i.test(firstLine) &&
+    /^[a-z]/i.test(secondLine) &&
+    !/^\d/.test(secondLine)
+      ? `${firstLine} ${secondLine}`
+      : firstLine;
+
   return {
     session: {
       weekIndex: params.weekIndex,
@@ -591,27 +716,27 @@ function buildSessionTemplate(params: BuildSessionTemplateParams) {
       dayOfWeek: params.dayOfWeek ?? null,
       discipline: params.discipline,
       sessionType,
-      title: (params.title ?? sessionText).slice(0, 120),
+      title: title.slice(0, 120),
       durationMinutes: parsed.estimatedDurationMinutes ?? parseMinutes(sessionText),
       distanceKm: parseDistanceKm(sessionText),
       intensityType: parsed.intensityType ?? null,
       intensityTargetJson: parsed.intensityTargetJson ?? null,
       recipeV2Json: parsed.recipeV2 ?? null,
-      parserConfidence: parsed.confidence ?? null,
-      parserWarningsJson: parsed.warnings.length ? parsed.warnings : null,
+      parserConfidence,
+      parserWarningsJson: parserWarnings.length ? parserWarnings : null,
       structureJson: parsed.recipeV2
         ? {
             recipeV2: parsed.recipeV2,
             parser: {
               version: 'v2',
-              confidence: parsed.confidence,
-              warnings: parsed.warnings,
+              confidence: parserConfidence,
+              warnings: parserWarnings,
             },
           }
         : null,
       notes: sessionText,
     } satisfies ExtractedSessionTemplate,
-    warnings: parsed.warnings,
+    warnings: parserWarnings,
   };
 }
 
