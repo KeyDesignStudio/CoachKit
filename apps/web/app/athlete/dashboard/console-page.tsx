@@ -488,6 +488,7 @@ export default function AthleteDashboardConsolePage() {
       qs.set('from', dateRange.from);
       qs.set('to', dateRange.to);
       if (discipline) qs.set('discipline', discipline);
+      qs.set('includeLoadModel', '1');
       if (bypassCache) qs.set('t', String(Date.now()));
 
       try {
