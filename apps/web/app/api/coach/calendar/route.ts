@@ -47,6 +47,14 @@ const completionSources: CompletionSource[] = [CompletionSource.MANUAL, Completi
 const ATHLETE_ACCESS_CACHE_TTL_MS = 30_000;
 const COACH_CALENDAR_CACHE_TTL_MS = 30_000;
 
+function readDraftText(draft: unknown, key: string): string | null {
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null;
+  const value = (draft as Record<string, unknown>)[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 type CoachAthleteAccess = {
   userId: string;
   athleteName: string | null;
@@ -393,16 +401,46 @@ export async function GET(request: NextRequest) {
       const timezoneByAthleteId = new Map(
         athletes.map((athlete) => [athlete.userId, athlete.timezone ?? 'Australia/Brisbane'] as const)
       );
+      const latestSubmittedIntakes = athleteIds.length
+        ? await prisma.athleteIntakeResponse.findMany({
+            where: {
+              athleteId: { in: athleteIds },
+              coachId: user.id,
+              submittedAt: { not: null },
+            },
+            select: {
+              athleteId: true,
+              draftJson: true,
+              submittedAt: true,
+              createdAt: true,
+            },
+            orderBy: [{ athleteId: 'asc' }, { submittedAt: 'desc' }, { createdAt: 'desc' }],
+          })
+        : [];
+      const latestSubmittedIntakeDraftByAthlete = new Map<string, Record<string, unknown>>();
+      for (const row of latestSubmittedIntakes) {
+        if (!latestSubmittedIntakeDraftByAthlete.has(row.athleteId)) {
+          latestSubmittedIntakeDraftByAthlete.set(row.athleteId, ((row.draftJson as any) ?? {}) as Record<string, unknown>);
+        }
+      }
       const goalCountdownByAthlete = Object.fromEntries(
-        athletes.map((athlete) => [
-          athlete.userId,
-          getGoalCountdown({
-            eventName: athlete.eventName,
-            eventDate: athlete.eventDate,
-            timelineWeeks: athlete.timelineWeeks,
-            todayDayKey: getTodayDayKey(athlete.timezone),
-          }),
-        ])
+        athletes.map((athlete) => {
+          const intakeDraftJson = latestSubmittedIntakeDraftByAthlete.get(athlete.userId) ?? {};
+          const fallbackEventNameFromIntake = readDraftText(intakeDraftJson, 'event_name');
+          const fallbackEventDateFromIntake =
+            readDraftText(intakeDraftJson, 'event_date') ?? readDraftText(intakeDraftJson, 'completion_date');
+          const profileEventName = typeof athlete.eventName === 'string' ? athlete.eventName.trim() : '';
+
+          return [
+            athlete.userId,
+            getGoalCountdown({
+              eventName: profileEventName || fallbackEventNameFromIntake,
+              eventDate: athlete.eventDate ?? fallbackEventDateFromIntake,
+              timelineWeeks: athlete.timelineWeeks,
+              todayDayKey: getTodayDayKey(athlete.timezone),
+            }),
+          ];
+        })
       );
       const utcRangeByAthleteId = new Map(
         athleteIds.map((athleteId) => [
