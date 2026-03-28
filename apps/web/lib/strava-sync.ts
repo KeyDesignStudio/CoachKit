@@ -78,6 +78,23 @@ type StravaApiErrorPayload = {
   }>;
 };
 
+async function parseJsonOrText(response: Response) {
+  const raw = await response.text();
+  if (!raw.trim().length) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
+function previewRawResponse(payload: unknown) {
+  if (typeof payload !== 'string') return null;
+  const trimmed = payload.replace(/\s+/g, ' ').trim();
+  if (!trimmed.length) return null;
+  return trimmed.slice(0, 160);
+}
+
 function formatStravaApiErrorMessage(payload: StravaApiErrorPayload | null | undefined, fallback: string) {
   if (!payload) return fallback;
   const base = (payload.message ?? '').trim() || fallback;
@@ -147,22 +164,24 @@ async function refreshStravaTokenIfNeeded(connection: StravaConnectionEntry['con
     cache: 'no-store',
   });
 
-  const payload = (await response.json()) as {
+  const payload = (await parseJsonOrText(response)) as ({
     access_token?: string;
     refresh_token?: string;
     expires_at?: number;
     scope?: string;
-  } & StravaApiErrorPayload;
+  } & StravaApiErrorPayload) | string | null;
 
   if (!response.ok) {
     throw new ApiError(
       502,
       'STRAVA_TOKEN_REFRESH_FAILED',
-      formatStravaApiErrorMessage(payload, 'Failed to refresh Strava token.')
+      typeof payload === 'string'
+        ? `Failed to refresh Strava token. Upstream returned non-JSON content: ${previewRawResponse(payload) ?? 'unexpected response'}.`
+        : formatStravaApiErrorMessage(payload, 'Failed to refresh Strava token.')
     );
   }
 
-  if (!payload.access_token || !payload.refresh_token || !payload.expires_at) {
+  if (!payload || typeof payload === 'string' || !payload.access_token || !payload.refresh_token || !payload.expires_at) {
     throw new ApiError(502, 'STRAVA_TOKEN_REFRESH_INVALID', 'Strava token refresh response missing required fields.');
   }
 
@@ -247,14 +266,26 @@ async function fetchRecentActivities(accessToken: string, afterUnixSeconds: numb
     throw new ApiError(429, 'STRAVA_RATE_LIMITED', 'Strava rate limit hit. Try again later.');
   }
 
-  const payload = (await response.json()) as unknown;
+  const payload = await parseJsonOrText(response);
 
   if (!response.ok) {
-    throw new ApiError(502, 'STRAVA_ACTIVITIES_FETCH_FAILED', 'Failed to fetch Strava activities.');
+    throw new ApiError(
+      502,
+      'STRAVA_ACTIVITIES_FETCH_FAILED',
+      typeof payload === 'string'
+        ? `Failed to fetch Strava activities. Upstream returned non-JSON content: ${previewRawResponse(payload) ?? 'unexpected response'}.`
+        : 'Failed to fetch Strava activities.'
+    );
   }
 
   if (!Array.isArray(payload)) {
-    throw new ApiError(502, 'STRAVA_ACTIVITIES_INVALID', 'Strava activities response was not an array.');
+    throw new ApiError(
+      502,
+      'STRAVA_ACTIVITIES_INVALID',
+      typeof payload === 'string'
+        ? `Strava activities response was not JSON: ${previewRawResponse(payload) ?? 'unexpected response'}.`
+        : 'Strava activities response was not an array.'
+    );
   }
 
   return payload as StravaActivity[];
@@ -290,10 +321,26 @@ async function fetchActivityById(accessToken: string, activityId: string, scenar
     throw new ApiError(429, 'STRAVA_RATE_LIMITED', 'Strava rate limit hit. Try again later.');
   }
 
-  const payload = (await response.json()) as unknown;
+  const payload = await parseJsonOrText(response);
 
   if (!response.ok) {
-    throw new ApiError(502, 'STRAVA_ACTIVITY_FETCH_FAILED', 'Failed to fetch Strava activity.');
+    throw new ApiError(
+      502,
+      'STRAVA_ACTIVITY_FETCH_FAILED',
+      typeof payload === 'string'
+        ? `Failed to fetch Strava activity. Upstream returned non-JSON content: ${previewRawResponse(payload) ?? 'unexpected response'}.`
+        : 'Failed to fetch Strava activity.'
+    );
+  }
+
+  if (!payload || typeof payload === 'string' || Array.isArray(payload)) {
+    throw new ApiError(
+      502,
+      'STRAVA_ACTIVITY_INVALID',
+      typeof payload === 'string'
+        ? `Strava activity response was not JSON: ${previewRawResponse(payload) ?? 'unexpected response'}.`
+        : 'Strava activity response was invalid.'
+    );
   }
 
   return payload as StravaActivity;
