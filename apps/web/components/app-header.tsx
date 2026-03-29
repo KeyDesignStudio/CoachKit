@@ -404,16 +404,16 @@ export async function AppHeader() {
                           </Link>
                           <div
                             className={cn(
-                              'pointer-events-none invisible absolute right-0 top-[calc(100%+0.4rem)] z-20 min-w-[188px] opacity-0',
-                              'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-1.5',
-                              'shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)] transition-opacity duration-150',
+                              'pointer-events-none invisible absolute right-0 top-full z-20 min-w-[188px] overflow-hidden opacity-0',
+                              'rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card-solid)]',
+                              'shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)] transition-opacity duration-100',
                               'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100',
                               'group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100'
                             )}
                           >
                             <Link
                               href={submenu.childHref}
-                              className="inline-flex w-full items-center rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
+                              className="inline-flex w-full items-center px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text)] hover:bg-[var(--bg-structure)]"
                             >
                               {submenu.childLabel}
                             </Link>

@@ -232,6 +232,25 @@ function isSessionPublishedForDisplay(item: CalendarItem | null | undefined): bo
   return item.publicationStatus === 'PUBLISHED';
 }
 
+function decorateCalendarItemForView(
+  item: CalendarItem,
+  options: {
+    athleteId?: string | null;
+    athleteName?: string | null;
+    athleteTimezone?: string | null;
+    publicationStatus?: PublicationStatus;
+  } = {}
+): CalendarItem {
+  return {
+    ...item,
+    title: resolveCalendarItemTitle(item),
+    athleteId: options.athleteId ?? item.athleteId ?? undefined,
+    athleteName: options.athleteName ?? item.athleteName ?? null,
+    athleteTimezone: options.athleteTimezone ?? item.athleteTimezone ?? undefined,
+    publicationStatus: options.publicationStatus ?? item.publicationStatus ?? 'DRAFT',
+  };
+}
+
 export default function CoachCalendarPage() {
   const { user, loading: userLoading } = useAuthUser();
   const { request } = useApi();
@@ -972,9 +991,21 @@ export default function CoachCalendarPage() {
 
       try {
         setLoading(true);
-        await request('/api/coach/calendar-items', { method: 'POST', data: postPayload });
-        await loadCalendar();
+        const response = await request<{ item: CalendarItem }>('/api/coach/calendar-items', { method: 'POST', data: postPayload });
+        const athlete = athletes.find((entry) => entry.userId === targetAthleteId);
+        const decoratedItem = decorateCalendarItemForView(response.item, {
+          athleteId: targetAthleteId,
+          athleteName: athlete?.user.name ?? null,
+          athleteTimezone: athlete?.user.timezone ?? athleteTimezone,
+          publicationStatus: 'DRAFT',
+        });
+        setItems((prev) => {
+          const next = prev.filter((item) => item.id !== decoratedItem.id);
+          next.push(decoratedItem);
+          return next;
+        });
         setPasteToast({ type: 'success', message: 'Session pasted.' });
+        void loadCalendar();
       } catch(e) {
         setPasteToast({ type: 'error', message: 'Couldn’t paste session. Please try copying again.' });
         console.debug('Paste failure', e);
