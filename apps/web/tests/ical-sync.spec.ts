@@ -145,6 +145,11 @@ test.describe('Athlete iCal sync (private subscription)', () => {
     // Stable UIDs.
     expect(body).toContain(`UID:coachkit-${planned.id}@coachkit`);
     expect(body).toContain(`UID:coachkit-${completed.id}@coachkit`);
+    expect(body).toContain('SUMMARY:🏃 RUN — Easy Run');
+    expect(body).toContain('SUMMARY:🚴 BIKE — Synced Ride');
+    expect(body).toContain('STATUS:CONFIRMED');
+    expect(body).toContain('TRANSP:OPAQUE');
+    expect(body).toContain('REFRESH-INTERVAL;VALUE=DURATION:PT15M');
 
     // Deleted item must not appear.
     expect(body).not.toContain(`UID:coachkit-${deleted.id}@coachkit`);

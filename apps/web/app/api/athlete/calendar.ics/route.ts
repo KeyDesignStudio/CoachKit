@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
-        'Cache-Control': 'private, max-age=60',
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       },
     });
   } catch (error: any) {
