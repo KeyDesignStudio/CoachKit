@@ -120,7 +120,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           aria-label="Account menu"
           className={cn(
             'fixed z-[110] overflow-hidden rounded-2xl border border-[var(--border-subtle)]',
-            'bg-[var(--bg-surface)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]'
+            'bg-[var(--bg-card-solid)] shadow-[0_18px_48px_-32px_rgba(15,23,42,0.55)]'
           )}
           style={{ top: menuPosition.top, left: menuPosition.left, width: menuPosition.width }}
         >
@@ -130,7 +130,7 @@ export function UserHeaderControl({ className }: UserHeaderControlProps) {
           </div>
           <div className="h-px bg-[var(--border-subtle)]" />
           <div className="p-2">
-            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card-solid)] px-3 py-2">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Appearance</div>
               <div className="grid grid-cols-2 gap-1">
                 <button

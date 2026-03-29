@@ -12,6 +12,8 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
+  --bg-surface-solid: #F6F7F9;
+  --bg-card-solid: #FFFFFF;
   /* Subtle, visible borders on light surfaces */
   --border-subtle: rgba(12, 18, 34, 0.10);
 
@@ -64,6 +66,8 @@
   --bg-surface: #F6F7F9;
   --bg-structure: #E6E9ED;
   --bg-card: #FFFFFF;
+  --bg-surface-solid: #F6F7F9;
+  --bg-card-solid: #FFFFFF;
   --border-subtle: rgba(12, 18, 34, 0.10);
 
   --bg-inverse: #0c1222;
@@ -108,6 +112,8 @@
   --bg-surface: rgba(13, 17, 35, 0.75);
   --bg-structure: rgba(24, 30, 56, 0.78);
   --bg-card: rgba(23, 30, 56, 0.92);
+  --bg-surface-solid: #111628;
+  --bg-card-solid: #171e38;
   /* Avoid harsh white borders on dark surfaces */
   --border-subtle: rgba(248, 251, 255, 0.24);
 
