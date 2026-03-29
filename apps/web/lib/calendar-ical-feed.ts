@@ -17,6 +17,33 @@ export type IcalFeedCalendarItem = {
 
 const DEFAULT_DURATION_SEC = 60 * 60;
 
+function getDisciplineMarker(disciplineRaw: string): string {
+  const discipline = String(disciplineRaw ?? '').trim().toUpperCase();
+  switch (discipline) {
+    case 'RUN':
+      return '🏃';
+    case 'BIKE':
+    case 'CYCLE':
+    case 'CYCLING':
+    case 'BRICK':
+      return '🚴';
+    case 'SWIM':
+    case 'SWIM_OPEN_WATER':
+      return '🏊';
+    case 'STRENGTH':
+    case 'GYM':
+      return '🏋️';
+    case 'WALK':
+      return '🚶';
+    case 'YOGA':
+      return '🧘';
+    case 'REST':
+      return '😴';
+    default:
+      return '🏅';
+  }
+}
+
 function isCompletedStatus(status: string): boolean {
   return status === 'COMPLETED_MANUAL' || status === 'COMPLETED_SYNCED' || status === 'COMPLETED_SYNCED_DRAFT';
 }
@@ -83,6 +110,8 @@ export function buildIcalEventsForCalendarItems(params: {
 
     const detail = item.workoutDetail?.trim() || '';
     const url = `${baseUrl}/athlete/workouts/${item.id}`;
+    const marker = getDisciplineMarker(item.discipline);
+    const disciplineLabel = String(item.discipline ?? '').trim().replaceAll('_', ' ') || 'WORKOUT';
 
     const descriptionLines = [`Status: ${statusLabel}`];
     if (detail) descriptionLines.push('', detail);
@@ -92,7 +121,7 @@ export function buildIcalEventsForCalendarItems(params: {
       uid: `coachkit-${item.id}@coachkit`,
       dtStartUtc: startUtc,
       dtEndUtc: endUtc,
-      summary: `${item.discipline} — ${item.title}`,
+      summary: `${marker} ${disciplineLabel} — ${item.title}`,
       description: descriptionLines.join('\n'),
     };
   });

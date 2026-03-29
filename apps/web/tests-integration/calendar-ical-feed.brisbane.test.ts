@@ -58,6 +58,7 @@ describe('calendar iCal feed local-day selection (Australia/Brisbane)', () => {
     expect(ics).toContain('UID:coachkit-item-in-range@coachkit');
     expect(ics).toContain('DTSTART:20260129T170000Z');
     expect(ics).toContain('DTEND:20260129T180000Z');
+    expect(ics).toContain('SUMMARY:🏃 RUN — Morning run');
 
     // Ensure the out-of-range item is not present.
     expect(ics).not.toContain('UID:coachkit-item-out-of-range@coachkit');

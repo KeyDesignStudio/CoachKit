@@ -64,6 +64,8 @@ export function buildIcsCalendar(params: {
   emitLine(lines, 'PRODID:-//CoachKit//EN');
   emitLine(lines, 'CALSCALE:GREGORIAN');
   emitLine(lines, 'METHOD:PUBLISH');
+  emitLine(lines, 'REFRESH-INTERVAL;VALUE=DURATION:PT15M');
+  emitLine(lines, 'X-PUBLISHED-TTL:PT15M');
   emitLine(lines, `X-WR-CALNAME:${escapeIcsText(params.calName)}`);
   emitLine(lines, `X-WR-TIMEZONE:${escapeIcsText(params.timeZone)}`);
 
@@ -71,8 +73,11 @@ export function buildIcsCalendar(params: {
     emitLine(lines, 'BEGIN:VEVENT');
     emitLine(lines, `UID:${escapeIcsText(event.uid)}`);
     emitLine(lines, `DTSTAMP:${formatUtcDateTime(now)}`);
+    emitLine(lines, `LAST-MODIFIED:${formatUtcDateTime(now)}`);
     emitLine(lines, `DTSTART:${formatUtcDateTime(event.dtStartUtc)}`);
     emitLine(lines, `DTEND:${formatUtcDateTime(event.dtEndUtc)}`);
+    emitLine(lines, 'STATUS:CONFIRMED');
+    emitLine(lines, 'TRANSP:OPAQUE');
     emitLine(lines, `SUMMARY:${escapeIcsText(event.summary)}`);
     if (event.description) {
       emitLine(lines, `DESCRIPTION:${escapeIcsText(event.description)}`);
